@@ -34,6 +34,7 @@
 #define COL_TEXT    RGB(0xFF, 0xFF, 0xFF)
 #define COL_SUBTLE  RGB(0xB0, 0xB0, 0xB0)
 #define COL_ACCENT  RGB(0x7B, 0x2F, 0xBE)
+#define COL_DIM     RGB(0x55, 0x55, 0x55)  /* a policy-disabled glyph */
 
 static const WCHAR LISTENER_CLASS[] = L"SgStartPanel";
 static const WCHAR PANEL_CLASS[]    = L"SgStartWindow";
@@ -166,8 +167,24 @@ static void run_native_lock(void)
     LockWorkStation();
 }
 
+/* Is a power-rail action forbidden by machine policy (Group Policy)? sg-start
+ * honours the same restrictions Windows' shell does: NoClose disables shut
+ * down, StartMenuLogoff removes sign-out. SHRestricted reads the machine
+ * policy from HKLM first (wine-sg 0025), which an administrator sets and a user
+ * cannot override. */
+static BOOL rail_blocked(int which)
+{
+    switch (which)
+    {
+    case RAIL_POWER:   return SHRestricted(REST_NOCLOSE) != 0;
+    case RAIL_SIGNOUT: return SHRestricted(REST_STARTMENULOGOFF) != 0;
+    default:           return FALSE;
+    }
+}
+
 static void rail_action(int which)
 {
+    if (rail_blocked(which)) return;   /* forbidden by policy */
     switch (which)
     {
     case RAIL_LOCK:    run_native_lock(); break;
@@ -188,7 +205,9 @@ static RECT rail_button_rect(int i)
 static void draw_rail_glyph(HDC dc, RECT r, int which, BOOL hot)
 {
     int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
-    HPEN pen = CreatePen(PS_SOLID, 2, hot ? COL_TEXT : COL_SUBTLE);
+    BOOL blocked = rail_blocked(which);
+    HPEN pen = CreatePen(PS_SOLID, 2, blocked ? COL_DIM : (hot ? COL_TEXT : COL_SUBTLE));
+    if (blocked) hot = FALSE;   /* never draw a disabled control as hot */
     HPEN old = SelectObject(dc, pen);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
     switch (which)
