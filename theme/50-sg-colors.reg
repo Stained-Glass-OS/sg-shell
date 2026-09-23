@@ -1,0 +1,42 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- default window colours (the "Stained Glass Light" palette).
+;
+; Wine draws window captions, frames, menus and classic controls from these
+; system colours; its visual-style support themes controls but never the title
+; bar. Shipping them in the Default User profile is what replaces the gray and
+; dated blue-gradient bars with a flat, light look, for every user.
+;
+; Our own palette: white surfaces and captions, neutral grays for 3D edges, and
+; the project's purple accent for selection. Colours are "R G B".
+
+[HKEY_CURRENT_USER\Control Panel\Colors]
+"ActiveTitle"="255 255 255"
+"GradientActiveTitle"="255 255 255"
+"TitleText"="0 0 0"
+"InactiveTitle"="255 255 255"
+"GradientInactiveTitle"="255 255 255"
+"InactiveTitleText"="150 150 150"
+"ActiveBorder"="240 240 240"
+"InactiveBorder"="240 240 240"
+"WindowFrame"="100 100 100"
+"Menu"="249 249 249"
+"MenuBar"="255 255 255"
+"MenuText"="0 0 0"
+"MenuHilight"="112 48 192"
+"Window"="255 255 255"
+"WindowText"="0 0 0"
+"AppWorkspace"="200 200 200"
+"Hilight"="112 48 192"
+"HilightText"="255 255 255"
+"HotTrackingColor"="112 48 192"
+"ButtonFace"="240 240 240"
+"ButtonHilight"="255 255 255"
+"ButtonLight"="227 227 227"
+"ButtonShadow"="160 160 160"
+"ButtonDkShadow"="105 105 105"
+"ButtonText"="0 0 0"
+"GrayText"="109 109 109"
+"Scrollbar"="240 240 240"
+"InfoWindow"="255 255 255"
+"InfoText"="0 0 0"
