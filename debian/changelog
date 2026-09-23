@@ -1,0 +1,5 @@
+sg-shell (0.1.0-1) unstable; urgency=medium
+
+  * Initial package: sg-start, the Windows 10 Start menu.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Tue, 22 Sep 2026 18:52:18 -0700

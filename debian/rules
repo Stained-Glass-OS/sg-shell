@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+export DEB_BUILD_OPTIONS ?= nocheck
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) build
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/sg-shell/usr/libexec/stained-glass/shell
+	install -m0755 build/sg-start64.exe build/sg-start32.exe \
+	    debian/sg-shell/usr/libexec/stained-glass/shell/

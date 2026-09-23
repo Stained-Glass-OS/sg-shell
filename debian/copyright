@@ -1,0 +1,6 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: sg-shell
+
+Files: *
+Copyright: 2026 David Hamner and the Stained Glass OS contributors
+License: AGPL-3.0-or-later

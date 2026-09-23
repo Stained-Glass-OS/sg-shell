@@ -1,0 +1,17 @@
+Source: sg-shell
+Section: x11
+Priority: optional
+Maintainer: Stained Glass OS <dev@stained-glass.example>
+Build-Depends: debhelper-compat (= 13), gcc-mingw-w64-x86-64, gcc-mingw-w64-i686
+Standards-Version: 4.7.0
+Homepage: https://github.com/Stained-Glass-OS/sg-shell
+Rules-Requires-Root: no
+
+Package: sg-shell
+Architecture: all
+Depends: ${misc:Depends}, wine-sg | wine
+Description: Stained Glass OS shell panels (Windows 10 Start menu)
+ Windows 10-style panels for the surfaces Wine's explorer does not provide --
+ currently sg-start, the Start menu. The taskbar's appearance is handled in
+ wine-sg, not here. Panels install as PE programs under
+ /usr/libexec/stained-glass/shell.
