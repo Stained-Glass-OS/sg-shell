@@ -69,11 +69,14 @@ static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
     int top = cy - h / 2, bottom = cy + h / 2;
     int arch = 7;                            /* height of the arched top */
     int body = top + arch;                   /* where the arch meets the body */
-    int l3 = left + w / 3, l23 = left + 2 * w / 3;
-    static const COLORREF light[3] = {
-        RGB(0x00, 0x78, 0xD7),               /* blue  */
-        RGB(0xE8, 0xB3, 0x00),               /* amber */
-        RGB(0xC0, 0x3A, 0x4B),               /* rose  */
+    /* Four lights in the project's own stained-glass palette -- purple,
+     * magenta, turquoise, amber -- chosen to be distinctive and to share no
+     * colour with any operating system's logo. */
+    static const COLORREF light[4] = {
+        RGB(0x7B, 0x2F, 0xBE),               /* purple    */
+        RGB(0xC4, 0x2E, 0x8E),               /* magenta   */
+        RGB(0x12, 0xB5, 0xB0),               /* turquoise */
+        RGB(0xE8, 0xA2, 0x00),               /* amber     */
     };
     HRGN win, arc, tmp;
     HPEN lead = CreatePen(PS_SOLID, 1, COL_BAR);
@@ -88,10 +91,10 @@ static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
     CombineRgn(tmp, win, arc, RGN_OR);
     SelectClipRgn(dc, tmp);
 
-    for (i = 0; i < 3; i++)
+    for (i = 0; i < 4; i++)
     {
-        int x0 = (i == 0) ? left : (i == 1) ? l3 : l23;
-        int x1 = (i == 0) ? l3   : (i == 1) ? l23 : right;
+        int x0 = left + (w * i) / 4;
+        int x1 = left + (w * (i + 1)) / 4;
         HBRUSH b = CreateSolidBrush(hot ? COL_BAR_HOVER : light[i]);
         RECT strip = { x0, top, x1, bottom };
         FillRect(dc, &strip, b);
@@ -106,8 +109,11 @@ static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
     MoveToEx(dc, left, body, NULL);  LineTo(dc, left, bottom);
     MoveToEx(dc, right, body, NULL); LineTo(dc, right, bottom);
     MoveToEx(dc, left, bottom, NULL); LineTo(dc, right, bottom);
-    MoveToEx(dc, l3, top + 2, NULL);  LineTo(dc, l3, bottom);
-    MoveToEx(dc, l23, top + 2, NULL); LineTo(dc, l23, bottom);
+    for (i = 1; i < 4; i++)
+    {
+        int x = left + (w * i) / 4;
+        MoveToEx(dc, x, top + 2, NULL); LineTo(dc, x, bottom);
+    }
 
     SelectObject(dc, oldpen);
     DeleteObject(lead);
