@@ -11,8 +11,9 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d debian/sg-shell/usr/libexec/stained-glass/shell
 	install -m0755 build/sg-start64.exe build/sg-start32.exe \
+	    build/sg-mstsc64.exe build/sg-mstsc32.exe \
 	    debian/sg-shell/usr/libexec/stained-glass/shell/
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
-	install -m0644 theme/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
+	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/

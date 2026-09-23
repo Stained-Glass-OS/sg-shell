@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- `mstsc` in the Run box and from ShellExecute starts our
+; Remote Desktop Connection (sg-mstsc), as it would start Microsoft's on
+; Windows. Scripts and support tools that call `mstsc /v:host` find it too.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\mstsc.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-mstsc64.exe"

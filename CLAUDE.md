@@ -42,6 +42,7 @@ wine-sg or an X server.
 | Panel | State |
 |---|---|
 | `sg-start` | The Start menu: a persistent listener + a dark Win10 panel above the Start button. Lists programs from the Start Menu folders (plus built-ins), launches them, and has a power / lock / sign-out rail. Explorer's Start button toggles it (`SgStartPanel`, `WM_USER+10`); falls back to Wine's menu if it is not running. |
+| `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -63,6 +64,27 @@ edge. The plan is to keep `Shell_TrayWnd` alive (applications register tray
 icons with it) while hiding its visual, and forward what it holds into our bar.
 Until that lands both may be visible; the gate runs the panel standalone so it
 tests our bar, not the interaction.
+
+## sg-mstsc: .rdp files are untrusted input
+
+They arrive as email attachments, so sg-mstsc treats them as hostile:
+
+- **Every value is its own quoted argument** to FreeRDP, and server and user
+  names are validated to conservative character sets -- a `/drive:` smuggled in
+  through an address or user name would share this machine's disks with the
+  server. The gate tries exactly that, and expects a refusal.
+- **Redirection settings in .rdp files are ignored.** It redirects the clipboard
+  (mstsc's default) and nothing else.
+- **The password is never on a command line**, where any local user could read
+  it from `/proc`: `sdl-freerdp3` prompts in its own dialog, which is also why it
+  is the SDL client and not `xfreerdp3` (no terminal to prompt on).
+
+`test/mstsc-check.sh` round-trips awkward strings through `append_arg` and
+Wine's command-line-to-argv conversion into a fake native client. It has been
+seen to fail: a mutant that never quotes fails it. (The first version of the
+test did not -- every real argument is space-free, and CreateProcess resolves an
+unquoted path by trying each space-separated prefix -- hence `/sg-echo-args`,
+honoured only with `SG_MSTSC_TEST=1`.)
 
 ## Start bar alignment
 

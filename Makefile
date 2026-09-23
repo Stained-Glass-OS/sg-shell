@@ -7,7 +7,7 @@ SG_CFLAGS := -O2 -municode -mwindows -Wall -Wextra
 LIBS     = -lshell32 -lgdi32 -luser32
 BUILD    = build
 
-PANELS = sg-taskbar sg-start
+PANELS = sg-taskbar sg-start sg-mstsc
 
 .PHONY: all build test clean
 all: build
@@ -24,6 +24,7 @@ build:
 test: build
 	@sh test/render-check.sh
 	@sh test/start-check.sh
+	@sh test/mstsc-check.sh
 
 clean:
 	rm -rf $(BUILD)

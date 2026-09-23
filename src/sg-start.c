@@ -136,6 +136,20 @@ static void build_list(void)
     /* A couple of built-ins so the menu is never empty. */
     add_entry(L"Notepad", L"notepad.exe");
     add_entry(L"File Explorer", L"explorer.exe");
+    /* Remote Desktop Connection, when sg-mstsc is installed beside us --
+     * found next to our own executable, so no install path is hardcoded. */
+    {
+        static const WCHAR mstsc[] = L"sg-mstsc64.exe";
+        WCHAR self[MAX_PATH], *slash;
+        DWORD n = GetModuleFileNameW(NULL, self, MAX_PATH);
+        if (n && n < MAX_PATH && (slash = wcsrchr(self, '\\')) &&
+            (size_t)(slash + 1 - self) + ARRAYSIZE(mstsc) <= MAX_PATH)
+        {
+            lstrcpyW(slash + 1, mstsc);
+            if (GetFileAttributesW(self) != INVALID_FILE_ATTRIBUTES)
+                add_entry(L"Remote Desktop Connection", self);
+        }
+    }
     qsort(g_entries, g_count, sizeof(*g_entries), entry_cmp);
 }
 
