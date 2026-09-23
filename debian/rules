@@ -13,6 +13,7 @@ override_dh_auto_install:
 	install -m0755 build/sg-start64.exe build/sg-start32.exe \
 	    build/sg-mstsc64.exe build/sg-mstsc32.exe \
 	    build/sg-control64.exe build/sg-control32.exe \
+	    build/sg-gpresult64.exe build/sg-gpresult32.exe \
 	    debian/sg-shell/usr/libexec/stained-glass/shell/
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.

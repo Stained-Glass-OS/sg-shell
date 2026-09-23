@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- `gpresult` (Run box / ShellExecute) opens the Group Policy
+; result tool (sg-gpresult), as it would run Microsoft's on Windows. For use as
+; a bare command in cmd/PowerShell the tool also wants to be on the machine
+; PATH; that is handled where the shell package installs its programs.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\gpresult.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-gpresult64.exe"

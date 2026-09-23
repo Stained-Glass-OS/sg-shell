@@ -4,10 +4,15 @@ MINGW32 ?= i686-w64-mingw32-gcc
 # Not CFLAGS: dpkg-buildpackage exports its own CFLAGS (no -municode),
 # which would drop the Unicode entry point and break the link.
 SG_CFLAGS := -O2 -municode -mwindows -Wall -Wextra
+# Console subsystem: gpresult is a command-line tool whose report must reach the
+# console/pipe it is run from, so it links -mconsole, not -mwindows.
+SG_CON_CFLAGS := -O2 -municode -mconsole -Wall -Wextra
 LIBS     = -lshell32 -lgdi32 -luser32
 BUILD    = build
 
 PANELS = sg-taskbar sg-start sg-mstsc sg-control
+# Console tools (subsystem console), built the same way but without -mwindows.
+CONSOLE_TOOLS = sg-gpresult
 
 .PHONY: all build test clean
 all: build
@@ -19,6 +24,10 @@ build:
 	    $(MINGW64) $(SG_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit)"; \
 	    $(MINGW32) $(SG_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit)"; \
 	done
+	@for p in $(CONSOLE_TOOLS); do \
+	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
+	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
+	done
 
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build
@@ -26,6 +35,7 @@ test: build
 	@sh test/start-check.sh
 	@sh test/mstsc-check.sh
 	@sh test/control-check.sh
+	@sh test/gpresult-check.sh
 
 clean:
 	rm -rf $(BUILD)

@@ -1,3 +1,12 @@
+sg-shell (0.1.0-3) unstable; urgency=medium
+
+  * sg-gpresult: a Group Policy result tool (like `gpresult /r`) that reports
+    the machine and user policy in force, read from the live registry; a console
+    program, `gpresult.exe` via App Paths. Gated by test/gpresult-check.sh,
+    which plants known machine and user policies and requires them in the report.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Wed, 23 Sep 2026 16:02:19 -0700
+
 sg-shell (0.1.0-2) unstable; urgency=medium
 
   * Control Panel (sg-control): shows the machine's real state; control.exe
