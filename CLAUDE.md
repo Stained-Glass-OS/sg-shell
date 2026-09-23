@@ -8,12 +8,18 @@ Project brief: [`stained-glass/docs/BRIEF.md`](https://github.com/Stained-Glass-
 
 ## The architecture, and why
 
-Wine's `explorer` **stays the shell process**. It owns `Shell_TrayWnd`, the
-tray protocol and AppBar registration -- the surface applications depend on. We
-do not replace it; we dock beside it. Each panel is a program of its own that
-registers as an AppBar, reserves its edge, and draws the Windows 10 look. That
-keeps applications working (they talk to the real shell) and keeps our UI on
-our side of a clean boundary.
+Wine's `explorer` **stays the shell process and keeps its taskbar**. It owns
+`Shell_TrayWnd`, the tray protocol, the taskbar buttons, the taskbar position
+and `ITaskbarList` -- the surface applications depend on. The taskbar's
+Windows 10 *appearance* is applied by upgrading that bar in place, in
+`wine-sg` (patch 0012): most Windows-compatible, since no protocol path
+changes.
+
+**This repo is for the surfaces explorer does not have** -- a Start menu, a
+notification centre, a search panel. Each is a program of its own, launched by
+the shell and, where it docks, registering as an AppBar. That keeps
+applications talking to the real shell while our new UI stays on our side of a
+clean, AGPL boundary.
 
 **That boundary is also the licence boundary.** These panels are AGPL and carry
 no Wine code. Anything that must change inside `explorer` belongs in `wine-sg`
@@ -35,7 +41,8 @@ wine-sg or an X server.
 
 | Panel | State |
 |---|---|
-| `sg-taskbar` | The bar: docks bottom via AppBar, Start glyph left, clock right. Task buttons, tray and the Start-panel hook are next. |
+| `sg-start` | The Start menu (planned): opens when explorer's Start button is clicked. |
+| `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
 
