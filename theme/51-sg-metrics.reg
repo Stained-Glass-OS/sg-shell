@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- default window metrics.
+;
+; A taller, Windows-10-proportioned title bar. Values are negative twips
+; (-15 per pixel at 96 DPI), which is how Windows stores them and what Wine
+; reads: -450 is 30 pixels.
+;
+; The caption buttons stay square (CaptionWidth = CaptionHeight). Wine reserves
+; room for the title text by caption height per button, so buttons wider than
+; tall would let a long title run underneath them.
+
+[HKEY_CURRENT_USER\Control Panel\Desktop\WindowMetrics]
+"CaptionHeight"="-450"
+"CaptionWidth"="-450"
