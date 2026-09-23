@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- `control` in the Run box and from ShellExecute opens the
+; Control Panel (sg-control), as it would open Microsoft's on Windows. Support
+; tools and scripts that call control.exe find it too.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-control64.exe"

@@ -151,6 +151,19 @@ static void build_list(void)
                 add_entry(L"Remote Desktop Connection", self);
         }
     }
+    /* Control Panel, likewise found next to our own executable. */
+    {
+        static const WCHAR control[] = L"sg-control64.exe";
+        WCHAR self[MAX_PATH], *slash;
+        DWORD n = GetModuleFileNameW(NULL, self, MAX_PATH);
+        if (n && n < MAX_PATH && (slash = wcsrchr(self, '\\')) &&
+            (size_t)(slash + 1 - self) + ARRAYSIZE(control) <= MAX_PATH)
+        {
+            lstrcpyW(slash + 1, control);
+            if (GetFileAttributesW(self) != INVALID_FILE_ATTRIBUTES)
+                add_entry(L"Control Panel", self);
+        }
+    }
     qsort(g_entries, g_count, sizeof(*g_entries), entry_cmp);
 }
 

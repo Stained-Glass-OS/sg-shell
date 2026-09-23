@@ -43,6 +43,7 @@ wine-sg or an X server.
 |---|---|
 | `sg-start` | The Start menu: a persistent listener + a dark Win10 panel above the Start button. Lists programs from the Start Menu folders (plus built-ins), launches them, and has a power / lock / sign-out rail. Explorer's Start button toggles it (`SgStartPanel`, `WM_USER+10`); falls back to Wine's menu if it is not running. |
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
+| `sg-control` | **Control Panel.** A window showing the machine's real state -- edition, computer name, system type, the signed-in user and whether they are an administrator in this session, how Windows Update is managed, and how many machine policies are in force. Reads the live token, registry and system, not canned strings (`--dump` prints them for the gate). `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
