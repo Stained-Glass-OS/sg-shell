@@ -52,72 +52,48 @@ static RECT clock_rect(HWND hwnd)
     return r;
 }
 
-/* The Start mark: an arched stained-glass window.
+/* The Start mark: four stained-glass tiles set as a diamond.
  *
- * A lancet window -- a rounded arch over a rectangular body -- with vertical
- * leading dividing it into three coloured lights. It reads unmistakably as
- * stained glass, the project's namesake, and looks nothing like any operating
- * system's logo: no four-square flag, no single glyph anyone else uses. On
- * hover the glass goes to one tint so the whole mark reads as a button.
+ * Four small diamond tiles -- each a square turned on its point -- arranged
+ * around the centre as a larger diamond, held in dark leading. Purple,
+ * magenta, turquoise and amber: the project's own palette, sharing no colour
+ * with any operating system's logo. On hover all four go to one tint so the
+ * mark reads as a single button.
  */
 static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
 {
     int cx = (area.left + area.right) / 2;
     int cy = (area.top + area.bottom) / 2;
-    int w = 16, h = 20;                     /* window bounds */
-    int left = cx - w / 2, right = cx + w / 2;
-    int top = cy - h / 2, bottom = cy + h / 2;
-    int arch = 7;                            /* height of the arched top */
-    int body = top + arch;                   /* where the arch meets the body */
-    /* Four lights in the project's own stained-glass palette -- purple,
-     * magenta, turquoise, amber -- chosen to be distinctive and to share no
-     * colour with any operating system's logo. */
-    static const COLORREF light[4] = {
-        RGB(0x7B, 0x2F, 0xBE),               /* purple    */
-        RGB(0xC4, 0x2E, 0x8E),               /* magenta   */
-        RGB(0x12, 0xB5, 0xB0),               /* turquoise */
-        RGB(0xE8, 0xA2, 0x00),               /* amber     */
+    int half = 6;                            /* half-diagonal of each tile */
+    int off = half + 2;                      /* centre-to-tile spacing (with leading) */
+    static const COLORREF glass[4] = {
+        RGB(0x7B, 0x2F, 0xBE),               /* purple    (top)    */
+        RGB(0xC4, 0x2E, 0x8E),               /* magenta   (right)  */
+        RGB(0xE8, 0xA2, 0x00),               /* amber     (bottom) */
+        RGB(0x12, 0xB5, 0xB0),               /* turquoise (left)   */
     };
-    HRGN win, arc, tmp;
-    HPEN lead = CreatePen(PS_SOLID, 1, COL_BAR);
-    HPEN oldpen;
+    /* Tile centres at the four compass points around the mark's centre. */
+    const POINT at[4] = {
+        { cx, cy - off }, { cx + off, cy }, { cx, cy + off }, { cx - off, cy },
+    };
     int i;
-
-    /* The window silhouette: a rectangle body plus an elliptical arch on top,
-     * unioned, used as a clip so the coloured lights fill exactly the glass. */
-    win = CreateRectRgn(left, body, right, bottom);
-    arc = CreateEllipticRgn(left, top, right, body + arch);
-    tmp = CreateRectRgn(0, 0, 0, 0);
-    CombineRgn(tmp, win, arc, RGN_OR);
-    SelectClipRgn(dc, tmp);
 
     for (i = 0; i < 4; i++)
     {
-        int x0 = left + (w * i) / 4;
-        int x1 = left + (w * (i + 1)) / 4;
-        HBRUSH b = CreateSolidBrush(hot ? COL_BAR_HOVER : light[i]);
-        RECT strip = { x0, top, x1, bottom };
-        FillRect(dc, &strip, b);
+        POINT p[4] = {
+            { at[i].x,        at[i].y - half },   /* top    */
+            { at[i].x + half, at[i].y        },   /* right  */
+            { at[i].x,        at[i].y + half },   /* bottom */
+            { at[i].x - half, at[i].y        },   /* left   */
+        };
+        HBRUSH b = CreateSolidBrush(hot ? COL_BAR_HOVER : glass[i]);
+        HBRUSH oldb = SelectObject(dc, b);
+        HPEN oldp = SelectObject(dc, GetStockObject(NULL_PEN));
+        Polygon(dc, p, 4);
+        SelectObject(dc, oldp);
+        SelectObject(dc, oldb);
         DeleteObject(b);
     }
-    SelectClipRgn(dc, NULL);
-
-    /* The leading: outline the silhouette and draw the two vertical cames. */
-    oldpen = SelectObject(dc, lead);
-    SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Arc(dc, left, top, right, body + arch, left, body, right, body);
-    MoveToEx(dc, left, body, NULL);  LineTo(dc, left, bottom);
-    MoveToEx(dc, right, body, NULL); LineTo(dc, right, bottom);
-    MoveToEx(dc, left, bottom, NULL); LineTo(dc, right, bottom);
-    for (i = 1; i < 4; i++)
-    {
-        int x = left + (w * i) / 4;
-        MoveToEx(dc, x, top + 2, NULL); LineTo(dc, x, bottom);
-    }
-
-    SelectObject(dc, oldpen);
-    DeleteObject(lead);
-    DeleteObject(win); DeleteObject(arc); DeleteObject(tmp);
 }
 
 static void draw_clock(HDC dc, RECT area)
