@@ -52,27 +52,66 @@ static RECT clock_rect(HWND hwnd)
     return r;
 }
 
-/* The Start glyph: four rounded tiles, drawn by us. It reads as the familiar
- * four-pane mark without being anyone's copyrighted artwork. */
+/* The Start mark: an arched stained-glass window.
+ *
+ * A lancet window -- a rounded arch over a rectangular body -- with vertical
+ * leading dividing it into three coloured lights. It reads unmistakably as
+ * stained glass, the project's namesake, and looks nothing like any operating
+ * system's logo: no four-square flag, no single glyph anyone else uses. On
+ * hover the glass goes to one tint so the whole mark reads as a button.
+ */
 static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
 {
     int cx = (area.left + area.right) / 2;
     int cy = (area.top + area.bottom) / 2;
-    int tile = 7, gap = 3;
-    int left = cx - tile - gap / 2;
-    int top  = cy - tile - gap / 2;
-    HBRUSH brush = CreateSolidBrush(hot ? COL_ACCENT : COL_TEXT);
-    int row, col;
+    int w = 16, h = 20;                     /* window bounds */
+    int left = cx - w / 2, right = cx + w / 2;
+    int top = cy - h / 2, bottom = cy + h / 2;
+    int arch = 7;                            /* height of the arched top */
+    int body = top + arch;                   /* where the arch meets the body */
+    int l3 = left + w / 3, l23 = left + 2 * w / 3;
+    static const COLORREF light[3] = {
+        RGB(0x00, 0x78, 0xD7),               /* blue  */
+        RGB(0xE8, 0xB3, 0x00),               /* amber */
+        RGB(0xC0, 0x3A, 0x4B),               /* rose  */
+    };
+    HRGN win, arc, tmp;
+    HPEN lead = CreatePen(PS_SOLID, 1, COL_BAR);
+    HPEN oldpen;
+    int i;
 
-    for (row = 0; row < 2; row++)
-        for (col = 0; col < 2; col++)
-        {
-            RECT t = { left + col * (tile + gap), top + row * (tile + gap), 0, 0 };
-            t.right = t.left + tile;
-            t.bottom = t.top + tile;
-            FillRect(dc, &t, brush);
-        }
-    DeleteObject(brush);
+    /* The window silhouette: a rectangle body plus an elliptical arch on top,
+     * unioned, used as a clip so the coloured lights fill exactly the glass. */
+    win = CreateRectRgn(left, body, right, bottom);
+    arc = CreateEllipticRgn(left, top, right, body + arch);
+    tmp = CreateRectRgn(0, 0, 0, 0);
+    CombineRgn(tmp, win, arc, RGN_OR);
+    SelectClipRgn(dc, tmp);
+
+    for (i = 0; i < 3; i++)
+    {
+        int x0 = (i == 0) ? left : (i == 1) ? l3 : l23;
+        int x1 = (i == 0) ? l3   : (i == 1) ? l23 : right;
+        HBRUSH b = CreateSolidBrush(hot ? COL_BAR_HOVER : light[i]);
+        RECT strip = { x0, top, x1, bottom };
+        FillRect(dc, &strip, b);
+        DeleteObject(b);
+    }
+    SelectClipRgn(dc, NULL);
+
+    /* The leading: outline the silhouette and draw the two vertical cames. */
+    oldpen = SelectObject(dc, lead);
+    SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Arc(dc, left, top, right, body + arch, left, body, right, body);
+    MoveToEx(dc, left, body, NULL);  LineTo(dc, left, bottom);
+    MoveToEx(dc, right, body, NULL); LineTo(dc, right, bottom);
+    MoveToEx(dc, left, bottom, NULL); LineTo(dc, right, bottom);
+    MoveToEx(dc, l3, top + 2, NULL);  LineTo(dc, l3, bottom);
+    MoveToEx(dc, l23, top + 2, NULL); LineTo(dc, l23, bottom);
+
+    SelectObject(dc, oldpen);
+    DeleteObject(lead);
+    DeleteObject(win); DeleteObject(arc); DeleteObject(tmp);
 }
 
 static void draw_clock(HDC dc, RECT area)
