@@ -5,7 +5,7 @@ CFLAGS  ?= -O2 -municode -mwindows -Wall -Wextra
 LIBS     = -lshell32 -lgdi32 -luser32
 BUILD    = build
 
-PANELS = sg-taskbar
+PANELS = sg-taskbar sg-start
 
 .PHONY: all build test clean
 all: build
@@ -21,6 +21,7 @@ build:
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build
 	@sh test/render-check.sh
+	@sh test/start-check.sh
 
 clean:
 	rm -rf $(BUILD)
