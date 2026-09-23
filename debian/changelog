@@ -1,3 +1,11 @@
+sg-shell (0.1.0-2) unstable; urgency=medium
+
+  * Control Panel (sg-control): shows the machine's real state; control.exe
+    maps to it and the Start menu lists it.
+  * sg-start honours machine Group Policy (NoClose, StartMenuLogOff).
+
+ -- Stained Glass OS <dev@stained-glass.example>  Wed, 23 Sep 2026 15:00:10 -0700
+
 sg-shell (0.1.0-1) unstable; urgency=medium
 
   * Initial package: sg-start, the Windows 10 Start menu.
