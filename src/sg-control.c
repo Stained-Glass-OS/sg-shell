@@ -21,7 +21,7 @@
 #include <stdio.h>
 
 #define WIN_W 620
-#define WIN_H 460
+#define WIN_H 620
 #define MARGIN 24
 
 #define COL_BG      RGB(0x20, 0x20, 0x20)
@@ -41,7 +41,35 @@ struct facts {
     BOOL  is_admin;         /* administrator in THIS session (split token) */
     WCHAR update[128];
     int   policy_count;
+    WCHAR os_build[64];     /* the OS build string, from the registry */
+    WCHAR cpu[128];         /* processor name, from the registry */
+    WCHAR ram[32];          /* installed physical memory, human-readable */
+    int   program_count;    /* installed programs (Uninstall entries) */
 };
+
+/* Read a REG_SZ value into out; leave out untouched on any failure. */
+static void reg_read_sz(HKEY root, const WCHAR *sub, const WCHAR *val,
+                        WCHAR *out, DWORD out_cch)
+{
+    HKEY k;
+    DWORD type, cb = out_cch * sizeof(WCHAR);
+    if (RegOpenKeyExW(root, sub, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    if (RegQueryValueExW(k, val, NULL, &type, (BYTE *)out, &cb) == ERROR_SUCCESS &&
+        (type == REG_SZ || type == REG_EXPAND_SZ))
+        out[out_cch - 1] = 0;   /* ensure termination */
+    RegCloseKey(k);
+}
+
+/* Count the subkeys under a key (0 if it does not open). */
+static int count_subkeys(HKEY root, const WCHAR *sub)
+{
+    HKEY k;
+    DWORD subs = 0;
+    if (RegOpenKeyExW(root, sub, 0, KEY_READ, &k) != ERROR_SUCCESS) return 0;
+    RegQueryInfoKeyW(k, NULL, NULL, NULL, &subs, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    RegCloseKey(k);
+    return (int)subs;
+}
 
 /* the signed-in user's name, via the process token's SID */
 static void get_user_name(WCHAR *out, size_t out_cch)
@@ -116,6 +144,43 @@ static void gather(struct facts *f)
         count_policy_values(HKEY_LOCAL_MACHINE,
             L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System") +
         count_policy_values(HKEY_LOCAL_MACHINE, L"Software\\Policies");
+
+    /* OS build, from where Windows keeps it. */
+    lstrcpyW(f->os_build, L"(unknown)");
+    {
+        WCHAR disp[32] = L"", build[32] = L"";
+        reg_read_sz(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                    L"DisplayVersion", disp, ARRAYSIZE(disp));
+        reg_read_sz(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                    L"CurrentBuild", build, ARRAYSIZE(build));
+        if (disp[0] && build[0]) _snwprintf(f->os_build, ARRAYSIZE(f->os_build), L"%ls (build %ls)", disp, build);
+        else if (build[0]) _snwprintf(f->os_build, ARRAYSIZE(f->os_build), L"build %ls", build);
+    }
+
+    /* Processor, from the hardware description the loader writes. */
+    lstrcpyW(f->cpu, L"(unknown)");
+    reg_read_sz(HKEY_LOCAL_MACHINE,
+                L"Hardware\\Description\\System\\CentralProcessor\\0",
+                L"ProcessorNameString", f->cpu, ARRAYSIZE(f->cpu));
+
+    /* Installed physical memory. */
+    {
+        MEMORYSTATUSEX ms;
+        ms.dwLength = sizeof(ms);
+        if (GlobalMemoryStatusEx(&ms)) {
+            double gb = (double)ms.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
+            _snwprintf(f->ram, ARRAYSIZE(f->ram), L"%.1f GB", gb);
+        } else lstrcpyW(f->ram, L"(unknown)");
+    }
+
+    /* Installed programs: the classic Uninstall entries, machine and user. */
+    f->program_count =
+        count_subkeys(HKEY_LOCAL_MACHINE,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall") +
+        count_subkeys(HKEY_LOCAL_MACHINE,
+            L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall") +
+        count_subkeys(HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall");
 }
 
 /* ---- drawing ----------------------------------------------------------- */
@@ -177,12 +242,20 @@ static void paint(HWND hwnd)
     text(dc, MARGIN, 20, g_title, COL_TEXT, L"Control Panel");
 
     /* System card */
-    c.left = MARGIN; c.top = 70; c.right = WIN_W - MARGIN; c.bottom = 70 + 150;
+    c.left = MARGIN; c.top = 70; c.right = WIN_W - MARGIN; c.bottom = 70 + 176;
     card(dc, &c, L"System");
     y = c.top + 46;
     row(dc, c.left + 18, &y, L"Edition", f.edition);
+    row(dc, c.left + 18, &y, L"Version", f.os_build);
     row(dc, c.left + 18, &y, L"Computer name", f.computer);
     row(dc, c.left + 18, &y, L"System type", f.arch);
+
+    /* Device card */
+    c.top = c.bottom + 16; c.bottom = c.top + 96;
+    card(dc, &c, L"Device");
+    y = c.top + 46;
+    row(dc, c.left + 18, &y, L"Processor", f.cpu);
+    row(dc, c.left + 18, &y, L"Installed RAM", f.ram);
 
     /* Account card */
     c.top = c.bottom + 16; c.bottom = c.top + 96;
@@ -192,13 +265,15 @@ static void paint(HWND hwnd)
     row(dc, c.left + 18, &y, L"Administrator", f.is_admin ? L"Yes" : L"No (elevate to run as administrator)");
 
     /* Update + policy card */
-    c.top = c.bottom + 16; c.bottom = c.top + 96;
+    c.top = c.bottom + 16; c.bottom = c.top + 122;
     card(dc, &c, L"Updates and policy");
     y = c.top + 46;
     row(dc, c.left + 18, &y, L"Windows Update", f.update);
     _snwprintf(line, ARRAYSIZE(line), L"%d machine %s in force",
                f.policy_count, f.policy_count == 1 ? L"policy" : L"policies");
     row(dc, c.left + 18, &y, L"Group Policy", line);
+    _snwprintf(line, ARRAYSIZE(line), L"%d installed", f.program_count);
+    row(dc, c.left + 18, &y, L"Programs", line);
 
     EndPaint(hwnd, &ps);
 }
@@ -222,6 +297,10 @@ static int dump(void)
     wprintf(L"arch=%ls\n", f.arch);
     wprintf(L"admin=%ls\n", f.is_admin ? L"yes" : L"no");
     wprintf(L"policies=%d\n", f.policy_count);
+    wprintf(L"osbuild=%ls\n", f.os_build);
+    wprintf(L"cpu=%ls\n", f.cpu);
+    wprintf(L"ram=%ls\n", f.ram);
+    wprintf(L"programs=%d\n", f.program_count);
     return 0;
 }
 

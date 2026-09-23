@@ -26,6 +26,10 @@ usr=$(echo "$out" | sed -n 's/^user=//p')
 [ -n "$usr" ] && [ "$usr" != "(unknown)" ] && pass "reports the signed-in user ($usr)" || fail "no user name"
 echo "$out" | grep -q '^arch=' && pass "reports the system type" || fail "no system type"
 echo "$out" | grep -q '^policies=[0-9]' && pass "reports the policy count" || fail "no policy count"
+echo "$out" | grep -qE '^osbuild=.+' && pass "reports the OS build" || fail "no OS build"
+echo "$out" | grep -qE '^cpu=.+' && pass "reports the processor" || fail "no processor"
+echo "$out" | grep -qE '^ram=[0-9].* GB' && pass "reports installed RAM ($(echo "$out" | sed -n 's/^ram=//p'))" || fail "no RAM"
+echo "$out" | grep -qE '^programs=[0-9]+' && pass "reports installed program count" || fail "no program count"
 
 # 2. the window appears (needs an X server; skip that half if none).
 if command -v Xvfb >/dev/null && command -v xdotool >/dev/null; then

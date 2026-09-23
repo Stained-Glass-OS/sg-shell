@@ -1,3 +1,11 @@
+sg-shell (0.1.0-4) unstable; urgency=medium
+
+  * sg-control: deepen the Control Panel -- a Device card (processor, installed
+    RAM), the OS build in the System card, and a count of installed programs,
+    all read live from the registry and the system. Gate extended to assert them.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Wed, 23 Sep 2026 16:48:00 -0700
+
 sg-shell (0.1.0-3) unstable; urgency=medium
 
   * sg-gpresult: a Group Policy result tool (like `gpresult /r`) that reports
