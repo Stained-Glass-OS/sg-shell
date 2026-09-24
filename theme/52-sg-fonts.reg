@@ -1,0 +1,54 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- default fonts and text rendering.
+;
+; ClearType text (subpixel, RGB), as Windows ships. wine-sg patch 0064 makes
+; this setting decide rather than the host's fontconfig preference, so the
+; Control Panel and SystemParametersInfo(SPI_SETFONTSMOOTHING*) take effect.
+;
+; The interface font is Segoe UI 9 pt, as on Windows 10, in the window
+; metrics below (LOGFONTW; -12 is 9 pt at 96 DPI). Segoe UI itself is not
+; ours to ship, so its name -- and the dialog font names MS Shell Dlg, MS
+; Shell Dlg 2 and Tahoma (Wine's own Tahoma is hinted for bitmap-like
+; rendering) -- are substituted with Inter (fonts-inter, OFL).
+;
+; Fonts documents ask for by name are Replacements: metric-compatible open
+; fonts, used only while the real font is absent, so installing the real one
+; wins and text laid out for it keeps its line breaks.
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"FontSmoothing"="2"
+"FontSmoothingType"=dword:00000002
+"FontSmoothingGamma"=dword:00000578
+"FontSmoothingOrientation"=dword:00000001
+
+[HKEY_CURRENT_USER\Control Panel\Desktop\WindowMetrics]
+"CaptionFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+"SmCaptionFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+"MenuFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+"StatusFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+"MessageFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+"IconFont"=hex:f4,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,90,01,00,00,00,00,00,01,00,00,00,00,53,00,65,00,67,00,6f,00,65,00,20,00,55,00,49,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes]
+"Segoe UI"="Inter"
+"Segoe UI Semibold"="Inter SemiBold"
+"Segoe UI Light"="Inter Light"
+"Segoe UI Semilight"="Inter Light"
+"Segoe UI Black"="Inter Black"
+"MS Shell Dlg"="Inter"
+"MS Shell Dlg 2"="Inter"
+"Tahoma"="Inter"
+"MS Sans Serif"="Inter"
+"Microsoft Sans Serif"="Inter"
+
+[HKEY_CURRENT_USER\Software\Wine\Fonts\Replacements]
+"Arial"="Liberation Sans"
+"Helvetica"="Liberation Sans"
+"Times New Roman"="Liberation Serif"
+"Courier New"="Liberation Mono"
+"Calibri"="Carlito"
+"Cambria"="Caladea"
+"Consolas"="Cascadia Mono"
+"Lucida Console"="Cascadia Mono"
+"Segoe UI Mono"="Cascadia Mono"

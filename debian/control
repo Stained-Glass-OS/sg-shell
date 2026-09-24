@@ -9,7 +9,8 @@ Rules-Requires-Root: no
 
 Package: sg-shell
 Architecture: all
-Depends: ${misc:Depends}, wine-sg | wine
+Depends: ${misc:Depends}, wine-sg | wine, fonts-inter, fonts-liberation,
+         fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code
 Description: Stained Glass OS shell panels (Windows 10 Start menu)
  Windows 10-style panels for the surfaces Wine's explorer does not provide --
  currently sg-start, the Start menu. The taskbar's appearance is handled in
