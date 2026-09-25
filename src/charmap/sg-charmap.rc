@@ -1,0 +1,3 @@
+/* sg-charmap: its icon (generated into build/ by gen-icon.py) and the common-controls 6 manifest. */
+1 ICON "sg-charmap.ico"
+1 24 "sg-charmap.manifest"

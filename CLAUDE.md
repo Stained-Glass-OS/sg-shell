@@ -56,6 +56,7 @@ wine-sg or an X server.
 | `sg-paint` | **Paint** (`mspaint.exe`), an MS-Paint-class raster editor, our own drawing: Windows 10 Paint's ribbon (File menu; Home: Clipboard, Image -- rectangular/free-form select, select all, invert, delete, transparent selection, Crop, Resize and Skew, Rotate/flip --, Tools -- pencil, fill, text, eraser, colour picker, magnifier --, Brushes (6), Shapes (16, outline/fill), Size, Color 1/Color 2, 20-colour palette + custom row, Edit colors; View: zoom, gridlines, status bar, full screen), a canvas with resize handles, a status bar (cursor, selection, picture size, zoom slider), undo/redo, CF_DIB cut/copy/paste, files through WIC (PNG, JPEG, BMP, GIF, TIFF). App Paths `mspaint.exe` and the pictures' Edit verb: `defaults/71-sg-paint.reg`; sg-start lists it. See "Paint" below. |
 | `sg-sticky` | **Sticky Notes.** Borderless notes with a strip in a darker shade (+ new note, ... menu, x close), a RichEdit body (Ctrl+B/I/U, Ctrl+T strikethrough, Ctrl+Shift+L bullets, and a formatting bar), seven colours, Notes list with search, Delete note (asks). One process owns every note; notes save themselves (debounced) to `%LOCALAPPDATA%\Stained Glass\Sticky Notes\<id>.note` and come back at the next start. `stikynot.exe` resolves via App Paths (`defaults/78-sg-sticky.reg`); sg-start lists it. See "Sticky Notes" below. |
 | `sg-snip` | **Snipping Tool** (and Snip & Sketch's screen clip). `/clip` -- what explorer's Win+Shift+S and PrtScn run, and the `ms-screenclip:` URI -- freezes the screen, shows it dimmed with the mode bar (rectangle, free-form, window, full screen, close), puts the snip on the clipboard (CF_DIB, PNG; CF_BITMAP synthesized) and shows a "Snip saved to clipboard" toast that opens the editor. Without it: the Snipping Tool window (New, mode, delay 0/3/5/10 s) that grows into the editor -- pen, highlighter, eraser, crop, undo/redo, copy, save as PNG/JPEG/GIF/BMP (WIC) to `Pictures\Screenshots`. `snippingtool.exe` via App Paths (`defaults/72-sg-snip.reg`); sg-start lists it. See "Snipping Tool" below. |
+| `sg-charmap` | **Character Map** (`charmap.exe`) -- Wine has none. A font drop-down (every installed family), the font's characters in a 20-column grid (only what `GetFontUnicodeRanges` says it has), a magnified view while the mouse holds a cell or the keyboard moves, "Characters to copy" (in the chosen font) with Select and Copy, and the Advanced view: character set, search by name or `U+XXXX`/`0xXXXX` (a name search narrows the grid; Reset), Go to Unicode. The status bar names the character ("U+00E9: Latin Small Letter E With Acute") and gives Windows' Alt+0nnn keystroke. The font and the view are remembered in `HKCU\Software\Microsoft\CharMap`, as Windows keeps them. `defaults/77-sg-charmap.reg`; sg-start lists it. See "Character Map" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -605,3 +606,36 @@ comes back from there; the process exits once no note and no list is shown.
   (the colour not read back) and `-DSG_MUTANT_WIDE_MASK` (the black block)
   (`SG_STICKY_EXE=`) turn it red.
 
+## Character Map (sg-charmap)
+
+`src/charmap/main.c`. The window is a plain top-level window with
+`WS_EX_CONTROLPARENT` and `IsDialogMessage`, the grid a control of its own
+(`SgCharGrid`, `DLGC_WANTARROWS | DLGC_WANTCHARS`, and Enter), the magnified
+view an owned `WS_EX_NOACTIVATE` popup (`SgCharZoom`).
+
+- **Names come from the Unicode Character Database at build time**:
+  `gen-names.py` reads Debian's `unicode-data` (`/usr/share/unicode/
+  UnicodeData.txt`, `UNICODE_DATA=` to override; a Build-Depends) into
+  `build/charmap-names.c` -- the BMP's names in title case as a word list plus
+  indices (about 17 000 names). Ideographs, Hangul syllables (the Unicode
+  algorithm) and private use are named in code. Nothing generated is
+  committed; the data's Unicode License v3 notice is in `debian/copyright`.
+- **A label's mnemonic needs `WM_NEXTDLGCTL`**: `IsDialogMessage` sends it to
+  the "dialog" for `&Font :` and friends, and only `DefDlgProc` answers it --
+  so a non-dialog window must, or Alt+F does nothing. Mnemonics must be
+  unique ("C&haracter set" took Alt+H from "Searc&h for").
+- **Growing the window leaves the old status bar's pixels** under the
+  advanced controls until the whole window is invalidated.
+- **Under Xvfb the grid's glyphs render without anti-aliasing** (4 colours);
+  the gate measures ink, not a colour count.
+- **Gate: `test/charmap-check.sh`** (display :117): `charmap.exe` through
+  App Paths on Arial, a font chosen with Alt+F and a letter (and remembered),
+  typing a character in the grid selects it, arrows, Enter and Alt+S add to
+  "Characters to copy", Alt+C puts exactly that on the clipboard (read by
+  `test/sg-charmap-probe.c`), the magnified view while the mouse holds a cell,
+  the Advanced view: `u+00e9` selects é with its name and Alt+0233, "omega"
+  narrows the grid and Reset restores it, Go to Unicode 20AC is the Euro Sign.
+  `+` is typed as Shift held down on the X keyboard (`xdotool type` loses
+  Shift). Screenshots `build/charmap-*.png`. Mutants built with
+  `-DSG_MUTANT_SELECT` (Select adds the next character) or
+  `-DSG_MUTANT_SEARCH` (no `U+` search) via `SG_CHARMAP_EXE=` turn it red.

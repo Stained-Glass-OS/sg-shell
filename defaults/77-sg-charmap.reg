@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Character Map (sg-charmap). Wine has no charmap.exe;
+; `charmap` in the Run box, ShellExecute and scripts find ours here.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\charmap.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-charmap64.exe"

@@ -41,6 +41,10 @@ PAINT_LIBS = -lcomdlg32 -lcomctl32 -lshell32 -lgdi32 -luser32 -lmsimg32 -lole32 
 STICKY_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -lole32 -luuid
 # Snipping Tool (sg-snip): WIC for saving, its icon drawn at build time.
 SNIP_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lgdi32 -luser32 -lole32 -luuid -lwindowscodecs -lmsimg32
+# Character Map (sg-charmap): character names generated from the Unicode
+# Character Database (Debian's unicode-data) into build/charmap-names.c.
+CHARMAP_LIBS = -lcomctl32 -lgdi32 -luser32 -ladvapi32
+UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -95,6 +99,11 @@ build:
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-snip.rc -O coff -o $(BUILD)/sg-snip-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
 	    && echo "built sg-snip (64-bit)"
+	@python3 src/charmap/gen-names.py $(UNICODE_DATA) $(BUILD)/charmap-names.c
+	@python3 src/charmap/gen-icon.py $(BUILD)/sg-charmap.ico
+	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
+	    $(BUILD)/charmap-names.c $(BUILD)/sg-charmap-res64.o $(CHARMAP_LIBS) && echo "built sg-charmap (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -118,6 +127,7 @@ test: build
 	@sh test/paint-check.sh
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
+	@sh test/charmap-check.sh
 
 clean:
 	rm -rf $(BUILD)

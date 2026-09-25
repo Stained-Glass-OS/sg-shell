@@ -1,3 +1,16 @@
+sg-shell (0.1.0-18) unstable; urgency=medium
+
+  * sg-charmap: Character Map (charmap.exe; Wine has none) -- a font's
+    characters in a grid, a magnified view, Characters to copy with Select
+    and Copy, and the Advanced view (search by name or U+ code, Go to
+    Unicode); the status bar names each character from the Unicode
+    Character Database (generated at build time; Build-Depends
+    unicode-data) with its Alt+0nnn keystroke. App Paths:
+    defaults/77-sg-charmap.reg; in the Start menu.
+  * Gate: test/charmap-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 02:18:40 -0700
+
 sg-shell (0.1.0-17) unstable; urgency=medium
 
   * sg-snip: Snipping Tool. /clip (explorer's Win+Shift+S and PrtScn, the
