@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the font viewer and the Fonts folder (sg-fontview).
+; Wine has no fontview.exe; wine-sg 0183 adds a system32 launcher for this
+; App Paths entry, opens .ttf/.otf/.ttc/.fon files with it, and sends
+; shell:fonts and %WINDIR%\Fonts to its Fonts folder (`fontview.exe /folder`).
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\fontview.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-fontview64.exe"

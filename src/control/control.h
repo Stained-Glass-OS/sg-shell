@@ -75,6 +75,7 @@ int  page_scroll_pos(void);
 extern HWND g_keep_focus;     /* scroll the page to a content position */
 void users_reset(void);         /* forget Manage Accounts' selection */   /* rebuild the page when the window is active again */
 BOOL open_network_connections(void);   /* sg-ncpa, if installed */
+BOOL open_fonts_folder(void);          /* sg-fontview /folder (fontview.exe) */
 extern WCHAR g_search_text[128];
 enum page_id current_page(void);
 /* the Settings window (settings.c): the same pages, another frame */
@@ -136,7 +137,7 @@ void pg_title(int x, int y, const WCHAR *s);
 enum icon {
     IC_SYSSEC, IC_NET, IC_HW, IC_PROG, IC_USERS, IC_APPEAR, IC_CLOCK,
     IC_SYSTEM, IC_UPDATE, IC_DATETIME, IC_PERSONAL, IC_NETCENTER, IC_INET,
-    IC_GAME, IC_DISPLAY, IC_GENERIC, IC_USER, IC_SHIELD, IC_OK, IC_WARN, IC_REFRESH, IC_SPEECH, IC_ADMINTOOLS,
+    IC_GAME, IC_DISPLAY, IC_GENERIC, IC_USER, IC_SHIELD, IC_OK, IC_WARN, IC_REFRESH, IC_SPEECH, IC_ADMINTOOLS, IC_FONTS,
     /* Settings' line glyphs, in the accent colour (g_glyph_color) */
     IC_G_SYSTEM, IC_G_DEVICES, IC_G_NETWORK, IC_G_PERSONAL, IC_G_APPS, IC_G_ACCOUNTS, IC_G_TIME,
     IC_G_EOA, IC_G_PRIVACY, IC_G_UPDATE, IC_G_HOME, IC_G_SEARCH, IC_G_BACK, IC_G_PC,

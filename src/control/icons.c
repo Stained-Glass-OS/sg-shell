@@ -371,6 +371,14 @@ static void paint_icon(HDC dc, int icon)
         { int st[] = { 32, 46, 32, 52 }; line(dc, RGB(0xFF, 0xFF, 0xFF), 4, st, 2); }
         { int ft[] = { 24, 53, 40, 53 }; line(dc, RGB(0xFF, 0xFF, 0xFF), 4, ft, 2); }
         break;
+    case IC_FONTS:                      /* a folder with a large A on it */
+        brush_rect(dc, RGB(0xD2, 0xA0, 0x32), 4, 10, 28, 20, 4);
+        brush_rect(dc, RGB(0xD2, 0xA0, 0x32), 4, 16, 60, 56, 4);
+        brush_rect(dc, RGB(0xEC, 0xBE, 0x50), 4, 22, 60, 56, 4);
+        { int a[] = { 18, 50, 32, 16, 46, 50 }; line(dc, RGB(0x2E, 0x38, 0x48), 6, a, 3); }
+        { int b[] = { 24, 38, 40, 38 }; line(dc, RGB(0x2E, 0x38, 0x48), 5, b, 2); }
+        { int u[] = { 14, 53, 50, 53 }; line(dc, RGB(0x70, 0x30, 0xC0), 3, u, 2); }
+        break;
     case IC_OK:
         brush_ellipse(dc, RGB(0x10, 0x7C, 0x10), 2, 2, 62, 62);
         check(dc, RGB(0xFF, 0xFF, 0xFF), 7, 18, 34, 28);

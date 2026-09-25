@@ -39,6 +39,9 @@
 #   ntp on|off
 #   time YYYY-MM-DD HH:MM:SS                 (only with synchronisation off)
 #   update-check
+#   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
+#   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
+#                            stained-glass for Linux programs (fontconfig)
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -60,6 +63,12 @@ RESERVED = {"root", "sgsystem", "sguser", "sggreet", "nobody", "daemon", "bin",
             "sys", "admin", "administrator", "guest", "system"}
 PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
 
+# "Install for all users" in the font viewer / Fonts folder: SYSTEM writes the
+# file into the machine prefix's Windows\Fonts; Linux programs get a copy here.
+FONTS_SRC = "/var/lib/stained-glass/prefix/drive_c/windows/Fonts"
+FONTS_DST = "/usr/local/share/fonts/stained-glass"
+MAX_FONT = 64 << 20
+
 TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
 if TEST:
     # The gate runs this unprivileged against a spool of its own, with stand-ins
@@ -67,6 +76,8 @@ if TEST:
     SPOOL = os.environ.get("SG_ADMIN_SPOOL", SPOOL)
     PATH = os.environ.get("SG_ADMIN_PATH", "") + ":" + PATH
     ZONEINFO = os.environ.get("SG_ADMIN_ZONEINFO", ZONEINFO)
+    FONTS_SRC = os.environ.get("SG_ADMIN_FONTS_SRC", FONTS_SRC)
+    FONTS_DST = os.environ.get("SG_ADMIN_FONTS_DST", FONTS_DST)
 
 
 class Refused(Exception):
@@ -350,6 +361,80 @@ def op_update_check(args):
     return []
 
 
+FONT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,120}\.(ttf|otf|ttc|fon|fnt)$", re.IGNORECASE)
+FONT_MAGIC = (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf", b"MZ")
+
+
+def font_name(name):
+    if not FONT_RE.fullmatch(name) or ".." in name:
+        raise Refused("'%s' is not a font file name." % name)
+    return name
+
+
+def fonts_dst_dir():
+    """/usr/local/share/fonts/stained-glass, made if missing, never through a link"""
+    parent = os.path.dirname(FONTS_DST)
+    os.makedirs(parent, 0o755, exist_ok=True)
+    try:
+        os.mkdir(FONTS_DST, 0o755)
+    except FileExistsError:
+        pass
+    st = os.lstat(FONTS_DST)
+    if not stat.S_ISDIR(st.st_mode):
+        raise Refused("The fonts folder is not a folder.")
+    return FONTS_DST
+
+
+def op_font_install(args):
+    name = font_name(args[0])
+    try:
+        dfd = os.open(FONTS_SRC, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        raise Refused("The Windows fonts folder is missing.")
+    try:
+        try:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+        except OSError:
+            raise Refused("%s is not in the Windows fonts folder." % name)
+        try:
+            st = os.fstat(fd)
+            # SYSTEM's own regular file, not a link to something else
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != system_uid():
+                raise Refused("%s was not installed by an administrator." % name)
+            if st.st_size > MAX_FONT:
+                raise Refused("%s is too large for a font." % name)
+            data = os.read(fd, MAX_FONT + 1)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    if not data.startswith(FONT_MAGIC):
+        raise Refused("%s is not a font." % name)
+    dst = fonts_dst_dir()
+    tmp = os.path.join(dst, ".%s.tmp" % name)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, os.path.join(dst, name))
+    run(["fc-cache", "-f", dst])
+    return [os.path.join(dst, name)]
+
+
+def op_font_remove(args):
+    name = font_name(args[0])
+    p = os.path.join(FONTS_DST, name)
+    try:
+        st = os.lstat(p)
+    except FileNotFoundError:
+        return []
+    if not stat.S_ISREG(st.st_mode):
+        raise Refused("%s is not a font file." % name)
+    os.unlink(p)
+    run(["fc-cache", "-f", FONTS_DST])
+    return []
+
+
 OPS = {
     "ping": (op_ping, 0),
     "hostname": (op_hostname, 1),
@@ -362,6 +447,8 @@ OPS = {
     "ntp": (op_ntp, 1),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
+    "font-install": (op_font_install, 1),
+    "font-remove": (op_font_remove, 1),
 }
 SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password
 

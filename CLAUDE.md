@@ -62,6 +62,7 @@ wine-sg or an X server.
 | `sg-charmap` | **Character Map** (`charmap.exe`) -- Wine has none. A font drop-down (every installed family), the font's characters in a 20-column grid (only what `GetFontUnicodeRanges` says it has), a magnified view while the mouse holds a cell or the keyboard moves, "Characters to copy" (in the chosen font) with Select and Copy, and the Advanced view: character set, search by name or `U+XXXX`/`0xXXXX` (a name search narrows the grid; Reset), Go to Unicode. The status bar names the character ("U+00E9: Latin Small Letter E With Acute") and gives Windows' Alt+0nnn keystroke. The font and the view are remembered in `HKCU\Software\Microsoft\CharMap`, as Windows keeps them. `defaults/77-sg-charmap.reg`; sg-start lists it. See "Character Map" below. |
 | `sg-magnify` | **Magnifier** (`magnify.exe`, Win+Plus / Win+Minus / Win+Esc): Windows 10's toolbar (zoom out, the zoom level, zoom in, Views, Settings, Help) and its three views -- full screen (click-through, the point under the pointer shown under the pointer), lens and docked (an AppBar across the top) -- following the pointer, the keyboard focus or the text cursor; Ctrl+Alt+F/L/D, Ctrl+Alt+wheel, Ctrl+Alt+I inverts. Settings in `HKCU\Software\Microsoft\ScreenMagnifier`; Settings > Ease of Access > Magnifier. `defaults/82-sg-magnify.reg`; sg-start lists it. See "Magnifier" below. |
 | `sg-osk` | **On-Screen Keyboard** (`osk.exe`, Win+Ctrl+O): Windows 10's dark keyboard -- the full layout, sticky Shift/Ctrl/Alt/Win, Caps Lock lit from the keyboard's state, Fn (F1-F12), the navigation keys, the numeric key pad, Mv Up/Mv Dn, Dock (an AppBar across the bottom), Fade, Options (click sound, hover to type). Real key presses (SendInput with scan codes); it never takes the focus. `defaults/83-sg-osk.reg`; sg-start lists it; Settings > Ease of Access > Keyboard turns it on. See "On-Screen Keyboard" below. |
+| `sg-fontview` | **The font viewer and the Fonts folder** (`fontview.exe`, `control fonts`, `shell:fonts`, %WINDIR%\Fonts). A font file (.ttf .otf .ttc .fon) shows its own names read from the file, version, kind, the alphabet and a sample line at 12-72 pt, with Print, Install (for you) and Install for all users (elevated), a face picker for collections. The Fonts folder: a tile per family drawn in its font, search, details (styles, where installed, files), Preview, Delete, Install new font, dropped files. Per-user fonts where Windows 10 keeps them (and in `~/.local/share/fonts` for Linux programs), all users' through the elevated copy and sg-admind. `defaults/81-sg-fontview.reg`; wine-sg 0183 gives the launcher, the associations, per-user font loading and `shell:` URLs. See "Fonts (sg-fontview)" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
@@ -1021,6 +1022,83 @@ Win+Ctrl+O look for). One instance (`Local\StainedGlassOnScreenKeyboard`).
   `-DSG_MUTANT_ACTIVATE` (no NOACTIVATE: Notepad loses the focus, nothing is
   typed) and `-DSG_MUTANT_STICKY` (Shift never lets go: "HELLO< world!")
   (`SG_OSK_EXE=`) turn it red. Screenshots `build/osk-*.png`.
+
+## Fonts (sg-fontview)
+
+`src/fontview/`: `fontinfo.c` reads font files (plain C, no Windows headers,
+so `test/fontinfo-dump.c` runs it natively): the sfnt table directory, the
+`name` table (Windows English records first, then any Windows, Unicode, Mac
+Roman), `OS/2` weight/italic (`head` macStyle without one), which outlines
+(glyf/CFF), OpenType Layout (GSUB/GPOS), DSIG; each face of a `ttcf`
+collection; a `.fon`'s NE `RT_FONT` resources and FNT headers. **Every offset
+is checked against the buffer** -- font files come from downloads and mail.
+`fontlib.c` installs, removes and lists; `main.c` is the viewer and the
+command line; `folder.c` the Fonts folder. Icons are drawn by `gen-icon.py`.
+
+- **The viewer loads the file privately** (`AddFontResourceEx(FR_PRIVATE)`)
+  and names it from the file itself, not from GDI; the samples are drawn with
+  the name table's family, OS/2 weight and italic. Windows' title ("Name
+  (TrueType)"), a face picker instead of Windows' Previous/Next for a `.ttc`.
+- **Where fonts go.** For you: `%LOCALAPPDATA%\Microsoft\Windows\Fonts\<file>`
+  and `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts` "Full name
+  (TrueType)" = the full path (Windows 10 1809; **Wine read only HKLM's key**
+  -- wine-sg 0183 makes win32u load HKCU's), plus a copy in
+  `~/.local/share/fonts/stained-glass` (or `$XDG_DATA_HOME/fonts/...`; the
+  Unix home is Wine's `WINEHOMEDIR`) and `fc-cache` for Linux programs. For
+  all users (an elevated token -- SYSTEM, ADR 0012 -- or `runas` of
+  ourselves, whose exit code is the answer): `%WINDIR%\Fonts\<file>`, the
+  HKLM value = the file name, and sg-admind's `font-install FILE` copies it
+  from the machine prefix's `windows/Fonts` (SYSTEM's own regular file, a
+  font's magic, 64 MB at most, never through a link) to
+  `/usr/local/share/fonts/stained-glass` (`font-remove` takes it away). Then
+  `AddFontResource` and `WM_FONTCHANGE`, as Windows' installer does; a
+  collection's value is "A & B (TrueType)".
+- **Delete** removes a person's own family (value, both copies,
+  `RemoveFontResource` so this session's font cache forgets it); a family
+  installed for all users needs the elevated copy; Linux's and Wine's own
+  fonts are "a system font and can't be deleted". Wine keeps each process's
+  font list, so the Fonts folder hides what it deleted itself, and ignores
+  its own `WM_FONTCHANGE` while busy -- **the broadcast reaches our own window
+  in the middle of the delete**, and reloading there freed the family being
+  deleted (a crash the gate caught).
+- **Command line**: `FILE`, `/p FILE`, `/install [/allusers] [/quiet] FILE`,
+  `/uninstall [/allusers] [/quiet] FILE|NAME` (exit code 0 or the Windows
+  error; `/quiet` never elevates, so a standard user gets 5), `/family NAME`,
+  `/folder`, `--families OUT` (every family GDI enumerates, for gates).
+  `SG_FONTVIEW_DUMP=<file>`: the viewer's names, type, `gdi_face` (what GDI
+  selected), install state, buttons' and sample lines' screen positions; the
+  folder's counts, search, tiles with centres, selection and its files; the
+  result of a headless install. `SG_FONTVIEW_YES=1` answers its questions.
+- The Control Panel: "Fonts" in All Items and Appearance and
+  Personalization, `control fonts` / `Microsoft.Fonts` (`open_fonts_folder`:
+  our sibling `sg-fontview64.exe /folder`, else `fontview.exe`).
+- **Gate: `test/fontview-check.sh`** (display :181, a SHARED prefix: this
+  user is SYSTEM, `sgconf` a standard user; fontTools makes the fonts from
+  DejaVu at run time): the reader against fontTools on a TrueType font, a
+  two-face collection, DejaVu Sans Bold, an OpenType/CFF font, and a `.fon`
+  (Wine's `coure.fon`), and non-fonts refused; as the standard user the
+  viewer (through the .ttf association) shows the file's names, GDI draws in
+  the private font, the 72 pt line is several times the 12 pt one's height;
+  Install (a click): the HKCU value, the file, `fc-list` with the user's
+  gate HOME, a new process's families; `control fonts` lists it, search
+  narrows to it, its tile selects it ("For you", its file), Delete removes
+  value, files and every trace; Install for all users refused for the
+  standard user (5, nothing written); as SYSTEM for all users: %WINDIR%\Fonts,
+  HKLM = the file name, sg-admind (test mode, its own spool) makes the Linux
+  copy, the standard user sees it, the folder says "For all users";
+  uninstalled again. 27 checks. Mutants `-DSG_MUTANT_NOREG` (no registry
+  value), `-DSG_MUTANT_NAMEID` (family and full name swapped;
+  `SG_FONTINFO_CFLAGS` for the native reader) and `-DSG_MUTANT_ANYONE`
+  (anyone may install for all users) turn it red. Screenshots
+  `build/fontview-*.png`.
+- **In the gate's shared prefix a standard user can write `%WINDIR%\Fonts`**
+  (the harness makes the whole prefix group-writable); the program's own
+  check and the HKLM key's DACL are what refuse. The image's prefix
+  permissions are sg-session's.
+- **Not yet:** Font settings (hide fonts by language, "Show/Hide"), the
+  font's designer/licence page, variable-font axes, a Details view of the
+  folder, drag out of the folder, printing tested only as far as the dialog
+  (no printer).
 
 ## The administrative consoles (sg-mmc)
 

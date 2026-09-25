@@ -833,6 +833,20 @@ BOOL open_network_connections(void)
     return TRUE;
 }
 
+/* The Fonts folder is the font viewer's (sg-fontview /folder), as Windows'
+ * is a view of its own: our sibling, else whatever fontview.exe is. */
+BOOL open_fonts_folder(void)
+{
+    WCHAR path[MAX_PATH], *slash;
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    if ((slash = wcsrchr(path, L'\\'))) {
+        lstrcpyW(slash + 1, L"sg-fontview64.exe");
+        if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES)
+            return (INT_PTR)ShellExecuteW(NULL, NULL, path, L"/folder", NULL, SW_SHOWNORMAL) > 32;
+    }
+    return (INT_PTR)ShellExecuteW(NULL, NULL, L"fontview.exe", L"/folder", NULL, SW_SHOWNORMAL) > 32;
+}
+
 /* Resolve a control.exe argument. Returns the page, or PG_COUNT with *cpl set
  * to a hosted applet, or PG_COUNT with *cpl NULL for "unknown". */
 static enum page_id resolve(const WCHAR *arg, const WCHAR **cpl)
@@ -864,6 +878,8 @@ static int open_target(const WCHAR *arg, enum page_id *page)
         !_wcsicmp(arg, L"Microsoft.NetworkConnections")) {
         if (open_network_connections()) return 1;         /* handled: no window of ours */
     }
+    if (!_wcsicmp(arg, L"fonts") || !_wcsicmp(arg, L"Microsoft.Fonts") || !_wcsicmp(arg, L"shell:fonts"))
+        return open_fonts_folder() ? 1 : 0;
     *page = resolve(arg, &cpl);
     if (*page != PG_COUNT) return 0;
     if (cpl) return cpl_run_inproc(cpl, NULL) >= 0 ? 1 : 0;

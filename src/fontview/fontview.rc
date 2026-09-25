@@ -1,0 +1,4 @@
+/* sg-fontview: its icons (generated into build/ by gen-icon.py) and the common-controls 6 manifest. */
+1 ICON "sg-fontview.ico"
+2 ICON "sg-fonts.ico"
+1 24 "fontview.manifest"

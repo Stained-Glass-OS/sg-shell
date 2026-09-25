@@ -63,6 +63,10 @@ CLOCK_LIBS = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32 -lm
 # sg-session's sg-pdf, reached through its bridge.
 PDF_SRC  = $(wildcard src/pdf/*.c)
 PDF_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lwinspool -lgdi32 -luser32 -ladvapi32 -lole32
+# The font viewer (fontview.exe) and the Fonts folder (sg-fontview): src/fontview/,
+# its icons drawn at build time.
+FONTVIEW_SRC  = $(wildcard src/fontview/*.c)
+FONTVIEW_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -ladvapi32 -lwinspool -lole32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -165,6 +169,10 @@ build:
 	@$(WINDRES64) -I src/pdf -I $(BUILD) src/pdf/pdf.rc -O coff -o $(BUILD)/sg-pdf-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-pdf64.exe $(PDF_SRC) \
 	    $(BUILD)/sg-pdf-res64.o $(PDF_LIBS) && echo "built sg-pdf (64-bit)"
+	@python3 src/fontview/gen-icon.py $(BUILD)/sg-fontview.ico $(BUILD)/sg-fonts.ico
+	@$(WINDRES64) -I src/fontview -I $(BUILD) src/fontview/fontview.rc -O coff -o $(BUILD)/sg-fontview-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $(FONTVIEW_SRC) \
+	    $(BUILD)/sg-fontview-res64.o $(FONTVIEW_LIBS) && echo "built sg-fontview (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -193,6 +201,7 @@ test: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/fontview-check.sh
 	@sh test/magnify-check.sh
 	@sh test/osk-check.sh
 	@sh test/services-check.sh

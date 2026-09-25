@@ -1,3 +1,21 @@
+sg-shell (0.1.0-37) unstable; urgency=medium
+
+  * sg-fontview: the font viewer (fontview.exe) -- a .ttf/.otf/.ttc/.fon's
+    own names, version and kind read from the file, the alphabet and a
+    sample line at 12-72 pt, Print, Install (for you) and Install for all
+    users (elevated), a face picker for collections -- and the Fonts folder
+    (control fonts, shell:fonts): a tile per family in its own font, search,
+    details, Preview, Delete, Install new font, dropped files. Per-user
+    fonts where Windows 10 keeps them plus ~/.local/share/fonts for Linux
+    programs; all users' in %WINDIR%\Fonts and HKLM, with sg-admind's new
+    font-install/font-remove copying them to /usr/local/share/fonts.
+    defaults/81-sg-fontview.reg.
+  * Control Panel: Fonts in All Items and Appearance and Personalization;
+    control fonts / Microsoft.Fonts.
+  * Gate: test/fontview-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 12:58:00 -0700
+
 sg-shell (0.1.0-36) unstable; urgency=medium
 
   * Voice typing: the bar shows what is being said (the engine's partial

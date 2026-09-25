@@ -8,7 +8,7 @@
 
 /* commands the navigation pages share */
 enum {
-    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA,
+    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -44,10 +44,12 @@ static const struct applet SPEECH_A = { L"Speech Recognition", IC_SPEECH, NAV(PG
 static const struct applet ADMIN_A = { L"Administrative Tools", IC_ADMINTOOLS, NAV(PG_ADMINTOOLS),
     L"administrative tools services event viewer device manager disk management computer management msinfo resource monitor cleanup",
     { { L"View event logs", NAV(PG_ADMINTOOLS) }, { L"Free up disk space", NAV(PG_ADMINTOOLS) } } };
+static const struct applet FONTS_A = { L"Fonts", IC_FONTS, CMD_FONTS, L"font fonts typeface install preview delete truetype opentype",
+    { { L"Preview, delete, or show and hide fonts", CMD_FONTS } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
-    &ADMIN_A, &DATETIME_A, &DISPLAY_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
+    &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
     &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A,
 };
 
@@ -70,7 +72,7 @@ static const struct category CATS[] = {
       { &USERS_A } },
     { PG_CAT_APPEAR, IC_APPEAR, L"Appearance and Personalization",
       { { L"Change the desktop background", NAV(PG_PERSONALIZE) }, { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } },
-      { &PERSONAL_A, &DISPLAY_A } },
+      { &PERSONAL_A, &DISPLAY_A, &FONTS_A } },
     { PG_CAT_CLOCK, IC_CLOCK, L"Clock and Region",
       { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } },
       { &DATETIME_A } },
@@ -204,6 +206,7 @@ BOOL cmd_home(int id, int code, HWND ctl)
     case CMD_JOY: cpl_open_file(L"joy.cpl", NULL); return TRUE;
     case CMD_DESK: cpl_open_file(L"desk.cpl", NULL); return TRUE;
     case CMD_NCPA: if (!open_network_connections()) navigate(PG_NETWORK); return TRUE;
+    case CMD_FONTS: open_fonts_folder(); return TRUE;
     case CMD_RENAME: if (run_elevated(L"/admin rename")) refresh_when_back(); return TRUE;
     case CMD_TIMEZONE: if (run_elevated(L"/admin timezone")) refresh_when_back(); return TRUE;
     }
