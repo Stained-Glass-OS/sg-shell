@@ -10,7 +10,11 @@ SG_CON_CFLAGS := -O2 -municode -mconsole -Wall -Wextra
 LIBS     = -lshell32 -lgdi32 -luser32
 BUILD    = build
 
-PANELS = sg-taskbar sg-start sg-mstsc sg-control
+PANELS = sg-taskbar sg-start sg-mstsc
+# The Control Panel is several files (src/control/) and needs more of Windows.
+CONTROL_SRC  = $(wildcard src/control/*.c)
+CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
+               -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -24,6 +28,8 @@ build:
 	    $(MINGW64) $(SG_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit)"; \
 	    $(MINGW32) $(SG_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit)"; \
 	done
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
+	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -34,6 +40,7 @@ test: build
 	@sh test/render-check.sh
 	@sh test/start-check.sh
 	@sh test/mstsc-check.sh
+	@sh test/admind-check.sh
 	@sh test/control-check.sh
 	@sh test/gpresult-check.sh
 

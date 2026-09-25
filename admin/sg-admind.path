@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for Control Panel administration requests
+
+[Path]
+PathExistsGlob=/run/stained-glass-admin/requests/*.req
+Unit=sg-admind.service
+
+[Install]
+WantedBy=paths.target

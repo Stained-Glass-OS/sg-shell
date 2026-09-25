@@ -1,0 +1,11 @@
+[Unit]
+Description=Control Panel administration for elevated programs
+Documentation=file:///usr/share/doc/sg-shell/README.md
+# Started by sg-admind.path when SYSTEM files a request.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/stained-glass/sg-admind
+# Root, because renaming the computer, managing accounts and setting the time
+# zone are root's; every operation is on a fixed, validated list.
+PrivateTmp=yes

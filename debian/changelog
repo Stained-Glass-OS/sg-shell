@@ -1,3 +1,37 @@
+sg-shell (0.1.0-5) unstable; urgency=medium
+
+  * The Control Panel, rebuilt as a real one (src/control/): the Windows 10
+    category view, category pages, All Control Panel Items with search, and a
+    navigation bar (back, forward, up, breadcrumb). Applets, all live:
+    - System: edition, build, hardware, computer name, domain or workgroup,
+      account type; "Change settings" renames the computer or joins a domain.
+    - Programs and Features: every Uninstall entry (both registry views and
+      the user's), as Windows filters them; Uninstall / Change / Repair run the
+      program's own commands (msiexec for Windows Installer products).
+    - User Accounts: your account; manage local accounts -- create, change
+      type, reset password, delete (keep or delete files).
+    - Date and Time: clock, Windows and IANA zone, next daylight-saving
+      change, Internet time; change the zone and time synchronisation.
+    - Personalization: desktop picture (JPEG/PNG/BMP, all six fits), solid
+      color, accent color, light/dark app and Windows modes -- in Windows'
+      own registry values, applied live.
+    - Windows Update: status, last check, restart to install, sources, apt
+      history; "Check for updates".
+    - Network and Sharing Center: active networks and adapters (read-only;
+      Network Connections is sg-ncpa's).
+    - Hosted .cpl applets (Internet Options, Game Controllers, Display, and
+      any third party's) through CPlApplet.
+    control.exe's .cpl names, keywords and /name Microsoft.* names open the
+    matching applet.
+  * sg-admind: the Control Panel's privileged half. Elevated (SYSTEM) copies
+    of the Control Panel file requests in a spool only SYSTEM can write;
+    sg-admind.path runs the root service, which acts on a fixed, validated
+    list of operations. Gated by test/admind-check.sh.
+  * Default fonts: ClearType, Segoe UI 9 pt as Inter, metric-compatible
+    stand-ins (from the main theming work).
+
+ -- Stained Glass OS <dev@stained-glass.example>  Thu, 24 Sep 2026 17:20:00 -0700
+
 sg-shell (0.1.0-4) unstable; urgency=medium
 
   * sg-control: deepen the Control Panel -- a Device card (processor, installed

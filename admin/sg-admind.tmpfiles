@@ -1,0 +1,5 @@
+# The Control Panel's administration spool (sg-admind). Requests: SYSTEM only.
+# Replies: written by root, readable by SYSTEM, not writable by it.
+d /run/stained-glass-admin          0755 root     root     -
+d /run/stained-glass-admin/requests 0700 sgsystem sgsystem -
+d /run/stained-glass-admin/replies  0750 root     sgsystem -

@@ -10,9 +10,15 @@ Rules-Requires-Root: no
 Package: sg-shell
 Architecture: all
 Depends: ${misc:Depends}, wine-sg | wine, fonts-inter, fonts-liberation,
-         fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code
-Description: Stained Glass OS shell panels (Windows 10 Start menu)
- Windows 10-style panels for the surfaces Wine's explorer does not provide --
- currently sg-start, the Start menu. The taskbar's appearance is handled in
+         fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code,
+         python3, sg-session
+Description: Stained Glass OS shell panels (Start menu, Control Panel)
+ Windows 10-style panels for the surfaces Wine's explorer does not provide:
+ the Start menu (sg-start), the Control Panel (sg-control), Remote Desktop
+ Connection (sg-mstsc) and gpresult. The taskbar's appearance is handled in
  wine-sg, not here. Panels install as PE programs under
  /usr/libexec/stained-glass/shell.
+ .
+ The Control Panel's administrative changes (computer name, domain, local
+ accounts, time zone, update checks) are made by sg-admind, a root service
+ that acts only on requests from the elevated SYSTEM account.

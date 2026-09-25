@@ -1,0 +1,456 @@
+#!/usr/bin/python3
+# sg-admind -- the Control Panel's privileged half: machine administration
+# for an elevated (SYSTEM) program.
+#
+# On Windows an administrator's elevated token may rename the computer, join
+# a domain, manage local accounts and set the time zone. On Stained Glass the
+# elevated token is the SYSTEM account (ADR 0012), which is unprivileged on
+# the Unix side, and these are root's jobs. This is the narrow bridge: a fixed
+# list of operations, each validated here, run as root for a request that only
+# SYSTEM can make.
+#
+# Transport is a spool, because Wine gives a Windows program neither AF_UNIX
+# sockets nor pipes to a native child:
+#
+#   /run/stained-glass-admin/requests   sgsystem 0700 -- only SYSTEM (and
+#                                        root) can put a request here
+#   /run/stained-glass-admin/replies    root:sgsystem 0750 -- SYSTEM reads the
+#                                        answer, cannot forge one
+#
+# A request is <id>.req (id: 16-64 hex digits), UTF-8, one field per line:
+# the verb, then its arguments; a password is always the last field. It is
+# written as something else and renamed, so it is whole when it appears.
+# sg-admind.path starts this (as root) when one appears; each request is
+# read without following links, must be a regular file owned by SYSTEM, is
+# deleted as it is read, and is answered in replies/<id>.rep:
+#
+#   OK                  or   FAILED <what to tell the person>
+#   <detail lines>
+#
+# Verbs:
+#   ping
+#   hostname NAME
+#   join-domain REALM USER DC PASSWORD        (DC may be empty)
+#   user-add NAME FULLNAME standard|administrator PASSWORD
+#   user-type NAME standard|administrator
+#   user-password NAME PASSWORD
+#   user-remove NAME keep|delete
+#   timezone AREA/CITY
+#   ntp on|off
+#   update-check
+#
+# Copyright (C) 2026 Stained Glass OS contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+import os
+import re
+import stat
+import subprocess
+import sys
+import time
+
+SPOOL = "/run/stained-glass-admin"
+SYSTEM_USER = "sgsystem"
+WINE_GROUP = "sgwine"
+ADMIN_GROUPS = ("sg-admins", "sudo")   # an administrator is in both (sg-install)
+ADMIN_GROUP = "sg-admins"              # ... and this one is the definition
+ZONEINFO = "/usr/share/zoneinfo"
+MAX_REQUEST = 16384
+RESERVED = {"root", "sgsystem", "sguser", "sggreet", "nobody", "daemon", "bin",
+            "sys", "admin", "administrator", "guest", "system"}
+PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+
+TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
+if TEST:
+    # The gate runs this unprivileged against a spool of its own, with stand-ins
+    # for the system tools first in PATH. Never honoured as root.
+    SPOOL = os.environ.get("SG_ADMIN_SPOOL", SPOOL)
+    PATH = os.environ.get("SG_ADMIN_PATH", "") + ":" + PATH
+    ZONEINFO = os.environ.get("SG_ADMIN_ZONEINFO", ZONEINFO)
+
+
+class Refused(Exception):
+    pass
+
+
+def log(msg):
+    sys.stderr.write("sg-admind: %s\n" % msg)
+    sys.stderr.flush()
+
+
+def run(argv, stdin=None, timeout=120):
+    env = {"PATH": PATH, "LANG": "C.UTF-8"}
+    try:
+        r = subprocess.run(argv, input=stdin, capture_output=True, text=True,
+                           timeout=timeout, env=env,
+                           stdin=None if stdin is not None else subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refused("%s is not installed." % argv[0])
+    except subprocess.TimeoutExpired:
+        raise Refused("%s did not finish in time." % argv[0])
+    return r
+
+
+def must(argv, what, stdin=None, timeout=120):
+    r = run(argv, stdin, timeout)
+    if r.returncode != 0:
+        why = (r.stderr or r.stdout).strip().splitlines()
+        log("%s failed (%d): %s" % (argv[0], r.returncode, why[-1] if why else ""))
+        raise Refused("%s%s" % (what, (": " + why[-1]) if why else "."))
+    return r.stdout
+
+
+# ---- facts, through getent so the gate's stand-ins answer ------------------
+def passwd_entry(name):
+    r = run(["getent", "passwd", name])
+    if r.returncode != 0:
+        return None
+    f = r.stdout.strip().split(":")
+    return f if len(f) >= 7 else None
+
+
+def group_members(group):
+    r = run(["getent", "group", group])
+    if r.returncode != 0:
+        return []
+    f = r.stdout.strip().split(":")
+    return [m for m in f[3].split(",") if m] if len(f) >= 4 else []
+
+
+def local_account(name):
+    """A person's local account: uid 1000-59999 in /etc/passwd, not reserved."""
+    e = passwd_entry(name)
+    if not e:
+        raise Refused("There is no account named %s." % name)
+    uid = int(e[2])
+    if uid < 1000 or uid >= 60000 or name in RESERVED:
+        raise Refused("%s is not a person's account and cannot be changed here." % name)
+    return e
+
+
+def administrators():
+    return [m for m in group_members(ADMIN_GROUP) if passwd_entry(m)]
+
+
+def role():
+    try:
+        with open("/etc/stained-glass/role") as f:
+            for line in f:
+                if line.startswith("role="):
+                    return line.strip()[5:]
+    except OSError:
+        pass
+    return ""
+
+
+def signed_in(name):
+    r = run(["loginctl", "show-user", name, "--property=State", "--value"])
+    return r.returncode == 0 and r.stdout.strip() in ("active", "online", "lingering")
+
+
+# ---- validation --------------------------------------------------------------
+NAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,13}[A-Za-z0-9])?$")
+REALM_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$")
+JOINUSER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+IPV4_RE = re.compile(r"^[0-9]{1,3}(\.[0-9]{1,3}){3}$")
+ZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9][A-Za-z0-9_+-]*){0,2}$")
+
+
+def account_name(name):
+    if not NAME_RE.match(name):
+        raise Refused("'%s' is not a valid account name: use lower-case letters, digits, - and _, starting with a letter." % name)
+    if name in RESERVED:
+        raise Refused("'%s' is reserved." % name)
+    return name
+
+
+def password(pw):
+    if not pw:
+        raise Refused("The password cannot be empty.")
+    if len(pw) > 256 or any(c in pw for c in "\n\r\0"):
+        raise Refused("That password cannot be used.")
+    return pw
+
+
+def kind(k):
+    if k not in ("standard", "administrator"):
+        raise Refused("The account type must be standard or administrator.")
+    return k
+
+
+# ---- the operations ------------------------------------------------------------
+def op_ping(args):
+    return ["pong"]
+
+
+def op_hostname(args):
+    (name,) = args
+    if not HOST_RE.match(name):
+        raise Refused("'%s' is not a valid computer name: up to 15 letters, digits and hyphens, not starting or ending with a hyphen." % name)
+    if role() in ("member", "dc"):
+        raise Refused("This computer is part of a domain. Renaming it is done through the domain.")
+    must(["hostnamectl", "set-hostname", name], "The computer could not be renamed")
+    # Debian names the machine itself on 127.0.1.1
+    hosts = "/etc/hosts" if not TEST else os.environ.get("SG_ADMIN_HOSTS", "/dev/null")
+    try:
+        with open(hosts) as f:
+            lines = f.read().splitlines()
+        out, done = [], False
+        for line in lines:
+            if line.split()[:1] == ["127.0.1.1"]:
+                line, done = "127.0.1.1\t%s" % name, True
+            out.append(line)
+        if not done:
+            out.append("127.0.1.1\t%s" % name)
+        with open(hosts + ".sg-new", "w") as f:
+            f.write("\n".join(out) + "\n")
+        os.chmod(hosts + ".sg-new", 0o644)
+        os.replace(hosts + ".sg-new", hosts)
+    except OSError as e:
+        log("hosts not updated: %s" % e)
+    return ["restart"]
+
+
+def op_join_domain(args):
+    realm, user, dc, pw = args
+    if not REALM_RE.match(realm):
+        raise Refused("'%s' is not a domain name (for example corp.example.com)." % realm)
+    if not JOINUSER_RE.match(user):
+        raise Refused("'%s' is not an account name." % user)
+    if dc and not IPV4_RE.match(dc):
+        raise Refused("The domain controller must be given as an IPv4 address.")
+    if role():
+        raise Refused("This computer is already a %s." % ("domain controller" if role() == "dc" else "domain member"))
+    argv = ["sg-domain-join", "--domain", realm, "--user", user, "--password-stdin"]
+    if dc:
+        argv += ["--dc", dc]
+    must(argv, "The computer could not join %s" % realm, stdin=password(pw) + "\n", timeout=600)
+    return ["restart"]
+
+
+def op_user_add(args):
+    name, full, k, pw = args
+    account_name(name)
+    kind(k)
+    password(pw)
+    if len(full) > 64 or any(c in full for c in ":\n\r\0,"):
+        raise Refused("The full name cannot contain ':' or ','.")
+    if passwd_entry(name):
+        raise Refused("There is already an account named %s." % name)
+    groups = [WINE_GROUP] + (list(ADMIN_GROUPS) if k == "administrator" else [])
+    groups = [g for g in groups if run(["getent", "group", g]).returncode == 0]
+    must(["useradd", "-m", "-s", "/bin/bash", "-c", full or name, "-G", ",".join(groups), name],
+         "The account could not be created")
+    try:
+        must(["chpasswd"], "The password could not be set", stdin="%s:%s\n" % (name, pw))
+    except Refused:
+        run(["userdel", "-r", name])
+        raise
+    return []
+
+
+def op_user_type(args):
+    name, k = args
+    account_name(name)
+    kind(k)
+    local_account(name)
+    admins = administrators()
+    if k == "standard":
+        if name in admins and len(admins) <= 1:
+            raise Refused("%s is the only administrator. Make another account an administrator first." % name)
+        for g in ADMIN_GROUPS:
+            if name in group_members(g):
+                must(["gpasswd", "-d", name, g], "The account type could not be changed")
+    else:
+        for g in ADMIN_GROUPS:
+            if run(["getent", "group", g]).returncode == 0 and name not in group_members(g):
+                must(["gpasswd", "-a", name, g], "The account type could not be changed")
+    return ["signout"]
+
+
+def op_user_password(args):
+    name, pw = args
+    account_name(name)
+    local_account(name)
+    must(["chpasswd"], "The password could not be changed", stdin="%s:%s\n" % (name, password(pw)))
+    return []
+
+
+def op_user_remove(args):
+    name, how = args
+    account_name(name)
+    if how not in ("keep", "delete"):
+        raise Refused("Choose whether to keep or delete the account's files.")
+    local_account(name)
+    if name in administrators() and len(administrators()) <= 1:
+        raise Refused("%s is the only administrator and cannot be removed." % name)
+    if signed_in(name):
+        raise Refused("%s is signed in. They must sign out before the account can be removed." % name)
+    must(["userdel"] + (["-r"] if how == "delete" else []) + [name], "The account could not be removed")
+    return []
+
+
+def op_timezone(args):
+    (zone,) = args
+    if not ZONE_RE.match(zone) or ".." in zone:
+        raise Refused("'%s' is not a time zone." % zone)
+    path = os.path.realpath(os.path.join(ZONEINFO, zone))
+    if not path.startswith(os.path.realpath(ZONEINFO) + os.sep) or not os.path.isfile(path):
+        raise Refused("'%s' is not a time zone." % zone)
+    must(["timedatectl", "set-timezone", zone], "The time zone could not be changed")
+    # Debian's record of the zone by name, which the Control Panel reads back
+    tzfile = "/etc/timezone" if not TEST else os.environ.get("SG_ADMIN_TIMEZONE", "/dev/null")
+    try:
+        with open(tzfile + ".sg-new", "w") as f:
+            f.write(zone + "\n")
+        os.chmod(tzfile + ".sg-new", 0o644)
+        os.replace(tzfile + ".sg-new", tzfile)
+    except OSError as e:
+        log("%s not updated: %s" % (tzfile, e))
+    return []
+
+
+def op_ntp(args):
+    (v,) = args
+    if v not in ("on", "off"):
+        raise Refused("Time synchronisation is on or off.")
+    must(["timedatectl", "set-ntp", "true" if v == "on" else "false"],
+         "Time synchronisation could not be changed")
+    return []
+
+
+def op_update_check(args):
+    must(["systemctl", "start", "--no-block", "sg-update-prepare.service"],
+         "The update check could not be started")
+    return []
+
+
+OPS = {
+    "ping": (op_ping, 0),
+    "hostname": (op_hostname, 1),
+    "join-domain": (op_join_domain, 4),
+    "user-add": (op_user_add, 4),
+    "user-type": (op_user_type, 2),
+    "user-password": (op_user_password, 2),
+    "user-remove": (op_user_remove, 2),
+    "timezone": (op_timezone, 1),
+    "ntp": (op_ntp, 1),
+    "update-check": (op_update_check, 0),
+}
+SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password
+
+
+def system_uid():
+    if TEST:
+        return int(os.environ.get("SG_ADMIN_SYSTEM_UID", os.geteuid()))
+    import pwd
+    return pwd.getpwnam(SYSTEM_USER).pw_uid
+
+
+def system_gid():
+    import grp
+    return grp.getgrnam(SYSTEM_USER).gr_gid
+
+
+ID_RE = re.compile(r"^([0-9a-f]{16,64})\.req$")
+
+
+def read_request(dirfd, name, uid):
+    """The request's fields, or None if it is not one we may act on."""
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dirfd)
+    except OSError as e:
+        log("%s: not opened: %s" % (name, e))
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_nlink != 1:
+            log("%s: refused: not a request from SYSTEM" % name)
+            return None
+        data = os.read(fd, MAX_REQUEST + 1)
+    finally:
+        os.close(fd)
+    if len(data) > MAX_REQUEST:
+        log("%s: refused: too large" % name)
+        return None
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return [""]
+    return text.split("\n")[:-1] if text.endswith("\n") else text.split("\n")
+
+
+def answer(req_id, lines):
+    replies = os.path.join(SPOOL, "replies")
+    tmp = os.path.join(replies, ".%s.tmp" % req_id)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    if not TEST:
+        os.chown(tmp, 0, system_gid())
+    os.replace(tmp, os.path.join(replies, "%s.rep" % req_id))
+
+
+def handle(fields):
+    verb, args = (fields[0], fields[1:]) if fields else ("", [])
+    if verb not in OPS:
+        raise Refused("Unknown request.")
+    fn, n = OPS[verb]
+    if len(args) != n:
+        raise Refused("Malformed request.")
+    shown = args[:-1] if verb in SECRET else args
+    log("%s %s" % (verb, " ".join(repr(a) for a in shown)))
+    return fn(args)
+
+
+def process():
+    uid = system_uid()
+    reqdir = os.path.join(SPOOL, "requests")
+    dirfd = os.open(reqdir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for name in sorted(os.listdir(dirfd)):
+            m = ID_RE.match(name)
+            if not m:
+                # a half-written request (renamed into place when complete) is
+                # left alone; anything else that is stale is cleared
+                try:
+                    st = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+                    if time.time() - st.st_mtime > 600:
+                        os.unlink(name, dir_fd=dirfd)
+                except OSError:
+                    pass
+                continue
+            fields = read_request(dirfd, name, uid)
+            try:
+                os.unlink(name, dir_fd=dirfd)
+            except OSError:
+                pass
+            if fields is None:
+                continue
+            try:
+                detail = handle(fields)
+                reply = ["OK"] + detail
+                log("%s: done" % fields[0])
+            except Refused as e:
+                reply = ["FAILED %s" % e]
+                log("%s: refused: %s" % (fields[0] if fields else "?", e))
+            except Exception as e:   # never leave the elevated program waiting
+                reply = ["FAILED Something went wrong."]
+                log("%s: error: %r" % (fields[0] if fields else "?", e))
+            fields = None
+            answer(m.group(1), reply)
+    finally:
+        os.close(dirfd)
+    # old answers nobody collected
+    replies = os.path.join(SPOOL, "replies")
+    for name in os.listdir(replies):
+        p = os.path.join(replies, name)
+        try:
+            if time.time() - os.lstat(p).st_mtime > 600:
+                os.unlink(p)
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    process()

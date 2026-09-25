@@ -4,3 +4,4 @@
 /debian/files
 /debian/*.substvars
 /debian/sg-shell/
+/debian/*.debhelper

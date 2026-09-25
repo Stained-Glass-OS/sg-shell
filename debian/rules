@@ -15,6 +15,12 @@ override_dh_auto_install:
 	    build/sg-control64.exe build/sg-control32.exe \
 	    build/sg-gpresult64.exe build/sg-gpresult32.exe \
 	    debian/sg-shell/usr/libexec/stained-glass/shell/
+	# The Control Panel's privileged half: a fixed list of administrative
+	# operations for requests from SYSTEM (see admin/sg-admind).
+	install -D -m0755 admin/sg-admind debian/sg-shell/usr/libexec/stained-glass/sg-admind
+	install -D -m0644 admin/sg-admind.service debian/sg-shell/usr/lib/systemd/system/sg-admind.service
+	install -D -m0644 admin/sg-admind.path debian/sg-shell/usr/lib/systemd/system/sg-admind.path
+	install -D -m0644 admin/sg-admind.tmpfiles debian/sg-shell/usr/lib/tmpfiles.d/sg-admind.conf
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
