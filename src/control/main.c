@@ -49,6 +49,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_PERSONALIZE]  = { L"Personalization",            PG_CAT_APPEAR, build_personalize,  cmd_personalize, notify_personalize },
     [PG_UPDATE]       = { L"Windows Update",             PG_CAT_SYSSEC, build_update,       cmd_update },
     [PG_NETWORK]      = { L"Network and Sharing Center", PG_CAT_NET,    build_network,      cmd_network },
+    [PG_SPEECH]       = { L"Speech Recognition",         PG_CAT_HW,     build_speech,       cmd_speech, NULL, timer_speech },
 };
 
 int S(int dip) { return MulDiv(dip, g_dpi, 96); }
@@ -730,10 +731,11 @@ static const struct target TARGETS[] = {
     { L"Microsoft.DevicesAndPrinters",      PG_CAT_HW },
     { L"Microsoft.ActionCenter",            PG_CAT_SYSSEC },
     { L"Microsoft.SecurityAndMaintenance",  PG_CAT_SYSSEC },
+    { L"Microsoft.SpeechRecognition",       PG_SPEECH },
     /* our own page names, for --page */
     { L"home", PG_HOME }, { L"all", PG_ALL }, { L"programs", PG_PROGRAMS }, { L"users", PG_USERS },
     { L"accounts", PG_USERS_MANAGE }, { L"datetime", PG_DATETIME }, { L"personalization", PG_PERSONALIZE },
-    { L"network", PG_NETWORK }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
+    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
     { L"cat-hardware", PG_CAT_HW }, { L"cat-programs", PG_CAT_PROG }, { L"cat-users", PG_CAT_USERS },
     { L"cat-appearance", PG_CAT_APPEAR }, { L"cat-clock", PG_CAT_CLOCK },
 };
@@ -805,7 +807,8 @@ static int dump(const WCHAR *what)
     struct { const WCHAR *name; void (*fn)(void); } parts[] = {
         { L"system", dump_system }, { L"programs", dump_programs }, { L"users", dump_users },
         { L"datetime", dump_datetime }, { L"personalization", dump_personalize },
-        { L"update", dump_update }, { L"network", dump_network }, { L"items", dump_items },
+        { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech },
+        { L"items", dump_items },
     };
     size_t i;
     BOOL any = FALSE;

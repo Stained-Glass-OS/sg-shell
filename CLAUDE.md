@@ -47,6 +47,7 @@ wine-sg or an X server.
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
+| `sg-dictate` | **Voice typing** (Win+H). A dark bar at the top centre (mic button with a level ring in the accent colour while listening, "Listening...", a gear for Control Panel > Speech Recognition, close) that never takes the focus; what is said is typed into the program that has it. The engine is sg-session's `sg-dictate` (Parakeet on the CPU). `sg-dictate.exe` resolves via App Paths (`defaults/64-sg-dictate.reg`) for explorer's Win+H. See "Voice typing" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -204,6 +205,53 @@ happens at start-up, so it opens in well under 200 ms with 200 apps.
   Screenshots: `build/start-{open,search,context,power,rail}.png`. xdotool's
   window geometry is not the panel's in a Wine desktop -- the gate reads
   the rectangle from the dump.
+
+## Voice typing (sg-dictate)
+
+`src/sg-dictate.c`. Explorer's Win+H (wine-sg 0092) runs `sg-dictate.exe
+/toggle`: open the bar and listen, or stop and close it. It re-launches
+itself through the engine's bridge (`sg-dictate --bridge wine <itself>
+--bridged`, `SG_DICTATE` overrides the engine's path, as `SG_NETCTL` does);
+the protocol is in sg-session's CLAUDE.md. One instance: a second hands its
+command to the first (`WM_COPYDATA`, class `SgDictateBar`, mutex
+`Local\StainedGlassVoiceTyping`) and exits.
+
+- **It never takes the focus**: `WS_EX_NOACTIVATE` (and `MA_NOACTIVATE`,
+  `SWP_NOACTIVATE`), topmost, a tool window owned by a hidden window (no
+  taskbar button under any taskbar rule). Text goes to whatever has the
+  focus: `SendInput` with `KEYEVENTF_UNICODE` (a line break is the Enter
+  key), or, if the user chose it, the clipboard and Ctrl+V -- the clipboard's
+  text is put back afterwards.
+- **Hold-to-talk**: with `HoldToTalk` on, `sg-dictate /background` (started
+  with the session by sg-session's `sg-run-explorer`; exits at once if the
+  setting is off) keeps a `WH_KEYBOARD_LL` hook. The key (default Right Ctrl)
+  held alone for 250 ms opens the bar and listens; released, it stops, and
+  the bar goes once the text is in. With another key it is a shortcut and
+  nothing happens; the key is never swallowed. The model is unloaded after 5
+  minutes unused. `/reload` tells a running instance the settings changed.
+- **Settings** are `HKCU\Software\Stained Glass\Speech`, read at every
+  start, so Control Panel changes apply at once.
+- **Control Panel > Speech Recognition** (`src/control/speech.c`; `control
+  /name Microsoft.SpeechRecognition`, the bar's gear): on/off -- turning it on
+  runs `sg-dictate --download` (sg-speechd downloads the model as root) and
+  shows progress from its status file; the microphone (from `sg-dictate
+  --mics --out`), "Test microphone" (`sg-dictate --meter`, a level in a temp
+  file); hold-to-talk and its key; continuous dictation, automatic and spoken
+  punctuation, filler words, numbers, typing or pasting, language; privacy
+  and the model's CC BY 4.0 attribution. Wine gives a Windows program no
+  pipes to a native one, so the engine answers through files.
+  `--dump speech` for gates.
+- **Gate: `test/dictate-check.sh`** (Xvfb, a shell desktop, Notepad in
+  front): `/toggle` through App Paths, a stand-in engine's words typed into
+  Notepad and read back with `WM_GETTEXT`, the bar's styles and place, Notepad
+  keeping the focus throughout, the settings in the start request, `/toggle`
+  closing it, pasting with the clipboard given back, "off", hold-to-talk on
+  the X keyboard (and Right Ctrl+C left alone), the Control Panel page (the
+  dump, the download's progress, the level meter, writing a setting), and --
+  when a model is at hand -- the real engine typing spoken words. `WINH=1`
+  presses Win+H on the X keyboard too (a wine-sg with 0092). Screenshots in
+  `build/dictate-*.png`. Mutants that drop `WS_EX_NOACTIVATE`, stop typing,
+  skip giving back the clipboard or the chord guard each turn it red.
 
 ## Start bar alignment
 

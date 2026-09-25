@@ -39,11 +39,13 @@ static const struct applet PERSONAL_A = { L"Personalization", IC_PERSONAL, NAV(P
       { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } } };
 static const struct applet DATETIME_A = { L"Date and Time", IC_DATETIME, NAV(PG_DATETIME), L"clock time zone ntp calendar",
     { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } } };
+static const struct applet SPEECH_A = { L"Speech Recognition", IC_SPEECH, NAV(PG_SPEECH), L"speech voice typing dictation microphone dictate talk",
+    { { L"Set up voice typing", NAV(PG_SPEECH) }, { L"Set up a microphone", NAV(PG_SPEECH) } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
     &DATETIME_A, &DISPLAY_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SYSTEM_A, &USERS_A, &UPDATE_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[4]; };
@@ -56,7 +58,7 @@ static const struct category CATS[] = {
       { &NETCENTER_A, &INET_A } },
     { PG_CAT_HW, IC_HW, L"Hardware and Sound",
       { { L"Set up game controllers", CMD_JOY }, { L"Adjust screen resolution", CMD_DESK } },
-      { &DISPLAY_A, &GAME_A } },
+      { &DISPLAY_A, &GAME_A, &SPEECH_A } },
     { PG_CAT_PROG, IC_PROG, L"Programs",
       { { L"Uninstall a program", NAV(PG_PROGRAMS) } },
       { &PROGRAMS_A } },

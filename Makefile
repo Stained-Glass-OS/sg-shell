@@ -19,6 +19,8 @@ CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphl
 NET_PANELS = sg-ncpa sg-netflyout
 WINDRES64 ?= x86_64-w64-mingw32-windres
 NET_LIBS = -lcomctl32 -luxtheme $(LIBS)
+# Voice typing's toolbar (sg-dictate): its engine is sg-session's sg-dictate.
+DICTATE_LIBS = -lshell32 -lgdi32 -luser32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -39,6 +41,8 @@ build:
 	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
 	        && echo "built $$p (64-bit)"; \
 	done
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
+	    && echo "built sg-dictate (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -53,6 +57,7 @@ test: build
 	@sh test/control-check.sh
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
+	@sh test/dictate-check.sh
 
 clean:
 	rm -rf $(BUILD)

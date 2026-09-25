@@ -253,6 +253,13 @@ static void paint_icon(HDC dc, int icon)
         arc(dc, RGB(0x44, 0x44, 0x44), 6, 10, 10, 54, 54, 40, 11, 54, 26);
         { int a[] = { 36, 0, 58, 12, 40, 26 }; brush_poly(dc, RGB(0x44, 0x44, 0x44), a, 3); }
         break;
+    case IC_SPEECH:                     /* a microphone on a stand, in a blue disc */
+        brush_ellipse(dc, RGB(0x1E, 0x6F, 0xD9), 2, 2, 62, 62);
+        brush_rect(dc, RGB(0xFF, 0xFF, 0xFF), 24, 10, 40, 38, 16);
+        arc(dc, RGB(0xFF, 0xFF, 0xFF), 4, 16, 18, 48, 46, 48, 32, 16, 32);
+        { int st[] = { 32, 46, 32, 52 }; line(dc, RGB(0xFF, 0xFF, 0xFF), 4, st, 2); }
+        { int ft[] = { 24, 53, 40, 53 }; line(dc, RGB(0xFF, 0xFF, 0xFF), 4, ft, 2); }
+        break;
     case IC_OK:
         brush_ellipse(dc, RGB(0x10, 0x7C, 0x10), 2, 2, 62, 62);
         check(dc, RGB(0xFF, 0xFF, 0xFF), 7, 18, 34, 28);

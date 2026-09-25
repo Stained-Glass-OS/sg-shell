@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- voice typing (sg-dictate), the dictation toolbar.
+; explorer's Win+H runs ShellExecute("sg-dictate.exe", "/toggle") (wine-sg
+; patch 0092), which finds the program here, as the Run box and scripts do.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-dictate.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-dictate64.exe"

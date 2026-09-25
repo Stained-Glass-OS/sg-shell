@@ -1,3 +1,19 @@
+sg-shell (0.1.0-9) unstable; urgency=medium
+
+  * sg-dictate: voice typing, as Windows 10's Win+H -- a dark bar at the top
+    of the screen that never takes the focus, types what is said into the
+    program that has it (or pastes it, giving the clipboard back), with a
+    level ring while listening, hold-to-talk, and a single instance that
+    /toggle opens and closes. App Paths: defaults/64-sg-dictate.reg.
+  * Control Panel: Speech Recognition -- turning voice typing on downloads its
+    model with progress; microphone and Test microphone; hold-to-talk key;
+    continuous dictation, punctuation, filler words, numbers, typing or
+    pasting, language; privacy and attribution. control /name
+    Microsoft.SpeechRecognition.
+  * Gate: test/dictate-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 24 Sep 2026 22:42:36 -0700
+
 sg-shell (0.1.0-8) unstable; urgency=medium
 
   * sg-start: a Windows 10-class Start menu -- the rail (user, Documents,
