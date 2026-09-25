@@ -1,0 +1,60 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Get a web browser (sg-browser).
+;
+; We ship no web browser. Until the user has one, web links (http, https) and
+; .htm/.html files open "Get a web browser", which installs one from its maker
+; (checked against the winget community repository's SHA-256) or, with one
+; browser installed, opens it there and makes it the default -- several:
+; "How do you want to open this?". Wine's own handler (winebrowser, which
+; hands links to a Linux browser the image does not have) is replaced.
+; A user's choice (Settings > Default apps, or Get a web browser) goes in
+; their own Classes and takes precedence over these.
+;
+; What is offered: Offers\NN (Id = the winget package, Name, Publisher,
+; Description, Colour 0xRRGGBB for the letter badge -- no logos). Where
+; manifests come from: ListUrl and RawUrl (defaults: GitHub's winget-pkgs).
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-browser.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-browser64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\http\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-browser64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\https\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-browser64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\htmlfile\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-browser64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.htm]
+@="htmlfile"
+"Content Type"="text/html"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.html]
+@="htmlfile"
+"Content Type"="text/html"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\01]
+"Id"="Mozilla.Firefox"
+"Name"="Mozilla Firefox"
+"Publisher"="Mozilla"
+"Description"="Free and open source, from a non-profit."
+"Colour"=dword:00e66000
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\02]
+"Id"="Google.Chrome"
+"Name"="Google Chrome"
+"Publisher"="Google"
+"Description"="The most used browser, from Google."
+"Colour"=dword:001a73e8
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\03]
+"Id"="Brave.Brave"
+"Name"="Brave"
+"Publisher"="Brave Software"
+"Description"="Blocks ads and trackers by default."
+"Colour"=dword:00fb542b

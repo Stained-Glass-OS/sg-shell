@@ -333,6 +333,7 @@ static void build_list(void)
     add_beside(L"PDF Viewer", L"sg-pdf64.exe");
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
+    add_beside(L"Get a web browser", L"sg-browser64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
     {

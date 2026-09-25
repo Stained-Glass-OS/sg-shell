@@ -122,16 +122,37 @@ static WCHAR g_choices[NKINDS][MAX_CHOICES][128];     /* ProgIDs */
 static int g_nchoices[NKINDS];
 enum { CMD_KIND_FIRST = CMD_PAGE_FIRST + 1, CMD_RESET = CMD_PAGE_FIRST + 50 };
 
+/* Wine's HKEY_CLASSES_ROOT is the machine's classes only: the user's
+ * Software\Classes (a per-user install's ProgIDs, the user's choices) is
+ * not merged in as on Windows, so look there first. */
+static LONG cls_open(const WCHAR *sub, HKEY *out)
+{
+    WCHAR path[400];
+    _snwprintf(path, ARRAYSIZE(path), L"Software\\Classes\\%ls", sub);
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, path, 0, KEY_READ, out)) return 0;
+    return RegOpenKeyExW(HKEY_CLASSES_ROOT, sub, 0, KEY_READ, out);
+}
+
+static LONG cls_get(const WCHAR *sub, const WCHAR *value, WCHAR *out, DWORD *cb)
+{
+    WCHAR path[400];
+    DWORD size = *cb;
+    _snwprintf(path, ARRAYSIZE(path), L"Software\\Classes\\%ls", sub);
+    if (!RegGetValueW(HKEY_CURRENT_USER, path, value, RRF_RT_REG_SZ, NULL, out, cb)) return 0;
+    *cb = size;
+    return RegGetValueW(HKEY_CLASSES_ROOT, sub, value, RRF_RT_REG_SZ, NULL, out, cb);
+}
+
 static void progid_name(const WCHAR *progid, WCHAR *out, int cch)
 {
     WCHAR cmd[MAX_PATH * 2] = L"", sub[300], *exe, *end;
     DWORD cb;
     out[0] = 0;
     cb = cch * sizeof(WCHAR);
-    if (RegGetValueW(HKEY_CLASSES_ROOT, progid, L"FriendlyTypeName", RRF_RT_REG_SZ, NULL, out, &cb) || out[0] == L'@') out[0] = 0;
+    if (cls_get(progid, L"FriendlyTypeName", out, &cb) || out[0] == L'@') out[0] = 0;
     _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\shell\\open\\command", progid);
     cb = sizeof(cmd);
-    RegGetValueW(HKEY_CLASSES_ROOT, sub, NULL, RRF_RT_REG_SZ, NULL, cmd, &cb);
+    cls_get(sub, NULL, cmd, &cb);
     /* the program's own name reads best: "sg-photos64.exe" -> its FileDescription, else the file name */
     exe = cmd[0] == L'"' ? cmd + 1 : cmd;
     if ((end = wcschr(exe, cmd[0] == L'"' ? L'"' : L' '))) *end = 0;
@@ -147,7 +168,7 @@ static void progid_name(const WCHAR *progid, WCHAR *out, int cch)
     }
     if (!out[0]) {
         cb = cch * sizeof(WCHAR);
-        if (RegGetValueW(HKEY_CLASSES_ROOT, progid, NULL, RRF_RT_REG_SZ, NULL, out, &cb) || !out[0]) {
+        if (cls_get(progid, NULL, out, &cb) || !out[0]) {
             const WCHAR *base = wcsrchr(exe, L'\\');
             lstrcpynW(out, base ? base + 1 : exe[0] ? exe : progid, cch);
         }
@@ -158,6 +179,20 @@ static void current_progid(int k, WCHAR *out, int cch)
 {
     DWORD cb = cch * sizeof(WCHAR);
     out[0] = 0;
+    /* the user's choice first: Wine's HKEY_CLASSES_ROOT is the machine's
+     * classes only, so what set_default wrote is not seen through it */
+    if (KINDS[k].proto) {
+        WCHAR sub[200];
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\%ls\\UserChoice", KINDS[k].proto);
+        if (!RegGetValueW(HKEY_CURRENT_USER, sub, L"ProgId", RRF_RT_REG_SZ, NULL, out, &cb) && out[0]) return;
+        cb = cch * sizeof(WCHAR);
+    }
+    if (KINDS[k].exts[0]) {
+        WCHAR sub[200];
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", KINDS[k].exts[0]);
+        if (!RegGetValueW(HKEY_CURRENT_USER, sub, NULL, RRF_RT_REG_SZ, NULL, out, &cb) && out[0]) return;
+        cb = cch * sizeof(WCHAR);
+    }
     if (KINDS[k].exts[0]) RegGetValueW(HKEY_CLASSES_ROOT, KINDS[k].exts[0], NULL, RRF_RT_REG_SZ, NULL, out, &cb);
     else {
         WCHAR sub[64];
@@ -174,7 +209,7 @@ static void add_choice(int k, const WCHAR *progid)
     if (!progid[0] || g_nchoices[k] >= MAX_CHOICES) return;
     for (i = 0; i < g_nchoices[k]; i++) if (!lstrcmpiW(g_choices[k][i], progid)) return;
     _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\shell\\open\\command", progid);
-    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, sub, 0, KEY_READ, &key)) return;     /* it must open something */
+    if (cls_open(sub, &key)) return;     /* it must open something */
     RegCloseKey(key);
     lstrcpynW(g_choices[k][g_nchoices[k]++], progid, 128);
 }
@@ -189,7 +224,13 @@ static void load_choices(int k)
     current_progid(k, cur, ARRAYSIZE(cur));
     add_choice(k, cur);
     for (e = 0; KINDS[k].exts[e]; e++) {
+        WCHAR usub[200];
         _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\OpenWithProgids", KINDS[k].exts[e]);
+        _snwprintf(usub, ARRAYSIZE(usub), L"Software\\Classes\\%ls", sub);
+        if (!RegOpenKeyExW(HKEY_CURRENT_USER, usub, 0, KEY_READ, &key)) {
+            for (i = 0; n = ARRAYSIZE(name), !RegEnumValueW(key, i, name, &n, NULL, NULL, NULL, NULL); i++) add_choice(k, name);
+            RegCloseKey(key);
+        }
         if (RegOpenKeyExW(HKEY_CLASSES_ROOT, sub, 0, KEY_READ, &key)) continue;
         for (i = 0; n = ARRAYSIZE(name), !RegEnumValueW(key, i, name, &n, NULL, NULL, NULL, NULL); i++) add_choice(k, name);
         RegCloseKey(key);
@@ -240,7 +281,7 @@ static void set_default(int k, const WCHAR *progid)
         HKEY from, to;
         _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", KINDS[k].proto);
         RegDeleteTreeW(HKEY_CURRENT_USER, sub);
-        if (!RegOpenKeyExW(HKEY_CLASSES_ROOT, progid, 0, KEY_READ, &from)) {
+        if (!cls_open(progid, &from)) {
             if (!RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &to, NULL)) {
                 copy_key(from, to);
                 RegSetValueExW(to, L"URL Protocol", 0, REG_SZ, (const BYTE *)L"", sizeof(WCHAR));
@@ -251,7 +292,7 @@ static void set_default(int k, const WCHAR *progid)
         if (!lstrcmpW(KINDS[k].proto, L"http")) {
             WCHAR s2[64] = L"Software\\Classes\\https";
             RegDeleteTreeW(HKEY_CURRENT_USER, s2);
-            if (!RegOpenKeyExW(HKEY_CLASSES_ROOT, progid, 0, KEY_READ, &from)) {
+            if (!cls_open(progid, &from)) {
                 if (!RegCreateKeyExW(HKEY_CURRENT_USER, s2, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &to, NULL)) {
                     copy_key(from, to);
                     RegSetValueExW(to, L"URL Protocol", 0, REG_SZ, (const BYTE *)L"", sizeof(WCHAR));

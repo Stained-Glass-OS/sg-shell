@@ -65,6 +65,7 @@ wine-sg or an X server.
 | `sg-fontview` | **The font viewer and the Fonts folder** (`fontview.exe`, `control fonts`, `shell:fonts`, %WINDIR%\Fonts). A font file (.ttf .otf .ttc .fon) shows its own names read from the file, version, kind, the alphabet and a sample line at 12-72 pt, with Print, Install (for you) and Install for all users (elevated), a face picker for collections. The Fonts folder: a tile per family drawn in its font, search, details (styles, where installed, files), Preview, Delete, Install new font, dropped files. Per-user fonts where Windows 10 keeps them (and in `~/.local/share/fonts` for Linux programs), all users' through the elevated copy and sg-admind. `defaults/81-sg-fontview.reg`; wine-sg 0183 gives the launcher, the associations, per-user font loading and `shell:` URLs. See "Fonts (sg-fontview)" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
+| `sg-browser` | **Get a web browser** -- we ship no browser (Edge is Microsoft's). Web links (`http`, `https`) and `.htm`/`.html` open it until the user has one: none installed -- it offers Firefox, Chrome and Brave, downloads the maker's installer as the winget community repository describes it, checks its SHA-256, installs it silently (or through winget when the user has it), makes it the default and opens the link; one installed -- the link opens there; several -- "How do you want to open this?". The user's choice (UserChoice, as Settings > Default apps writes it) is honoured on every link. Internet Explorer (Wine's, Gecko) is offered for simple pages. `defaults/81-sg-browser.reg`; sg-start lists it. See "Get a web browser" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -1462,3 +1463,77 @@ manifest, the password prompt and the version information (FileDescription
   `build/pdf-*.png`.
 - **Not yet:** forms, annotations and highlighting of our own, two-page view,
   presentation mode, a printing gate, remembering the last page per file.
+
+## Get a web browser (sg-browser)
+
+`src/browser/`: `main.c` (the routing, the two windows, the default
+browser), `fetch.c` (the source, the download, SHA-256, running the
+installer, winget), `manifest.c` (plain C, no Windows headers: reading winget
+installer manifests -- a small, regular subset of YAML -- and choosing the
+installer; unit-tested natively). The icon is drawn by `gen-icon.py`.
+
+- **Licensing.** We never ship or redistribute a browser. Install fetches
+  the maker's own installer (Mozilla's CDN, Google's, Brave's GitHub
+  releases) at the user's request; which file, its SHA-256 and how to run it
+  silently come from github.com/microsoft/winget-pkgs (MIT-licensed data):
+  `ListUrl` + `m/Mozilla/Firefox` (GitHub's contents API: the version
+  folders; the newest by winget's order, sub-packages like `ESR` and `de`
+  skipped), then `RawUrl` + `.../<version>/<Id>.installer.yaml` (else the
+  singleton `<Id>.yaml`). `HKLM\Software\Stained Glass\Web Browsers`
+  `ListUrl`/`RawUrl` point at a mirror (an organisation's; the gate's);
+  `SG_BROWSER_LIST_URL`/`SG_BROWSER_RAW_URL` for tests. **A download whose
+  SHA-256 is not the manifest's is deleted and never run**; a manifest with
+  no SHA-256 is refused. The installer chosen: x64 first, the user's locale,
+  machine scope for an administrator and user scope otherwise; run silently
+  by type (msi/wix through msiexec `/quiet /norestart`, nullsoft `/S`, inno,
+  burn, exe with the manifest's switches), through `ShellExecuteEx` and
+  `runas` when it needs elevation (the consent prompt). With winget (the
+  user's own: PATH, App Paths, `SG_BROWSER_WINGET`) it is `winget install
+  --id <Id> -e --silent --accept-package-agreements
+  --accept-source-agreements --disable-interactivity` instead.
+- **Offers** are `HKLM\...\Web Browsers\Offers\NN` (`Id`, `Name`,
+  `Publisher`, `Description`, `Colour`) -- Firefox, Chrome, Brave by
+  default; each has a letter badge in a colour, never a logo.
+- **Installed** means registered under `Software\Clients\StartMenuInternet`
+  (HKCU, then HKLM; Wine's IEXPLORE.EXE excluded), with the program on
+  disk. **The default** is set as Settings > Default apps sets it: the user's
+  `Classes\http`, `https` (a copy of the browser's URL ProgID), `.htm`,
+  `.html`, and `UrlAssociations\{http,https}\UserChoice\ProgId`.
+- **Wine's HKEY_CLASSES_ROOT is the machine's classes only** -- the user's
+  `Software\Classes` is not merged in, as Windows does (a user key never
+  shadows the machine's; measured: a value in both reads as the machine's).
+  So the user's copies above are not what ShellExecute sees: every web link
+  still arrives here, and **this program honours UserChoice** (opens the
+  chosen browser without a window). Class lookups here, and in Settings >
+  Default apps (`src/control/set_apps.c`), read the user's classes first (a
+  per-user browser registers there); Default apps shows UserChoice / the
+  user's class as the current choice. For
+  other file types the user's choice still does not take effect -- a
+  wine-sg change (a merged HKCR) is the real fix.
+- **`SG_BROWSER_DUMP=<file>`**: the mode (get, choose, none), the link, the
+  method (winget, manifest), the default, the installed browsers, each
+  offer's state and message, every clickable thing's screen centre, the
+  package (id, version, type, URL) and the installer's arguments, what was
+  opened.
+- **Gate: `test/browser-check.sh`** (Xvfb picks its display): the manifest
+  reader's native unit test (`test/browser-manifest-test.c`, 23 checks:
+  shapes of the real Firefox, Chrome and Brave manifests); a
+  winget-pkgs-shaped source served by `python3 -m http.server` with
+  stand-ins built at test time (`test/sg-browser-fake.c`: an installer that
+  registers a browser, the browser, winget). With no browser a link opens
+  Get a web browser naming it; a tampered download is refused and never run;
+  Install takes 1.10.0 over 1.9.0 and the x64 installer, runs it with the
+  manifest's switches, the browser becomes the default (UserChoice and the
+  user's http class) and the link opens in it; the next link and an .html
+  file open there without a window; reset, one browser: opens there and is
+  the default again; two: "How do you want to open this?", the one picked
+  opens it and with Always becomes the default; winget: `winget install --id
+  ... -e --silent ...`; Internet Explorer is offered; Settings > Default
+  apps shows the installed browser as the web browser. 29 checks.
+  `SG_BROWSER_ONLINE=1` also installs the real Mozilla Firefox from GitHub's
+  manifests and Mozilla's CDN. Mutants `-DSG_MUTANT_NOHASH` (no SHA-256
+  check) and `-DSG_MUTANT_NODEFAULT` (no default set), via
+  `SG_BROWSER_EXE=`, turn it red. Screenshots `build/browser-*.png`.
+- sg-session's first-run setup (OOBE) installs Firefox for everyone from
+  Mozilla's "latest" link (`lib/sg-oobe-browser`); this program is the
+  per-user path afterwards, and the one that checks a manifest's SHA-256.

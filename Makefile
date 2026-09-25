@@ -67,6 +67,10 @@ PDF_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lwinspool -lgdi32 -luser32 -ladvapi3
 # its icons drawn at build time.
 FONTVIEW_SRC  = $(wildcard src/fontview/*.c)
 FONTVIEW_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -ladvapi32 -lwinspool -lole32
+# Get a web browser (sg-browser): src/browser/, WinINet and BCrypt; its
+# manifest reader (manifest.c) is plain C, also built natively by its gate.
+BROWSER_SRC  = $(wildcard src/browser/*.c)
+BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -173,6 +177,10 @@ build:
 	@$(WINDRES64) -I src/fontview -I $(BUILD) src/fontview/fontview.rc -O coff -o $(BUILD)/sg-fontview-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $(FONTVIEW_SRC) \
 	    $(BUILD)/sg-fontview-res64.o $(FONTVIEW_LIBS) && echo "built sg-fontview (64-bit)"
+	@python3 src/browser/gen-icon.py $(BUILD)/sg-browser.ico
+	@$(WINDRES64) -I src/browser -I $(BUILD) src/browser/browser.rc -O coff -o $(BUILD)/sg-browser-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-browser64.exe $(BROWSER_SRC) \
+	    $(BUILD)/sg-browser-res64.o $(BROWSER_LIBS) && echo "built sg-browser (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -213,6 +221,7 @@ test: build
 	@sh test/cleanmgr-check.sh
 	@sh test/resmon-check.sh
 	@sh test/pdf-check.sh
+	@sh test/browser-check.sh
 
 clean:
 	rm -rf $(BUILD)
