@@ -23,3 +23,7 @@ Windows Registry Editor Version 5.00
 ; system32\msinfo32.exe hands off to this entry (wine-sg 0142).
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\msinfo32.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-msinfo3264.exe"
+
+; Disk Cleanup: cleanmgr.exe (wine-sg 0142's launcher) opens this.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\cleanmgr.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-cleanmgr64.exe"

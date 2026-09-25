@@ -1040,3 +1040,24 @@ Programs). Hardware facts from `sg-sysinfo system|devices|disks`.
   Components > Display lists sg-sysinfo's display adapters; `/report`
   writes all 14 categories. `-DSG_MUTANT_MEM` turns it red.
 
+### Disk Cleanup (cleanmgr.exe)
+
+`src/mmc/cleanmgr.c`, the host as `sg-cleanmgr64.exe` (App Paths
+`cleanmgr.exe`, wine-sg 0142's launcher), a dialog like Windows' "Disk Cleanup
+for (C:)": "You can use Disk Cleanup to free up to N of disk space", the list
+with ticks and sizes, the total, the description, "Clean up system files"
+(itself again with `runas` and `/system`), OK and "Are you sure you want to
+permanently delete these files?". Windows-side categories are deleted by the
+program itself: Downloaded Program Files, Temporary Internet Files,
+Temporary files (**only files not changed for a week**, as Windows). The
+user's Linux side is `sg-sysinfo cleanup`/`clean` (Recycle Bin = the XDG
+trash Wine uses, Thumbnails, Wine's downloads); `/system` asks sg-sysinfod
+for `cleanup-system`/`clean-system` (update packages, old logs, the archived
+journal, error reports; an administrator only). `/d X` picks the drive.
+
+- **Gate: `test/cleanmgr-check.sh`**: `cleanmgr.exe` through App Paths, the
+  sizes of a planted week-old and a new temporary file (only the old one
+  counted), thumbnails and a trashed file; Windows' default ticks; ticking
+  with the keyboard, OK, Yes: the old temporary file, the thumbnails and the
+  trash go, today's temporary file stays. `-DSG_MUTANT_AGE` turns it red.
+

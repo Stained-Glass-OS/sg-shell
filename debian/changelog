@@ -1,3 +1,14 @@
+sg-shell (0.1.0-28) unstable; urgency=medium
+
+  * Disk Cleanup (cleanmgr.exe, sg-cleanmgr64.exe via App Paths): Windows'
+    dialog over Temporary files (older than a week), Temporary Internet
+    Files, Downloaded Program Files and the user's Linux side (Recycle Bin,
+    thumbnails, Wine's downloads) through sg-sysinfo; Clean up system files
+    (an administrator, through sg-sysinfod).
+  * Gate: test/cleanmgr-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 09:07:16 -0700
+
 sg-shell (0.1.0-27) unstable; urgency=medium
 
   * System Information (msinfo32.exe, sg-msinfo3264.exe via App Paths):

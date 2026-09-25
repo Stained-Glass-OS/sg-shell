@@ -1184,6 +1184,7 @@ static void pick_console(const WCHAR *cmdline)
     base = wcsrchr(self, '\\') ? wcsrchr(self, '\\') + 1 : self;
     if (!_wcsnicmp(base, L"sg-eventvwr", 11)) lstrcpyW(g_console, L"eventvwr");
     if (!_wcsnicmp(base, L"sg-msinfo32", 11)) lstrcpyW(g_console, L"msinfo32");
+    if (!_wcsnicmp(base, L"sg-cleanmgr", 11)) lstrcpyW(g_console, L"cleanmgr");
     for (i = 1; argv && i < argc && !g_console[0]; i++)
     {
         if (argv[i][0] == '-' || argv[i][0] == '/') continue;
@@ -1345,6 +1346,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     GetEnvironmentVariableW(L"SG_MMC_DUMP", g_dump_path, MAX_PATH);
     load_icons();
     pick_console(full);
+    if (!wcscmp(g_console, L"cleanmgr")) return cleanmgr_main(full);
     /* msinfo32 /report FILE: the report, no window */
     if (!wcscmp(g_console, L"msinfo32"))
     {

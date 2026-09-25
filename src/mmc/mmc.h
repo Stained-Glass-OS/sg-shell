@@ -211,5 +211,6 @@ node_t *users_create(node_t *parent);       /* Local Users and Groups */
 node_t *shares_create(node_t *parent);      /* Shared Folders */
 node_t *msinfo_create(void);                 /* System Information */
 int msinfo_report(const WCHAR *path);        /* msinfo32 /report FILE */
+int cleanmgr_main(const WCHAR *cmdline);     /* Disk Cleanup (cleanmgr.exe) */
 
 #endif
