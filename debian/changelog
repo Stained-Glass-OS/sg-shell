@@ -1,3 +1,16 @@
+sg-shell (0.1.0-25) unstable; urgency=medium
+
+  * Computer Management (compmgmt.msc): System Tools (Event Viewer, Shared
+    Folders, Local Users and Groups, Device Manager), Storage (Disk
+    Management), Services and Applications (Services) in one console.
+  * Local Users and Groups: the Stained Glass accounts and groups
+    (sg-admins as Administrators, sgwine as Users, SYSTEM), read-only, with
+    a way to Control Panel > User Accounts. Shared Folders: Samba's shares
+    with Windows paths; sessions and open files for an administrator.
+  * Gate: test/compmgmt-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 08:46:44 -0700
+
 sg-shell (0.1.0-24) unstable; urgency=medium
 
   * Disk Management (diskmgmt.msc): the volume list and the graphical view

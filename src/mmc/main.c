@@ -38,7 +38,7 @@ static node_t *g_initial;
 static WCHAR g_console[32] = L"";   /* services, eventvwr, ... */
 static WCHAR g_title[128] = L"Console Root";
 static BOOL g_show_tree = TRUE, g_show_actions = TRUE;
-static int g_tree_w = 250, g_actions_w = 210;
+static int g_tree_w = 270, g_actions_w = 210;
 static RECT g_center, g_list_rc;
 static WCHAR g_banner_text[512];
 static WCHAR g_last_msg[1024];
@@ -193,6 +193,7 @@ void node_select(node_t *n)
         static const int widths[] = { 260, 400 };
         node_t *c;
         pane_columns(cols, widths, 2);
+        pane_sort(-1, FALSE);       /* the console's own order */
         pane_begin();
         for (c = n->child; c; c = c->next)
         {
@@ -1095,6 +1096,7 @@ static LRESULT CALLBACK main_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
                 NMTREEVIEWW *tv = (NMTREEVIEWW *)lp;
                 if (tv->itemNew.lParam) node_select((node_t *)tv->itemNew.lParam);
             }
+            else if (nh->code == TVN_ITEMEXPANDEDW) frame_dump_later();
             else if (nh->code == TVN_ITEMEXPANDINGW)
             {
                 NMTREEVIEWW *tv = (NMTREEVIEWW *)lp;

@@ -924,3 +924,34 @@ and the prefix's drive letters -- C: is the volume holding `drive_c`).
   to scale) and `-DSG_MUTANT_FSNAME` (always NTFS) turn it red. Screenshots
   `build/diskmgmt-*.png`.
 
+### Computer Management (compmgmt.msc), Local Users and Groups, Shared Folders
+
+`main.c`'s `build_console()` puts the consoles under Windows' tree: Computer
+Management (Local) > System Tools (Event Viewer, Shared Folders, Local Users
+and Groups, Device Manager), Storage (Disk Management), Services and
+Applications (Services, Stained Glass System Services). A folder node's
+result pane lists its children in the console's order (not sorted). The
+same program answers `lusrmgr` and `fsmgmt` as console names (wine-sg writes
+no .msc for them yet).
+
+- `src/mmc/users.c`, **read-only**: Users (`sg-sysinfo users`: name, full
+  name, description, Windows session, administrator; the SYSTEM account
+  `sgsystem` with the Stained Glass picture) and Groups (`sg-sysinfo groups`:
+  `sg-admins` shown as Administrators, `sgwine` as Users, with members and
+  the Linux group). The node's one verb opens Control Panel > User Accounts
+  (`control userpasswords2`), where accounts are changed (sg-admind).
+  Shared Folders: Shares (`sg-sysinfo shares`: Samba's shares with the
+  folder as a Windows path -- `wine_get_dos_file_name` --, type, comment,
+  access; "Samba is not installed" without it), Sessions and Open Files (an
+  administrator's, through sg-sysinfod).
+- **Gate: `test/compmgmt-check.sh`**: the tree in Windows' order; Services,
+  Device Manager, Disk Management and Event Viewer's Application log working
+  inside it; Users and Groups over a made-up passwd/group
+  (`SG_PASSWD_FILE`/`SG_GROUP_FILE`): alice a Windows user, bob an
+  administrator, sgsystem the SYSTEM account, no actions; Administrators
+  (sg-admins, bob) and Users (sgwine); Shares from a stand-in testparm
+  (`SG_TESTPARM`) with the Windows path, and "Samba is not installed" with
+  none. 17 checks. `-DSG_MUTANT_WINNAME` (Linux group names) turns it red.
+  **Expanding a tree item rewrites the dump** (TVN_ITEMEXPANDED), or a gate
+  reads the children's positions before they exist.
+

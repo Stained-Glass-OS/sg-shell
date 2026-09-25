@@ -151,6 +151,7 @@ test: build
 	@sh test/eventvwr-check.sh
 	@sh test/devmgmt-check.sh
 	@sh test/diskmgmt-check.sh
+	@sh test/compmgmt-check.sh
 
 clean:
 	rm -rf $(BUILD)
