@@ -1,3 +1,14 @@
+sg-shell (0.1.0-12) unstable; urgency=medium
+
+  * sg-calc: Calculator (calc.exe), Windows 10's -- Standard (immediate
+    execution, percent), Scientific (precedence, parentheses, DEG/RAD/GRAD
+    trigonometry, 2nd functions, F-E) and Programmer (HEX/DEC/OCT/BIN,
+    QWORD..BYTE, AND/OR/XOR/NOT, Lsh/Rsh, Mod); memory, History, keyboard,
+    copy and paste. App Paths calc.exe and the calculator: URI
+    (defaults/70-sg-calc.reg); listed in Start. Gate: test/calc-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 02:00:24 -0700
+
 sg-shell (0.1.0-11) unstable; urgency=medium
 
   * sg-media: Media Player -- audio and video through Wine's DirectShow and

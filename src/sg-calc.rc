@@ -1,0 +1,2 @@
+/* Calculator's resources: its icon, drawn at build time by sg-calc-icon.py. */
+1 ICON "sg-calc.ico"

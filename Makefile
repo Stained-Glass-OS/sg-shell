@@ -27,6 +27,8 @@ ZIP_LIBS = -lcomctl32 -lshell32 -lshlwapi -lgdi32 -luser32 -lole32 -lcomdlg32
 # Media Player (sg-media): DirectShow (quartz, winegstreamer) and its own icon,
 # drawn by src/sg-media-icon.py at build time.
 MEDIA_LIBS = -lole32 -luuid -lstrmiids -lgdi32 -luser32 -lshell32 -lcomdlg32 -ladvapi32 -lmsimg32
+# Calculator (sg-calc): calc.exe. Its icon is drawn at build time (src/sg-calc-icon.py).
+CALC_LIBS = -lgdi32 -luser32 -ladvapi32 -lm
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -57,6 +59,10 @@ build:
 	@$(WINDRES64) -I $(BUILD) src/sg-media.rc -O coff -o $(BUILD)/sg-media-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-media64.exe src/sg-media.c $(BUILD)/sg-media-res64.o $(MEDIA_LIBS) \
 	    && echo "built sg-media (64-bit)"
+	@python3 src/sg-calc-icon.py $(BUILD)/sg-calc.ico
+	@$(WINDRES64) -I $(BUILD) src/sg-calc.rc -O coff -o $(BUILD)/sg-calc-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calc64.exe src/sg-calc.c $(BUILD)/sg-calc-res64.o $(CALC_LIBS) \
+	    && echo "built sg-calc (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -74,6 +80,7 @@ test: build
 	@sh test/dictate-check.sh
 	@sh test/zip-check.sh
 	@sh test/media-check.sh
+	@sh test/calc-check.sh
 
 clean:
 	rm -rf $(BUILD)

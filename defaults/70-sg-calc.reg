@@ -1,0 +1,23 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Calculator (sg-calc). calc.exe in the Run box, from
+; ShellExecute and from scripts opens it, as it opens Microsoft's on Windows
+; (wine-sg's system32 calc.exe hands off to this App Paths entry, so programs
+; that CreateProcess calc.exe get it too). The calculator: URI opens it as
+; well; calculator:scientific and calculator:programmer choose the mode.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\calc.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-calc64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\calculator]
+@="URL:calculator"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\calculator\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-calc64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\calculator\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-calc64.exe\" \"%1\""

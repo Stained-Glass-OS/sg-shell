@@ -50,6 +50,7 @@ wine-sg or an X server.
 | `sg-dictate` | **Voice typing** (Win+H). A dark bar at the top centre (mic button with a level ring in the accent colour while listening, "Listening...", a gear for Control Panel > Speech Recognition, close) that never takes the focus; what is said is typed into the program that has it. The engine is sg-session's `sg-dictate` (Parakeet on the CPU). `sg-dictate.exe` resolves via App Paths (`defaults/64-sg-dictate.reg`) for explorer's Win+H. See "Voice typing" below. |
 | `sg-zip` | **Compressed (zipped) Folders** -- Wine has no `zipfldr.dll`. Opening a `.zip` (ProgID `CompressedFolder`) browses it read-only like a folder (Name, Type, Compressed size, Password protected, Size, Ratio, Date modified; Enter/double-click opens folders, Backspace/Alt+Up goes up, Back/Forward; a file opens from a temporary copy), "Extract all" / the "Extract All..." verb runs the **Extract Compressed (Zipped) Folders** wizard (destination named like the zip, Browse, "Show extracted files when complete", progress, Replace-or-Skip with "Do this for all conflicts"), and "Compress to ZIP file" on any file or folder makes `<name>.zip` beside it. Our own inflate/deflate. `defaults/75-sg-zip.reg`. See "Compressed folders" below. |
 | `sg-media` | **Media Player** -- audio and video, Windows 11 Media Player's layout in the Stained Glass Light palette: an "Open file(s)" bar, the video pane (letterboxed; a drawn album tile for audio), and the transport bar -- seek bar with elapsed/total, now playing ("1 of 3"), Stop, Previous, Play/Pause, Next, mute and volume, full screen. Space/Ctrl+P, Ctrl+S, Ctrl+B/F, Left/Right (5 s, Ctrl 60 s), Up/Down, M/F7, F11/Alt+Enter/double-click, Escape, media keys, the wheel for volume, dropped files. One instance: a second launch hands its files over. DirectShow through winegstreamer. `wmplayer.exe` and 17 audio/video types via `defaults/74-sg-media.reg`. See "Media Player" below. |
+| `sg-calc` | **Calculator** (`calc.exe`). Windows 10's Calculator, our own drawing: Standard (immediate execution), Scientific (precedence, parentheses, trigonometry in DEG/RAD/GRAD, 2nd functions, F-E) and Programmer (HEX/DEC/OCT/BIN readouts, QWORD..BYTE, AND/OR/XOR/NOT, Lsh/Rsh, Mod); memory, History, keyboard, copy/paste. `calc.exe` and the `calculator:` URI resolve to it (`defaults/70-sg-calc.reg`); sg-start lists it. See "Calculator" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -254,6 +255,38 @@ command to the first (`WM_COPYDATA`, class `SgDictateBar`, mutex
   presses Win+H on the X keyboard too (a wine-sg with 0092). Screenshots in
   `build/dictate-*.png`. Mutants that drop `WS_EX_NOACTIVATE`, stop typing,
   skip giving back the clipboard or the chord guard each turn it red.
+
+## Calculator (sg-calc)
+
+`src/sg-calc.c`, one owner-drawn window: every key is a rectangle in a table
+rebuilt by `layout()` on each change, so hover, disabled keys (hex digits
+outside HEX, MC/MR with nothing stored) and the dump come from one place.
+
+- **One engine for all modes**: an operand stack and an operator stack
+  (shunting-yard). Standard gives every operator the same precedence, which
+  *is* Windows' immediate execution (2 + 3 x 4 = 20); Scientific and
+  Programmer use real precedence and parentheses. `=` again repeats the last
+  operator with its right operand; an operator straight after another
+  replaces it; `5 + =` is 10, as on Windows.
+- **Numbers**: doubles shown to 16 significant digits (exponential outside
+  that), trigonometric results rounded to 15 so sin 30 deg is 0.5; Programmer
+  keeps 64-bit integers cut to the word size and refuses a digit that would
+  not fit.
+- **Alt+1/2/3 switch modes**; `WM_SYSCOMMAND SC_KEYMENU` from the keyboard
+  is swallowed, or Alt's release entered the (menu-less) menu loop and ate the
+  next keys.
+- The icon is drawn at build time (`src/sg-calc-icon.py`, PIL) and linked as
+  a resource; nothing binary is committed.
+- **Gate: `test/calc-check.sh`** (in `make test`): `wine start calc.exe`
+  through App Paths on a shell desktop, driven by xdotool keys and clicks
+  (key positions from `SG_CALC_DUMP`): 12+30= typed and clicked, repeated =,
+  immediate execution, percent, divide by zero, grouping, Backspace, memory,
+  F9, Ctrl+C/Ctrl+V (xclip), history; Scientific precedence, parentheses,
+  square root, x^2, sin 30, 2nd, x^y, n!; Programmer HEX, FF AND 0F (typed and
+  clicked), readouts, BIN disabling digits, BYTE NOT, Lsh; `calculator:scientific`;
+  the = key's accent pixel. Screenshots `build/calc-*.png`. Mutants (+ computing
+  -, a click pressing the neighbouring key, Standard with precedence) each
+  turn it red.
 
 ## Start bar alignment
 
