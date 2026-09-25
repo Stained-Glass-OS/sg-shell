@@ -1,0 +1,37 @@
+name: CI
+
+# Builds the package sg-image installs, in the distribution it installs into.
+# The panels' gates (make test) render under Xvfb against wine-sg and are run
+# locally and by sg-image's boot gate; this is the build.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  deb:
+    name: build .deb (Debian trixie)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential devscripts debhelper equivs make ca-certificates
+          apt-get build-dep -y --no-install-recommends ./
+
+      - name: Build package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Collect package
+        run: mkdir -p dist && cp ../sg-shell_*.deb dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sg-shell-deb
+          path: dist/*.deb
