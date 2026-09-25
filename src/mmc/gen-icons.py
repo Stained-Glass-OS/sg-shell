@@ -314,6 +314,14 @@ def draw(name, p):
     elif name == "ACTIONS":
         p.rect(1.5, 2, 14.5, 14, fill=WHITE, outline=DARK)
         p.rect(10, 2, 14.5, 14, fill=ACCENT_LT, outline=DARK)
+    elif name == "DISABLED":
+        # a device (a card) with a black circle and a white down arrow: disabled
+        p.rect(1, 2, 12, 10, fill=ACCENT_LT, outline=GREY, r=1)
+        p.rect(3, 10, 5, 12, fill=GREY)
+        p.rect(8, 10, 10, 12, fill=GREY)
+        p.ellipse(7, 7, 15.5, 15.5, fill=DARK)
+        p.poly([(9, 10), (13.5, 10), (11.25, 13.8)], fill=WHITE)
+        p.rect(10.4, 8.2, 12.1, 10.2, fill=WHITE)
 
 
 NAMES = ("COMPUTER SERVICES SERVICE EVENTS LOG ERROR WARNING INFO "
@@ -322,7 +330,7 @@ NAMES = ("COMPUTER SERVICES SERVICE EVENTS LOG ERROR WARNING INFO "
          "FOLDER SGLOGO AUDIT_OK AUDIT_FAIL NODRIVER CDROM BATTERY CAMERA "
          "BLUETOOTH PRINTER MONITOR STORAGE HID TOOLS STORAGEFOLDER SESSION "
          "BACK FORWARD UP TREE REFRESH PROPS HELP START "
-         "STOP PAUSE RESTART EXPORT FILTER CLEAR SCAN ACTIONS").split()
+         "STOP PAUSE RESTART EXPORT FILTER CLEAR SCAN ACTIONS DISABLED").split()
 
 
 def render(name, size):

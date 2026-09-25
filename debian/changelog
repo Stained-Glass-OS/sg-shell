@@ -1,3 +1,19 @@
+sg-shell (0.1.0-39) unstable; urgency=medium
+
+  * Disk Management: New Simple Volume, Delete Volume, Extend Volume and
+    Shrink Volume (through sg-sysinfod: sg-session 0.1.0-26); SMART health
+    ("Online (Errors)", a banner, the disk's Properties).
+  * Device Manager: Disable device / Enable device, the down-arrow picture
+    and "This device is disabled. (Code 22)".
+  * Services: Properties > Security shows the service's own DACL (wine-sg
+    0185's sc sdset).
+  * System Information: msinfo32 /report returns only once the report is
+    written.
+  * Gates: diskmgmt-check.sh (loop device), devmgmt-check.sh,
+    services-check.sh and msinfo-check.sh extended.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 13:24:17 -0700
+
 sg-shell (0.1.0-38) unstable; urgency=medium
 
   * Get a web browser (sg-browser64.exe; http, https, .htm and .html until a

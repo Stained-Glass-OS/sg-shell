@@ -161,6 +161,14 @@ xdotool key alt+u; sleep 0.5; xdotool key d; sleep 0.5; xdotool key Return; slee
 wait_dump "	Stained Glass Test Service	[^	]*		Disabled	" 5 && pass "the row says Disabled" || fail "row: $(row 'Stained Glass Test Service')"
 [ "$(verb_on 1)" = 0 ] && pass "Start is disabled for a disabled service" || fail "Start enabled for a disabled service"
 
+# 6b. Properties > Security: the service's own descriptor (wine-sg 0185), read-only
+xdotool key alt+Return; sleep 2
+xdotool key ctrl+Tab; sleep 0.3; xdotool key ctrl+Tab; sleep 0.3; xdotool key ctrl+Tab; sleep 1
+if wait_dump '^SVCSECURITY D:.*;;;AU\).*;;;SY\)' 5; then pass "Properties > Security shows the service's DACL ($(d | sed -n 's/^SVCSECURITY //p'))"
+else fail "Security page: $(d | grep '^SVCSECURITY')"; fi
+shot security
+xdotool key Escape; sleep 1
+
 # 7. Stained Glass System Services (sg-sysinfo units, read-only)
 want=$("$SYSINFO" units 2>/dev/null | grep -c '^UNIT ')
 # shellcheck disable=SC2086

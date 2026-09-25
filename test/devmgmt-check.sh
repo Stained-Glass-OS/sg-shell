@@ -34,7 +34,7 @@ RC=0; XP=""
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 
-for need in Xvfb xdotool import python3; do command -v "$need" >/dev/null || { echo "SKIP: $need missing"; exit 77; }; done
+for need in systemd-socket-activate Xvfb xdotool import python3; do command -v "$need" >/dev/null || { echo "SKIP: $need missing"; exit 77; }; done
 if [ -x "$WINE_DIR/bin/wine" ]; then WBIN="$WINE_DIR/bin"; WSERVER="$WINE_DIR/bin/wineserver"
 elif [ -x "$WINE_DIR/wine" ]; then WBIN="$WINE_DIR"; WSERVER="$WINE_DIR/server/wineserver"
 else echo "SKIP: no wine in $WINE_DIR"; exit 77; fi
@@ -144,6 +144,9 @@ def pci(slot, vendor, device, cls, driver=None, module=None):
 pci("0000:00:01.0", "1234", "1111", "030000", "bochs-drm", "bochs")
 pci("0000:01:00.0", "10de", "1c82", "030000")
 net = pci("0000:00:03.0", "1af4", "1041", "020000", "virtio-pci", "virtio_pci")
+write(os.path.join(net, "driver_override"), "(null)\n")
+write(os.path.join(root, "sys/bus/pci/drivers/virtio-pci/unbind"), "")
+write(os.path.join(root, "sys/bus/pci/drivers_probe"), "")
 vn = os.path.join(net, "virtio0")
 write(os.path.join(vn, "net/eth0/address"), "52:54:00:12:34:56\n")
 link("../../devices/pci0000:00/0000:00:03.0/virtio0/net/eth0", os.path.join(root, "sys/class/net/eth0"))
@@ -183,6 +186,67 @@ wait_dump '^BYCONNECTION 1' 5 && ! d | grep -q '^CATEGORY' && pass "Devices by c
     || fail "by connection: $(d | grep -cE '^CATEGORY') categories"
 shot connection
 close_console
+
+# ---- 4. Disable device / Enable device, through sg-sysinfod -------------------------------------------
+link_xy() { d | awk -v n="$1" '$1 == "LINK" && $2 == 0 { t = $0; sub(/^LINK 0 -?[0-9]+ -?[0-9]+ /, "", t); if (t == n) { print $3, $4; exit } }'; }
+export SG_SYSINFO_SOCKET="$T/sysinfod.sock" SG_SYSINFO_STATE="$T/state"
+SP=""
+serve() {
+    [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; rm -f "$SG_SYSINFO_SOCKET"
+    SG_ADMIN_GROUP="$1" SG_WINE_GROUP="$(id -gn)" systemd-socket-activate -l "$SG_SYSINFO_SOCKET" --inetd -a \
+        -E SG_ADMIN_GROUP -E SG_WINE_GROUP -E SG_SYSFS -E SG_PCI_IDS -E SG_USB_IDS -E SG_UDEV_DATA -E SG_DRIVERS \
+        -E SG_DPKG_QUERY -E SG_SYSINFO_STATE -E PATH "$SYSINFO" --serve >/dev/null 2>&1 &
+    SP=$!
+    i=0; while [ ! -S "$SG_SYSINFO_SOCKET" ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
+}
+OVR="$F/sys/devices/pci0000:00/0000:00:03.0/driver_override"
+vnet() { d | awk -F'\t' '$1 ~ /^DEV / && $3 == "Network adapters" && $4 ~ /[Vv]irtio/ { print; exit }'; }
+serve sg-nobody-here
+open_console
+dbl $(cat_xy 'Network adapters'); sleep 0.5
+xy=$(vnet | awk -F'\t' '{ print $2 }')
+# shellcheck disable=SC2086
+[ -n "$xy" ] && xdotool mousemove $xy click 1; sleep 1
+lx=$(link_xy 'Disable device')
+[ -n "$lx" ] && pass "a PCI device offers Disable device" || fail "no Disable device link: $(d | grep '^LINK')"
+# shellcheck disable=SC2086
+xdotool mousemove $lx click 1; sleep 1
+wait_dump '^MSG Disabling this device will cause it to stop functioning' 5 && pass "Disable asks first" || fail "no question: $(d | grep '^MSG')"
+xdotool key y; sleep 2
+if wait_dump '^MSG You must be an administrator to disable this device' 5 && [ "$(cat "$OVR")" = "(null)" ]; then
+    pass "a standard user is refused (the administrator message), the device untouched"
+else fail "standard user: $(d | grep '^MSG'), override '$(cat "$OVR")'"; fi
+shot disable-refused
+xdotool key Return; sleep 1
+close_console
+serve "$(id -gn)"
+open_console
+dbl $(cat_xy 'Network adapters'); sleep 0.5
+xy=$(vnet | awk -F'\t' '{ print $2 }')
+# shellcheck disable=SC2086
+xdotool mousemove $xy click 1; sleep 1
+# shellcheck disable=SC2046
+xdotool mousemove $(link_xy 'Disable device') click 1; sleep 1
+xdotool key y; sleep 3
+case "$(vnet)" in *"	disabled	"*) pass "an administrator disables it: the row says disabled" ;; *) fail "not disabled: $(vnet)" ;; esac
+[ "$(cat "$OVR")" = sg-disabled ] && [ "$(cat "$F/sys/bus/pci/drivers/virtio-pci/unbind")" = 0000:00:03.0 ] \
+    && pass "sg-sysinfod unbound it (driver_override sg-disabled)" || fail "sysfs: '$(cat "$OVR")'"
+[ -n "$(link_xy 'Enable device')" ] && pass "a disabled device offers Enable device" || fail "no Enable link: $(d | grep '^LINK')"
+shot disabled
+xy=$(vnet | awk -F'\t' '{ print $2 }')
+dbl $xy
+if wait_dump '^PROPSTATUS This device is disabled. \(Code 22\)' 5; then pass "its Properties: This device is disabled. (Code 22)"
+else fail "status: $(d | grep '^PROPSTATUS')"; fi
+shot disabled-properties
+xdotool key Escape; sleep 1
+# shellcheck disable=SC2086
+xdotool mousemove $xy click 1; sleep 1
+# shellcheck disable=SC2046
+xdotool mousemove $(link_xy 'Enable device') click 1; sleep 3
+case "$(vnet)" in *"	ok	"*) [ "$(cat "$OVR")" = "" ] || [ "$(cat "$OVR")" = "$(printf '\n')" ]
+    pass "Enable device: working again, the override cleared" ;; *) fail "not enabled: $(vnet)" ;; esac
+close_console
+kill "$SP" 2>/dev/null
 
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

@@ -55,6 +55,7 @@ enum
     /* toolbar */
     IC_BACK, IC_FORWARD, IC_UP, IC_TREE, IC_REFRESH, IC_PROPS, IC_HELP, IC_START,
     IC_STOP, IC_PAUSE, IC_RESTART, IC_EXPORT, IC_FILTER, IC_CLEAR, IC_SCAN, IC_ACTIONS,
+    IC_DISABLED,        /* Device Manager: a disabled device */
     IC_COUNT
 };
 extern HIMAGELIST g_icons;          /* 16x16 (scaled for dpi) */

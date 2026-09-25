@@ -112,5 +112,17 @@ if grep -q '^\[System Summary\]' "$T/report.utf8" && grep -q "^OS Name	$(si OS-N
     pass "msinfo32 /report writes every category ($(grep -c '^\[' "$T/report.utf8"))"
 else fail "report: $(head -5 "$T/report.utf8" | tr '\n' '|')"; fi
 
+# /report returns only once the file is written (scripts read it next), a
+# relative name meaning the caller's directory: straight after the command, no waiting
+last_of() { iconv -f utf-16 -t utf-8 "$1" 2>/dev/null | grep -c '^\[Software Environment\\Startup Programs\]'; }
+(cd "$C" && wine "$winexe" /report 'report2.txt' >/dev/null 2>&1)
+[ "$(last_of "$C/report2.txt")" = 1 ] && pass "sg-msinfo /report waits until the report is complete (relative name in the caller's directory)" \
+    || fail "sg-msinfo /report returned before the report was written ($(ls -l "$C/report2.txt" 2>&1))"
+if [ -f "$C/windows/system32/msinfo32.exe" ] && strings -el "$C/windows/system32/msinfo32.exe" 2>/dev/null | grep -q '^report$'; then
+    wine msinfo32 /report 'C:\report3.txt' >/dev/null 2>&1
+    [ "$(last_of "$C/report3.txt")" = 1 ] && pass "msinfo32.exe (system32, wine-sg 0186) /report waits too" \
+        || fail "system32 msinfo32 /report returned early"
+else echo "NOTE  this Wine's msinfo32.exe does not wait (no wine-sg 0186)"; fi
+
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

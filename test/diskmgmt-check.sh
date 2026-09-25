@@ -20,10 +20,19 @@
 #      dosdevices link to its mount point, shown as "PHOTOS (D:)" -- and
 #      Format of the spare partition as exFAT with a label runs mkfs.exfat
 #      (a stand-in) with that label on that partition after the warning.
+#   4. SMART (a stand-in smartctl through sg-sysinfod): the failing data disk
+#      says "Online (Errors)", a banner warns, and its Properties give what
+#      SMART reports; the healthy one is healthy.
+#   5. For real, on a LOOP DEVICE only (needs passwordless sudo; sg-sysinfod
+#      as root on the gate's socket with SG_SYSINFO_DISKS naming only that
+#      loop device): New Simple Volume in its unallocated space -- ext4 with a
+#      label and a drive letter (mounted under the gate's own media directory,
+#      the letter in the prefix), then a second one without a letter; Shrink
+#      Volume and Extend Volume on the second (lsblk's sizes); Delete Volume.
 #
 # Screenshots: build/diskmgmt-*.png. Needs wine-sg, Xvfb, xdotool,
 # ImageMagick, python3, lsblk, systemd-socket-activate; skips (77) without
-# them. SG_MMC_EXE tests another build (mutants: -DSG_MUTANT_SCALE, -DSG_MUTANT_FSNAME), SG_WINE_DIR
+# them. SG_MMC_EXE tests another build (mutants: -DSG_MUTANT_SCALE, -DSG_MUTANT_FSNAME, -DSG_MUTANT_NONEW), SG_WINE_DIR
 # another Wine, SG_SYSINFO the sg-sysinfo.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -46,12 +55,17 @@ else echo "SKIP: no wine in $WINE_DIR"; exit 77; fi
 [ -f "$EXE" ] && [ -x "$SYSINFO" ] || { echo "SKIP: $EXE or sg-sysinfo missing"; exit 77; }
 
 T=$(mktemp -d /var/tmp/sg-diskmgmt.XXXXXX); chmod 755 "$T"
+LOOP=""
 # shellcheck disable=SC2317
 cleanup() {
     WINEPREFIX="$T/pfx" "$WSERVER" -k 2>/dev/null
-    [ -n "$SP" ] && kill "$SP" 2>/dev/null
+    [ -n "$SP" ] && { kill "$SP" 2>/dev/null; sudo -n kill "$SP" 2>/dev/null; }
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
-    rm -rf "$T"
+    if [ -n "$LOOP" ]; then
+        for m in "$T"/media/*; do [ -d "$m" ] && sudo -n umount "$m" 2>/dev/null; done
+        sudo -n losetup -d "$LOOP" 2>/dev/null
+    fi
+    sudo -n rm -rf "$T" 2>/dev/null || rm -rf "$T"
 }
 trap cleanup EXIT INT TERM
 
@@ -75,7 +89,7 @@ wine explorer /desktop=shell,1280x800 > "$T/explorer.out" 2>&1 &
 sleep 4
 
 d() { [ -f "$DUMP" ] && tr -d '\r' < "$DUMP"; }
-wait_dump() { i=0; while ! d | grep -Eq "$1" && [ $i -lt $(( ${2:-10} * 2 )) ]; do sleep 0.5; i=$((i + 1)); done; d | grep -Eq "$1"; }
+wait_dump() { i=0; while ! d | LC_ALL=C grep -aEq "$1" && [ $i -lt $(( ${2:-10} * 2 )) ]; do sleep 0.5; i=$((i + 1)); done; d | LC_ALL=C grep -aEq "$1"; }
 click() { [ $# -ge 2 ] || return 0; xdotool mousemove "$1" "$2" click 1; sleep 1; }
 shot() { import -window root "$OUT/diskmgmt-$1.png" 2>/dev/null; }
 row_xy() { d | awk -F'\t' -v n="$1" '$1 ~ /^ROW / && ($2 == n || index($2, n " (") == 1) { split($1, a, " "); print a[3], a[4]; exit }'; }
@@ -198,6 +212,124 @@ xdotool key Return; sleep 3
 if grep -qx -- '-L gatevol /dev/sdb1' "$T/mkfs.log" 2>/dev/null; then pass "Format: mkfs.exfat -L gatevol /dev/sdb1"
 else fail "mkfs: '$(cat "$T/mkfs.log" 2>/dev/null)'"; fi
 close_console
+
+# ---- 4. SMART health through sg-sysinfod ------------------------------------------------------------
+cat > "$T/smartctl" <<'EOF2'
+#!/usr/bin/python3
+import json, sys
+if sys.argv[-1] == "/dev/sdb":
+    print(json.dumps({"smart_status": {"passed": False}, "temperature": {"current": 51},
+                      "ata_smart_attributes": {"table": [{"id": 5, "raw": {"value": 112}}]}}))
+    sys.exit(8)
+print(json.dumps({"smart_status": {"passed": True}, "temperature": {"current": 33}, "power_on_time": {"hours": 4321}}))
+EOF2
+chmod 755 "$T/smartctl"
+export SG_SMARTCTL="$T/smartctl"
+serve() {
+    [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; rm -f "$SG_SYSINFO_SOCKET"
+    SG_ADMIN_GROUP="$1" SG_WINE_GROUP="$(id -gn)" systemd-socket-activate -l "$SG_SYSINFO_SOCKET" --inetd -a \
+        -E SG_ADMIN_GROUP -E SG_WINE_GROUP -E SG_LSBLK -E SG_MKFS_EXFAT -E SG_SMARTCTL -E WINEPREFIX -E PATH \
+        "$SYSINFO" --serve >/dev/null 2>&1 &
+    SP=$!
+    i=0; while [ ! -S "$SG_SYSINFO_SOCKET" ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
+}
+serve "$me"
+open_console
+[ "$(d | awk -F'\t' '$1 ~ /^DISK / && $2 == "sdb" { print $6 }')" = failing ] && [ "$(d | awk -F'\t' '$1 ~ /^DISK / && $2 == "sda" { print $6 }')" = ok ] \
+    && pass "SMART: the data disk is failing, the system disk healthy" || fail "health: $(d | grep '^DISK')"
+d | grep -q '^BANNER Disk 1 reports (SMART) that it is failing' && pass "a banner warns about the failing disk" || fail "banner: $(d | grep '^BANNER')"
+shot smart
+xy=$(d | awk -F'\t' '$1 ~ /^DISK / && $2 == "sdb" { print $4 }')
+# shellcheck disable=SC2086
+[ -n "$xy" ] && xdotool mousemove $xy click --repeat 2 1; sleep 2
+if wait_dump '^MSG Disk 1\|.*reports \(SMART\) that it is failing.*.*C\): 51\|Reallocated sectors: 112\|' 5; then pass "the disk's Properties: failing, 51 C, 112 reallocated sectors"
+else fail "disk properties: $(d | grep -a -A9 '^MSG')"; fi
+shot smart-props
+xdotool key Return; sleep 1
+close_console
+unset SG_SMARTCTL
+
+# ---- 5. for real, on a loop device ------------------------------------------------------------------
+if ! sudo -n true 2>/dev/null || [ ! -x /usr/sbin/losetup ]; then
+    echo "NOTE  no passwordless sudo: the loop-device part is skipped"
+else
+    truncate -s 512M "$T/disk.img"
+    LOOP=$(sudo -n losetup -f --show "$T/disk.img")
+    N=${LOOP#/dev/}
+    echo "      test disk: $LOOP"
+    unset SG_LSBLK SG_MKFS_EXFAT
+    mkdir -p "$T/media"
+    export SG_SYSINFO_DISKS="$LOOP" SG_MEDIA_DIR="$T/media"
+    [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; rm -f "$SG_SYSINFO_SOCKET"
+    sudo -n env SG_ADMIN_GROUP="$me" SG_WINE_GROUP="$me" SG_SYSINFO_DISKS="$LOOP" SG_MEDIA_DIR="$T/media" \
+        WINEPREFIX="$WINEPREFIX" systemd-socket-activate -l "$SG_SYSINFO_SOCKET" --inetd -a -E SG_ADMIN_GROUP \
+        -E SG_WINE_GROUP -E SG_SYSINFO_DISKS -E SG_MEDIA_DIR -E WINEPREFIX -E PATH "$SYSINFO" --serve >/dev/null 2>&1 &
+    SP=$!
+    i=0; while [ ! -S "$SG_SYSINFO_SOCKET" ] && [ $i -lt 30 ]; do sleep 0.2; i=$((i + 1)); done
+    sudo -n chmod 666 "$SG_SYSINFO_SOCKET"
+    open_console
+    fxy=$(d | awk -F'\t' -v n="$N" '$1 ~ /^DISK / && $2 == n { k = substr($1, 6) } $1 ~ /^SEG / && $2 == k && $3 == "free" { print $6; exit }')
+    [ -n "$fxy" ] && pass "the loop device's unallocated space is shown" || fail "no free space on $N: $(d | grep -E '^(DISK|SEG)')"
+    # shellcheck disable=SC2086
+    xdotool mousemove $fxy click 1; sleep 1
+    [ "$(verb_on 'New &Simple Volume...')" = 1 ] && pass "unallocated space offers New Simple Volume" || fail "New verb: $(d | grep '^VERB')"
+    click $(link_xy 'New Simple Volume...')
+    sleep 1
+    xdotool type --delay 50 '100'; xdotool key Tab; sleep 0.2; xdotool key e e; xdotool key Tab
+    xdotool key ctrl+a; xdotool type --delay 50 'GATEONE'
+    shot new-volume
+    xdotool key Return
+    i=0; while [ -z "$(lsblk -n -r -o NAME "$LOOP" | sed 1d)" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done; sleep 3
+    p1=$(lsblk -n -r -o NAME "$LOOP" | sed -n 2p)
+    [ -n "$p1" ] && [ "$(lsblk -n -b -o SIZE "/dev/$p1")" = $((100 * 1048576)) ] && [ "$(lsblk -n -o FSTYPE "/dev/$p1")" = ext4 ] \
+        && [ "$(lsblk -n -o LABEL "/dev/$p1")" = GATEONE ] && pass "New Simple Volume: $p1, 100 MB ext4 'GATEONE'" \
+        || fail "new volume: $(lsblk -b -o NAME,SIZE,FSTYPE,LABEL "$LOOP")"
+    lt=$(for l in "$WINEPREFIX"/dosdevices/[d-y]:; do [ -L "$l" ] && readlink "$l"; done | grep "/GATEONE$" | head -1)
+    [ -n "$lt" ] && mountpoint -q "$lt" && pass "it is mounted and has a drive letter ($lt)" || fail "no letter/mount: $(ls -l "$WINEPREFIX/dosdevices")"
+    wait_dump 'GATEONE \([D-Y]:\)' 10 && pass "shown as GATEONE (X:)" || fail "volume list: $(d | grep -i gate)"
+    fxy=$(d | awk -F'\t' -v n="$N" '$1 ~ /^DISK / && $2 == n { k = substr($1, 6) } $1 ~ /^SEG / && $2 == k && $3 == "free" { print $6; exit }')
+    # shellcheck disable=SC2086
+    xdotool mousemove $fxy click 1; sleep 1
+    click $(link_xy 'New Simple Volume...')
+    sleep 1
+    xdotool type --delay 50 '150'; xdotool key Tab; sleep 0.2; xdotool key e e; xdotool key Tab
+    xdotool key ctrl+a; xdotool type --delay 50 'GATETWO'; xdotool key Tab space
+    xdotool key Return
+    i=0; while [ "$(lsblk -n -r -o NAME "$LOOP" | sed 1d | wc -l)" -lt 2 ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done; sleep 3
+    p2=$(lsblk -n -r -o NAME,LABEL "$LOOP" | awk '$2 == "GATETWO" { print $1 }')
+    [ -n "$p2" ] && [ "$(lsblk -n -b -o SIZE "/dev/$p2")" = $((150 * 1048576)) ] && [ -z "$(lsblk -n -o MOUNTPOINTS "/dev/$p2")" ] \
+        && pass "a second volume without a drive letter: $p2, 150 MB, not mounted" || fail "second: $(lsblk -b -o NAME,SIZE,LABEL,MOUNTPOINTS "$LOOP")"
+    shot two-volumes
+    wait_dump 'GATETWO' 10
+    click $(row_xy 'GATETWO')
+    sleep 1
+    [ "$(verb_on 'Shrin&k Volume...')" = 1 ] && [ "$(verb_on '&Delete Volume...')" = 1 ] \
+        && pass "the unmounted ext4 volume offers Shrink and Delete" || fail "verbs: $(d | grep '^VERB row')"
+    click $(link_xy 'Shrink Volume...')
+    sleep 3; shot shrink
+    xdotool key ctrl+a; xdotool type --delay 50 '50'; xdotool key Return
+    i=0; while [ "$(lsblk -n -b -o SIZE "/dev/$p2")" != $((100 * 1048576)) ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+    [ "$(lsblk -n -b -o SIZE "/dev/$p2")" = $((100 * 1048576)) ] && pass "Shrink Volume: $p2 by 50 MB to 100 MB" \
+        || fail "shrink: $(lsblk -n -b -o SIZE "/dev/$p2") $(d | grep '^MSG')"
+    sleep 2; wait_dump 'GATETWO' 10
+    click $(row_xy 'GATETWO'); sleep 1
+    [ "$(verb_on 'E&xtend Volume...')" = 1 ] && pass "with space after it, Extend is offered" || fail "extend verb: $(d | grep '^VERB row')"
+    click $(link_xy 'Extend Volume...')
+    sleep 3; xdotool key ctrl+a; xdotool type --delay 50 '30'; xdotool key Return
+    i=0; while [ "$(lsblk -n -b -o SIZE "/dev/$p2")" != $((130 * 1048576)) ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+    [ "$(lsblk -n -b -o SIZE "/dev/$p2")" = $((130 * 1048576)) ] && sudo -n e2fsck -fn "/dev/$p2" >/dev/null 2>&1 \
+        && pass "Extend Volume: $p2 by 30 MB to 130 MB, the file system clean" || fail "extend: $(lsblk -n -b -o SIZE "/dev/$p2")"
+    sleep 2; wait_dump 'GATETWO' 10
+    click $(row_xy 'GATETWO'); sleep 1
+    click $(link_xy 'Delete Volume...')
+    sleep 1
+    wait_dump '^MSG Deleting GATETWO will erase all data' 5 && pass "Delete Volume warns" || fail "delete warning: $(d | grep '^MSG')"
+    shot delete
+    xdotool key y
+    i=0; while [ -e "/dev/$p2" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+    [ ! -e "/dev/$p2" ] && [ -e "/dev/$p1" ] && pass "Delete Volume: $p2 gone, $p1 kept" || fail "delete: $(lsblk "$LOOP")"
+    close_console
+fi
 
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

@@ -486,8 +486,10 @@ static void build_links(void)
     if (g_have_row)
     {
         int i2 = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+        name[0] = 0;
         if (i2 >= 0) ListView_GetItemText(g_list, i2, 0, name, ARRAY_SIZE(name));
-        if (g_cur->custom) lstrcpynW(name, g_custom_name[0] ? g_custom_name : L"Selected Item", ARRAY_SIZE(name));
+        /* a custom view's selection, or one a list view's snap-in reports itself (Disk Management's unallocated space) */
+        if (g_cur->custom || i2 < 0) lstrcpynW(name, g_custom_name[0] ? g_custom_name : L"Selected Item", ARRAY_SIZE(name));
         add_link(0, name, -1, TRUE, TRUE);
         for (i = 0; i < g_row_verbs.n; i++)
             add_link(CMD_ROWVERB + i, g_row_verbs.v[i].name, g_row_verbs.v[i].icon, FALSE, g_row_verbs.v[i].enabled);
@@ -1314,6 +1316,45 @@ static void load_icons(void)
     }
 }
 
+/* For `/report FILE`: the arguments for the bridged copy -- the file made a full
+ * path (the copy starts in another directory) and "--report-done EVENT", an event
+ * it sets once the report is written -- and that event in *done. Otherwise args. */
+static const WCHAR *report_args(const WCHAR *full, const WCHAR *args, HANDLE *done)
+{
+    static WCHAR out[8192];
+    WCHAR name[64], path[MAX_PATH];
+    WCHAR **argv;
+    int argc, i, r = -1;
+
+    *done = NULL;
+    if (!(argv = CommandLineToArgvW(full, &argc))) return args;
+    for (i = 1; i + 1 < argc; i++)
+        if (!_wcsicmp(argv[i], L"/report") || !_wcsicmp(argv[i], L"-report")) r = i;
+    if (r < 0) { LocalFree(argv); return args; }
+    _snwprintf(name, ARRAY_SIZE(name), L"Local\\SgMsinfoReport-%lu", GetCurrentProcessId());
+    if (!(*done = CreateEventW(NULL, TRUE, FALSE, name))) { LocalFree(argv); return args; }
+    out[0] = 0;
+    for (i = 1; i < argc; i++)
+    {
+        const WCHAR *a = argv[i];
+        size_t n = wcslen(out);
+        if (i == r + 1 && GetFullPathNameW(argv[i], MAX_PATH, path, NULL)) a = path;
+        _snwprintf(out + n, ARRAY_SIZE(out) - n, L"%ls\"%ls\"", n ? L" " : L"", a);
+    }
+#ifndef SG_MUTANT_NOWAIT
+    {
+        size_t n = wcslen(out);
+        _snwprintf(out + n, ARRAY_SIZE(out) - n, L" --report-done %ls", name);
+    }
+#else
+    CloseHandle(*done);
+    *done = NULL;
+#endif
+    out[ARRAY_SIZE(out) - 1] = 0;
+    LocalFree(argv);
+    return out;
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
 {
     WNDCLASSEXW wc = { sizeof(wc) };
@@ -1333,7 +1374,23 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     while (*args == ' ' || *args == '\t') args++;
 
     /* the Linux side: through sg-sysinfo's bridge, unless there is none */
-    if (!sys_init(full) && !wcsstr(full, L"--no-bridge") && sys_relaunch(args)) return 0;
+    if (!sys_init(full) && !wcsstr(full, L"--no-bridge"))
+    {
+        HANDLE done = NULL;
+        const WCHAR *relargs = report_args(full, args, &done);
+        if (sys_relaunch(relargs))
+        {
+            /* msinfo32 /report FILE returns once the file is written, as Windows' does:
+             * the bridged copy (a native parent we cannot wait on) signals when done */
+            if (done)
+            {
+                WaitForSingleObject(done, 10 * 60 * 1000);
+                CloseHandle(done);
+            }
+            return 0;
+        }
+        if (done) CloseHandle(done);
+    }
 
     SetProcessDPIAware();
     dc = GetDC(NULL);
@@ -1355,7 +1412,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
         int argc, i;
         WCHAR **argv = CommandLineToArgvW(full, &argc);
         for (i = 1; argv && i + 1 < argc; i++)
-            if (!_wcsicmp(argv[i], L"/report") || !_wcsicmp(argv[i], L"-report")) return msinfo_report(argv[i + 1]);
+            if (!_wcsicmp(argv[i], L"/report") || !_wcsicmp(argv[i], L"-report"))
+            {
+                int rc = msinfo_report(argv[i + 1]), k;
+                for (k = 1; k + 1 < argc; k++)
+                    if (!wcscmp(argv[k], L"--report-done"))
+                    {
+                        HANDLE ev = OpenEventW(EVENT_MODIFY_STATE, FALSE, argv[k + 1]);
+                        if (ev) { SetEvent(ev); CloseHandle(ev); }
+                    }
+                return rc;
+            }
     }
 
     wc.lpfnWndProc = main_proc;

@@ -13,6 +13,7 @@
 #include "mmc.h"
 #include <string.h>
 #include <winsvc.h>
+#include <sddl.h>
 
 enum { V_START = 1, V_STOP, V_PAUSE, V_RESUME, V_RESTART };
 
@@ -440,6 +441,7 @@ enum
     P_NAME = 1100, P_DISPLAY, P_DESC, P_PATH, P_STARTUP, P_STATUS, P_START, P_STOP, P_PAUSE, P_RESUME, P_PARAMS,
     L_SYSTEM = 1200, L_INTERACT, L_THIS, L_ACCOUNT, L_PASS, L_CONFIRM,
     D_ON = 1300, D_BY,
+    S_LIST = 1400, S_SDDL,
 };
 
 typedef struct props { svc_t *s; LPARAM key; BOOL dirty_general, dirty_logon; } props_t;
@@ -669,10 +671,86 @@ static INT_PTR CALLBACK deps_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
+/* ---- Security: who may do what with the service (its own descriptor, wine-sg 0185), read-only ---- */
+
+static WCHAR g_last_sddl[1024];
+
+static const WCHAR *rights_text(DWORD m)
+{
+    if ((m & SERVICE_ALL_ACCESS) == SERVICE_ALL_ACCESS || (m & GENERIC_ALL)) return L"Full control";
+    if ((m & (SERVICE_START | SERVICE_STOP)) == (SERVICE_START | SERVICE_STOP)) return L"Start, stop and read";
+    if (m & SERVICE_START) return L"Start and read";
+    if (m & (SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG | GENERIC_READ)) return L"Read";
+    return L"Special permissions";
+}
+
+static INT_PTR CALLBACK security_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    (void)wp;
+    if (msg == WM_INITDIALOG)
+    {
+        props_t *p = (props_t *)((PROPSHEETPAGEW *)lp)->lParam;
+        SC_HANDLE scm, h = NULL;
+        BYTE sdbuf[8192];
+        DWORD need = 0;
+        BOOL ok = FALSE;
+        g_last_sddl[0] = 0;
+        if ((scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT)))
+        {
+            if ((h = OpenServiceW(scm, p->s->name, READ_CONTROL)))
+                ok = QueryServiceObjectSecurity(h, DACL_SECURITY_INFORMATION, (PSECURITY_DESCRIPTOR)sdbuf, sizeof(sdbuf), &need);
+            if (h) CloseServiceHandle(h);
+            CloseServiceHandle(scm);
+        }
+        if (ok)
+        {
+            BOOL present = FALSE, def;
+            PACL acl = NULL;
+            WCHAR *sddl = NULL;
+            DWORD i;
+            if (ConvertSecurityDescriptorToStringSecurityDescriptorW(sdbuf, SDDL_REVISION_1, DACL_SECURITY_INFORMATION, &sddl, NULL))
+            {
+                lstrcpynW(g_last_sddl, sddl, ARRAY_SIZE(g_last_sddl));
+                SetDlgItemTextW(dlg, S_SDDL, sddl);
+                LocalFree(sddl);
+            }
+            if (GetSecurityDescriptorDacl(sdbuf, &present, &acl, &def) && present && acl)
+                for (i = 0; i < acl->AceCount; i++)
+                {
+                    ACCESS_ALLOWED_ACE *ace;
+                    WCHAR name[256], dom[256], line[600];
+                    DWORD nl = 256, dl = 256;
+                    SID_NAME_USE use;
+                    if (!GetAce(acl, i, (void **)&ace)) continue;
+                    if (!LookupAccountSidW(NULL, &ace->SidStart, name, &nl, dom, &dl, &use))
+                    {
+                        WCHAR *str = NULL;
+                        ConvertSidToStringSidW(&ace->SidStart, &str);
+                        lstrcpynW(name, str ? str : L"?", 256);
+                        LocalFree(str);
+                        dom[0] = 0;
+                    }
+                    _snwprintf(line, ARRAY_SIZE(line), L"%ls%ls%ls: %ls %ls", dom, dom[0] ? L"\\" : L"", name,
+                               ace->Header.AceType == ACCESS_DENIED_ACE_TYPE ? L"Deny" : L"Allow", rights_text(ace->Mask));
+                    SendDlgItemMessageW(dlg, S_LIST, LB_ADDSTRING, 0, (LPARAM)line);
+                }
+        }
+        else
+        {
+            WCHAR m[256];
+            error_text(GetLastError(), m, 256);
+            SendDlgItemMessageW(dlg, S_LIST, LB_ADDSTRING, 0, (LPARAM)m);
+        }
+        frame_dump_later();
+        return TRUE;
+    }
+    return FALSE;
+}
+
 static void svc_open(node_t *n, LPARAM key)
 {
-    static dlgt_t general, logon, deps;
-    PROPSHEETPAGEW pg[3] = { { 0 } };
+    static dlgt_t general, logon, deps, security;
+    PROPSHEETPAGEW pg[4] = { { 0 } };
     PROPSHEETHEADERW ph = { 0 };
     WCHAR title[300];
     props_t p = { 0 };
@@ -725,10 +803,17 @@ static void svc_open(node_t *n, LPARAM key)
     D_LABEL(&deps, L"The following system components depend on this service:", 7, 122, 238);
     dlg_item(&deps, NULL, ATOM_LISTBOX, L"", D_BY, WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT | LBS_NOSEL, 7, 134, 238, 64);
 
+    dlg_begin(&security, L"Security", pstyle, 252, 218);
+    D_LABEL(&security, L"Group or user names and what they may do with this service:", 7, 7, 238);
+    dlg_item(&security, NULL, ATOM_LISTBOX, L"", S_LIST, WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT | LBS_NOSEL, 7, 19, 238, 110);
+    D_LABEL(&security, L"The service's security descriptor (SDDL):", 7, 136, 238);
+    dlg_item(&security, NULL, ATOM_STATIC, L"", S_SDDL, SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL | WS_BORDER, 7, 148, 238, 36);
+    D_LABEL(&security, L"An administrator changes it with sc sdset.", 7, 192, 238);
+
     {
-        dlgt_t *t[3] = { &general, &logon, &deps };
-        DLGPROC procs[3] = { general_proc, logon_proc, deps_proc };
-        for (i = 0; i < 3; i++)
+        dlgt_t *t[4] = { &general, &logon, &deps, &security };
+        DLGPROC procs[4] = { general_proc, logon_proc, deps_proc, security_proc };
+        for (i = 0; i < 4; i++)
         {
             pg[i].dwSize = sizeof(pg[i]);
             pg[i].dwFlags = PSP_DLGINDIRECT;
@@ -744,9 +829,10 @@ static void svc_open(node_t *n, LPARAM key)
     ph.hwndParent = g_main;
     ph.hInstance = g_inst;
     ph.pszCaption = title;
-    ph.nPages = 3;
+    ph.nPages = 4;
     ph.ppsp = pg;
     PropertySheetW(&ph);
+    g_last_sddl[0] = 0;
     refresh_row(key);
 }
 
@@ -775,6 +861,7 @@ static void svc_dump(node_t *n, FILE *f)
     for (i = 0; i < g_nsvcs; i++)
         fprintf(f, "SERVICE %ls\t%lu\t%lu\t%lu\t%ls\n", g_svcs[i].name, g_svcs[i].state, g_svcs[i].start,
                 (unsigned long)key_for(g_svcs[i].name), g_svcs[i].display);
+    if (g_last_sddl[0]) fprintf(f, "SVCSECURITY %ls\n", g_last_sddl);
 }
 
 static const snapin_t services_ops = {

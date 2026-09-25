@@ -1149,7 +1149,9 @@ Restart (toolbar, Actions pane, Action and context menus) and Windows'
 while the state changes; Properties: General (display name, description,
 path, startup type, status and its buttons, start parameters), Log On (Local
 System + interact with desktop, or an account and password), Dependencies
-(both directions). **The console decides nothing**: each step opens the
+(both directions), Security (read-only: the service's own DACL from
+`QueryServiceObjectSecurity` -- who may do what, and the SDDL an
+administrator changes with `sc sdset`, wine-sg 0185). **The console decides nothing**: each step opens the
 SCM and the service with only the access it needs, and wine-sg 0141 makes
 the SCM refuse a standard user's start/stop/change -- the console shows
 Windows' "Windows could not stop the X service on Local Computer. Error 5:
@@ -1169,9 +1171,10 @@ read-only (no verbs; Properties shows the unit's fields).
   (Actions pane); Restart (toolbar) -> a new process; Stop (Actions pane) ->
   STOPPED, blank status; Properties, Alt+U, D, Enter -> start type DISABLED,
   the row says Disabled, Start disabled; Stained Glass System Services lists
-  exactly what `sg-sysinfo units` does, with no verbs. 18 checks. Mutants
-  (`-DSG_MUTANT_NOSTART`, `-DSG_MUTANT_STATUS`, via `SG_MMC_EXE`) turn it
-  red. Screenshots `build/services-*.png`.
+  exactly what `sg-sysinfo units` does, with no verbs; Properties >
+  Security shows the DACL (a wine-sg without 0185 shows an empty one and
+  fails). 19 checks. Mutants (`-DSG_MUTANT_NOSTART`, `-DSG_MUTANT_STATUS`,
+  via `SG_MMC_EXE`) turn it red. Screenshots `build/services-*.png`.
 
 ### Event Viewer (eventvwr.exe, eventvwr.msc)
 
@@ -1244,8 +1247,14 @@ properly." or "The drivers for this device are not installed. (Code 28)" and
 what sg-drivers would install), Driver (the kernel driver and module),
 Details (every property). **A device with no driver** gets the warning
 picture (Wine's TreeView draws no overlay images, so the icon itself is the
-warning), its category opens by itself and a banner says so. Nothing is
-changed here: Linux binds drivers, sg-drivers installs third-party ones.
+warning), its category opens by itself and a banner says so. **Disable
+device / Enable device** (a PCI or USB device: Actions pane, Action and
+context menus; Windows' "Disabling this device will cause it to stop
+functioning" question) are sg-sysinfod's `device-disable`/`device-enable`
+(administrators only; the controller of the system disk is refused); a
+disabled device gets the down-arrow picture (`IC_DISABLED`), its category
+opens, and General says "This device is disabled. (Code 22)". Otherwise
+Linux binds drivers, sg-drivers installs third-party ones.
 
 - **Gate: `test/devmgmt-check.sh`**: on this machine through the real
   sg-sysinfo, every display and network adapter sg-sysinfo reports is under
@@ -1255,8 +1264,13 @@ changed here: Linux binds drivers, sg-drivers installs third-party ones.
   stand-ins for `SG_DRIVERS`/`SG_DPKG_QUERY`): a VM's bochs display and
   virtio network adapter with their drivers, an NVIDIA card with no driver
   (marked, visible, the banner, Properties "Code 28" and `nvidia-driver`),
-  and Devices by connection. 14 checks. Mutants `-DSG_MUTANT_NOLINUX` (only
-  SetupAPI) and `-DSG_MUTANT_NOWARN` (no-driver ignored) turn it red.
+  and Devices by connection; then Disable/Enable through a real sg-sysinfod
+  on the gate's socket over the made-up sysfs: a standard user refused (the
+  device untouched), an administrator disabling the virtio adapter
+  (`driver_override` = sg-disabled, unbound), Code 22 in Properties, Enable
+  device clearing it. 21 checks. Mutants `-DSG_MUTANT_NOLINUX` (only
+  SetupAPI), `-DSG_MUTANT_NOWARN` (no-driver ignored) and
+  `-DSG_MUTANT_NODISABLED` (Code 22 ignored: 3 fail) turn it red.
   Screenshots `build/devmgmt-*.png`.
 
 ### Disk Management (diskmgmt.msc)
@@ -1280,8 +1294,18 @@ and the prefix's drive letters -- C: is the volume holding `drive_c`).
   administrator and refuses the system disk, a mounted or lettered volume
   for format, C:/Z:, ... The console greys what cannot apply (Format on a
   system or mounted volume) and shows the service's refusal in Windows' words
-  ("You need to be an administrator to change disks and volumes"). New,
-  Delete, Extend and Shrink volume are not offered.
+  ("You need to be an administrator to change disks and volumes").
+- **New Simple Volume** (on unallocated space: size, file system, label,
+  drive letter -- then mounted and lettered), **Delete Volume** (after
+  Windows' warning), **Extend Volume** (into the unallocated space right
+  after it) and **Shrink Volume** (the amount; sg-sysinfod's `resize-info`
+  gives the limits) are sg-sysinfod's `create`/`delete`/`resize`; offered
+  only off the system disk, on unmounted, unlettered volumes; resizing only
+  NTFS and ext4. Unallocated space has no list row, so the graph reports it
+  through `frame_custom_selection` (the Actions pane then names it
+  "Unallocated"). **SMART** (`sg-sysinfo smart`): a failing disk's box says
+  "Online (Errors)" in red with a banner; a disk's box double-clicked (or its
+  Properties) shows health, temperature, hours and sector counts.
 - **Gate: `test/diskmgmt-check.sh`**: this machine's disks against `lsblk`
   (every disk with its exact size, every partition a volume, C: the volume
   holding drive_c); a made-up machine (a stand-in `SG_LSBLK`): the data
@@ -1294,9 +1318,15 @@ and the prefix's drive letters -- C: is the volume holding `drive_c`).
   administrator message and no link made; then as an administrator: PHOTOS
   gets D: (a `dosdevices/d:` link to its mount point, shown "PHOTOS (D:)"),
   and Format as exFAT with a label runs the stand-in `mkfs.exfat -L gatevol
-  /dev/sdb1` after the warning. 19 checks. Mutants `-DSG_MUTANT_SCALE` (not
-  to scale) and `-DSG_MUTANT_FSNAME` (always NTFS) turn it red. Screenshots
-  `build/diskmgmt-*.png`.
+  /dev/sdb1` after the warning; SMART through a stand-in smartctl (the
+  failing disk, the banner, its Properties); then **for real on a loop
+  device only** (passwordless sudo; sg-sysinfod as root on the gate's socket
+  with `SG_SYSINFO_DISKS` naming only it): two New Simple Volumes (ext4,
+  one with a letter under the gate's media directory), Shrink by 50 MB,
+  Extend by 30 MB (e2fsck clean), Delete. 34 checks. Mutants
+  `-DSG_MUTANT_SCALE` (not to scale), `-DSG_MUTANT_FSNAME` (always NTFS) and
+  `-DSG_MUTANT_NONEW` (no New Simple Volume: 11 fail) turn it red.
+  Screenshots `build/diskmgmt-*.png`.
 
 ### Computer Management (compmgmt.msc), Local Users and Groups, Shared Folders
 
@@ -1305,8 +1335,8 @@ Management (Local) > System Tools (Event Viewer, Shared Folders, Local Users
 and Groups, Device Manager), Storage (Disk Management), Services and
 Applications (Services, Stained Glass System Services). A folder node's
 result pane lists its children in the console's order (not sorted). The
-same program answers `lusrmgr` and `fsmgmt` as console names (wine-sg writes
-no .msc for them yet).
+same program answers `lusrmgr` and `fsmgmt` as console names (wine-sg 0186
+writes `lusrmgr.msc` and `fsmgmt.msc`).
 
 - `src/mmc/users.c`, **read-only**: Users (`sg-sysinfo users`: name, full
   name, description, Windows session, administrator; the SYSTEM account
@@ -1343,13 +1373,19 @@ Input, Network with Windows' adapters and addresses, Storage Disks and
 Drives, USB), Software Environment (System Drivers = the kernel modules
 bound to devices, Environment Variables, Running Tasks, Services, Startup
 Programs). Hardware facts from `sg-sysinfo system|devices|disks`.
-`msinfo32 /report FILE` writes every category as UTF-16 text and exits.
+`msinfo32 /report FILE` writes every category as UTF-16 text and exits --
+**only once the file is written**: the copy started first creates an event,
+re-launches itself through the bridge with the report's full path and
+`--report-done <event>`, and waits for it (a Windows process cannot wait on
+the native bridge; wine-sg 0186 makes system32's msinfo32 wait for us).
 
 - **Gate: `test/msinfo-check.sh`**: `msinfo32.exe` through App Paths; OS
   Name is sg-sysinfo's; Processor is /proc/cpuinfo's model and thread count;
   Installed Physical Memory is MemTotal; x64-based PC; the computer's name;
   Components > Display lists sg-sysinfo's display adapters; `/report`
-  writes all 14 categories. `-DSG_MUTANT_MEM` turns it red.
+  writes all 14 categories, and returns only when it has (a relative name,
+  and system32's msinfo32 with 0186). `-DSG_MUTANT_MEM` and
+  `-DSG_MUTANT_NOWAIT` (3 fail) turn it red.
 
 ### Disk Cleanup (cleanmgr.exe)
 

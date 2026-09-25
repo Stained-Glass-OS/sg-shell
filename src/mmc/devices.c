@@ -13,8 +13,11 @@
  * The result pane is a tree (View: Devices by type, or by connection), as
  * Windows' Device Manager draws it. Properties: General (type, maker,
  * location, status in Windows' words), Driver (the kernel module: provider,
- * version, file, licence), Details (every property). Nothing is changed:
- * Linux decides which driver binds, sg-drivers installs third-party ones.
+ * version, file, licence), Details (every property). Disable device / Enable
+ * device (a PCI or USB device) ask sg-sysinfod, which lets only an
+ * administrator do it: a disabled device shows the down-arrow picture and
+ * "This device is disabled. (Code 22)". Otherwise Linux decides which driver
+ * binds, and sg-drivers installs third-party ones.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -30,6 +33,7 @@ typedef struct dev
     int cat;                    /* index into CATS */
     WCHAR parent[128];
     BOOL nodriver;
+    BOOL disabled;              /* Disable device (Code 22) */
     BOOL wine_only;             /* only SetupAPI knows it */
     WCHAR winid[256];           /* Windows instance ID, when Wine has it */
     WCHAR winservice[64];
@@ -67,7 +71,7 @@ static HWND g_pane, g_dtree;
 static BOOL g_by_connection;
 static WCHAR g_computer[64];
 static HTREEITEM g_root, g_cat_items[NCATS];
-enum { V_SCAN = 1, V_BYTYPE, V_BYCONN, V_PROPS };
+enum { V_SCAN = 1, V_BYTYPE, V_BYCONN, V_PROPS, V_DISABLE, V_ENABLE };
 
 /* ---- collecting ---------------------------------------------------------------------- */
 
@@ -109,7 +113,10 @@ static void load_linux(void)
 #ifdef SG_MUTANT_NOWARN
         d->nodriver = FALSE;
 #else
-        d->nodriver = (v = field(b, "STATUS")) && strcmp(v, "ok");
+        d->nodriver = (v = field(b, "STATUS")) && strcmp(v, "ok") && strcmp(v, "disabled");
+#endif
+#ifndef SG_MUTANT_NODISABLED
+        d->disabled = (v = field(b, "STATUS")) && !strcmp(v, "disabled");
 #endif
         for (e = b; e < g_rep.nlines && strcmp(g_rep.lines[e], "END"); e++) ;
         d->first = b;
@@ -222,7 +229,8 @@ static HTREEITEM place_by_connection(int i, int depth)
     int p;
     if (d->hti) return d->hti;
     if (depth < 16 && d->parent[0] && (p = dev_index(d->parent)) >= 0 && p != i) parent = place_by_connection(p, depth + 1);
-    return d->hti = insert(parent, d->name, d->nodriver ? IC_NODRIVER : CATS[d->cat].icon, i + 1, d->nodriver);
+    return d->hti = insert(parent, d->name, d->disabled ? IC_DISABLED : d->nodriver ? IC_NODRIVER : CATS[d->cat].icon, i + 1,
+                           d->nodriver);
 }
 
 static void fill_tree(void)
@@ -241,13 +249,13 @@ static void fill_tree(void)
         for (c = 0; c < NCATS; c++)
         {
             BOOL any = FALSE, warn = FALSE;
-            for (i = 0; i < g_ndevs; i++) if (g_devs[i].cat == c) { any = TRUE; warn |= g_devs[i].nodriver; }
+            for (i = 0; i < g_ndevs; i++) if (g_devs[i].cat == c) { any = TRUE; warn |= g_devs[i].nodriver | g_devs[i].disabled; }
             if (!any) continue;
             g_cat_items[c] = insert(g_root, CATS[c].title, CATS[c].icon, -(c + 1), FALSE);
             for (i = 0; i < g_ndevs; i++)
                 if (g_devs[i].cat == c)
-                    g_devs[i].hti = insert(g_cat_items[c], g_devs[i].name, g_devs[i].nodriver ? IC_NODRIVER : CATS[c].icon,
-                                           i + 1, g_devs[i].nodriver);
+                    g_devs[i].hti = insert(g_cat_items[c], g_devs[i].name, g_devs[i].disabled ? IC_DISABLED :
+                                           g_devs[i].nodriver ? IC_NODRIVER : CATS[c].icon, i + 1, g_devs[i].nodriver);
             /* Windows opens a category holding a device with a problem */
             if (warn) TreeView_Expand(g_dtree, g_cat_items[c], TVE_EXPAND);
         }
@@ -277,7 +285,10 @@ static void status_text(dev_t_ *d, WCHAR *out, int cch)
     WCHAR problem[256], sg[256];
     line_value(d, "PROBLEM", problem, 256);
     line_value(d, "SG-DRIVER", sg, 256);
-    if (d->nodriver && sg[0])
+    if (d->disabled)
+        _snwprintf(out, cch, L"This device is disabled. (Code 22)\r\n\n"
+                             L"Enable the device (Action > Enable device) to use it again.");
+    else if (d->nodriver && sg[0])
         _snwprintf(out, cch, L"The drivers for this device are not installed. (Code 28)\r\n\r\n"
                              L"Stained Glass can install a driver for it: %ls. An administrator installs it with "
                              L"sg-drivers (third-party drivers).", sg);
@@ -466,6 +477,54 @@ static void props(int i)
     frame_dump_later();
 }
 
+/* ---- Disable device / Enable device ------------------------------------------------------------ */
+
+static BOOL can_toggle(int i)
+{
+    return i >= 0 && i < g_ndevs && !g_devs[i].wine_only &&
+           (!wcsncmp(g_devs[i].id, L"pci:", 4) || !wcsncmp(g_devs[i].id, L"usb:", 4));
+}
+
+static void reselect(const WCHAR *id)
+{
+    int i = dev_index(id);
+    if (i >= 0 && g_devs[i].hti) TreeView_SelectItem(g_dtree, g_devs[i].hti);
+}
+
+static void toggle(int i, BOOL enable)
+{
+    WCHAR id[128];
+    char *u;
+    const char *argv[2];
+    sys_reply_t r;
+    if (!can_toggle(i)) return;
+    if (!enable && frame_message(MB_YESNO | MB_ICONWARNING, g_devs[i].name,
+                                 L"Disabling this device will cause it to stop functioning. "
+                                 L"Do you really want to disable it?") != IDYES)
+        return;
+    lstrcpynW(id, g_devs[i].id, ARRAY_SIZE(id));
+    u = w_to_utf8(id);
+    argv[0] = enable ? "device-enable" : "device-disable";
+    argv[1] = u;
+    sys_request_argv(&r, 2, argv);
+    free(u);
+    if (!r.ok)
+    {
+        WCHAR m[512];
+        utf8_to_w(r.message, m, 512);
+        if (!strcmp(r.kind, "denied") && strstr(r.message, "administrator"))
+            frame_message(MB_OK | MB_ICONERROR, L"Device Manager",
+                          L"You must be an administrator to %ls this device.\n\n(%ls)", enable ? L"enable" : L"disable", m);
+        else frame_message(MB_OK | MB_ICONERROR, L"Device Manager", L"The device could not be %ls.\n\n%ls",
+                           enable ? L"enabled" : L"disabled", m);
+    }
+    sys_free(&r);
+    load();
+    fill_tree();
+    reselect(id);
+    frame_update_verbs();
+}
+
 /* ---- the pane ------------------------------------------------------------------------------- */
 
 static LRESULT CALLBACK pane_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
@@ -497,6 +556,9 @@ static LRESULT CALLBACK pane_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             AppendMenuW(m, MF_STRING, V_SCAN, L"Scan for hardware &changes");
             if ((key = selected_key()) > 0)
             {
+                if (can_toggle((int)key - 1))
+                    AppendMenuW(m, MF_STRING, g_devs[key - 1].disabled ? V_ENABLE : V_DISABLE,
+                                g_devs[key - 1].disabled ? L"&Enable device" : L"&Disable device");
                 AppendMenuW(m, MF_SEPARATOR, 0, NULL);
                 AppendMenuW(m, MF_STRING, V_PROPS, L"P&roperties");
                 SetMenuDefaultItem(m, V_PROPS, FALSE);
@@ -505,6 +567,7 @@ static LRESULT CALLBACK pane_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, ht.pt.x, ht.pt.y, 0, g_main, NULL);
             DestroyMenu(m);
             if (cmd == V_PROPS) props((int)key - 1);
+            else if (cmd == V_DISABLE || cmd == V_ENABLE) toggle((int)key - 1, cmd == V_ENABLE);
             else if (cmd == V_SCAN) { load(); fill_tree(); frame_dump_later(); }
             return TRUE;
         }
@@ -570,8 +633,17 @@ static void dev_hide(node_t *n)
 
 static void dev_verbs(node_t *n, LPARAM key, BOOL have, verbs_t *out)
 {
-    (void)n; (void)key;
-    if (have) return;
+    (void)n;
+    if (have)
+    {
+        int i = (int)key - 1;
+        if (key > 0 && can_toggle(i))
+        {
+            if (g_devs[i].disabled) out->v[out->n++] = (verb_t){ V_ENABLE, L"&Enable device", -1, TRUE, FALSE };
+            else out->v[out->n++] = (verb_t){ V_DISABLE, L"&Disable device", IC_DISABLED, TRUE, FALSE };
+        }
+        return;
+    }
     out->v[out->n++] = (verb_t){ V_SCAN, L"Scan for hardware &changes", IC_SCAN, TRUE, FALSE };
     out->v[out->n++] = (verb_t){ V_BYTYPE, L"Devices by &type", -1, g_by_connection, TRUE };
     out->v[out->n++] = (verb_t){ V_BYCONN, L"Devices by co&nnection", -1, !g_by_connection, FALSE };
@@ -579,9 +651,10 @@ static void dev_verbs(node_t *n, LPARAM key, BOOL have, verbs_t *out)
 
 static void dev_invoke(node_t *n, LPARAM key, BOOL have, int verb)
 {
-    (void)n; (void)key; (void)have;
+    (void)n;
     switch (verb)
     {
+    case V_DISABLE: case V_ENABLE: if (have) toggle((int)key - 1, verb == V_ENABLE); return;
     case V_SCAN: load(); fill_tree(); break;
     case V_BYTYPE: g_by_connection = FALSE; fill_tree(); break;
     case V_BYCONN: g_by_connection = TRUE; fill_tree(); break;
@@ -609,7 +682,8 @@ static void dev_dump(node_t *n, FILE *f)
         if (g_devs[i].hti && SendMessageW(g_dtree, TVM_GETITEMRECT, TRUE, (LPARAM)&r)) screen_center(g_dtree, &r, &pt);
         line_value(&g_devs[i], "DRIVER", drv, 64);
         fprintf(f, "DEV %d\t%ld %ld\t%ls\t%ls\t%ls\t%s\t%ls\t%ls\n", i + 1, pt.x, pt.y, CATS[g_devs[i].cat].title,
-                g_devs[i].name, g_devs[i].id, g_devs[i].nodriver ? "nodriver" : g_devs[i].wine_only ? "wine" : "ok",
+                g_devs[i].name, g_devs[i].id, g_devs[i].disabled ? "disabled" : g_devs[i].nodriver ? "nodriver" :
+                g_devs[i].wine_only ? "wine" : "ok",
                 drv, g_devs[i].winid);
     }
     for (i = 0; i < NCATS; i++)
