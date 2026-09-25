@@ -150,6 +150,7 @@ test: build
 	@sh test/services-check.sh
 	@sh test/eventvwr-check.sh
 	@sh test/devmgmt-check.sh
+	@sh test/diskmgmt-check.sh
 
 clean:
 	rm -rf $(BUILD)

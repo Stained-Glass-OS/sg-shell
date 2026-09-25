@@ -885,3 +885,42 @@ changed here: Linux binds drivers, sg-drivers installs third-party ones.
   SetupAPI) and `-DSG_MUTANT_NOWARN` (no-driver ignored) turn it red.
   Screenshots `build/devmgmt-*.png`.
 
+### Disk Management (diskmgmt.msc)
+
+`src/mmc/disks.c`: Windows' layout -- the volume list above (Volume, Layout,
+Type, File System, Status, Capacity, Free Space, % Free) and the graphical
+view below (our own drawing: per disk a label box -- Disk N, Basic or
+Removable, size, Online; CD-ROM N, DVD, No Media -- and a bar of its
+partitions and unallocated space in disk order, each at least 70 px and the
+rest shared by size; a coloured header, blue for system volumes, black for
+unallocated; the selection hatched). Clicking either selects both. Names are
+Windows': "LABEL (X:)", "Local Disk (C:)", "(Disk 0 partition 1)"; statuses
+"Healthy (EFI System Partition)", "Healthy (System, Page File, Primary
+Partition)", "Healthy, not mounted (...)". From `sg-sysinfo disks` (lsblk,
+and the prefix's drive letters -- C: is the volume holding `drive_c`).
+
+- **Changes are sg-sysinfod's**: Change Drive Letter and Paths (assign D:-Y:,
+  or remove), Mount/Unmount, Format (label, NTFS/exFAT/FAT32/ext4, after
+  Windows' "Formatting this volume will erase all data on it" warning) are
+  requests `letter`/`mount`/`unmount`/`format`; the service allows only an
+  administrator and refuses the system disk, a mounted or lettered volume
+  for format, C:/Z:, ... The console greys what cannot apply (Format on a
+  system or mounted volume) and shows the service's refusal in Windows' words
+  ("You need to be an administrator to change disks and volumes"). New,
+  Delete, Extend and Shrink volume are not offered.
+- **Gate: `test/diskmgmt-check.sh`**: this machine's disks against `lsblk`
+  (every disk with its exact size, every partition a volume, C: the volume
+  holding drive_c); a made-up machine (a stand-in `SG_LSBLK`): the data
+  disk's size, 8 GiB unallocated between and after its volumes in disk order,
+  drawn to scale, Format offered only for the unmounted non-system volume;
+  then changes through a real sg-sysinfod the gate serves itself
+  (`systemd-socket-activate -a ... --serve`; **it passes on only the `-E`
+  variables**), first as a standard user (`SG_WINE_GROUP` is the user's
+  group, `SG_ADMIN_GROUP` not): Change Drive Letter refused with the
+  administrator message and no link made; then as an administrator: PHOTOS
+  gets D: (a `dosdevices/d:` link to its mount point, shown "PHOTOS (D:)"),
+  and Format as exFAT with a label runs the stand-in `mkfs.exfat -L gatevol
+  /dev/sdb1` after the warning. 19 checks. Mutants `-DSG_MUTANT_SCALE` (not
+  to scale) and `-DSG_MUTANT_FSNAME` (always NTFS) turn it red. Screenshots
+  `build/diskmgmt-*.png`.
+

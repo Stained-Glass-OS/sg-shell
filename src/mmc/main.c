@@ -949,7 +949,12 @@ void frame_dump(void)
         SendMessageW(g_status, SB_GETTEXTW, 0, (LPARAM)st);
         fprintf(f, "STATUS %ls\n", st);
     }
-    fprintf(f, "MSG %ls\n", g_last_msg);
+    {
+        WCHAR m[1024], *p;
+        lstrcpynW(m, g_last_msg, ARRAY_SIZE(m));
+        for (p = m; *p; p++) if (*p == '\n') *p = '|'; else if (*p == '\r') *p = ' ';
+        fprintf(f, "MSG %ls\n", m);
+    }
     if (g_cur && g_cur->ops && g_cur->ops->dump) g_cur->ops->dump(g_cur, f);
     fprintf(f, "END\n");
     fclose(f);

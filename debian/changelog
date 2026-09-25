@@ -1,3 +1,14 @@
+sg-shell (0.1.0-24) unstable; urgency=medium
+
+  * Disk Management (diskmgmt.msc): the volume list and the graphical view
+    of each disk, its partitions and unallocated space to scale, from
+    sg-sysinfo (lsblk, the prefix's drive letters); Change Drive Letter and
+    Paths, Mount/Unmount and Format as requests to sg-sysinfod, which lets
+    only an administrator change disks and refuses the system disk.
+  * Gate: test/diskmgmt-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 08:32:55 -0700
+
 sg-shell (0.1.0-23) unstable; urgency=medium
 
   * Device Manager (devmgmt.msc): the hardware from sg-sysinfo (sysfs, udev,
