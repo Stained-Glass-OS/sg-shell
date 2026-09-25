@@ -1,4 +1,4 @@
-sg-shell (0.1.0-21) unstable; urgency=medium
+sg-shell (0.1.0-22) unstable; urgency=medium
 
   * Event Viewer (eventvwr.exe, eventvwr.msc; sg-eventvwr64.exe via App
     Paths): Windows Logs and Applications and Services Logs from wine-sg's
