@@ -1,3 +1,14 @@
+sg-shell (0.1.0-6) unstable; urgency=medium
+
+  * Network Connections (sg-ncpa, ncpa.cpl): adapter tiles, Status, Network
+    Connection Details, Properties and the Internet Protocol Version 4
+    (TCP/IPv4) Properties dialog, through sg-session's sg-netctl.
+  * The taskbar's network icon and flyout (sg-netflyout): Wi-Fi networks,
+    Connect with the network security key, Disconnect, the Wi-Fi button.
+  * Gate: test/net-ui-check.sh.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Thu, 24 Sep 2026 17:48:17 -0700
+
 sg-shell (0.1.0-5) unstable; urgency=medium
 
   * The Control Panel, rebuilt as a real one (src/control/): the Windows 10
