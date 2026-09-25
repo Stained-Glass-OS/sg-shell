@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the default desktop picture.
+;
+; Our own art, generated at package build by theme/wallpapers/gen-wallpaper.py
+; (panes of coloured glass in lead) and installed in
+; /usr/share/stained-glass/wallpapers, reached through Wine's Z: drive.
+; WallpaperStyle 10 is Fill, as Windows 10's default; wine-sg patch 0069 makes
+; the desktop draw JPEGs and honour the style.
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"Wallpaper"="Z:\\usr\\share\\stained-glass\\wallpapers\\stained-glass.jpg"
+"WallpaperStyle"="10"
+"TileWallpaper"="0"

@@ -30,6 +30,8 @@
 
 static const WCHAR DESKTOP[] = L"Control Panel\\Desktop";
 static const WCHAR COLORS[] = L"Control Panel\\Colors";
+/* the wallpapers sg-shell ships (theme/wallpapers), through Wine's Z: drive */
+static const WCHAR SG_WALLPAPERS[] = L"Z:\\usr\\share\\stained-glass\\wallpapers";
 static const WCHAR WALLPAPERS[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers";
 static const WCHAR IE_DESKTOP[] = L"Software\\Microsoft\\Internet Explorer\\Desktop\\General";
 static const WCHAR DWM[] = L"Software\\Microsoft\\Windows\\DWM";
@@ -463,6 +465,8 @@ void build_personalize(void)
         GetWindowsDirectoryW(windir, MAX_PATH);
         _snwprintf(dir, MAX_PATH, L"%ls\\Web\\Wallpaper", windir);
         g_npics = find_pictures(g_pics, ARRAYSIZE(g_pics), dir, 0);
+        /* and the system's own (sg-shell's theme/wallpapers) */
+        g_npics += find_pictures(g_pics + g_npics, ARRAYSIZE(g_pics) - g_npics, SG_WALLPAPERS, 0);
         pg_text(x, y, w, S(20), g_font_body, COL_TEXT, L"Choose your picture", DT_SINGLELINE);
         y += S(26);
         cols = w / (tw + S(10));
@@ -556,7 +560,9 @@ BOOL cmd_personalize(int id, int code, HWND ctl)
                 else {
                     GetWindowsDirectoryW(windir, MAX_PATH);
                     _snwprintf(dir, MAX_PATH, L"%ls\\Web\\Wallpaper", windir);
-                    if ((g_npics = find_pictures(g_pics, ARRAYSIZE(g_pics), dir, 0))) pic = g_pics[0];
+                    g_npics = find_pictures(g_pics, ARRAYSIZE(g_pics), dir, 0);
+                    g_npics += find_pictures(g_pics + g_npics, ARRAYSIZE(g_pics) - g_npics, SG_WALLPAPERS, 0);
+                    if (g_npics) pic = g_pics[0];
                 }
                 if (pic) failed(set_wallpaper(pic, g_state.style));
                 else message(g_main, L"Personalization", L"There is no picture to show. Use Browse to choose one.", FALSE);

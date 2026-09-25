@@ -24,5 +24,9 @@ override_dh_auto_install:
 	install -D -m0644 admin/sg-admind.tmpfiles debian/sg-shell/usr/lib/tmpfiles.d/sg-admind.conf
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.
+	# Wallpapers: our own art, generated here (theme/wallpapers).
+	install -d debian/sg-shell/usr/share/stained-glass/wallpapers
+	python3 theme/wallpapers/gen-wallpaper.py debian/sg-shell/usr/share/stained-glass/wallpapers/stained-glass.jpg
+	python3 theme/wallpapers/gen-wallpaper.py --night debian/sg-shell/usr/share/stained-glass/wallpapers/stained-glass-night.jpg
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
