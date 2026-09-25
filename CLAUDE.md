@@ -1018,3 +1018,25 @@ no .msc for them yet).
   **Expanding a tree item rewrites the dump** (TVN_ITEMEXPANDED), or a gate
   reads the children's positions before they exist.
 
+### System Information (msinfo32.exe)
+
+`src/mmc/msinfo.c`, the same host as `sg-msinfo3264.exe` (App Paths
+`msinfo32.exe`; Wine's own `system32\msinfo32.exe` hands off to it, wine-sg
+0142), without the toolbar and Actions pane, as Windows' msinfo32 has none.
+System Summary (OS name and the Windows version Wine reports, Wine's version,
+kernel, maker/model, processor with cores and threads, BIOS and board, BIOS
+mode, Secure Boot, directories, boot device, locale, user, time zone, memory,
+virtualization), Hardware Resources (a pointer to Device Manager: Linux
+assigns them), Components (Display with the Windows display modes, Sound,
+Input, Network with Windows' adapters and addresses, Storage Disks and
+Drives, USB), Software Environment (System Drivers = the kernel modules
+bound to devices, Environment Variables, Running Tasks, Services, Startup
+Programs). Hardware facts from `sg-sysinfo system|devices|disks`.
+`msinfo32 /report FILE` writes every category as UTF-16 text and exits.
+
+- **Gate: `test/msinfo-check.sh`**: `msinfo32.exe` through App Paths; OS
+  Name is sg-sysinfo's; Processor is /proc/cpuinfo's model and thread count;
+  Installed Physical Memory is MemTotal; x64-based PC; the computer's name;
+  Components > Display lists sg-sysinfo's display adapters; `/report`
+  writes all 14 categories. `-DSG_MUTANT_MEM` turns it red.
+

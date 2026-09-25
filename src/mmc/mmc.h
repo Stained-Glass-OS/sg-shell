@@ -209,5 +209,7 @@ node_t *devices_create(node_t *parent);     /* Device Manager */
 node_t *disks_create(node_t *parent);       /* Disk Management */
 node_t *users_create(node_t *parent);       /* Local Users and Groups */
 node_t *shares_create(node_t *parent);      /* Shared Folders */
+node_t *msinfo_create(void);                 /* System Information */
+int msinfo_report(const WCHAR *path);        /* msinfo32 /report FILE */
 
 #endif

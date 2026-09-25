@@ -49,10 +49,14 @@ UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
 # diskmgmt.msc, compmgmt.msc; the same program as sg-eventvwr for eventvwr.exe):
 # src/mmc/, pictures drawn at build time by gen-icons.py.
 MMC_SRC  = $(wildcard src/mmc/*.c)
+<<<<<<< Updated upstream
 MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lsetupapi -lshell32 -ladvapi32 -lgdi32 -luser32 -lole32 -luuid
 # Terminal (wt.exe): src/terminal/, its screen (vt.c) also built natively for its unit test.
 TERMINAL_SRC  = $(wildcard src/terminal/*.c)
 TERMINAL_LIBS = -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
+=======
+MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lsetupapi -liphlpapi -lws2_32 -lshell32 -ladvapi32 -lgdi32 -luser32 -lole32 -luuid
+>>>>>>> Stashed changes
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -118,17 +122,23 @@ build:
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
 	    $(BUILD)/charmap-names.c $(BUILD)/sg-charmap-res64.o $(CHARMAP_LIBS) && echo "built sg-charmap (64-bit)"
-	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico
+	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico $(BUILD)/sg-msinfo32.ico
 	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-mmc.rc -O coff -o $(BUILD)/sg-mmc-res64.o
 	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-eventvwr.rc -O coff -o $(BUILD)/sg-eventvwr-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-mmc64.exe $(MMC_SRC) $(BUILD)/sg-mmc-res64.o $(MMC_LIBS) \
 	    && echo "built sg-mmc (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-eventvwr64.exe $(MMC_SRC) $(BUILD)/sg-eventvwr-res64.o $(MMC_LIBS) \
 	    && echo "built sg-eventvwr (64-bit)"
+<<<<<<< Updated upstream
 	@python3 src/terminal/gen-icon.py $(BUILD)/sg-terminal.ico
 	@$(WINDRES64) -I src/terminal -I $(BUILD) src/terminal/terminal.rc -O coff -o $(BUILD)/sg-terminal-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-terminal64.exe $(TERMINAL_SRC) \
 	    $(BUILD)/sg-terminal-res64.o $(TERMINAL_LIBS) && echo "built sg-terminal (64-bit)"
+=======
+	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-msinfo32.rc -O coff -o $(BUILD)/sg-msinfo32-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-msinfo3264.exe $(MMC_SRC) $(BUILD)/sg-msinfo32-res64.o $(MMC_LIBS) \
+	    && echo "built sg-msinfo32 (64-bit)"
+>>>>>>> Stashed changes
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -160,6 +170,7 @@ test: build
 	@sh test/devmgmt-check.sh
 	@sh test/diskmgmt-check.sh
 	@sh test/compmgmt-check.sh
+	@sh test/msinfo-check.sh
 
 clean:
 	rm -rf $(BUILD)

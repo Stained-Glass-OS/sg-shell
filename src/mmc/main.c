@@ -37,7 +37,7 @@ static node_t *g_cur;
 static node_t *g_initial;
 static WCHAR g_console[32] = L"";   /* services, eventvwr, ... */
 static WCHAR g_title[128] = L"Console Root";
-static BOOL g_show_tree = TRUE, g_show_actions = TRUE;
+static BOOL g_show_tree = TRUE, g_show_actions = TRUE, g_show_toolbar = TRUE;
 static int g_tree_w = 270, g_actions_w = 210;
 static RECT g_center, g_list_rc;
 static WCHAR g_banner_text[512];
@@ -816,7 +816,8 @@ static void layout(void)
     SendMessageW(g_status, WM_SIZE, 0, 0);
     GetWindowRect(g_toolbar, &tb);
     GetWindowRect(g_status, &sb);
-    top = tb.bottom - tb.top;
+    ShowWindow(g_toolbar, g_show_toolbar ? SW_SHOW : SW_HIDE);
+    top = g_show_toolbar ? tb.bottom - tb.top : 0;
     bottom = rc.bottom - (sb.bottom - sb.top);
     left = g_show_tree ? S(g_tree_w) : 0;
     right = g_show_actions ? rc.right - S(g_actions_w) : rc.right;
@@ -1182,6 +1183,7 @@ static void pick_console(const WCHAR *cmdline)
     GetModuleFileNameW(NULL, self, MAX_PATH);
     base = wcsrchr(self, '\\') ? wcsrchr(self, '\\') + 1 : self;
     if (!_wcsnicmp(base, L"sg-eventvwr", 11)) lstrcpyW(g_console, L"eventvwr");
+    if (!_wcsnicmp(base, L"sg-msinfo32", 11)) lstrcpyW(g_console, L"msinfo32");
     for (i = 1; argv && i < argc && !g_console[0]; i++)
     {
         if (argv[i][0] == '-' || argv[i][0] == '/') continue;
@@ -1245,6 +1247,14 @@ static void build_console(void)
     {
         lstrcpyW(g_title, L"Local Users and Groups");
         users_create(NULL);
+    }
+    else if (!wcscmp(g_console, L"msinfo32"))
+    {
+        lstrcpyW(g_title, L"System Information");
+        msinfo_create();
+        g_show_actions = FALSE;
+        g_show_toolbar = FALSE;
+        g_tree_w = 230;
     }
     else if (!wcscmp(g_console, L"fsmgmt"))
     {
@@ -1335,6 +1345,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     GetEnvironmentVariableW(L"SG_MMC_DUMP", g_dump_path, MAX_PATH);
     load_icons();
     pick_console(full);
+    /* msinfo32 /report FILE: the report, no window */
+    if (!wcscmp(g_console, L"msinfo32"))
+    {
+        int argc, i;
+        WCHAR **argv = CommandLineToArgvW(full, &argc);
+        for (i = 1; argv && i + 1 < argc; i++)
+            if (!_wcsicmp(argv[i], L"/report") || !_wcsicmp(argv[i], L"-report")) return msinfo_report(argv[i + 1]);
+    }
 
     wc.lpfnWndProc = main_proc;
     wc.hInstance = inst;

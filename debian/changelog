@@ -1,3 +1,12 @@
+sg-shell (0.1.0-27) unstable; urgency=medium
+
+  * System Information (msinfo32.exe, sg-msinfo3264.exe via App Paths):
+    System Summary, Components and Software Environment from sg-sysinfo and
+    Windows, Windows' msinfo32 layout; msinfo32 /report FILE.
+  * Gate: test/msinfo-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 08:55:43 -0700
+
 sg-shell (0.1.0-26) unstable; urgency=medium
 
   * sg-terminal: Terminal, Windows Terminal's stand-in (wt.exe; Win+X >

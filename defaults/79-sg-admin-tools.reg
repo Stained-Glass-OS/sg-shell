@@ -18,3 +18,8 @@ Windows Registry Editor Version 5.00
 ; cannot carry arguments), so eventvwr.exe opens Event Viewer.
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\eventvwr.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-eventvwr64.exe"
+
+; System Information: the console host under its own name. Wine's own
+; system32\msinfo32.exe hands off to this entry (wine-sg 0142).
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\msinfo32.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-msinfo3264.exe"
