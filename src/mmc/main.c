@@ -34,10 +34,11 @@ HIMAGELIST g_icons;
 static HWND g_tree, g_list, g_toolbar, g_status, g_actions, g_banner, g_empty;
 static node_t g_roots;              /* a sentinel: its children are the roots */
 static node_t *g_cur;
+static node_t *g_initial;
 static WCHAR g_console[32] = L"";   /* services, eventvwr, ... */
 static WCHAR g_title[128] = L"Console Root";
 static BOOL g_show_tree = TRUE, g_show_actions = TRUE;
-static int g_tree_w = 220, g_actions_w = 210;
+static int g_tree_w = 250, g_actions_w = 210;
 static RECT g_center, g_list_rc;
 static WCHAR g_banner_text[512];
 static WCHAR g_last_msg[1024];
@@ -433,6 +434,7 @@ int frame_message(UINT flags, const WCHAR *title, const WCHAR *fmt, ...)
 }
 
 const WCHAR *console_name(void) { return g_console; }
+void frame_set_initial(node_t *n) { g_initial = n; }
 
 /* ---- verbs: toolbar, Action menu, Actions pane ------------------------------------------ */
 
@@ -1379,8 +1381,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     UpdateWindow(g_main);
     /* the console's first item: the first root with a view of its own, or the root */
     {
-        node_t *first = g_roots.child;
-        if (!wcscmp(g_console, L"compmgmt")) first = g_roots.child;
+        node_t *first = g_initial ? g_initial : g_roots.child, *p;
+        for (p = first->parent; p && p != &g_roots; p = p->parent) if (p->hti) TreeView_Expand(g_tree, p->hti, TVE_EXPAND);
         node_select(first);
     }
     SetTimer(g_main, TIMER_TICK, 1000, NULL);

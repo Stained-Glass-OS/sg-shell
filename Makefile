@@ -148,6 +148,7 @@ test: build
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
 	@sh test/services-check.sh
+	@sh test/eventvwr-check.sh
 
 clean:
 	rm -rf $(BUILD)

@@ -799,3 +799,55 @@ read-only (no verbs; Properties shows the unit's fields).
   (`-DSG_MUTANT_NOSTART`, `-DSG_MUTANT_STATUS`, via `SG_MMC_EXE`) turn it
   red. Screenshots `build/services-*.png`.
 
+### Event Viewer (eventvwr.exe, eventvwr.msc)
+
+`src/mmc/events.c`. The tree: Event Viewer (Local) > Windows Logs
+(Application, Security, Setup, System -- those the registry has) and
+Applications and Services Logs (every other `HKLM\System\CurrentControlSet\
+Services\EventLog` subkey but the service's `Parameters`, and **Stained
+Glass**). A log's view is Windows': a header ("Application  Number of events:
+N", and the filter), the list (Level, Date and Time, Source, Event ID, Task
+Category; newest first) and a preview pane with General (the message, then
+Log Name, Source, Logged, Event ID, Task Category, Level, Keywords, User,
+Computer) and Details (the record's fields, strings and data in hex). Verbs:
+Filter Current Log (levels -- Audit Success/Failure on Security --, Logged
+any time/1 h/12 h/24 h/7 d/30 d, sources, IDs with ranges and exclusions),
+Clear Filter, Clear Log (save first or not), Save All Events As
+(`BackupEventLog`), and per event Copy and Properties (a dialog with
+Previous/Next and Copy). `eventvwr /c:<log>` opens that log, `/l:<file>` a
+saved one. New events appear by themselves (the count is polled every second).
+
+- **The Windows logs are wine-sg's event log** (0143/0144: the EventLog
+  service keeps them and decides who may read them from the caller's token,
+  via 0140). A standard user's `OpenEventLog("Security")` fails with 5: the
+  list shows "You do not have permission to read the Security log. Access is
+  denied." and a banner. Clear is 5 and backup 1314 for a standard user.
+- **Messages are formatted as Windows does**: `EventMessageFile` (REG_EXPAND_SZ,
+  `;`-separated) of `EventLog\<log>\<source>`, `LoadLibraryEx(AS_DATAFILE)`,
+  `FormatMessage(FROM_HMODULE | ARGUMENT_ARRAY)` with the full 32-bit event ID
+  and the record's strings (padded to 99 inserts, so a message asking for
+  more does not read garbage); categories from `CategoryMessageFile`. With no
+  message: Windows' "The description for Event ID N from source S cannot be
+  found..." and the strings. The IDs shown are `& 0xFFFF`.
+- **The Stained Glass log** is `sg-sysinfo journal --lines 2000` (sg-sysinfod
+  filters it to sg-* units and identifiers): Level from the priority (0-2
+  Critical, 3 Error, 4 Warning, 5-6 Information, 7 Verbose), Source the
+  identifier, Process ID and Unit columns, the message in the preview.
+- **Gate: `test/eventvwr-check.sh`** (a SHARED prefix: this user owns it and is
+  SYSTEM there, `sgconf` is a standard user through `sudo -u`, `xhost
+  +SI:localuser:`): a message DLL built at run time with `windmc`/`windres`
+  (`test/sg-evt-msg.mc`) and `test/sg-evt-probe.c` writing events;
+  `eventvwr.exe /c:Application` through wine-sg 0142; the registered source's
+  event with its formatted text and fields; the unregistered source's
+  "cannot be found" text with its strings; an event appearing while open;
+  Filter (Warning only; the header says Filtered) and Clear Filter; System's
+  6005 "The Event log service was started."; SYSTEM's audit event in Security
+  for the owner; the Stained Glass log through the real sg-sysinfo with a
+  stand-in `SG_JOURNALCTL` (only sg-* entries); and as the standard user
+  Security refused with the banner while Application reads. 22 checks. Stock
+  wine-sg fails 14 (the stub event log reads nothing); `-DSG_MUTANT_NOFORMAT`
+  (no message files) fails the text checks. Screenshots `build/eventvwr-*.png`.
+- **A per-user HKCU**: in the shared-prefix gate the second user needs the
+  shell desktop and theme settings in its own hive (`reg add` as that user),
+  as a new profile gets them from Default User on the image.
+

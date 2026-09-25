@@ -1,5 +1,19 @@
 sg-shell (0.1.0-21) unstable; urgency=medium
 
+  * Event Viewer (eventvwr.exe, eventvwr.msc; sg-eventvwr64.exe via App
+    Paths): Windows Logs and Applications and Services Logs from wine-sg's
+    event log service, Windows' layout (header, list, General/Details
+    preview), messages formatted from each source's EventMessageFile,
+    Filter Current Log, Clear Log, Save All Events As, event Properties and
+    Copy, /c:<log>; the Security log refused to a standard user as the
+    service decides; and a read-only Stained Glass log -- the journal of
+    Stained Glass's own services through sg-sysinfo.
+  * Gate: test/eventvwr-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 07:57:24 -0700
+
+sg-shell (0.1.0-21) unstable; urgency=medium
+
   * sg-settings: Settings, Windows 10's (SystemSettings.exe, Win+I with
     wine-sg 0130, every ms-settings: URI, the Start menu's Settings) -- the
     Control Panel's program in the Settings frame: navigation pane, Home's

@@ -13,3 +13,8 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\mmc.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-mmc64.exe"
+
+; Event Viewer: the same console host under its own name (App Paths values
+; cannot carry arguments), so eventvwr.exe opens Event Viewer.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\eventvwr.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-eventvwr64.exe"

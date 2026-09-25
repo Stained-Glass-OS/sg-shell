@@ -84,7 +84,7 @@ verb_tb() { d | awk -v id="$1" '$1 == "VERB" && $2 == "row" && $3 == id { print 
 verb_ac() { d | awk -v id="$1" '$1 == "VERB" && $2 == "row" && $3 == id { print $7, $8; exit }'; }
 verb_on() { d | awk -v id="$1" '$1 == "VERB" && $2 == "row" && $3 == id { print $4; exit }'; }
 tree_xy() { d | awk -v n="$1" '$1 == "TREE" { t = $0; sub(/^TREE [0-9]+ -?[0-9]+ -?[0-9]+ (\* )?/, "", t); if (t == n) { print $3, $4; exit } }'; }
-click() { xdotool mousemove "$1" "$2" click 1; sleep 0.8; }
+click() { [ $# -ge 2 ] || return 0; xdotool mousemove "$1" "$2" click 1; sleep 0.8; }
 shot() { import -window root "$OUT/services-$1.png" 2>/dev/null; }
 info() { wine 'C:\sg-svc-test.exe' info SgTestSvc 2>/dev/null | tr -d '\r' | awk -v k="$1" '$1 == k { print $2 }'; }
 scstate() { case "$(info STATE)" in 1) echo STOPPED ;; 2) echo START_PENDING ;; 3) echo STOP_PENDING ;; 4) echo RUNNING ;;

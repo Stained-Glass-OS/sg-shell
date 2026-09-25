@@ -143,7 +143,8 @@ void pane_set_list_rect(const RECT *rc);/* a custom view may shrink the list (pr
 /* ---- frame services -------------------------------------------------------- */
 void frame_status(const WCHAR *fmt, ...);
 void frame_update_verbs(void);          /* re-query verbs: toolbar, Action menu, Actions pane */
-void frame_custom_selection(LPARAM key, BOOL have);  /* a custom view's selection */
+void frame_custom_selection(LPARAM key, BOOL have);
+void frame_set_initial(node_t *n);      /* the node to open first (e.g. eventvwr /c:System) */  /* a custom view's selection */
 void frame_banner(const WCHAR *text);   /* a yellow bar above the result pane; NULL hides */
 int frame_message(UINT flags, const WCHAR *title, const WCHAR *fmt, ...);
 void frame_dump(void);                  /* rewrite SG_MMC_DUMP */
