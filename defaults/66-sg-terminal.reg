@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Terminal (sg-terminal), Windows Terminal's stand-in.
+; wt.exe from the Run box, ShellExecute and scripts opens it (wine-sg's
+; system32 wt.exe hands off to this App Paths entry, so programs that
+; CreateProcess wt.exe get it too), as does explorer's Win+X > Terminal.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\wt.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-terminal64.exe"

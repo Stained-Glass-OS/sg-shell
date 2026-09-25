@@ -45,6 +45,7 @@ wine-sg or an X server.
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-settings` | **Settings** (Windows 10's, Win+I, `SystemSettings.exe`, every `ms-settings:` URI) -- the Control Panel's program in the Settings frame, sharing its pages' logic. System, Devices, Network & Internet, Personalization, Apps, Accounts, Time & Language, Ease of Access, Privacy, Update & Security. `defaults/65-sg-settings.reg`; sg-start lists it and its rail's Settings opens it. See "Settings" below. |
+| `sg-terminal` | **Terminal** (Windows Terminal, `wt.exe`, Win+X > Terminal): tabs of shells on pseudo consoles -- PowerShell 7, Command Prompt, Git Bash and Windows PowerShell when present -- with a VT screen of our own, 16/256/RGB colours, scrollback, mouse selection, copy/paste, zoom, full screen, and `wt`'s command line (`-p`, `-d`, `--title`, `new-tab`, `;`). `defaults/66-sg-terminal.reg`; sg-start lists it. See "Terminal" below. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
@@ -268,6 +269,68 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
   wlr-output-power-management, which sg-compositor lacks, so the screen is
   never turned off); multiple displays are not arranged; no Windows Hello,
   Family, Gaming, Phone or Search categories.
+
+## Terminal (sg-terminal)
+
+`src/terminal/`: `vt.c` is the screen -- a VT/xterm parser over a grid of
+cells with a 9001-line scrollback ring (plain C, no Windows headers, so
+`test/terminal-vt-test.c` runs it natively); `main.c` is the window: the tab
+strip, the view, profiles, keys, the pseudo consoles and the dump. The icon is
+drawn by `gen-icon.py` at build time.
+
+- **Each tab is a pseudo console**: `CreatePseudoConsole` with two pipes,
+  `CreateProcess` with `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`, a reader thread
+  posting the output to the window, a waiter posting the exit. Wine's
+  conhost turns the console API into VT text; **three wine-sg patches make
+  that work**: 0131 (a pseudo console's programs get its handles -- without
+  it cmd and PowerShell write nowhere -- and `ResizePseudoConsole` resizes),
+  0132 (conhost interprets the VT sequences programs write -- without it
+  PowerShell 7's PSReadLine shows escape codes), 0133 (`wt.exe` in system32,
+  Win+X > Terminal).
+- **Keys go as VT**: arrows, Home/End, Insert/Delete, PgUp/PgDn and F1-F12
+  with xterm's modifier parameters (conhost's input parser reads them),
+  Backspace as DEL, Alt+key as ESC+key; the terminal's own shortcuts (see the
+  header of `main.c`) never reach the shell -- their queued `WM_CHAR` is
+  removed.
+- **Profiles** are found, not configured: PowerShell 7 (App Paths `pwsh.exe`,
+  the PATH, `%ProgramFiles%\PowerShell\7`), Command Prompt (`%ComSpec%`),
+  Git Bash (`%ProgramFiles%\Git\bin\bash.exe --login -i`), Windows
+  PowerShell. The default is PowerShell when present; Settings (Ctrl+,) keeps
+  the default profile, font and size in `HKCU\Software\Stained Glass\Terminal`.
+  A command line given without `-p` takes the profile that runs the same
+  program. A shell starts in `%USERPROFILE%`, with `WT_SESSION` set.
+- **Look**: our own colour scheme ("Stained Glass Night"), the first of
+  Cascadia Mono / Cascadia Code (Debian's fonts-cascadia-code, in the image)
+  / Consolas / DejaVu Sans Mono, a bar cursor, bold drawn bright as Windows
+  Terminal does. A graceful exit (0) closes the tab; any other shows the code
+  and Enter restarts, Ctrl+D closes.
+- **Things that bit.** A pseudo console's programs had no standard handles
+  under Wine (see 0131). `wine reg add /d` and dash's echo eat `\b`, `\e`,
+  `\7` in Windows paths: the gate prints with printf and copies PowerShell
+  into `Program Files` (through a symbolic link .NET looks for its
+  assemblies beside the link). `WINEDLLOVERRIDES=mscoree=` kills PowerShell 7
+  -- only for creating the prefix. Wine has no `mode.com`: the gate's
+  `test/sg-terminal-probe.c` reports the console's size and writes colours.
+- **`SG_TERMINAL_DUMP=<file>`**: the window, the grid size, the font, the
+  profiles, each tab (screen centre, profile, alive, exit code, title), the
+  + and menu buttons, the view's origin, the cursor, the active tab's rows and
+  the colour of each cell (`fg N: ...`), the selection.
+- **Gate: `test/terminal-check.sh`** (display :121; needs a wine-sg with
+  0131-0133, `SG_WINE_DIR`): the screen's unit test (25 checks, native),
+  `wt.exe` through App Paths opening Command Prompt, typed commands and their
+  output, a program's own SGR 91 and SetConsoleTextAttribute colours, Ctrl+
+  Shift+1 opening PowerShell 7 in a second tab (6*7 = 42, Write-Host in red,
+  the tab named PowerShell), switching tabs by clicking, a mouse selection
+  copied with Ctrl+Shift+C and Ctrl+V pasting (xclip), F11 resizing the
+  pseudo console (the program sees the new size), `exit` closing its tab,
+  `wt CMD ; nt -p ... --title ...`, and `wt.exe` typed in cmd (system32's
+  launcher). Screenshots `build/terminal-*.png`. Mutants `-DSG_MUTANT_NOSGR`
+  (no colours) and `-DSG_MUTANT_NORESIZE` (`SG_TERMINAL_EXE=`) turn it red,
+  and stock wine-sg shows no prompt at all.
+- **Not yet:** split panes, search, a settings.json of Windows Terminal's
+  own, profiles of the user's own, custom title bar tabs (the tabs are under
+  a normal caption), bracketed paste, mouse reporting to programs, Unicode
+  combining marks.
 
 ## The Start menu (sg-start)
 

@@ -1,3 +1,17 @@
+sg-shell (0.1.0-26) unstable; urgency=medium
+
+  * sg-terminal: Terminal, Windows Terminal's stand-in (wt.exe; Win+X >
+    Terminal with wine-sg 0133): tabs of shells on pseudo consoles --
+    PowerShell 7, Command Prompt, Git Bash, Windows PowerShell when present
+    -- our own VT screen (16/256/RGB colours, wide characters, the
+    alternate screen, scroll regions, 9001 lines of scrollback), mouse
+    selection, copy and paste, zoom, full screen, resizing, wt's command
+    line (-p, -d, --title, new-tab, ';'). Our own colour scheme; Cascadia
+    Mono where installed. defaults/66-sg-terminal.reg; in the Start menu.
+  * Gate: test/terminal-check.sh and test/terminal-vt-test.c (native).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 08:49:59 -0700
+
 sg-shell (0.1.0-25) unstable; urgency=medium
 
   * Computer Management (compmgmt.msc): System Tools (Event Viewer, Shared

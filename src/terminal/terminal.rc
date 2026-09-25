@@ -1,0 +1,5 @@
+/* Terminal's resources: its icon (drawn at build time by gen-icon.py) and a
+ * common-controls 6 manifest for the settings dialog. */
+#include <winuser.h>
+1 ICON "sg-terminal.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "terminal.manifest"

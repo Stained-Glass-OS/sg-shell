@@ -319,6 +319,7 @@ static void build_list(void)
     add_beside(L"Remote Desktop Connection", L"sg-mstsc64.exe");
     add_beside(L"Control Panel", L"sg-control64.exe");
     add_beside(L"Settings", L"sg-settings64.exe");
+    add_beside(L"Terminal", L"sg-terminal64.exe");
     add_beside(L"Media Player", L"sg-media64.exe");
     add_beside(L"Calculator", L"sg-calc64.exe");
     add_beside(L"Photos", L"sg-photos64.exe");
