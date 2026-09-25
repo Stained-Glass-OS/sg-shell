@@ -1,3 +1,11 @@
+sg-shell (0.1.0-19) unstable; urgency=medium
+
+  * Chinese, Japanese and Korean text: Windows' CJK font names (Microsoft
+    YaHei, SimSun, Meiryo, MS Gothic, Malgun Gothic, ...) are replaced by
+    Noto CJK, now a dependency, so CJK shows instead of boxes.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 03:15:23 -0700
+
 sg-shell (0.1.0-18) unstable; urgency=medium
 
   * sg-charmap: Character Map (charmap.exe; Wine has none) -- a font's
