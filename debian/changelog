@@ -1,3 +1,20 @@
+sg-shell (0.1.0-15) unstable; urgency=medium
+
+  * sg-paint: Paint (mspaint.exe), an MS-Paint-class raster editor with
+    Windows 10 Paint's ribbon, our own drawing -- Clipboard (cut, copy, paste,
+    paste from), Image (rectangular and free-form selection, select all,
+    invert, delete, transparent selection, crop, Resize and Skew, rotate and
+    flip), Tools (pencil, fill, text, eraser, colour picker, magnifier), six
+    brushes, sixteen shapes with outline and fill, sizes, Color 1/Color 2, the
+    palette and Edit colors; View (zoom, gridlines, status bar, full screen);
+    canvas resize handles, a status bar with a zoom slider, undo/redo, the
+    clipboard as CF_DIB, and PNG/JPEG/BMP/GIF/TIFF through WIC. App Paths
+    mspaint.exe and the pictures' Edit verb: defaults/71-sg-paint.reg. In the
+    Start menu.
+  * Gate: test/paint-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 02:10:43 -0700
+
 sg-shell (0.1.0-14) unstable; urgency=medium
 
   * sg-taskmgr: Task Manager, as Windows 10 has it -- Fewer details (the

@@ -1,0 +1,46 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Paint (sg-paint). `mspaint` in the Run box, ShellExecute
+; and scripts find it here, as they find Microsoft's on Windows; wine-sg's
+; system32 mspaint.exe hands off to this App Paths entry for programs that
+; start it with CreateProcess.
+;
+; "Edit" on any picture (the shell's SystemFileAssociations\image verb, which
+; Windows also puts on pictures for Paint) opens it in Paint; what "Open" does
+; is the Photos app's business.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\mspaint.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-paint64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SystemFileAssociations\image\shell\edit]
+@="Edit"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SystemFileAssociations\image\shell\edit\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-paint64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\mspaint.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-paint64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\mspaint.exe\SupportedTypes]
+".bmp"=""
+".dib"=""
+".jpg"=""
+".jpeg"=""
+".jpe"=""
+".jfif"=""
+".gif"=""
+".tif"=""
+".tiff"=""
+".png"=""
+".ico"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.bmp\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.png\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpg\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpeg\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.gif\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.tif\OpenWithList\mspaint.exe]
+[HKEY_LOCAL_MACHINE\Software\Classes\.tiff\OpenWithList\mspaint.exe]

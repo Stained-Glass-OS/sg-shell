@@ -1,0 +1,46 @@
+/* sg-paint -- resources: the icon (generated at build time by gen-icon.py,
+ * our own drawing), the common-controls 6 manifest and the dialogs.
+ * SPDX-License-Identifier: AGPL-3.0-or-later */
+#include <windows.h>
+#include "resource.h"
+
+IDI_PAINT ICON "sg-paint.ico"
+1 24 "paint.manifest"
+
+IDD_RESIZE DIALOGEX 0, 0, 200, 186
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Resize and Skew"
+FONT 9, "Segoe UI"
+BEGIN
+    GROUPBOX        "Resize", -1, 7, 7, 186, 86
+    LTEXT           "By:", -1, 16, 21, 20, 10
+    AUTORADIOBUTTON "&Percentage", IDC_RS_PERCENT, 44, 20, 64, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Pi&xels", IDC_RS_PIXELS, 116, 20, 60, 10
+    LTEXT           "&Horizontal:", -1, 16, 39, 60, 10
+    EDITTEXT        IDC_RS_H, 110, 37, 70, 13, ES_NUMBER | WS_GROUP | WS_TABSTOP
+    LTEXT           "&Vertical:", -1, 16, 57, 60, 10
+    EDITTEXT        IDC_RS_V, 110, 55, 70, 13, ES_NUMBER | WS_TABSTOP
+    AUTOCHECKBOX    "&Maintain aspect ratio", IDC_RS_LOCK, 16, 75, 120, 10, WS_TABSTOP
+    GROUPBOX        "Skew (Degrees)", -1, 7, 99, 186, 58
+    LTEXT           "H&orizontal:", -1, 16, 116, 60, 10
+    EDITTEXT        IDC_SK_H, 110, 114, 70, 13, WS_TABSTOP
+    LTEXT           "V&ertical:", -1, 16, 136, 60, 10
+    EDITTEXT        IDC_SK_V, 110, 134, 70, 13, WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK, 86, 164, 50, 15
+    PUSHBUTTON      "Cancel", IDCANCEL, 143, 164, 50, 15
+END
+
+IDD_PROPS DIALOGEX 0, 0, 200, 96
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Image Properties"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_PR_FILE, 7, 7, 186, 20
+    GROUPBOX        "Image size (pixels)", -1, 7, 28, 186, 40
+    LTEXT           "&Width:", -1, 16, 45, 30, 10
+    EDITTEXT        IDC_PR_W, 48, 43, 45, 13, ES_NUMBER | WS_TABSTOP
+    LTEXT           "&Height:", -1, 102, 45, 30, 10
+    EDITTEXT        IDC_PR_H, 136, 43, 45, 13, ES_NUMBER | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK, 86, 75, 50, 15
+    PUSHBUTTON      "Cancel", IDCANCEL, 143, 75, 50, 15
+END

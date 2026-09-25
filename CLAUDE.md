@@ -53,6 +53,7 @@ wine-sg or an X server.
 | `sg-calc` | **Calculator** (`calc.exe`). Windows 10's Calculator, our own drawing: Standard (immediate execution), Scientific (precedence, parentheses, trigonometry in DEG/RAD/GRAD, 2nd functions, F-E) and Programmer (HEX/DEC/OCT/BIN readouts, QWORD..BYTE, AND/OR/XOR/NOT, Lsh/Rsh, Mod); memory, History, keyboard, copy/paste. `calc.exe` and the `calculator:` URI resolve to it (`defaults/70-sg-calc.reg`); sg-start lists it. See "Calculator" below. |
 | `sg-photos` | **Photos** -- the image viewer, Windows 10 Photos' layout in the Stained Glass Light palette: a toolbar (the file's name and "2 of 5"; Open, Zoom in/out, Actual size/Fit, Rotate, Delete, Edit with Paint, Slideshow, File information, Full screen, See more), the picture fitted (never enlarged), arrows on it for the folder's other pictures in Explorer's name order. Reads whatever WIC decodes (animated GIFs animate, the largest icon size, JPEG EXIF orientation). Zoom (Ctrl+wheel at the pointer, +/-, Ctrl+0, Ctrl+1, double-click) and drag to pan; Left/Right/wheel/Home/End; Ctrl+R rotate, Ctrl+S save it rotated, Save a copy; Delete to the Recycle Bin; F5 slideshow, F11 full screen; Alt+Enter file information; Ctrl+C (picture and file); Ctrl+E Paint; Set as background. Images, `photos.exe` and `ms-photos:` via `defaults/73-sg-photos.reg`. See "Photos" below. |
 | `sg-taskmgr` | **Task Manager**, Windows 10's. Fewer details (the running apps, End task) and More details: Processes (Apps / Background / Windows processes, CPU, memory, disk shaded by load, totals in the headers, sort, End task, Open file location, Go to details), Performance (CPU, memory, network graphs and figures), Startup (Run keys and Startup folders, Enable/Disable through `StartupApproved`), Users, Details, Services (start/stop/restart). File > Run new task (with administrative privileges = `runas`), Always on top, Update speed. `taskmgr.exe` resolves via App Paths (`defaults/76-sg-taskmgr.reg`); sg-start lists it. See "Task Manager" below. |
+| `sg-paint` | **Paint** (`mspaint.exe`), an MS-Paint-class raster editor, our own drawing: Windows 10 Paint's ribbon (File menu; Home: Clipboard, Image -- rectangular/free-form select, select all, invert, delete, transparent selection, Crop, Resize and Skew, Rotate/flip --, Tools -- pencil, fill, text, eraser, colour picker, magnifier --, Brushes (6), Shapes (16, outline/fill), Size, Color 1/Color 2, 20-colour palette + custom row, Edit colors; View: zoom, gridlines, status bar, full screen), a canvas with resize handles, a status bar (cursor, selection, picture size, zoom slider), undo/redo, CF_DIB cut/copy/paste, files through WIC (PNG, JPEG, BMP, GIF, TIFF). App Paths `mspaint.exe` and the pictures' Edit verb: `defaults/71-sg-paint.reg`; sg-start lists it. See "Paint" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -489,3 +490,45 @@ alpha; the exe's icon is drawn by `src/sg-photos-icon.py` at build time).
   `lstrcmpi` order, a rotate that does nothing, and no reduced bitmap.
 - **Not yet:** no albums/collections, crop or edit tools, printing,
   favourites, or video; rotation of a JPEG is not lossless.
+## Paint (sg-paint)
+
+`src/paint/`: `main.c` (window, commands, files, dialogs, the dump),
+`ribbon.c` (ribbon and status bar, one item list for layout, drawing, hover,
+clicks and the dump), `canvas.c` (zoomed view, tools, selection, text box,
+canvas handles), `image.c` (pixels, undo, flood fill, transforms, WIC,
+clipboard), `glyphs.c` (the ribbon's pictures, drawn at 4x and box-filtered,
+as the Control Panel's icons). The exe's icon is drawn by `gen-icon.py` at
+build time (PIL) -- no binary is committed.
+
+- **The picture is one 32-bit top-down DIB section** selected into a memory
+  DC, so GDI (shapes, text) and our own loops (pencil, brushes, fill) draw on
+  the same pixels. GDI leaves alpha 0; the picture's alpha is ignored
+  everywhere, and compared colours are masked to RGB.
+- **A selection is lifted on first move** into a floating picture whose
+  alpha byte is its mask (free-form shapes, transparent selection), so
+  rotate/flip/resize/skew act on it with the same code as on the whole
+  picture, and putting it down is one blend.
+- **Undo keeps whole copies** (40 steps). A shape being dragged is redrawn
+  from the copy undo just took, so there is no separate preview buffer.
+- **Save writes 24-bit** (GIF: a fixed 216-colour palette, which WIC's GIF
+  encoder needs) to a temporary name and renames, so a failed encode never
+  destroys the file.
+- **`SG_PAINT_DUMP=<file>`** writes the title, path, tool, colours, sizes,
+  undo depth, selection, and the screen rectangles of every ribbon item and
+  of the picture's origin, after every change -- the gate clicks from it.
+- **Gate: `test/paint-check.sh`** (in `make test`): `mspaint.exe` through App
+  Paths on a shell desktop; with the X mouse it picks colours from the
+  palette and draws a pencil line, a rectangle, a fill inside it, a line, text
+  in a text box, a brush stroke, and a scribble that Ctrl+Z takes back; Ctrl+S
+  drives the Save As dialog and the PNG's pixels are checked; a PNG on the
+  command line opens, rotates (Ctrl+R) and saves in place; Select all + Copy
+  there and Paste in the first window moves pixels over the clipboard;
+  Resize 50% and its undo; closing with changes asks, and No leaves the file
+  alone; the ribbon paints; the View tab zooms. Windows are brought forward
+  with a probe calling `SetForegroundWindow` (no X window manager for
+  xdotool). Screenshots `build/paint-*.png`. Mutants whose pencil does not
+  draw, whose save writes a blank picture, or whose undo does nothing each
+  turn it red (`SG_PAINT_EXE` runs it on another build).
+- **Things that bit:** clicking a taskbar button of the window already in
+  front minimizes it, and Alt+F4 with the taskbar focused goes to explorer --
+  the gate uses the probe and the caption's close button instead.
