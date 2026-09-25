@@ -39,6 +39,8 @@ PAINT_SRC  = $(wildcard src/paint/*.c)
 PAINT_LIBS = -lcomdlg32 -lcomctl32 -lshell32 -lgdi32 -luser32 -lmsimg32 -lole32 -luuid -lwindowscodecs
 # Sticky Notes (sg-sticky): src/sticky/.
 STICKY_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -lole32 -luuid
+# Snipping Tool (sg-snip): WIC for saving, its icon drawn at build time.
+SNIP_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lgdi32 -luser32 -lole32 -luuid -lwindowscodecs -lmsimg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -89,6 +91,10 @@ build:
 	@$(WINDRES64) -I src/sticky -I $(BUILD) src/sticky/sg-sticky.rc -O coff -o $(BUILD)/sg-sticky-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sticky64.exe src/sticky/sg-sticky.c $(BUILD)/sg-sticky-res64.o $(STICKY_LIBS) \
 	    && echo "built sg-sticky (64-bit)"
+	@python3 src/sg-snip-icon.py $(BUILD)/sg-snip.ico
+	@$(WINDRES64) -I src -I $(BUILD) src/sg-snip.rc -O coff -o $(BUILD)/sg-snip-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
+	    && echo "built sg-snip (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -111,6 +117,7 @@ test: build
 	@sh test/taskmgr-check.sh
 	@sh test/paint-check.sh
 	@sh test/sticky-check.sh
+	@sh test/snip-check.sh
 
 clean:
 	rm -rf $(BUILD)

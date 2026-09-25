@@ -55,6 +55,7 @@ wine-sg or an X server.
 | `sg-taskmgr` | **Task Manager**, Windows 10's. Fewer details (the running apps, End task) and More details: Processes (Apps / Background / Windows processes, CPU, memory, disk shaded by load, totals in the headers, sort, End task, Open file location, Go to details), Performance (CPU, memory, network graphs and figures), Startup (Run keys and Startup folders, Enable/Disable through `StartupApproved`), Users, Details, Services (start/stop/restart). File > Run new task (with administrative privileges = `runas`), Always on top, Update speed. `taskmgr.exe` resolves via App Paths (`defaults/76-sg-taskmgr.reg`); sg-start lists it. See "Task Manager" below. |
 | `sg-paint` | **Paint** (`mspaint.exe`), an MS-Paint-class raster editor, our own drawing: Windows 10 Paint's ribbon (File menu; Home: Clipboard, Image -- rectangular/free-form select, select all, invert, delete, transparent selection, Crop, Resize and Skew, Rotate/flip --, Tools -- pencil, fill, text, eraser, colour picker, magnifier --, Brushes (6), Shapes (16, outline/fill), Size, Color 1/Color 2, 20-colour palette + custom row, Edit colors; View: zoom, gridlines, status bar, full screen), a canvas with resize handles, a status bar (cursor, selection, picture size, zoom slider), undo/redo, CF_DIB cut/copy/paste, files through WIC (PNG, JPEG, BMP, GIF, TIFF). App Paths `mspaint.exe` and the pictures' Edit verb: `defaults/71-sg-paint.reg`; sg-start lists it. See "Paint" below. |
 | `sg-sticky` | **Sticky Notes.** Borderless notes with a strip in a darker shade (+ new note, ... menu, x close), a RichEdit body (Ctrl+B/I/U, Ctrl+T strikethrough, Ctrl+Shift+L bullets, and a formatting bar), seven colours, Notes list with search, Delete note (asks). One process owns every note; notes save themselves (debounced) to `%LOCALAPPDATA%\Stained Glass\Sticky Notes\<id>.note` and come back at the next start. `stikynot.exe` resolves via App Paths (`defaults/78-sg-sticky.reg`); sg-start lists it. See "Sticky Notes" below. |
+| `sg-snip` | **Snipping Tool** (and Snip & Sketch's screen clip). `/clip` -- what explorer's Win+Shift+S and PrtScn run, and the `ms-screenclip:` URI -- freezes the screen, shows it dimmed with the mode bar (rectangle, free-form, window, full screen, close), puts the snip on the clipboard (CF_DIB, PNG; CF_BITMAP synthesized) and shows a "Snip saved to clipboard" toast that opens the editor. Without it: the Snipping Tool window (New, mode, delay 0/3/5/10 s) that grows into the editor -- pen, highlighter, eraser, crop, undo/redo, copy, save as PNG/JPEG/GIF/BMP (WIC) to `Pictures\Screenshots`. `snippingtool.exe` via App Paths (`defaults/72-sg-snip.reg`); sg-start lists it. See "Snipping Tool" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -338,6 +339,43 @@ Startup tab; settings in `HKCU\Software\Stained Glass\TaskManager`.
   File > Run new task starts winemine. Screenshots `build/taskmgr-*.png`.
   Mutants with CPU always 0, an End task that does not terminate, Disable
   writing 02, and no Apps group each turn it red.
+## Snipping Tool (sg-snip)
+
+One file, `src/sg-snip.c`; its icon is drawn at build time by
+`src/sg-snip-icon.py` (PIL) into `build/`, with a common-controls 6 manifest
+(`src/sg-snip.rc`).
+
+- **The screen is frozen first**: `GetDC(NULL)` + `BitBlt` of the virtual
+  screen, before anything of ours is shown. Under Wine's shell desktop that
+  returns other processes' windows' real pixels (checked), so no per-window
+  `PrintWindow` composition is needed. The overlay shows that copy at half
+  brightness and the selection at full; what is snipped is cut from the
+  frozen copy, never read back from the screen (so the overlay cannot leak
+  into it -- the full-screen check proves it).
+- **Give the keyboard back before the overlay goes.** Destroying the focused
+  topmost overlay left X with no input focus at all under Xvfb, and nothing
+  -- not even `SetForegroundWindow` on the editor afterwards -- brought it
+  back: the editor looked active and got no keys. The overlay now reactivates
+  the window that was in front when the snip began (as Windows does), then
+  goes. `SG_MUTANT_NOREFOCUS` turns the gate red.
+- **The overlay and toast are owned by a never-shown window**, so neither gets
+  a taskbar button (the installed wine-sg still gave the tool-window toast
+  one).
+- The dump writes with `_wfopen(..., "w")`: text mode, CRLF -- the gate strips
+  the `\r`.
+- One screen clip at a time (mutex `Local\StainedGlassScreenClip`), so a
+  second Win+Shift+S does not stack overlays.
+- **Gate: `test/snip-check.sh`** (Xvfb :112, a shell desktop, a four-colour
+  target window from `test/sg-snip-target.c`, `test/sg-snip-probe.c` reading
+  the clipboard): Escape leaves the clipboard alone; a dragged rectangle is
+  exactly the dragged size with every quadrant undimmed, PNG and CF_BITMAP
+  present; the toast above the taskbar opens the editor; a pen stroke, crop
+  by the corner handle and Enter, undo; Ctrl+S through the Save As dialog
+  writes a PNG with the snip and the stroke; full screen, window (exactly the
+  window) and free-form (white outside the shape); the tool window's New; the
+  `ms-screenclip:` URI. Screenshots `build/snip-*.png`. Mutants
+  (`-DSG_MUTANT_OFFSET`, `_ESCAPE_COPIES`, `_NODIB`, `_NOREFOCUS`; run with
+  `SG_SNIP_EXE=` and `SG_SNIP_DPY=`) each turn it red.
 
 ## Start bar alignment
 

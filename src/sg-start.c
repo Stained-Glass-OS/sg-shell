@@ -308,6 +308,7 @@ static void build_list(void)
     add_beside(L"Photos", L"sg-photos64.exe");
     add_beside(L"Paint", L"sg-paint64.exe");
     add_beside(L"Sticky Notes", L"sg-sticky64.exe");
+    add_beside(L"Snipping Tool", L"sg-snip64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
     {

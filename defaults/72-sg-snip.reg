@@ -1,0 +1,33 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Snipping Tool (sg-snip). `snippingtool` in the Run box and
+; from ShellExecute opens it; wine-sg's snippingtool.exe stub in system32 hands
+; CreateProcess callers to the same program. Explorer's Win+Shift+S and PrtScn
+; run `snippingtool.exe /clip`, the screen clip. The ms-screenclip: URI (what
+; Windows programs and scripts use to start a screen clip) runs it too.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\snippingtool.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-snip64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\screensketch.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-snip64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-screenclip]
+@="URL:ms-screenclip"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-screenclip\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-snip64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-screenclip\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-snip64.exe\" /clip \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-screensketch]
+@="URL:ms-screensketch"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-screensketch\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-snip64.exe\""

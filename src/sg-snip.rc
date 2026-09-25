@@ -1,0 +1,3 @@
+/* Snipping Tool's resources: its icon (generated at build time, src/sg-snip-icon.py) and manifest. */
+1 ICON "sg-snip.ico"
+1 24 "sg-snip.manifest"
