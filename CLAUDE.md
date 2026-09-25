@@ -45,7 +45,7 @@ wine-sg or an X server.
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-settings` | **Settings** (Windows 10's, Win+I, `SystemSettings.exe`, every `ms-settings:` URI) -- the Control Panel's program in the Settings frame, sharing its pages' logic. System, Devices, Network & Internet, Personalization, Apps, Accounts, Time & Language, Ease of Access, Privacy, Update & Security. `defaults/65-sg-settings.reg`; sg-start lists it and its rail's Settings opens it. See "Settings" below. |
-| `sg-terminal` | **Terminal** (Windows Terminal, `wt.exe`, Win+X > Terminal): tabs of shells on pseudo consoles -- PowerShell 7, Command Prompt, Git Bash and Windows PowerShell when present -- with a VT screen of our own, 16/256/RGB colours, scrollback, mouse selection, copy/paste, zoom, full screen, and `wt`'s command line (`-p`, `-d`, `--title`, `new-tab`, `;`). `defaults/66-sg-terminal.reg`; sg-start lists it. See "Terminal" below. |
+| `sg-terminal` | **Terminal** (Windows Terminal, `wt.exe`, Win+X > Terminal): tabs of shells on pseudo consoles -- PowerShell 7, Command Prompt, Git Bash and Windows PowerShell when present -- split into panes (Alt+Shift+Plus/Minus/D, Alt+arrows, Alt+Shift+arrows), with a VT screen of our own, 16/256/RGB colours, scrollback, search (Ctrl+Shift+F), mouse selection, copy/paste, zoom, full screen, and `wt`'s command line (`-p`, `-d`, `--title`, `new-tab`, `split-pane`, `move-focus`, `focus-tab`, `;`). `defaults/66-sg-terminal.reg`; sg-start lists it. See "Terminal" below. |
 | `sg-clock` | **Alarms & Clock** (`ms-clock:`): alarms (repeat days, snooze, a notification with a chime of our own), world clock, timers, stopwatch with laps; keeps running for its alarms and timers when closed, and starts with the session while an alarm is on. `defaults/67-sg-clock.reg`; sg-start lists it. See "Alarms & Clock" below. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
@@ -287,6 +287,30 @@ drawn by `gen-icon.py` at build time.
   0132 (conhost interprets the VT sequences programs write -- without it
   PowerShell 7's PSReadLine shows escape codes), 0133 (`wt.exe` in system32,
   Win+X > Terminal).
+- **Panes**: a tab is a tree (`struct node`: a leaf is a pane, a split
+  puts two subtrees side by side -- `SPLIT_V`, Windows Terminal's
+  "vertical" -- or one above the other, with the first child's share in per
+  mille). Each pane has its own window (`SgTerminalView`, the pane in
+  `GWLP_USERDATA`), screen, pseudo console and program, so a pane's size
+  change is its own `ResizePseudoConsole`. Alt+Shift+Plus splits to the
+  right, Alt+Shift+Minus downwards (the default profile), Alt+Shift+D
+  duplicates the focused pane (profile, command, folder) along its longer
+  side; Alt+arrows move the focus to the nearest pane that way (a move with
+  nowhere to go leaves the key to the shell, as Windows Terminal does);
+  Alt+Shift+arrows move the divider of the nearest split that runs that way
+  by 5%; Ctrl+Shift+W closes the pane and its sibling takes the space (the
+  tab goes with its last pane); a graceful exit closes only its pane. The
+  focused pane has an accent frame in the gap. `wt split-pane`/`sp` (`-H`
+  below, `-V` right, `-s` share, `-D` duplicate, `-p`, `-d`, a command),
+  `move-focus`/`mf` (left/right/up/down), `focus-tab`/`ft -t N`.
+- **Search** (Ctrl+Shift+F, or the menu): a box at the pane's top right
+  (`SgTerminalFind`: an edit, match case, up, down, close). As you type,
+  every match in the screen and the whole scrollback is highlighted and
+  the nearest one up from the bottom of what is shown becomes current and
+  is scrolled to; Enter goes up (older), Shift+Enter down, both wrapping;
+  Alt+C toggles match case; Escape closes it and gives the keys back to the
+  shell. Matches are found on the cells (a wide character is one letter);
+  a line is addressed absolutely (0 = the oldest scrollback line).
 - **Keys go as VT**: arrows, Home/End, Insert/Delete, PgUp/PgDn and F1-F12
   with xterm's modifier parameters (conhost's input parser reads them),
   Backspace as DEL, Alt+key as ESC+key; the terminal's own shortcuts (see the
@@ -311,10 +335,15 @@ drawn by `gen-icon.py` at build time.
   assemblies beside the link). `WINEDLLOVERRIDES=mscoree=` kills PowerShell 7
   -- only for creating the prefix. Wine has no `mode.com`: the gate's
   `test/sg-terminal-probe.c` reports the console's size and writes colours.
-- **`SG_TERMINAL_DUMP=<file>`**: the window, the grid size, the font, the
-  profiles, each tab (screen centre, profile, alive, exit code, title), the
-  + and menu buttons, the view's origin, the cursor, the active tab's rows and
-  the colour of each cell (`fg N: ...`), the selection.
+- **`SG_TERMINAL_DUMP=<file>`**: the window, the focused pane's grid size,
+  the font, the profiles, each tab (screen centre, profile, alive, exit
+  code, pane count, title), the + and menu buttons, the focused pane's
+  origin, the active tab's panes (`pane N id= at= rect= size= profile=
+  alive= focus=`) and every pane's non-empty rows (`prow ID Y: ...`), then
+  the focused pane's id, cursor, scroll, rows and the colour of each cell
+  (`fg N: ...`), the selection, and the search (`search open= case=
+  matches= current= line= col= viewrow= needle=`, the box's and buttons'
+  screen centres).
 - **Gate: `test/terminal-check.sh`** (display :121; needs a wine-sg with
   0131-0133, `SG_WINE_DIR`): the screen's unit test (25 checks, native),
   `wt.exe` through App Paths opening Command Prompt, typed commands and their
@@ -327,7 +356,22 @@ drawn by `gen-icon.py` at build time.
   launcher). Screenshots `build/terminal-*.png`. Mutants `-DSG_MUTANT_NOSGR`
   (no colours) and `-DSG_MUTANT_NORESIZE` (`SG_TERMINAL_EXE=`) turn it red,
   and stock wine-sg shows no prompt at all.
-- **Not yet:** split panes, search, a settings.json of Windows Terminal's
+- **Gate: `test/terminal-panes-check.sh`** (display :141, `SG_TERMINAL_PANES_DPY`; `SG_WINE_DIR`):
+  Alt+Shift+Plus gives a second Command Prompt of its own; typed text and
+  its output only in the focused pane; each pane's program (the size
+  probe) sees its own pane's size, the first one resized by the split;
+  Alt+Left/Up/Right move the focus; Alt+Shift+Minus splits downwards;
+  Alt+Shift+Right moves the divider and the program sees the new size;
+  Ctrl+Shift+W and `exit` close one pane each, the rest filling the space;
+  clicking focuses; Alt+Shift+D duplicates; search: two matches of a word
+  scrolled 100+ lines into the scrollback, scrolled to, the current one's
+  pixels in the highlight colour, Enter/Shift+Enter between them, match
+  case (cmd's `AMD64`), Escape giving the keys back; `wt ... ; sp -V ; sp -H
+  ; mf left` making three panes in one tab. 36 checks. Screenshots
+  `build/terminal-panes-*.png`. Mutants `-DSG_MUTANT_PANEINPUT` (keys to the
+  tab's first pane), `-DSG_MUTANT_NOSEARCH` (the screen only) and
+  `-DSG_MUTANT_NORESIZE` turn it red.
+- **Not yet:** a settings.json of Windows Terminal's
   own, profiles of the user's own, custom title bar tabs (the tabs are under
   a normal caption), bracketed paste, mouse reporting to programs, Unicode
   combining marks.

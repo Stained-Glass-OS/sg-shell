@@ -1,3 +1,16 @@
+sg-shell (0.1.0-32) unstable; urgency=medium
+
+  * Terminal: split panes -- each pane its own shell on its own pseudo
+    console; Alt+Shift+Plus/Minus split right/down, Alt+Shift+D duplicates,
+    Alt+arrows move the focus, Alt+Shift+arrows move the divider,
+    Ctrl+Shift+W closes a pane; wt's split-pane (-H/-V/-s/-D), move-focus
+    and focus-tab.
+  * Terminal: search (Ctrl+Shift+F) over the screen and scrollback, every
+    match highlighted, Enter/Shift+Enter between them, match case.
+  * Gate: test/terminal-panes-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 11:30:52 -0700
+
 sg-shell (0.1.0-31) unstable; urgency=medium
 
   * Start: Sleep and Hibernate in the power menu when logind allows them
