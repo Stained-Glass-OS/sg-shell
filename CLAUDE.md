@@ -41,7 +41,7 @@ wine-sg or an X server.
 
 | Panel | State |
 |---|---|
-| `sg-start` | The Start menu: a persistent listener + a dark Win10 panel above the Start button. Lists programs from the Start Menu folders (plus built-ins), launches them, and has a power / lock / sign-out rail. Explorer's Start button toggles it (`SgStartPanel`, `WM_USER+10`); falls back to Wine's menu if it is not running. |
+| `sg-start` | **The Start menu**, Windows 10-class, our own drawing: a rail (menu button that opens it with labels; the user with an initial avatar, Documents, Pictures, Settings, Power: Lock / Sign out / Restart / Shut down, NoClose and StartMenuLogoff honoured), every app from the user's and common Start Menu (recursive, `.lnk`/`.url`, own icons, letter headers, "Recently added"), pinned tiles (`HKCU\Software\Stained Glass\Start\Pinned`), type-to-search over apps and Control Panel settings, dark owner-drawn context menu (Pin/Unpin, Run as administrator = `runas`, Open file location, Uninstall), keyboard (arrows, Tab, Enter, Escape). Explorer's Start button and the Windows key toggle it (`SgStartPanel`, `WM_USER+10`); Wine's menu is the fallback. See "The Start menu" below. |
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
@@ -171,6 +171,39 @@ elevated path through a real spool, the window (appears, paints, Tab+Enter
 navigate), and the "Create an account" dialog driven by the keyboard. Both
 have been seen to fail: dropping the owner check, logging passwords, and
 writing the accent in the wrong byte order each turn them red.
+
+## The Start menu (sg-start)
+
+One file, `src/sg-start.c`. The list is rebuilt on every opening (a scan of
+the two Programs trees) but icons are cached by path and the first build
+happens at start-up, so it opens in well under 200 ms with 200 apps.
+
+- **Icons: `ExtractIconEx`, not `SHGetFileInfo`.** Wine's `SHGetFileInfo`
+  gives every program the generic icon; a shortcut's icon location (or its
+  target) goes through `ExtractIconEx`. **Wine's `SHGetStockIconInfo`
+  answers `S_OK` with no icon**: the fallbacks are `SHGetFileInfo` of the
+  Windows folder (File Explorer -- Wine's explorer carries no icon) and of a
+  `program.exe` by attributes. Settings and the Control Panel get a drawn
+  gear on the accent colour. COM is initialised for `IShellLink`.
+- **"Recently added"** is what was created after this user's Start menu
+  first ran (`FirstRun` in the Start key) and within a week -- otherwise a
+  fresh profile would call everything recent.
+- **Menus are owner-drawn** (dark), so their mnemonics come through
+  `WM_MENUCHAR`, and the dump takes their labels from our own table.
+- **`SG_START_DUMP=<file>`** writes what is shown after every paint (UTF-8,
+  no BOM -- `ccs=UTF-8` writes one and broke the first key's match): the
+  window rectangle, the rows, tiles, selection, search, open menu and its
+  items, the last launch, and how long the last opening took.
+- **Gate: `test/start-check.sh`** (in `make test`; `SG_WINE`/`SG_WINESERVER`
+  for another Wine build). It plants shortcuts (one three folders deep, 200
+  fillers, one after start-up) with `test/sg-start-mklnk.c`, joins the shell
+  desktop, and drives the menu with xdotool: placement, speed, apps, icons,
+  headers, Recently added, default tiles, arrows/Tab, search (apps and
+  settings), Escape twice, Enter launching, pin/unpin through the context
+  menu and the registry, the rail, the power menu and `NoClose`, click-away.
+  Screenshots: `build/start-{open,search,context,power,rail}.png`. xdotool's
+  window geometry is not the panel's in a Wine desktop -- the gate reads
+  the rectangle from the dump.
 
 ## Start bar alignment
 

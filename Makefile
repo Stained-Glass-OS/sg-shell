@@ -7,7 +7,7 @@ SG_CFLAGS := -O2 -municode -mwindows -Wall -Wextra
 # Console subsystem: gpresult is a command-line tool whose report must reach the
 # console/pipe it is run from, so it links -mconsole, not -mwindows.
 SG_CON_CFLAGS := -O2 -municode -mconsole -Wall -Wextra
-LIBS     = -lshell32 -lgdi32 -luser32
+LIBS     = -lshell32 -lgdi32 -luser32 -lole32 -luuid
 BUILD    = build
 
 PANELS = sg-taskbar sg-start sg-mstsc

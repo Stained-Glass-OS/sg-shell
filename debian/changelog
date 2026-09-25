@@ -1,3 +1,16 @@
+sg-shell (0.1.0-8) unstable; urgency=medium
+
+  * sg-start: a Windows 10-class Start menu -- the rail (user, Documents,
+    Pictures, Settings, Power with Lock/Sign out/Restart/Shut down under
+    policy), every app from the Start Menu folders with its icon, letter
+    headers and Recently added, pinned tiles, type-to-search over apps and
+    settings, the context menu (Pin/Unpin, Run as administrator, Open file
+    location, Uninstall), dark menus, keyboard. Gate: test/start-check.sh.
+  * theme/54-sg-desktop-icons.reg: This PC and the user's folder on the
+    desktop.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 24 Sep 2026 21:28:35 -0700
+
 sg-shell (0.1.0-7) unstable; urgency=medium
 
   * Wallpapers: our own art, generated at build (theme/wallpapers/
