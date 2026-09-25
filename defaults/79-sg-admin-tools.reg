@@ -27,3 +27,7 @@ Windows Registry Editor Version 5.00
 ; Disk Cleanup: cleanmgr.exe (wine-sg 0142's launcher) opens this.
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\cleanmgr.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-cleanmgr64.exe"
+
+; Resource Monitor: resmon.exe (wine-sg 0142's launcher) opens this.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\resmon.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-resmon64.exe"

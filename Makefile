@@ -134,6 +134,9 @@ build:
 	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-cleanmgr.rc -O coff -o $(BUILD)/sg-cleanmgr-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-cleanmgr64.exe $(MMC_SRC) $(BUILD)/sg-cleanmgr-res64.o $(MMC_LIBS) \
 	    && echo "built sg-cleanmgr (64-bit)"
+	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-resmon.rc -O coff -o $(BUILD)/sg-resmon-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-resmon64.exe $(MMC_SRC) $(BUILD)/sg-resmon-res64.o $(MMC_LIBS) \
+	    && echo "built sg-resmon (64-bit)"
 	@python3 src/terminal/gen-icon.py $(BUILD)/sg-terminal.ico
 	@$(WINDRES64) -I src/terminal -I $(BUILD) src/terminal/terminal.rc -O coff -o $(BUILD)/sg-terminal-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-terminal64.exe $(TERMINAL_SRC) \
@@ -176,6 +179,7 @@ test: build
 	@sh test/compmgmt-check.sh
 	@sh test/msinfo-check.sh
 	@sh test/cleanmgr-check.sh
+	@sh test/resmon-check.sh
 
 clean:
 	rm -rf $(BUILD)

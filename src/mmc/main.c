@@ -1185,6 +1185,7 @@ static void pick_console(const WCHAR *cmdline)
     if (!_wcsnicmp(base, L"sg-eventvwr", 11)) lstrcpyW(g_console, L"eventvwr");
     if (!_wcsnicmp(base, L"sg-msinfo32", 11)) lstrcpyW(g_console, L"msinfo32");
     if (!_wcsnicmp(base, L"sg-cleanmgr", 11)) lstrcpyW(g_console, L"cleanmgr");
+    if (!_wcsnicmp(base, L"sg-resmon", 9)) lstrcpyW(g_console, L"resmon");
     for (i = 1; argv && i < argc && !g_console[0]; i++)
     {
         if (argv[i][0] == '-' || argv[i][0] == '/') continue;
@@ -1347,6 +1348,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     load_icons();
     pick_console(full);
     if (!wcscmp(g_console, L"cleanmgr")) return cleanmgr_main(full);
+    if (!wcscmp(g_console, L"resmon")) return resmon_main();
     /* msinfo32 /report FILE: the report, no window */
     if (!wcscmp(g_console, L"msinfo32"))
     {

@@ -1,3 +1,12 @@
+sg-shell (0.1.0-30) unstable; urgency=medium
+
+  * Resource Monitor (resmon.exe, sg-resmon64.exe via App Paths): Overview,
+    CPU, Memory, Disk and Network tabs over the machine's processes (through
+    sg-sysinfo), TCP connections and listening ports, drive space, and the
+    CPU, disk, network and memory graphs.
+  * Gate: test/resmon-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 09:18:08 -0700
 sg-shell (0.1.0-29) unstable; urgency=medium
 
   * sg-clock: Alarms & Clock (ms-clock:) -- alarms with repeat days and

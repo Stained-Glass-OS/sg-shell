@@ -1,0 +1,30 @@
+/* sg-mmc resources: the program icon and the console pictures (drawn at build
+ * time by gen-icons.py into build/), the common-controls 6 manifest, and a
+ * version resource naming it. */
+#include <winver.h>
+1 ICON "sg-resmon.ico"
+2 BITMAP "mmc16.bmp"
+3 BITMAP "mmc32.bmp"
+1 24 "sg-mmc.manifest"
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "Stained Glass OS"
+      VALUE "FileDescription", "Resource Monitor"
+      VALUE "ProductName", "Stained Glass OS"
+      VALUE "InternalName", "resmon"
+      VALUE "OriginalFilename", "sg-resmon64.exe"
+      VALUE "FileVersion", "1.0.0.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 1200
+  END
+END

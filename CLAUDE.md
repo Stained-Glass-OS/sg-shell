@@ -1103,3 +1103,24 @@ journal, error reports; an administrator only). `/d X` picks the drive.
   with the keyboard, OK, Yes: the old temporary file, the thumbnails and the
   trash go, today's temporary file stays. `-DSG_MUTANT_AGE` turns it red.
 
+### Resource Monitor (resmon.exe)
+
+`src/mmc/resmon.c`, the host as `sg-resmon64.exe` (App Paths `resmon.exe`,
+wine-sg 0142's launcher), its own window: tabs Overview (CPU, Disk, Network,
+Memory sections), CPU, Memory, Disk (with Storage: the drive letters' space),
+Network (processes, TCP Connections, Listening Ports), and four graphs on the
+right (CPU from `GetSystemTimes`, disk as the processes' summed I/O, network
+from `GetIfTable` without loopback, memory load). **The processes are the
+whole Linux machine's** (`sg-sysinfo processes`/`connections` once a second;
+Wine's programs appear under their .exe names): CPU is the share of *all*
+processors over the last second, as Windows counts it (one busy core of 12
+is 8%), Average CPU over a minute; disk bytes per second from the kernel's
+per-process counters (only where this user may read them); a connection
+whose owner this user cannot see is "(not this user's)".
+
+- **Gate: `test/resmon-check.sh`**: the gate's own loads, Python under
+  names of their own (`cp /usr/bin/python3` -- the real interpreter, not a
+  pyenv shim -- to `sg-rm-*`): a spinning process at one processor's share,
+  a 300 MB working set, a writer syncing ~19 MB/s, a listener on 47123;
+  each shows on its tab; Storage lists C:. `-DSG_MUTANT_CPU` turns it red.
+
