@@ -205,6 +205,37 @@ BOOL set_cmd_colors(int id, int code, HWND ctl)
 /* ---- Lock screen ------------------------------------------------------------------------------- */
 enum { CMD_LOCK_BROWSE = CMD_PAGE_FIRST + 1, CMD_LOCK_SIGNIN, CMD_LOCK_TIMEOUT, CMD_LOCK_PIC = CMD_PAGE_FIRST + 100 };
 
+/* The lock screen is drawn by the machine account, which cannot read this
+ * user's files: the choice is published for it by sg-settingsctl (as this
+ * user, into the lock-screen drop that sg-lockd checks). PIC NULL = the
+ * system's picture. */
+static void lock_publish(const WCHAR *pic)
+{
+    static char *(CDECL *to_unix)(const WCHAR *);
+    WCHAR args[MAX_PATH * 2 + 32], err[160];
+    char *unix_path;
+    BOOL ok;
+    if (!pic) lstrcpyW(args, L"lockscreen picture default");
+    else {
+        if (!to_unix) to_unix = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+        if (!to_unix || !(unix_path = to_unix(pic))) { failed(L"the picture is not on a drive this PC can read"); return; }
+        if (strchr(unix_path, '"')) { HeapFree(GetProcessHeap(), 0, unix_path); failed(L"the picture's name has a quotation mark"); return; }
+        _snwprintf(args, ARRAYSIZE(args), L"lockscreen picture \"%hs\"", unix_path);
+        args[ARRAYSIZE(args) - 1] = 0;
+        HeapFree(GetProcessHeap(), 0, unix_path);
+    }
+    free(ctl_run(args, &ok, err, ARRAYSIZE(err), 15000));
+    if (!ok) failed(err[0] ? err : L"the lock screen could not be told");
+}
+
+static void lock_publish_signin(BOOL on)
+{
+    WCHAR err[160];
+    BOOL ok;
+    free(ctl_run(on ? L"lockscreen signin yes" : L"lockscreen signin no", &ok, err, ARRAYSIZE(err), 15000));
+    if (!ok) failed(err[0] ? err : L"the lock screen could not be told");
+}
+
 void set_build_lockscreen(void)
 {
     WCHAR pic[MAX_PATH] = L"";
@@ -217,6 +248,8 @@ void set_build_lockscreen(void)
     for (i = 0; i < g_npics; i++) {
         HWND t = pg_control(L"SgCplTile", L"", WS_TABSTOP, st_x() + (i % cols) * (tw + S(8)), y + (i / cols) * (th + S(8)), tw, th, CMD_LOCK_PIC + i);
         HBITMAP b = pers_thumb(g_pics[i], S(112), S(63));
+        const WCHAR *name = wcsrchr(g_pics[i], L'\\');
+        SetWindowTextW(t, name ? name + 1 : g_pics[i]);
         if (b) SendMessageW(t, TILE_SETBITMAP, (WPARAM)b, 0);
         SendMessageW(t, TILE_SETSEL, pic[0] ? !lstrcmpiW(g_pics[i], pic) : i == 0, 0);
     }
@@ -231,14 +264,22 @@ void set_build_lockscreen(void)
 BOOL set_cmd_lockscreen(int id, int code, HWND ctl)
 {
     (void)code;
-    if (id >= CMD_LOCK_PIC && id < CMD_LOCK_PIC + g_npics) { reg_set_sz(HKEY_CURRENT_USER, SG_LOCK, L"Picture", g_pics[id - CMD_LOCK_PIC]); refresh_page(); return TRUE; }
+    if (id >= CMD_LOCK_PIC && id < CMD_LOCK_PIC + g_npics) {
+        reg_set_sz(HKEY_CURRENT_USER, SG_LOCK, L"Picture", g_pics[id - CMD_LOCK_PIC]);
+        refresh_page();
+        lock_publish(g_pics[id - CMD_LOCK_PIC]);
+        return TRUE;
+    }
     switch (id) {
     case CMD_LOCK_BROWSE: {
         WCHAR file[MAX_PATH];
-        if (browse_picture(file)) { reg_set_sz(HKEY_CURRENT_USER, SG_LOCK, L"Picture", file); refresh_page(); }
+        if (browse_picture(file)) { reg_set_sz(HKEY_CURRENT_USER, SG_LOCK, L"Picture", file); refresh_page(); lock_publish(file); }
         return TRUE;
     }
-    case CMD_LOCK_SIGNIN: reg_set_dword(HKEY_CURRENT_USER, SG_LOCK, L"ShowOnSignIn", st_checked(ctl)); return TRUE;
+    case CMD_LOCK_SIGNIN:
+        reg_set_dword(HKEY_CURRENT_USER, SG_LOCK, L"ShowOnSignIn", st_checked(ctl));
+        lock_publish_signin(st_checked(ctl));
+        return TRUE;
     case CMD_LOCK_TIMEOUT: navigate(PG_S_POWER); return TRUE;
     }
     return FALSE;

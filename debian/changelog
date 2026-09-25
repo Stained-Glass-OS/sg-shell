@@ -1,3 +1,14 @@
+sg-shell (0.1.0-34) unstable; urgency=medium
+
+  * Settings > Lock screen: a chosen picture (tile or Browse) and the
+    "show on the sign-in screen" switch are published for the lock screen
+    through sg-settingsctl lockscreen (sg-session 0.1.0-23), which the
+    machine account's lock screen reads; tiles carry their file names.
+  * settings-check: the Lock screen page publishes the picture by its Unix
+    path and the switch.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 12:09:47 -0700
+
 sg-shell (0.1.0-33) unstable; urgency=medium
 
   * PDF Viewer (sg-pdf64.exe, the .pdf association, the Print verb, the

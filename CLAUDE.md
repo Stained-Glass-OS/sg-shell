@@ -245,6 +245,12 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
   Glyphs are drawn in the accent colour and cached by colour too, or a page
   drawn before an accent change keeps the old one. Wine's `GetGeoInfo` has no
   names: countries come from the locales (`LOCALE_IGEOID`).
+- **Lock screen publishes the choice** (`sg-settingsctl lockscreen picture
+  <unix path>` after a tile or Browse, `lockscreen signin yes|no` for the
+  switch; the path through `wine_get_unix_file_name`): the lock screen is
+  drawn by the machine account, which reads only what sg-settingsctl
+  published and sg-lockd checked (sg-session CLAUDE.md, "The lock screen's
+  picture and clock"). The registry value stays for the page itself.
 - **`SG_SETTINGS_DUMP=<file>`**: after every page is shown or scrolled, the
   window, its rectangle, the page, the category, the accent, the selection
   bar's and the search box's screen points, every text and every control
@@ -265,8 +271,7 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
   neighbouring accent) turn it red, and so does Win+I on a wine-sg without
   0130 (the Control Panel opens).
 - **Not yet:** the taskbar does not read Taskbar's switches (alignment,
-  small buttons, auto-hide) nor Start's "more tiles"/"full screen"; the lock
-  screen does not show the chosen picture; night light, resolution and
+  small buttons, auto-hide) nor Start's "more tiles"/"full screen"; night light, resolution and
   Power & sleep need the Stained Glass compositor (sg-compositor 0.2.0+sg5
   has wlr-output-power-management for wlopm); multiple displays are not arranged; no Windows Hello,
   Family, Gaming, Phone or Search categories.

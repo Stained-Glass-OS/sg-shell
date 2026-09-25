@@ -17,6 +17,9 @@
 #   - Privacy > Microphone: the switch writes the ConsentStore value
 #   - search: typing in the navigation's box finds Bluetooth, Enter opens it
 #   - Update: pending updates from sg-settingsctl
+#   - Lock screen: a picture tile and the sign-in switch are published through
+#     sg-settingsctl (the lock screen, drawn by the machine account, reads
+#     only what is published)
 #   - WINI=1: Win+I on the X keyboard opens it (a wine-sg with 0130)
 #
 # Screenshots: build/settings-*.png. Needs wine-sg, Xvfb, xdotool,
@@ -84,6 +87,7 @@ sound) [ \$# -eq 1 ] && printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSO
 nightlight) printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
 display) echo 'ERROR unsupported the display is not the compositor' ;;
 power) printf 'POWER 10\t0\tyes\tno\nOK\n' ;;
+lockscreen) printf 'LOCKSCREEN yes\tyes\nOK\n' ;;
 updates) printf 'UPDATE libfoo1\t1.0-1\t1.0-2\nUPDATE wine-sg\t10.0-37\t10.0-38\nSTAGED no\nOK\n' ;;
 bluetooth) printf 'BLUETOOTH yes\nPOWERED yes\nDEVICE AA:BB:CC:DD:EE:01\tyes\tyes\tTravel Mouse\n'
     [ "\${2:-}" = scan ] && printf 'DEVICE AA:BB:CC:DD:EE:02\tno\tno\tKeyboard K2\n'
@@ -178,6 +182,30 @@ if [ $# -eq 2 ]; then
     else fail "desktop pixel at $px,300 is $(pixel $px 300), not red"; fi
     shot background
 else fail "no red.png tile on the Background page"; tr -d '\r' < "$DUMP" | grep '^control' | head; shot background; fi
+
+# --- Lock screen: the choice is published for the lock screen -----------------------------------
+wine start ms-settings:lockscreen >/dev/null 2>&1
+page_is "Lock screen" "ms-settings:lockscreen"
+sleep 0.5
+set -- $(ctl_at SgCplTile green.png)
+if [ $# -eq 2 ]; then
+    click_at "$1" "$2"
+    i=0; while ! grep -q '^lockscreen picture .*/Web/Wallpaper/green.png$' "$LOG" && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
+    grep -q '^lockscreen picture .*/Web/Wallpaper/green.png$' "$LOG" \
+        && pass "a lock-screen picture is published by its Unix path (sg-settingsctl lockscreen picture)" \
+        || fail "the lock-screen picture was not published: $(grep lockscreen "$LOG" | tail -1)"
+    regq 'HKCU\Software\Stained Glass\LockScreen' Picture | grep -qi 'green.png' && pass "and recorded (LockScreen\\Picture)" \
+        || fail "LockScreen\\Picture: $(regq 'HKCU\Software\Stained Glass\LockScreen' Picture)"
+else fail "no green.png tile on the Lock screen page"; fi
+# the page's only switch: "Show lock screen background picture on the sign-in screen"
+set -- $(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | head -1 | sed -n 's/.* at=\([0-9]*\),\([0-9]*\).*/\1 \2/p')
+if [ $# -eq 2 ]; then
+    click_at "$1" "$2"
+    i=0; while ! grep -q '^lockscreen signin no$' "$LOG" && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+    grep -q '^lockscreen signin no$' "$LOG" && pass "the sign-in switch is published (lockscreen signin no)" \
+        || fail "the sign-in switch was not published"
+else fail "no sign-in switch on the Lock screen page"; fi
+sleep 0.5; shot lockscreen
 
 # --- Colors: an accent is written and Settings repaints in it ---------------------------------
 wine start ms-settings:colors >/dev/null 2>&1
