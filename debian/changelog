@@ -1,3 +1,15 @@
+sg-shell (0.1.0-11) unstable; urgency=medium
+
+  * sg-media: Media Player -- audio and video through Wine's DirectShow and
+    GStreamer (winegstreamer's splitter first, so AVIs show their picture):
+    the video pane or an album tile, seek bar, Stop/Previous/Play/Next,
+    volume and mute, full screen, Windows Media Player's keys, a queue of the
+    files given, one instance. wmplayer.exe and 17 audio/video types via
+    defaults/74-sg-media.reg; listed in Start. Needs sg-image's GStreamer
+    plugins. Gate: test/media-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 01:56:18 -0700
+
 sg-shell (0.1.0-10) unstable; urgency=medium
 
   * sg-zip: Compressed (zipped) Folders -- Wine has no zipfldr.dll. A .zip

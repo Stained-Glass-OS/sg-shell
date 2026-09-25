@@ -303,6 +303,7 @@ static void build_list(void)
     add_app(L"Task Manager", L"taskmgr.exe", NULL);
     add_beside(L"Remote Desktop Connection", L"sg-mstsc64.exe");
     add_beside(L"Control Panel", L"sg-control64.exe");
+    add_beside(L"Media Player", L"sg-media64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
     {

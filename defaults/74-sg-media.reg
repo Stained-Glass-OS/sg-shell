@@ -1,0 +1,185 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Media Player (sg-media). wmplayer.exe resolves to it through
+; App Paths (ShellExecute, the Run box; wine-sg hands Wine's own wmplayer.exe to it
+; for CreateProcess callers), and the audio and video types it plays open in it.
+; Every type listed here was measured playing under wine-sg with the image's
+; GStreamer plugins (sg-image mkosi.conf, group "media"); .mpg is not listed --
+; neither winegstreamer's splitter nor Wine's MPEG splitter takes MPEG program
+; streams.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\wmplayer.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio]
+@="Audio file"
+"FriendlyTypeName"="Audio file"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio\shell\open]
+@="&Play"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mp3]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mp3\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wav]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wav\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ogg]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ogg\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.oga]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.oga\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.opus]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.opus\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.flac]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.flac\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.m4a]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.m4a\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.aac]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.aac\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wma]
+@="StainedGlass.MediaPlayer.Audio"
+"PerceivedType"="audio"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wma\OpenWithProgids]
+"StainedGlass.MediaPlayer.Audio"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video]
+@="Video file"
+"FriendlyTypeName"="Video file"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video\shell\open]
+@="&Play"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mp4]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mp4\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.m4v]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.m4v\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mov]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mov\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mkv]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.mkv\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.webm]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.webm\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ogv]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ogv\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wmv]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.wmv\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.avi]
+@="StainedGlass.MediaPlayer.Video"
+"PerceivedType"="video"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.avi\OpenWithProgids]
+"StainedGlass.MediaPlayer.Video"=""
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\wmplayer.exe\SupportedTypes]
+".mp3"=""
+".wav"=""
+".ogg"=""
+".oga"=""
+".opus"=""
+".flac"=""
+".m4a"=""
+".aac"=""
+".wma"=""
+".mp4"=""
+".m4v"=""
+".mov"=""
+".mkv"=""
+".webm"=""
+".ogv"=""
+".wmv"=""
+".avi"=""

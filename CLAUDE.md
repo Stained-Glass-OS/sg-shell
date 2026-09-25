@@ -49,6 +49,7 @@ wine-sg or an X server.
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
 | `sg-dictate` | **Voice typing** (Win+H). A dark bar at the top centre (mic button with a level ring in the accent colour while listening, "Listening...", a gear for Control Panel > Speech Recognition, close) that never takes the focus; what is said is typed into the program that has it. The engine is sg-session's `sg-dictate` (Parakeet on the CPU). `sg-dictate.exe` resolves via App Paths (`defaults/64-sg-dictate.reg`) for explorer's Win+H. See "Voice typing" below. |
 | `sg-zip` | **Compressed (zipped) Folders** -- Wine has no `zipfldr.dll`. Opening a `.zip` (ProgID `CompressedFolder`) browses it read-only like a folder (Name, Type, Compressed size, Password protected, Size, Ratio, Date modified; Enter/double-click opens folders, Backspace/Alt+Up goes up, Back/Forward; a file opens from a temporary copy), "Extract all" / the "Extract All..." verb runs the **Extract Compressed (Zipped) Folders** wizard (destination named like the zip, Browse, "Show extracted files when complete", progress, Replace-or-Skip with "Do this for all conflicts"), and "Compress to ZIP file" on any file or folder makes `<name>.zip` beside it. Our own inflate/deflate. `defaults/75-sg-zip.reg`. See "Compressed folders" below. |
+| `sg-media` | **Media Player** -- audio and video, Windows 11 Media Player's layout in the Stained Glass Light palette: an "Open file(s)" bar, the video pane (letterboxed; a drawn album tile for audio), and the transport bar -- seek bar with elapsed/total, now playing ("1 of 3"), Stop, Previous, Play/Pause, Next, mute and volume, full screen. Space/Ctrl+P, Ctrl+S, Ctrl+B/F, Left/Right (5 s, Ctrl 60 s), Up/Down, M/F7, F11/Alt+Enter/double-click, Escape, media keys, the wheel for volume, dropped files. One instance: a second launch hands its files over. DirectShow through winegstreamer. `wmplayer.exe` and 17 audio/video types via `defaults/74-sg-media.reg`. See "Media Player" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -327,3 +328,41 @@ bundled.** `main.c` is the command line, the browse window and the wizard.
   Replace prompt. Screenshots `build/zip-*.png`. Mutants built with
   `-DSG_MUTANT_NOCRC` or `-DSG_MUTANT_TRAVERSAL` (`SG_ZIP_EXE=`) turn it red.
 
+## Media Player (sg-media)
+
+`src/sg-media.c`, one window drawn by us (glyphs at 4x, box-filtered to alpha;
+the exe's icon is drawn by `src/sg-media-icon.py` at build time).
+
+- **Playback is DirectShow, decoded by GStreamer.** The graph is built as
+  file source -> winegstreamer's own splitter (`CLSID_decodebin_parser`,
+  decodebin) -> `Render` on each of its pins; `RenderFile` is only the
+  fallback. `RenderFile` picks Wine's native AVI and MPEG splitters first, and
+  those know few codecs: an MPEG-4 AVI gave sound and no picture
+  (`VFW_S_PARTIAL_RENDER`). `.mpg` (MPEG program streams) plays neither way, so
+  it is not associated.
+- **It needs GStreamer's plugins, not just its libraries.** With only
+  `libgstreamer1.0-0` every file fails (`VFW_E_CANNOT_RENDER`: no typefind, no
+  decodebin). sg-image installs `gstreamer1.0-plugins-base`, `-good`, `-ugly`
+  (ASF: WMV/WMA) and `gstreamer1.0-libav` (H.264, AAC, WMV, MPEG-4); with just
+  those, every associated type was measured playing.
+- The video renderer's window is a child of our pane (`IVideoWindow` owner,
+  message drain to the main window, so keys and double-clicks reach us).
+  Full screen restyles the main window to the monitor and hides the bars.
+- Volume is linear 0-100 on screen, `2000*log10(v/100)` hundredths of a dB to
+  `IBasicAudio`; it and mute persist in `HKCU\Software\Stained Glass\Media
+  Player`. Previous restarts a track more than 3 s in, as players do.
+- `SG_MEDIA_DUMP=<file>` writes the state every 200 ms: state, file, duration
+  and position, volume, video size and pane rectangle, the seek bar's, Play's
+  and Next's screen rectangles, full screen, queue, title, error.
+- **Gate: `test/media-check.sh`** (display :214 -- an xvfb-run elsewhere
+  grabbed :114). Makes a 20 s WAV, a one-colour H.264 MP4, a VP8 WebM and an
+  MPEG-4 AVI; imports the real `.reg`; the WAV opens by association and plays
+  (duration, position advancing), Space pauses and resumes, a click at 3/4 of
+  the seek bar, Left, Down, M; a second launch plays the MP4 in the same
+  window and the pane's pixel is the clip's colour, F11 fills the screen with
+  it, Escape; a queue of three and Next twice (WebM, then the AVI with its
+  picture). Mutants that ignore pause, ignore seeks, or skip the GStreamer
+  splitter (`-DSG_MUTANT_*`) each turn it red. Screenshots in
+  `build/media-*.png`.
+- **Not yet:** no library/playlist views, no album art or tags, no
+  subtitles, no playback speed; `.mpg` and DVDs do not play.
