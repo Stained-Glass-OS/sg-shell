@@ -15,8 +15,7 @@ Windows Registry Editor Version 5.00
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image]
-@="Image"
-"FriendlyTypeName"="Image"
+@=""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image\DefaultIcon]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe,0"

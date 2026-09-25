@@ -55,3 +55,21 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\Directory\shell\SgCompressToZip\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" /create \"%1\""
+
+; "Send to > Compressed (zipped) Folder": sg-session puts an empty
+; "Compressed (zipped) Folder.ZFSendToTarget" in each user's SendTo folder, as
+; Windows' Default profile has; wine-sg's shell32 runs this type's sendto
+; command with every file sent (%*), so all of them go in one zip named after
+; the first, beside it.
+[HKEY_LOCAL_MACHINE\Software\Classes\.ZFSendToTarget]
+@="CompressedFolder.SendTo"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder.SendTo]
+@="Compressed (zipped) Folder"
+"NeverShowExt"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder.SendTo\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder.SendTo\shell\sendto\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" /create %*"

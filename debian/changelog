@@ -1,3 +1,13 @@
+sg-shell (0.1.0-41) unstable; urgency=medium
+
+  * Send to > Compressed (zipped) Folder: .ZFSendToTarget's sendto command
+    is sg-zip /create %* (wine-sg 0156 runs it; sg-session plants the item).
+  * Photos' and Media Player's ProgIDs give themselves no type name, so File
+    Explorer's Type column reads "PNG File", "MP3 File", "MP4 File" (wine-sg
+    0152) instead of "Image", "Audio file", "Video file".
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 14:25:00 -0700
+
 sg-shell (0.1.0-40) unstable; urgency=medium
 
   * WordPad (sg-wordpad; wordpad.exe and write.exe via App Paths,

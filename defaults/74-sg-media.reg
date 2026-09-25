@@ -15,8 +15,7 @@ Windows Registry Editor Version 5.00
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio]
-@="Audio file"
-"FriendlyTypeName"="Audio file"
+@=""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Audio\DefaultIcon]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe,0"
@@ -94,8 +93,7 @@ Windows Registry Editor Version 5.00
 "StainedGlass.MediaPlayer.Audio"=""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video]
-@="Video file"
-"FriendlyTypeName"="Video file"
+@=""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.MediaPlayer.Video\DefaultIcon]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-media64.exe,0"

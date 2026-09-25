@@ -725,9 +725,14 @@ bundled.** `main.c` is the command line, the browse window and the wizard.
   the common-controls 6 manifest, `src/zip/sg-zip.manifest`).
 - **Not yet:** password-protected (ZipCrypto/AES) entries are listed but not
   extracted; no drag-out or copy from the browse window; entries over 4 GB are
-  not written (ZIP64 is read only); no "Send to > Compressed (zipped) folder"
-  shortcut (that is a per-user SendTo item, sg-session's to plant). A
-  multi-selection "Compress to ZIP file" gets one zip per item (a static verb).
+  not written (ZIP64 is read only). A multi-selection "Compress to ZIP file"
+  gets one zip per item (a static verb) -- Send to makes one zip of them all.
+- **Send to > Compressed (zipped) Folder**: sg-session plants an empty
+  `Compressed (zipped) Folder.ZFSendToTarget` in each profile's SendTo, as
+  Windows' Default profile has, and wine-sg's shell32 (0156) runs that type's
+  `shell\sendto\command` with every file sent (`%*`); `75-sg-zip.reg`
+  registers it as `/create %*`. Gate: wine-sg's `test/explorer2-gate.sh`
+  (`SGZIP=` this build's sg-zip64.exe).
 - **Gate: `test/zip-check.sh`** (display :115): Python-made zips (deflate at
   level 9, stored, nested, unicode names, an empty file and folder) extract
   byte-identically with their dates; `/skip`, `/overwrite`; seven zip-slip
@@ -800,6 +805,10 @@ alpha; the exe's icon is drawn by `src/sg-photos-icon.py` at build time).
   none of them), plus `OpenWithProgids`, `Applications\sg-photos64.exe`,
   App Paths `photos.exe`, and the `ms-photos:` protocol
   (`ms-photos:viewer?fileName=<escaped path>`).
+  **The ProgID gives itself no name** (empty default, no FriendlyTypeName):
+  one ProgID serves every image type, so a name would make every picture's
+  Type read "Image"; without one File Explorer says "PNG File", "JPG File",
+  as Windows 10 does (wine-sg 0152). The same holds for sg-media's ProgIDs.
 - `SG_PHOTOS_DUMP=<file>` (a Windows path) writes after every paint: file,
   title, index, image size, scale, fit, rotation, EXIF orientation, frames,
   slideshow, full screen, info, and the window, canvas and picture rectangles
