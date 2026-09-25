@@ -13,7 +13,9 @@
  *   Enabled, Continuous, AutoPunctuation, SpokenPunctuation, RemoveFillers,
  *   FormatNumbers, HoldToTalk (DWORD 0/1), HoldKey (DWORD, a virtual key),
  *   InsertMethod (DWORD, 0 typing, 1 the clipboard), Microphone (SZ, a
- *   PipeWire source; empty for the default), Language (SZ, en-US or auto).
+ *   PipeWire source; empty for the default), Language (SZ, en-US, de-DE,
+ *   fr-FR, es-ES or auto: the language of spoken punctuation, commands and
+ *   filler words; the model itself recognises 25 languages either way).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -36,6 +38,9 @@ static const struct { const WCHAR *name; DWORD vk; } HOLD_KEYS[] = {
 };
 static const struct { const WCHAR *name, *code; } LANGS[] = {
     { L"English (United States)", L"en-US" },
+    { L"Deutsch (Deutschland)", L"de-DE" },
+    { L"Fran\x00e7ais (France)", L"fr-FR" },
+    { L"Espa\x00f1ol (Espa\x00f1a)", L"es-ES" },
     { L"Detect automatically (25 European languages)", L"auto" },
 };
 
@@ -66,6 +71,11 @@ static enum model_state model_state(ULONGLONG *done, ULONGLONG *total, WCHAR *ms
     enum model_state st = MS_MISSING;
     *done = 0; *total = MODEL_BYTES;
     if (msg) msg[0] = 0;
+    /* the sg-speech-model-parakeet package's copy, then sg-speechd's download */
+    if (!GetEnvironmentVariableA("SG_SPEECH_PACKAGED_DIR", path, MAX_PATH))
+        lstrcpyA(path, "/usr/share/stained-glass-speech");
+    lstrcatA(path, "/parakeet-tdt-0.6b-v3-int8/.verified");
+    if (unix_path_exists(path)) { *done = *total; return MS_INSTALLED; }
     _snprintf(path, sizeof(path), "%s/parakeet-tdt-0.6b-v3-int8/.verified", speech_dir());
     if (unix_path_exists(path)) { *done = *total; return MS_INSTALLED; }
     _snprintf(path, sizeof(path), "%s/status", speech_dir());
@@ -265,7 +275,8 @@ void build_speech(void)
     i = pg_para(x + S(64), y, w - S(64), g_font_body, COL_TEXT,
                  L"Dictate text anywhere you can type. Press the Windows logo key + H to start or stop, "
                  L"or select the microphone on the voice typing bar. Say \x201C" L"comma\x201D, \x201Cperiod\x201D, "
-                 L"\x201Cquestion mark\x201D or \x201Cnew line\x201D for punctuation.");
+                 L"\x201Cquestion mark\x201D or \x201Cnew line\x201D for punctuation, and \x201C" L"delete that\x201D, "
+                 L"\x201Cundo that\x201D or \x201Cstop listening\x201D to take something back or stop.");
     y += max(i, S(48)) + S(24);
 
     y = section(x, y, w, L"Voice typing");
@@ -337,7 +348,8 @@ void build_speech(void)
     }
     y += S(34);
     pg_text(x + S(16), y, w - S(16), S(20), g_font_body, COL_SUBTLE,
-            L"Punctuation you say, and filler words, are recognized in English.", DT_SINGLELINE | DT_END_ELLIPSIS);
+            L"Punctuation and commands you say, and filler words, are recognized in English, German, French and Spanish.",
+            DT_SINGLELINE | DT_END_ELLIPSIS);
     y += S(30);
     pg_text(x + S(16), y, w - S(16), S(20), g_font_body, COL_TEXT, L"Put the words into programs by:", DT_SINGLELINE);
     y += S(26);

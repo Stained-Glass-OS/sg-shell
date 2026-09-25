@@ -491,6 +491,20 @@ command to the first (`WM_COPYDATA`, class `SgDictateBar`, mutex
   the bar goes once the text is in. With another key it is a shortcut and
   nothing happens; the key is never swallowed. The model is unloaded after 5
   minutes unused. `/reload` tells a running instance the settings changed.
+- **What is being said shows in the bar** (the engine's `PARTIAL`): grey
+  italics where "Listening..." was, the bar widened to 600 px and still
+  centred, a long one losing its start ("...the end"). It is never typed;
+  the utterance's final `TEXT` clears it and is typed once. Any state but
+  listening clears it too.
+- **Spoken commands** come as `CMD delete` (as many Backspaces as the last
+  text had characters -- a line break was one Enter -- only if the window
+  it went to is still in front, and only within this bar's session) and
+  `CMD undo` (Ctrl+Z to the program in front). "Stop listening" is the
+  engine's own.
+- **Language** (Control Panel: English, Deutsch, Francais, Espanol, or
+  detect automatically) goes with each start request (`"language"`), with
+  `"partials": true`; the engine applies that language's spoken punctuation,
+  fillers and commands.
 - **Settings** are `HKCU\Software\Stained Glass\Speech`, read at every
   start, so Control Panel changes apply at once.
 - **Control Panel > Speech Recognition** (`src/control/speech.c`; `control
@@ -500,7 +514,10 @@ command to the first (`WM_COPYDATA`, class `SgDictateBar`, mutex
   --mics --out`), "Test microphone" (`sg-dictate --meter`, a level in a temp
   file); hold-to-talk and its key; continuous dictation, automatic and spoken
   punctuation, filler words, numbers, typing or pasting, language; privacy
-  and the model's CC BY 4.0 attribution. Wine gives a Windows program no
+  and the model's CC BY 4.0 attribution. The model counts as installed when
+  the sg-speech-model-parakeet package's copy
+  (`/usr/share/stained-glass-speech/...`, `SG_SPEECH_PACKAGED_DIR`) or
+  sg-speechd's download has its `.verified` stamp. Wine gives a Windows program no
   pipes to a native one, so the engine answers through files.
   `--dump speech` for gates.
 - **Gate: `test/dictate-check.sh`** (Xvfb, a shell desktop, Notepad in
@@ -514,6 +531,20 @@ command to the first (`WM_COPYDATA`, class `SgDictateBar`, mutex
   presses Win+H on the X keyboard too (a wine-sg with 0092). Screenshots in
   `build/dictate-*.png`. Mutants that drop `WS_EX_NOACTIVATE`, stop typing,
   skip giving back the clipboard or the chord guard each turn it red.
+  **Partials and commands**: the stand-in engine "speaks" three partials
+  2.5 s apart: the bar's dump (`SG_DICTATE_DUMP`, a Windows path; state,
+  rectangle, partial text, last length) shows each while Notepad stays
+  unchanged, the bar is 600 px and centred, its pixels have grey text; the
+  request carries `"language": "de-DE"` and `"partials": true`; the final
+  is typed once and the partial cleared; then `CMD delete` takes exactly its
+  30 characters back. With the real engine: a long sentence's partial
+  results appear before anything is typed (the WAV starts with 25 s of
+  silence -- under load 57 the model took 17 s to load and a sentence spoken
+  meanwhile finished before any partial could be shown), then the sentence
+  is typed; and German speech with Language = de-DE types "Komma"/"Punkt"
+  as marks. `SG_DICTATE_DPY` picks the display, `SG_DICTATE_EXE` a mutant:
+  `-DSG_MUTANT_PARTIAL_TYPED` (partials typed) fails 5 checks; the engine
+  with its German table removed (`SG_DICTATE_SCRIPT`) fails the German one.
 
 ## Calculator (sg-calc)
 

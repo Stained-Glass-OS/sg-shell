@@ -22,9 +22,15 @@
  * and exits.
  *
  * Settings: HKCU\Software\Stained Glass\Speech (Control Panel > Speech).
- * Engine -> bar: STATE <what> [detail], LEVEL <0-100>, TEXT <JSON string>.
+ * Engine -> bar: STATE <what> [detail], LEVEL <0-100>, TEXT <JSON string>,
+ * PARTIAL <JSON string> (what is being said, shown in the bar and never
+ * typed; "" clears it; TEXT replaces it), CMD delete|undo (spoken
+ * commands: take back the last text typed, or press Ctrl+Z).
  * Bar -> engine: one JSON object a line, {"cmd": "start", ...}, stop,
  * cancel, preload, unload, quit.
+ *
+ * SG_DICTATE_DUMP=<file> (gates only) writes the state and the partial text
+ * shown after every change. Nothing else ever records what was said.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -39,6 +45,7 @@
 #include <string.h>
 
 #define BAR_W 360
+#define BAR_W_WIDE 600  /* while it shows what is being said */
 #define BAR_H 56
 #define MIC_R 18
 #define WM_ENGINE (WM_APP + 1)
@@ -66,7 +73,7 @@ enum hot { HOT_NONE, HOT_GEAR, HOT_MIC, HOT_CLOSE };
 
 struct settings {
     DWORD enabled, continuous, spoken, autopunct, fillers, numbers, paste, hold, holdkey;
-    WCHAR mic[256];
+    WCHAR mic[256], language[16];
 };
 
 static HWND g_wnd;
@@ -78,7 +85,10 @@ static enum hot g_hot;
 static int g_level;
 static double g_ring;           /* the ring's radius beyond the button, eased */
 static HWND g_last_target;      /* where the last text went */
-static HFONT g_font, g_font_small;
+static int g_last_len;          /* how many characters that was, for "delete that" */
+static WCHAR *g_partial;        /* what is being said, not yet final: shown, never typed */
+static int g_bar_w = BAR_W;
+static HFONT g_font, g_font_small, g_font_partial;
 static struct settings g_set;
 static HHOOK g_kbhook;
 static CRITICAL_SECTION g_out_lock;
@@ -126,6 +136,10 @@ static void load_settings(void)
     if (!k || RegQueryValueExW(k, L"Microphone", NULL, &type, (BYTE *)g_set.mic, &sz) || type != REG_SZ)
         g_set.mic[0] = 0;
     g_set.mic[255] = 0;
+    sz = sizeof(g_set.language);
+    if (!k || RegQueryValueExW(k, L"Language", NULL, &type, (BYTE *)g_set.language, &sz) || type != REG_SZ)
+        lstrcpyW(g_set.language, L"en-US");
+    g_set.language[15] = 0;
     if (k) RegCloseKey(k);
 }
 
@@ -360,6 +374,58 @@ static WCHAR *json_to_w(const char *s)
     return w;
 }
 
+/* For the gates: the state and the partial text, rewritten on each change. */
+static void dump(void)
+{
+    static const char *const names[] = { "idle", "loading", "listening", "nomodel", "off", "nomic",
+                                         "error", "noengine", "privacy" };
+    WCHAR path[MAX_PATH];
+    char *u = NULL;
+    FILE *f;
+    int n;
+    RECT r = { 0, 0, 0, 0 };
+    if (!GetEnvironmentVariableW(L"SG_DICTATE_DUMP", path, MAX_PATH)) return;
+    if (!(f = _wfopen(path, L"wb"))) return;
+    fprintf(f, "state %s\n", names[g_state]);
+    GetWindowRect(g_wnd, &r);
+    fprintf(f, "visible %d\nrect %ld %ld %ld %ld\n", g_visible, r.left, r.top, r.right, r.bottom);
+    if (g_partial && (n = WideCharToMultiByte(CP_UTF8, 0, g_partial, -1, NULL, 0, NULL, NULL)) > 0 &&
+        (u = malloc(n)))
+    {
+        char *c;
+        WideCharToMultiByte(CP_UTF8, 0, g_partial, -1, u, n, NULL, NULL);
+        for (c = u; *c; c++) if (*c == '\n') *c = '|';
+    }
+    fprintf(f, "partial %s\n", u ? u : "");
+    fprintf(f, "last_len %d\n", g_last_len);
+    free(u);
+    fclose(f);
+}
+
+/* The bar grows while it shows what is being said, and shrinks again. */
+static void size_bar(void)
+{
+    int want = g_partial && *g_partial ? BAR_W_WIDE : BAR_W;
+    MONITORINFO mi = { sizeof(mi) };
+    POINT pt = { 0, 0 };
+    if (want == g_bar_w) return;
+    g_bar_w = want;
+    if (!g_visible) return;
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY), &mi);
+    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - g_bar_w) / 2, mi.rcWork.top + 12,
+                 g_bar_w, BAR_H, SWP_NOACTIVATE);
+}
+
+static void set_partial(WCHAR *text)
+{
+    free(g_partial);
+    g_partial = text && *text ? text : NULL;
+    if (text && !*text) free(text);
+    size_bar();
+    if (g_wnd) InvalidateRect(g_wnd, NULL, FALSE);
+    dump();
+}
+
 static void insert_text(const char *json)
 {
     WCHAR *text = json_to_w(json);
@@ -367,7 +433,9 @@ static void insert_text(const char *json)
     WCHAR cls[64] = L"";
     if (!text) return;
     if (fg) GetClassNameW(fg, cls, 64);
+    set_partial(NULL);  /* the final text replaces what was shown */
     if (g_set.paste) paste_text(text); else type_text(text);
+    g_last_len = (int)wcslen(text);
     g_last_target = fg;
     report("sg-dictate: inserted %d characters into %ls by %s\n", (int)wcslen(text), cls,
            g_set.paste ? "paste" : "typing");
@@ -383,7 +451,9 @@ static void set_state(enum state s)
     if (g_state != s) report("sg-dictate: state %s\n", names[s]);
     g_state = s;
     if (s != ST_LISTENING) g_level = 0;
+    if (s != ST_LISTENING && s != ST_LOADING && g_partial) set_partial(NULL);
     if (g_wnd) InvalidateRect(g_wnd, NULL, FALSE);
+    dump();
 }
 
 static BOOL listening(void) { return g_state == ST_LISTENING || g_state == ST_LOADING; }
@@ -433,7 +503,7 @@ static BOOL microphone_allowed(void)
 
 static void start_listening(BOOL hold)
 {
-    char req[1024], mic[768], tail[8];
+    char req[1200], mic[768], tail[8], lang[32];
     HWND fg = GetForegroundWindow();
     load_settings();
     if (!g_bridged) { set_state(ST_NOENGINE); return; }
@@ -445,7 +515,10 @@ static void start_listening(BOOL hold)
              hold || g_set.continuous ? "true" : "false", g_set.spoken ? "true" : "false",
              g_set.autopunct ? "true" : "false", g_set.fillers ? "true" : "false",
              g_set.numbers ? "true" : "false", fg != g_last_target ? "true" : "false");
-    json_str(req, sizeof(req) - 16, mic);
+    json_str(req, sizeof(req) - 64, mic);
+    WideCharToMultiByte(CP_UTF8, 0, g_set.language, -1, lang, sizeof(lang), NULL, NULL);
+    strcat(req, ", \"partials\": true, \"language\": ");
+    json_str(req, sizeof(req) - 16, lang);
     caret_context(fg, tail, sizeof(tail));
     if (tail[0])
     {
@@ -463,8 +536,8 @@ static void show_bar(void)
     MONITORINFO mi = { sizeof(mi) };
     POINT pt = { 0, 0 };
     GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY), &mi);
-    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - BAR_W) / 2, mi.rcWork.top + 12,
-                 BAR_W, BAR_H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - g_bar_w) / 2, mi.rcWork.top + 12,
+                 g_bar_w, BAR_H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     g_visible = TRUE;
     g_closing = FALSE;
     SetTimer(g_wnd, TIMER_ANIM, 40, NULL);
@@ -504,11 +577,67 @@ static void open_settings(void)
     ShellExecuteW(NULL, NULL, L"control.exe", L"/name Microsoft.SpeechRecognition", NULL, SW_SHOWNORMAL);
 }
 
+/* "Delete that": as many Backspaces as the last text had characters (a line
+ * break was one Enter), if it went to the window still in front. "Undo that":
+ * the program's own Ctrl+Z. */
+static void spoken_command(const char *what)
+{
+    HWND fg = GetForegroundWindow();
+    INPUT *in;
+    int n = 0, i;
+    if (!strcmp(what, "delete"))
+    {
+        if (fg != g_last_target || g_last_len <= 0)
+        {
+            report("sg-dictate: nothing to delete\n");
+            return;
+        }
+        if (!(in = calloc(g_last_len * 2, sizeof(INPUT)))) return;
+        for (i = 0; i < g_last_len; i++)
+        {
+            add_key(in, &n, VK_BACK, (WORD)MapVirtualKeyW(VK_BACK, MAPVK_VK_TO_VSC), 0);
+            add_key(in, &n, VK_BACK, (WORD)MapVirtualKeyW(VK_BACK, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP);
+        }
+        SendInput(n, in, sizeof(INPUT));
+        free(in);
+        report("sg-dictate: deleted %d characters\n", g_last_len);
+        g_last_len = 0;
+    }
+    else if (!strcmp(what, "undo"))
+    {
+        INPUT k[4];
+        add_key(k, &n, VK_CONTROL, 0, 0);
+        add_key(k, &n, 'Z', 0, 0);
+        add_key(k, &n, 'Z', 0, KEYEVENTF_KEYUP);
+        add_key(k, &n, VK_CONTROL, 0, KEYEVENTF_KEYUP);
+        SendInput(n, k, sizeof(INPUT));
+        g_last_len = 0;
+        report("sg-dictate: undo\n");
+    }
+    dump();
+}
+
 static void engine_line(char *line)
 {
     if (!strncmp(line, "LEVEL ", 6))
     {
         g_level = atoi(line + 6);
+        return;
+    }
+    if (!strncmp(line, "PARTIAL ", 8))
+    {
+#ifdef SG_MUTANT_PARTIAL_TYPED
+        insert_text(line + 8);
+#else
+        WCHAR *text = json_to_w(line + 8);
+        set_partial(text);
+        report("sg-dictate: partial %d characters\n", g_partial ? (int)wcslen(g_partial) : 0);
+#endif
+        return;
+    }
+    if (!strncmp(line, "CMD ", 4))
+    {
+        spoken_command(line + 4);
         return;
     }
     if (!strncmp(line, "TEXT ", 5))
@@ -668,14 +797,14 @@ static const WCHAR *status_text(void)
 
 #define GEAR_X 28
 #define MIC_X 84
-#define CLOSE_X (BAR_W - 28)
+#define CLOSE_X (g_bar_w - 28)
 
 static void paint(HWND hwnd)
 {
     PAINTSTRUCT ps;
     HDC wdc = BeginPaint(hwnd, &ps), dc = CreateCompatibleDC(wdc);
-    HBITMAP bmp = CreateCompatibleBitmap(wdc, BAR_W, BAR_H), obmp = SelectObject(dc, bmp);
-    RECT r = { 0, 0, BAR_W, BAR_H }, tr;
+    HBITMAP bmp = CreateCompatibleBitmap(wdc, g_bar_w, BAR_H), obmp = SelectObject(dc, bmp);
+    RECT r = { 0, 0, g_bar_w, BAR_H }, tr;
     HBRUSH bg = CreateSolidBrush(COL_BG);
     HPEN edge = CreatePen(PS_SOLID, 1, COL_EDGE), op;
     int cy = BAR_H / 2;
@@ -683,7 +812,7 @@ static void paint(HWND hwnd)
     FillRect(dc, &r, bg);
     op = SelectObject(dc, edge);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Rectangle(dc, 0, 0, BAR_W, BAR_H);
+    Rectangle(dc, 0, 0, g_bar_w, BAR_H);
     SelectObject(dc, op);
 
     if (g_hot == HOT_GEAR) fill_circle(dc, GEAR_X, cy, 16, COL_HOVER);
@@ -708,7 +837,30 @@ static void paint(HWND hwnd)
     SetTextColor(dc, g_state == ST_LISTENING || g_state == ST_LOADING || g_state == ST_IDLE ? COL_TEXT : COL_SUBTLE);
     SelectObject(dc, g_state <= ST_LISTENING ? g_font : g_font_small);
     SetRect(&tr, MIC_X + MIC_R + 16, 4, CLOSE_X - 20, BAR_H - 4);
-    if (g_state <= ST_LISTENING)
+    if (g_partial && g_state <= ST_LISTENING)
+    {
+        /* What is being said, greyed and in italics: not typed yet. Its end
+         * is what matters, so a long one loses its start ("...the end"). */
+        const WCHAR *p = g_partial;
+        WCHAR buf[4096];
+        SIZE sz;
+        int w = tr.right - tr.left;
+        SelectObject(dc, g_font_partial);
+        SetTextColor(dc, COL_SUBTLE);
+        while (*p && GetTextExtentPoint32W(dc, p, (int)wcslen(p), &sz) && sz.cx > w - 16)
+        {
+            const WCHAR *sp = wcschr(p + 1, ' ');
+            p = sp ? sp : p + 1;
+        }
+        _snwprintf(buf, 4096, L"%ls%ls", p == g_partial ? L"" : L"\x2026", p);
+        buf[4095] = 0;
+        {
+            WCHAR *c;
+            for (c = buf; *c; c++) if (*c == '\n') *c = ' ';
+        }
+        DrawTextW(dc, buf, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+    }
+    else if (g_state <= ST_LISTENING)
         DrawTextW(dc, status_text(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     else
     {
@@ -719,7 +871,7 @@ static void paint(HWND hwnd)
         DrawTextW(dc, status_text(), -1, &tr, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
     }
 
-    BitBlt(wdc, 0, 0, BAR_W, BAR_H, dc, 0, 0, SRCCOPY);
+    BitBlt(wdc, 0, 0, g_bar_w, BAR_H, dc, 0, 0, SRCCOPY);
     SelectObject(dc, obmp);
     DeleteObject(bmp);
     DeleteDC(dc);
@@ -934,6 +1086,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int s
 
     g_font = CreateFontW(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
     g_font_small = CreateFontW(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_partial = CreateFontW(-15, 0, 0, 0, FW_NORMAL, TRUE, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
     wc.lpfnWndProc = wnd_proc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);

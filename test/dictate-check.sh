@@ -19,10 +19,10 @@
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
-EXE="$HERE/build/sg-dictate64.exe"
+EXE="${SG_DICTATE_EXE:-$HERE/build/sg-dictate64.exe}"   # SG_DICTATE_EXE: a mutant
 OUT="$HERE/build"
 MINGW="${MINGW:-x86_64-w64-mingw32-gcc}"
-RC=0; DPY=93; XP=""
+RC=0; DPY=${SG_DICTATE_DPY:-93}; XP=""
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 
@@ -89,8 +89,22 @@ for raw in os.fdopen(ur, "rb"):
     cmd = json.loads(line)["cmd"]
     if cmd == "start":
         emit("STATE loading"); emit("STATE listening"); emit("LEVEL 70")
-        emit("TEXT " + json.dumps(texts[n % len(texts)], ensure_ascii=False))
+        item = texts[n % len(texts)]
         n += 1; open(os.environ["FAKE_N"], "w").write(str(n))
+        if isinstance(item, dict):
+            # {"partials": [...], "pause": s, "text": ..., "cmd": ...}: what is
+            # being said, shown while "speaking", then the final or a command
+            for p in item.get("partials", []):
+                emit("PARTIAL " + json.dumps(p, ensure_ascii=False))
+                open(os.environ["FAKE_N"] + ".partial", "w").write(p)
+                time.sleep(item.get("pause", 1.5))
+            if "text" in item:
+                emit("TEXT " + json.dumps(item["text"], ensure_ascii=False))
+                time.sleep(item.get("after", 0))
+            if "cmd" in item:
+                emit("CMD " + item["cmd"])
+            continue
+        emit("TEXT " + json.dumps(item, ensure_ascii=False))
     elif cmd in ("stop", "cancel"):
         emit("STATE idle")
     elif cmd == "quit":
@@ -98,15 +112,19 @@ for raw in os.fdopen(ur, "rb"):
 child.wait()
 EOF
 chmod 755 "$T/fake-engine"
-printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Caf\u00e9 cr\u00e8me \u2013 fin"]' > "$T/texts.json"
+printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Caf\u00e9 cr\u00e8me \u2013 fin",
+  {"partials": ["Hallo", "Hallo Welt,", "Hallo Welt, das ist ein"], "pause": 2.5,
+   "text": " Hallo Welt, das ist ein Test.", "after": 4, "cmd": "delete"}]' > "$T/texts.json"
 export FAKE_LOG="$T/engine.log" FAKE_ERR="$T/bar.log" FAKE_TEXTS="$T/texts.json" FAKE_N="$T/n"
 : > "$FAKE_LOG"; : > "$FAKE_ERR"
 
 # --- Wine, a shell desktop and Notepad ----------------------------------------------------------
 Xvfb ":$DPY" -screen 0 1024x768x24 -nolisten tcp >/dev/null 2>&1 & XP=$!
+export SG_DICTATE_DUMP_UNIX="$T/bar.dump"
 export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDLLOVERRIDES='mscoree,mshtml=' WINEDEBUG=-all
 export PATH="$WINE_DIR/bin:$PATH" SG_DICTATE="$T/fake-engine"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
+SG_DICTATE_DUMP=$(wine winepath -w "$SG_DICTATE_DUMP_UNIX" 2>/dev/null | tr -d '\r'); export SG_DICTATE_DUMP
 cp "$T/probe.exe" "$WINEPREFIX/drive_c/probe.exe"
 winexe=$(wine winepath -w "$EXE" 2>/dev/null | tr -d '\r')
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
@@ -121,7 +139,7 @@ wineserver -w
 P() { wine 'C:\probe.exe' "$@" 2>/dev/null | tr -d '\r'; }
 WINEDEBUG=trace+explorer wine explorer /desktop=shell,1024x768 > "$T/explorer.out" 2>&1 &
 i=0; while ! grep -q 'desktop message loop starting' "$T/explorer.out" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
-wine notepad >/dev/null 2>&1 &
+WINEDEBUG=err+all,seh wine notepad > "$T/notepad.log" 2>&1 &
 i=0; while [ "$(P text Notepad)" = NOWINDOW ] && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
 P activate Notepad; sleep 1
 [ "$(P foreground)" = Notepad ] && pass "Notepad has the focus" || fail "Notepad is not in front: $(P foreground)"
@@ -252,6 +270,11 @@ if [ -f "$CTL" ]; then
     [ "$(val "$out" enabled)/$(val "$out" model)/$(val "$out" insert)/$(val "$out" hold_key)/$(val "$out" continuous)" = "off/missing/type/Right Ctrl/on" ] \
         && pass "Speech --dump: the defaults (off, no model, typing, Right Ctrl, continuous)" || fail "defaults: $out"
     [ "$(val "$out" model.size)" = "641.6 MB" ] && pass "Speech --dump: the download's size" || fail "size: $(val "$out" model.size)"
+    # the model as a package (sg-speech-model-parakeet): installed, nothing to download
+    mkdir -p "$T/pkg/parakeet-tdt-0.6b-v3-int8"; : > "$T/pkg/parakeet-tdt-0.6b-v3-int8/.verified"
+    out=$(SG_SPEECH_PACKAGED_DIR="$T/pkg" ctl --dump speech)
+    [ "$(val "$out" model)" = installed ] && pass "Speech --dump: the packaged model counts as installed" \
+        || fail "packaged model: $(val "$out" model)"
     speech Enabled 1; speech InsertMethod 1; speech HoldToTalk 1; speech HoldKey 165; speech Continuous 0
     speech SpokenPunctuation 0; speech RemoveFillers 0; speech FormatNumbers 0; speech AutoPunctuation 0
     reg 'HKCU\Software\Stained Glass\Speech' /v Microphone /d sg.other
@@ -312,6 +335,53 @@ if [ "${WINH:-0}" = 1 ]; then
     xdotool key super+h; wait_gone && pass "Win+H again closes it" || fail "still up after Win+H"
 fi
 
+# --- partial results: shown in the bar while speaking, never typed; commands ---------------------------
+echo 4 > "$FAKE_N"
+reg 'HKCU\Software\Stained Glass\Speech' /v Language /d de-DE
+P activate Notepad; sleep 0.5
+before=$(P text Notepad)
+: > "$FAKE_ERR"
+toggle
+i=0; while ! grep -q '^partial Hallo Welt, das ist ein$' "$SG_DICTATE_DUMP_UNIX" 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+if grep -q '^partial Hallo Welt, das ist ein$' "$SG_DICTATE_DUMP_UNIX" 2>/dev/null; then
+    pass "the bar shows the partial text while it is being said"
+else
+    fail "partial not shown: $(cat "$SG_DICTATE_DUMP_UNIX" 2>/dev/null)"
+fi
+[ "$(P text Notepad)" = "$before" ] && pass "...and nothing is typed until the utterance ends" \
+    || fail "typed early: Notepad has '$(P text Notepad)'"
+set -- $(sed -n 's/^rect //p' "$SG_DICTATE_DUMP_UNIX")
+[ $# = 4 ] && [ $(( $3 - $1 )) = 600 ] && [ $(( ($1 + $3) / 2 )) -ge 500 ] && [ $(( ($1 + $3) / 2 )) -le 524 ] \
+    && pass "the bar widens for it, still centred ($*)" || fail "bar rect while partial: $*"
+sleep 0.3; import -window root "$OUT/dictate-partial.png"
+# the bar's pixels: grey italic text right of the microphone
+python3 - "$OUT/dictate-partial.png" "$1" "$2" <<'PY' && pass "the partial text is drawn in the bar (grey)" || fail "no grey text in the bar"
+import subprocess, sys
+png, x0, y0 = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+raw = subprocess.run(["convert", png, "-crop", "380x56+%d+%d" % (x0 + 130, y0), "rgb:-"], capture_output=True).stdout
+grey = sum(1 for i in range(0, len(raw) - 2, 3) if 0x70 < raw[i] < 0xB0 and abs(raw[i] - raw[i+1]) < 8 and abs(raw[i] - raw[i+2]) < 8)
+print("      grey pixels:", grey)
+sys.exit(0 if grey > 150 else 1)
+PY
+[ "$(sed -n 's/^\(.*\)"language": "\([^"]*\)".*/\2/p' "$FAKE_LOG" | tail -1)" = de-DE ] \
+    && pass "the language went with the request (de-DE)" || fail "request: $(grep start "$FAKE_LOG" | tail -1)"
+grep '"start"' "$FAKE_LOG" | tail -1 | grep -q '"partials": true' && pass "...and partial results were asked for" \
+    || fail "no partials in the request"
+if wait_text "${before} Hallo Welt, das ist ein Test." 20; then
+    pass "the final text replaced it, typed once"
+else
+    fail "after the final Notepad has '$(P text Notepad)'"
+fi
+sleep 0.5
+grep -q '^partial $' "$SG_DICTATE_DUMP_UNIX" && pass "...and the bar no longer shows a partial" \
+    || fail "partial still shown: $(grep '^partial' "$SG_DICTATE_DUMP_UNIX")"
+# then "delete that" (a command from the engine): the last text typed goes again
+if wait_text "$before" 20; then pass "a spoken \"delete that\" took the last text back"
+else fail "after delete Notepad has '$(P text Notepad)'"; fi
+grep -q 'deleted 30 characters' "$FAKE_ERR" && pass "...exactly its 30 characters" || fail "bar log: $(grep delete "$FAKE_ERR")"
+toggle; wait_gone
+reg 'HKCU\Software\Stained Glass\Speech' /v Language /d en-US
+
 # --- the real engine ----------------------------------------------------------------------------------------
 ENGINE=""
 for c in "${SG_DICTATE_SCRIPT:-}" "$HERE/../sg-session/speech/sg-dictate" /usr/bin/sg-dictate; do
@@ -339,6 +409,58 @@ if [ -n "$ENGINE" ] && [ -n "$MODEL" ] && command -v espeak-ng >/dev/null && pyt
         *) fail "real engine: Notepad has '$got' (wanted like '$want')" ;; esac
     [ "$(P foreground)" = Notepad ] && pass "Notepad kept the focus" || fail "the focus went to $(P foreground)"
     toggle; wait_gone || fail "real engine: the bar did not close"
+
+    # Partial results on the way: one long sentence, shown in the bar before
+    # anything is typed. (Each partial costs up to twice as long to come on a
+    # busy machine; a sentence this long still shows several.)
+    espeak-ng -v en-us -s 140 -w "$T/long.wav" "this is a much longer sentence that keeps going for a while so that the partial results have time to show up in the bar before the speaker finally stops talking" 2>/dev/null
+    # Speech starts after the model has loaded (it does in real use: the bar is
+    # up first): 25 s of silence first, as a loaded machine took 17 s to load it.
+    python3 - "$T/long.wav" <<'PY'
+import sys, wave
+w = wave.open(sys.argv[1]); p = w.getparams(); b = w.readframes(w.getnframes()); w.close()
+o = wave.open(sys.argv[1], "wb"); o.setparams(p); o.writeframes(b"\0" * p.sampwidth * p.framerate * 25 + b); o.close()
+PY
+    P activate Notepad; sleep 0.5
+    before=$(P text Notepad)
+    SG_DICTATE="$ENGINE" SG_SPEECH_LIB="$(dirname "$ENGINE")" SG_SPEECH_MODEL="$MODEL" \
+        SG_DICTATE_AUDIO_FILE="$T/long.wav" wine start sg-dictate.exe /toggle >/dev/null 2>&1
+    seen=""; typed_early=0
+    i=0; while [ "$(P text Notepad)" = "$before" ] && [ $i -lt 400 ]; do
+        p=$(sed -n 's/^partial //p' "$SG_DICTATE_DUMP_UNIX" 2>/dev/null)
+        if [ -n "$p" ] && [ ${#p} -gt ${#seen} ]; then
+            [ ${#p} -ge 30 ] && [ ${#seen} -lt 30 ] && import -window root "$OUT/dictate-real-partial.png"
+            seen=$p
+        fi
+        sleep 0.2; i=$((i + 1))
+    done
+    # typing ~150 characters takes a while on a busy machine: wait for it to settle
+    got=""; i=0
+    while [ "$(P text Notepad)" != "$got" ] || [ $i -lt 2 ]; do
+        got=$(P text Notepad); sleep 1; i=$((i + 1)); [ $i -gt 40 ] && break
+    done
+    [ -n "$seen" ] && pass "the real engine's partial results were shown before anything was typed: $seen" \
+        || fail "no partial result shown by the real engine"
+    case "$got" in "$before "[Tt]his\ is\ a\ much\ longer*talking.) pass "...and the final sentence typed once" ;;
+        *) fail "long sentence: Notepad has '${got#"$before"}'"; tail -20 "$T/notepad.log" ;; esac
+    toggle; wait_gone || fail "real engine (partials): the bar did not close"
+
+    # German: "Komma" and "Punkt" are marks. (espeak-ng's "Komma" is heard
+    # as "Toma"; it says "Kommar" recognisably.)
+    espeak-ng -v de -s 120 -w "$T/de.wav" "Das ist gut, Kommar, und das auch, Punkt" 2>/dev/null
+    reg 'HKCU\Software\Stained Glass\Speech' /v Language /d de-DE
+    P activate Notepad; sleep 0.5
+    before=$(P text Notepad)
+    SG_DICTATE="$ENGINE" SG_SPEECH_LIB="$(dirname "$ENGINE")" SG_SPEECH_MODEL="$MODEL" \
+        SG_DICTATE_AUDIO_FILE="$T/de.wav" wine start sg-dictate.exe /toggle >/dev/null 2>&1
+    i=0; while [ "$(P text Notepad)" = "$before" ] && [ $i -lt 120 ]; do sleep 0.25; i=$((i + 1)); done
+    sleep 2
+    got=$(P text Notepad)
+    import -window root "$OUT/dictate-real-de.png"
+    case "$got" in "$before Das ist gut, und das auch.") pass "German: Komma and Punkt typed as marks: ${got#"$before"}" ;;
+        *) fail "German: Notepad has '${got#"$before"}'" ;; esac
+    toggle; wait_gone || fail "real engine (German): the bar did not close"
+    reg 'HKCU\Software\Stained Glass\Speech' /v Language /d en-US
 else
     echo "SKIP  the real engine (needs sg-session's sg-dictate, a model, espeak-ng and python3-onnxruntime)"
 fi
