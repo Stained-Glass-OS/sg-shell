@@ -29,6 +29,8 @@ ZIP_LIBS = -lcomctl32 -lshell32 -lshlwapi -lgdi32 -luser32 -lole32 -lcomdlg32
 MEDIA_LIBS = -lole32 -luuid -lstrmiids -lgdi32 -luser32 -lshell32 -lcomdlg32 -ladvapi32 -lmsimg32
 # Calculator (sg-calc): calc.exe. Its icon is drawn at build time (src/sg-calc-icon.py).
 CALC_LIBS = -lgdi32 -luser32 -ladvapi32 -lm
+# Photos (sg-photos): WIC, and its own icon drawn by src/sg-photos-icon.py at build time.
+PHOTOS_LIBS = -lwindowscodecs -lole32 -luuid -lshlwapi -lshell32 -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -lmsimg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -63,6 +65,10 @@ build:
 	@$(WINDRES64) -I $(BUILD) src/sg-calc.rc -O coff -o $(BUILD)/sg-calc-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calc64.exe src/sg-calc.c $(BUILD)/sg-calc-res64.o $(CALC_LIBS) \
 	    && echo "built sg-calc (64-bit)"
+	@python3 src/sg-photos-icon.py $(BUILD)/sg-photos.ico
+	@$(WINDRES64) -I src -I $(BUILD) src/sg-photos.rc -O coff -o $(BUILD)/sg-photos-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-photos64.exe src/sg-photos.c $(BUILD)/sg-photos-res64.o $(PHOTOS_LIBS) \
+	    && echo "built sg-photos (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -81,6 +87,7 @@ test: build
 	@sh test/zip-check.sh
 	@sh test/media-check.sh
 	@sh test/calc-check.sh
+	@sh test/photos-check.sh
 
 clean:
 	rm -rf $(BUILD)

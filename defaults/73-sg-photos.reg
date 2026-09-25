@@ -1,0 +1,145 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Photos (sg-photos), the image viewer.
+;
+; Pictures open in Photos, as on Windows 10: each image extension's default
+; ProgID is StainedGlass.Photos.Image (and Photos is in its OpenWithProgids, so
+; a program that installs its own ProgID later still leaves Photos in Open with).
+; photos.exe resolves through App Paths, and the ms-photos: URI opens it too
+; (ms-photos:viewer?fileName=<escaped path>).
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\photos.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image]
+@="Image"
+"FriendlyTypeName"="Image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image\shell\open]
+@="Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.Photos.Image\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-photos64.exe]
+"FriendlyAppName"="Photos"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-photos64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-photos64.exe\SupportedTypes]
+".png"=""
+".jpg"=""
+".jpeg"=""
+".jpe"=""
+".jfif"=""
+".bmp"=""
+".dib"=""
+".gif"=""
+".tif"=""
+".tiff"=""
+".ico"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-photos]
+@="URL:ms-photos"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-photos\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-photos64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.png]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/png"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.png\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpg]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/jpeg"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpg\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpeg]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/jpeg"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpeg\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpe]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/jpeg"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jpe\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jfif]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/jpeg"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.jfif\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.bmp]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/bmp"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.bmp\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dib]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/bmp"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dib\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.gif]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/gif"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.gif\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.tif]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/tiff"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.tif\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.tiff]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/tiff"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.tiff\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ico]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/x-icon"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ico\OpenWithProgids]
+"StainedGlass.Photos.Image"=""

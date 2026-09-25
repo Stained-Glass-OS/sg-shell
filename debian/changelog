@@ -1,3 +1,16 @@
+sg-shell (0.1.0-13) unstable; urgency=medium
+
+  * sg-photos: Photos, the image viewer -- Windows 10 Photos' layout in the
+    Stained Glass Light palette. Whatever WIC decodes (animated GIFs animate,
+    JPEG EXIF orientation honoured), fitted, zoom at the pointer and pan,
+    the folder's pictures in Explorer's name order (keys, wheel, on-picture
+    arrows), rotate and save, Save a copy, delete to the Recycle Bin,
+    slideshow, full screen, file information, copy, Edit with Paint, Set as
+    background. Images, App Paths photos.exe and ms-photos: in
+    defaults/73-sg-photos.reg; sg-start lists it. Gate: test/photos-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 02:02:39 -0700
+
 sg-shell (0.1.0-12) unstable; urgency=medium
 
   * sg-calc: Calculator (calc.exe), Windows 10's -- Standard (immediate

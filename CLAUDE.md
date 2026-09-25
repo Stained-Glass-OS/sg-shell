@@ -51,6 +51,7 @@ wine-sg or an X server.
 | `sg-zip` | **Compressed (zipped) Folders** -- Wine has no `zipfldr.dll`. Opening a `.zip` (ProgID `CompressedFolder`) browses it read-only like a folder (Name, Type, Compressed size, Password protected, Size, Ratio, Date modified; Enter/double-click opens folders, Backspace/Alt+Up goes up, Back/Forward; a file opens from a temporary copy), "Extract all" / the "Extract All..." verb runs the **Extract Compressed (Zipped) Folders** wizard (destination named like the zip, Browse, "Show extracted files when complete", progress, Replace-or-Skip with "Do this for all conflicts"), and "Compress to ZIP file" on any file or folder makes `<name>.zip` beside it. Our own inflate/deflate. `defaults/75-sg-zip.reg`. See "Compressed folders" below. |
 | `sg-media` | **Media Player** -- audio and video, Windows 11 Media Player's layout in the Stained Glass Light palette: an "Open file(s)" bar, the video pane (letterboxed; a drawn album tile for audio), and the transport bar -- seek bar with elapsed/total, now playing ("1 of 3"), Stop, Previous, Play/Pause, Next, mute and volume, full screen. Space/Ctrl+P, Ctrl+S, Ctrl+B/F, Left/Right (5 s, Ctrl 60 s), Up/Down, M/F7, F11/Alt+Enter/double-click, Escape, media keys, the wheel for volume, dropped files. One instance: a second launch hands its files over. DirectShow through winegstreamer. `wmplayer.exe` and 17 audio/video types via `defaults/74-sg-media.reg`. See "Media Player" below. |
 | `sg-calc` | **Calculator** (`calc.exe`). Windows 10's Calculator, our own drawing: Standard (immediate execution), Scientific (precedence, parentheses, trigonometry in DEG/RAD/GRAD, 2nd functions, F-E) and Programmer (HEX/DEC/OCT/BIN readouts, QWORD..BYTE, AND/OR/XOR/NOT, Lsh/Rsh, Mod); memory, History, keyboard, copy/paste. `calc.exe` and the `calculator:` URI resolve to it (`defaults/70-sg-calc.reg`); sg-start lists it. See "Calculator" below. |
+| `sg-photos` | **Photos** -- the image viewer, Windows 10 Photos' layout in the Stained Glass Light palette: a toolbar (the file's name and "2 of 5"; Open, Zoom in/out, Actual size/Fit, Rotate, Delete, Edit with Paint, Slideshow, File information, Full screen, See more), the picture fitted (never enlarged), arrows on it for the folder's other pictures in Explorer's name order. Reads whatever WIC decodes (animated GIFs animate, the largest icon size, JPEG EXIF orientation). Zoom (Ctrl+wheel at the pointer, +/-, Ctrl+0, Ctrl+1, double-click) and drag to pan; Left/Right/wheel/Home/End; Ctrl+R rotate, Ctrl+S save it rotated, Save a copy; Delete to the Recycle Bin; F5 slideshow, F11 full screen; Alt+Enter file information; Ctrl+C (picture and file); Ctrl+E Paint; Set as background. Images, `photos.exe` and `ms-photos:` via `defaults/73-sg-photos.reg`. See "Photos" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -399,3 +400,44 @@ the exe's icon is drawn by `src/sg-media-icon.py` at build time).
   `build/media-*.png`.
 - **Not yet:** no library/playlist views, no album art or tags, no
   subtitles, no playback speed; `.mpg` and DVDs do not play.
+
+## Photos (sg-photos)
+
+`src/sg-photos.c`, one window drawn by us (toolbar glyphs at 4x, reduced to
+alpha; the exe's icon is drawn by `src/sg-photos-icon.py` at build time).
+
+- **Pictures are decoded once into premultiplied BGRA** (every frame of an
+  animated GIF composed with its offsets and disposal, up to 500 frames and
+  512 MB); rotation turns those buffers. Reduced views go through WIC's Fant
+  scaler, cached per size -- `AlphaBlend`'s own reduction drops pixels;
+  enlarged ones blit only the visible part.
+- **What counts as a picture is what WIC decodes**: its decoders' own
+  extension lists (`IWICBitmapCodecInfo::GetFileExtensions`), for the folder
+  walk and the Open dialog.
+- **Wine's JPEG decoder exposes no EXIF metadata**, so the orientation (and
+  date taken) come from the APP1 segment, read by us. Ctrl+S refuses to
+  re-encode an EXIF-oriented JPEG or an animation (Save a copy works).
+- **Delete is `SHFileOperation` with `FOF_ALLOWUNDO`**: Wine's Recycle Bin
+  is the XDG trash. The gate points `XDG_DATA_HOME` at its own directory.
+- The associations are HKLM ProgID `StainedGlass.Photos.Image` for .png .jpg
+  .jpeg .jpe .jfif .bmp .dib .gif .tif .tiff .ico (Wine's wine.inf registers
+  none of them), plus `OpenWithProgids`, `Applications\sg-photos64.exe`,
+  App Paths `photos.exe`, and the `ms-photos:` protocol
+  (`ms-photos:viewer?fileName=<escaped path>`).
+- `SG_PHOTOS_DUMP=<file>` (a Windows path) writes after every paint: file,
+  title, index, image size, scale, fit, rotation, EXIF orientation, frames,
+  slideshow, full screen, info, and the window, canvas and picture rectangles
+  on screen. `SG_PHOTOS_SLIDE_MS` shortens the slideshow's 3 s.
+- **Gate: `test/photos-check.sh`** (a display Xvfb picks itself with
+  `-displayfd`: fixed numbers collided with other gates' servers). It imports
+  the real `.reg`, opens img2.png by association and checks the screen's
+  pixel at the picture's centre, Right (img10 after img2: name order) and
+  Left twice with the pixels following, zoom in/out/fit, Ctrl+R (dimensions
+  swap, drawn taller), Alt+Enter, F5 advancing by itself and Escape,
+  Delete-confirm (gone from the folder, in the trash, next shown),
+  `photos.exe` via App Paths, a GIF animating, a 3000x1500 picture reduced
+  with its halves' colours intact, EXIF orientation 6, and `ms-photos:`.
+  Screenshots `build/photos-*.png`. Seen red against mutants: plain
+  `lstrcmpi` order, a rotate that does nothing, and no reduced bitmap.
+- **Not yet:** no albums/collections, crop or edit tools, printing,
+  favourites, or video; rotation of a JPEG is not lossless.

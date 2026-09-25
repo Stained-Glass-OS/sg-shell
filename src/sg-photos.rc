@@ -1,0 +1,4 @@
+/* Photos (sg-photos): its icon (drawn at build time by sg-photos-icon.py into
+ * build/) and the common-controls 6 manifest. */
+1 ICON "sg-photos.ico"
+1 24 "sg-photos.manifest"
