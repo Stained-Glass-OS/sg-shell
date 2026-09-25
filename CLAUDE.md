@@ -45,6 +45,8 @@ wine-sg or an X server.
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
+| `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
+| `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -174,3 +176,33 @@ writing the accent in the wrong byte order each turn them red.
 
 Start is left-aligned. Centering is a settings option, per David -- a config
 value the taskbar reads, not a rebuild.
+
+## The network programs: sg-ncpa and sg-netflyout
+
+They show and change network settings only through **sg-netctl**
+(sg-session; NetworkManager behind it). Wine has no AF_UNIX and gives a native
+program started from a GUI process no stdin or stdout, so each re-launches
+itself as `sg-netctl --bridge wine <itself> --bridged ...` and talks JSON lines
+on the pipes it is given (`src/sg-netclient.h`; requests run on a worker
+thread while the window keeps pumping messages). **They decide nothing**:
+sg-netd lets a standard user join Wi-Fi and refuses them adapter settings,
+and the programs say so in Windows' words. They carry a common-controls 6
+manifest (`src/sg-net.rc`) for the visual style and `BCM_SETSHIELD`; tab pages
+call `EnableThemeDialogTexture`, or every label paints a grey box on the tab.
+
+- **The flyout places itself from `Shell_TrayWnd`'s rectangle.** Under Wine
+  `ABM_GETTASKBARPOS` answered TRUE with an empty rectangle, and the work area
+  includes the taskbar. It is owned by the (never shown) tray window, so it
+  gets no taskbar button.
+- **`GetNumberFormat` prints 0 as nothing** with `LeadingZero = 0`.
+- **Gate: `test/net-ui-check.sh`** runs both programs under Wine against the
+  real sg-netctl bridge and sg-netd with a stand-in nmcli: the tiles and every
+  Details row, the IPv4 dialog's OK as exactly one `nmcli connection modify`
+  (and refused for a standard user, and for a bad mask or an off-subnet
+  gateway before anything is asked), the flyout's list, Connect with the key in
+  the saved profile and on no command line, a wrong key, and the windows
+  through the programs' own re-launch -- with screenshots in
+  `build/net-ui-*.png`. **The test prefix must put programs on the shell's
+  desktop** (`HKCU\Software\Wine\Explorer\Desktop=shell`, as
+  sg-run-explorer does), or every window is a bare X window outside it with no
+  caption. The real NetworkManager, radio and DHCP are sg-image's `make net-test`.

@@ -15,6 +15,10 @@ PANELS = sg-taskbar sg-start sg-mstsc
 CONTROL_SRC  = $(wildcard src/control/*.c)
 CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
                -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi
+# The network programs: sg-netclient.h and a common-controls 6 manifest.
+NET_PANELS = sg-ncpa sg-netflyout
+WINDRES64 ?= x86_64-w64-mingw32-windres
+NET_LIBS = -lcomctl32 -luxtheme $(LIBS)
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -30,6 +34,11 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
 	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
+	@$(WINDRES64) -I src src/sg-net.rc -O coff -o $(BUILD)/sg-net-res64.o
+	@for p in $(NET_PANELS); do \
+	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
+	        && echo "built $$p (64-bit)"; \
+	done
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -43,6 +52,7 @@ test: build
 	@sh test/admind-check.sh
 	@sh test/control-check.sh
 	@sh test/gpresult-check.sh
+	@sh test/net-ui-check.sh
 
 clean:
 	rm -rf $(BUILD)

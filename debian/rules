@@ -14,6 +14,7 @@ override_dh_auto_install:
 	    build/sg-mstsc64.exe build/sg-mstsc32.exe \
 	    build/sg-control64.exe build/sg-control32.exe \
 	    build/sg-gpresult64.exe build/sg-gpresult32.exe \
+	    build/sg-ncpa64.exe build/sg-netflyout64.exe \
 	    debian/sg-shell/usr/libexec/stained-glass/shell/
 	# The Control Panel's privileged half: a fixed list of administrative
 	# operations for requests from SYSTEM (see admin/sg-admind).

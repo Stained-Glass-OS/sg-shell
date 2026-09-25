@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Network Connections (sg-ncpa). `ncpa.cpl` in the Run box,
+; ShellExecute("ncpa.cpl") and scripts that run it open our Network
+; Connections window, as they open Microsoft's on Windows. The Control Panel's
+; `control ncpa.cpl` goes to the same program.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\ncpa.cpl]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-ncpa64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\ncpa.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-ncpa64.exe"
