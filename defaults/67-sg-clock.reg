@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Alarms & Clock (sg-clock). The ms-clock: URI opens it
+; (ms-clock:alarm, :worldclock, :timer and :stopwatch choose the page), as
+; Settings' "Add clocks for different time zones" does.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-clock]
+@="URL:ms-clock"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-clock\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-clock64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-clock\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-clock64.exe\" \"%1\""

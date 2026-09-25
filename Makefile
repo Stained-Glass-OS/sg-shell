@@ -53,6 +53,8 @@ MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lsetupapi -liphlpapi -lws2_32 -lshel
 # Terminal (wt.exe): src/terminal/, its screen (vt.c) also built natively for its unit test.
 TERMINAL_SRC  = $(wildcard src/terminal/*.c)
 TERMINAL_LIBS = -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
+# Alarms & Clock (sg-clock): src/clock/, its icon drawn at build time.
+CLOCK_LIBS = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32 -lm
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -136,6 +138,10 @@ build:
 	@$(WINDRES64) -I src/terminal -I $(BUILD) src/terminal/terminal.rc -O coff -o $(BUILD)/sg-terminal-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-terminal64.exe $(TERMINAL_SRC) \
 	    $(BUILD)/sg-terminal-res64.o $(TERMINAL_LIBS) && echo "built sg-terminal (64-bit)"
+	@python3 src/clock/gen-icon.py $(BUILD)/sg-clock.ico
+	@$(WINDRES64) -I src/clock -I $(BUILD) src/clock/clock.rc -O coff -o $(BUILD)/sg-clock-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-clock64.exe src/clock/main.c \
+	    $(BUILD)/sg-clock-res64.o $(CLOCK_LIBS) && echo "built sg-clock (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -150,6 +156,7 @@ test: build
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
 	@sh test/terminal-check.sh
+	@sh test/clock-check.sh
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
 	@sh test/dictate-check.sh

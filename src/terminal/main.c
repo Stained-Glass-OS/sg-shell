@@ -1007,12 +1007,13 @@ static LRESULT CALLBACK settings_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             g_cols = g_rows = 0;
             resize_grid();
             InvalidateRect(g_view, NULL, FALSE);
+            EnableWindow(g_wnd, TRUE);      /* before it goes, or another program's window is activated */
             DestroyWindow(hwnd);
             return 0;
         }
-        if (LOWORD(wp) == IDCANCEL) { DestroyWindow(hwnd); return 0; }
+        if (LOWORD(wp) == IDCANCEL) { EnableWindow(g_wnd, TRUE); DestroyWindow(hwnd); return 0; }
         break;
-    case WM_CLOSE: DestroyWindow(hwnd); return 0;
+    case WM_CLOSE: EnableWindow(g_wnd, TRUE); DestroyWindow(hwnd); return 0;
     case WM_DESTROY: g_set_dlg = NULL; EnableWindow(g_wnd, TRUE); SetForegroundWindow(g_wnd); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);

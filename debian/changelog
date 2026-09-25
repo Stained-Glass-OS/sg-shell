@@ -1,3 +1,16 @@
+sg-shell (0.1.0-29) unstable; urgency=medium
+
+  * sg-clock: Alarms & Clock (ms-clock:) -- alarms with repeat days and
+    snooze, a world clock, timers and a stopwatch with laps; our own
+    notification toasts with a synthesized chime; keeps running for its
+    alarms and timers when closed and starts with the session while an
+    alarm is on. defaults/67-sg-clock.reg; in the Start menu.
+  * Terminal's settings dialog: its owner is enabled before it closes, so
+    another program's window is not brought to the front.
+  * Gate: test/clock-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 09:17:29 -0700
+
 sg-shell (0.1.0-28) unstable; urgency=medium
 
   * Disk Cleanup (cleanmgr.exe, sg-cleanmgr64.exe via App Paths): Windows'

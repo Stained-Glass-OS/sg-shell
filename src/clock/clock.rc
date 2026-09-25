@@ -1,0 +1,5 @@
+/* Alarms & Clock's resources: its icon (drawn at build time by gen-icon.py)
+ * and a common-controls 6 manifest for its dialogs. */
+#include <winuser.h>
+1 ICON "sg-clock.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "clock.manifest"

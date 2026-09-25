@@ -46,6 +46,7 @@ wine-sg or an X server.
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-settings` | **Settings** (Windows 10's, Win+I, `SystemSettings.exe`, every `ms-settings:` URI) -- the Control Panel's program in the Settings frame, sharing its pages' logic. System, Devices, Network & Internet, Personalization, Apps, Accounts, Time & Language, Ease of Access, Privacy, Update & Security. `defaults/65-sg-settings.reg`; sg-start lists it and its rail's Settings opens it. See "Settings" below. |
 | `sg-terminal` | **Terminal** (Windows Terminal, `wt.exe`, Win+X > Terminal): tabs of shells on pseudo consoles -- PowerShell 7, Command Prompt, Git Bash and Windows PowerShell when present -- with a VT screen of our own, 16/256/RGB colours, scrollback, mouse selection, copy/paste, zoom, full screen, and `wt`'s command line (`-p`, `-d`, `--title`, `new-tab`, `;`). `defaults/66-sg-terminal.reg`; sg-start lists it. See "Terminal" below. |
+| `sg-clock` | **Alarms & Clock** (`ms-clock:`): alarms (repeat days, snooze, a notification with a chime of our own), world clock, timers, stopwatch with laps; keeps running for its alarms and timers when closed, and starts with the session while an alarm is on. `defaults/67-sg-clock.reg`; sg-start lists it. See "Alarms & Clock" below. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
@@ -331,6 +332,47 @@ drawn by `gen-icon.py` at build time.
   own, profiles of the user's own, custom title bar tabs (the tabs are under
   a normal caption), bracketed paste, mouse reporting to programs, Unicode
   combining marks.
+
+## Alarms & Clock (sg-clock)
+
+`src/clock/main.c`, one owner-drawn window (every clickable thing is a
+rectangle in one table, as in Calculator), four pages under a pivot: Alarm,
+World Clock, Timer, Stopwatch. Dialogs (New alarm, New timer, Add a new
+location) are plain controls. The icon is drawn by `gen-icon.py`.
+
+- **Notifications** are our own toast windows (topmost, tool windows that
+  never take the focus, owned by the main window so no taskbar button),
+  stacked above `Shell_TrayWnd`: Alarm (Snooze, Dismiss) and Timer (Dismiss),
+  with a two-note chime synthesized into a WAV in memory (`PlaySound`
+  `SND_MEMORY | SND_LOOP`) until dismissed. An "only once" alarm is turned off
+  when dismissed, not when it rings, so a snoozed one rings again.
+- **It keeps going when closed**: with an alarm on or a timer running,
+  closing hides the window; with an alarm on, `HKCU\...\Run\Stained Glass
+  Clock` starts it with the session (`/background`). One instance (mutex
+  `Local\StainedGlassAlarmsAndClock`); a second start hands over its page.
+- **World clock**: time zones from `EnumDynamicTimeZoneInformation` and their
+  `Display` names; the city is the one searched for ("tokyo" -> Tokyo).
+  **Wine's `SystemTimeToTzSpecificLocalTimeEx` is a stub** (it raised
+  EXCEPTION_WINE_STUB): the time is `GetTimeZoneInformationForYear` +
+  `SystemTimeToTzSpecificLocalTime`.
+- **A dialog's owner is enabled before the dialog goes**: enabled in
+  `WM_DESTROY`, Windows (and Wine) had already activated another program's
+  window (Notepad came to the front and ate the next click).
+- Kept in `HKCU\Software\Stained Glass\Clock` (`Alarms`, `Cities`,
+  `Timers` as REG_MULTI_SZ, `Page`).
+- **`SG_CLOCK_DUMP=<file>`**: the page, every button's screen centre, alarms,
+  cities with their time and offset, timers, the stopwatch, notifications
+  and their buttons, an open dialog's controls.
+- **Gate: `test/clock-check.sh`** (display :122): `ms-clock:stopwatch`; the
+  stopwatch runs, laps, pauses (stays), resets; a 3-second timer made in the
+  dialog fires its notification, Dismiss; World Clock finds Tokyo at the
+  system's Tokyo time; an alarm for the next minute goes off, Snooze snoozes
+  it; the Run entry; closing hides and keeps it running; everything kept
+  after a restart. Screenshots `build/clock-*.png`. Mutants
+  `-DSG_MUTANT_NOTIMERFIRE` and `-DSG_MUTANT_STOPWATCH` (`SG_CLOCK_EXE=`)
+  turn it red.
+- **Not yet:** Focus sessions, alarm sounds to choose, the lock screen's
+  alarm, waking the PC from sleep.
 
 ## The Start menu (sg-start)
 
