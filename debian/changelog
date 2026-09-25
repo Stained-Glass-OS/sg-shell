@@ -1,3 +1,15 @@
+sg-shell (0.1.0-16) unstable; urgency=medium
+
+  * sg-sticky: Sticky Notes -- borderless notes (a strip with + new note,
+    ... and close), a rich text body (Ctrl+B/I/U, Ctrl+T strikethrough,
+    Ctrl+Shift+L bullets, a formatting bar), seven colours, Notes list with
+    search, Delete note (asks). One process owns every note; notes save
+    themselves to %LOCALAPPDATA%\Stained Glass\Sticky Notes and come back at
+    the next start. App Paths: stikynot.exe (defaults/78-sg-sticky.reg).
+    Start menu: Sticky Notes. Gate: test/sticky-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 02:15:01 -0700
+
 sg-shell (0.1.0-15) unstable; urgency=medium
 
   * sg-paint: Paint (mspaint.exe), an MS-Paint-class raster editor with

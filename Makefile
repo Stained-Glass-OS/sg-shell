@@ -37,6 +37,8 @@ TASKMGR_LIBS = -lntdll -lversion -liphlpapi -ladvapi32 -lcomdlg32 -lshell32 -lgd
 # Paint (mspaint.exe): several files (src/paint/), WIC, an icon generated at build time.
 PAINT_SRC  = $(wildcard src/paint/*.c)
 PAINT_LIBS = -lcomdlg32 -lcomctl32 -lshell32 -lgdi32 -luser32 -lmsimg32 -lole32 -luuid -lwindowscodecs
+# Sticky Notes (sg-sticky): src/sticky/.
+STICKY_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -lole32 -luuid
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -83,6 +85,10 @@ build:
 	@$(WINDRES64) -I src/paint -I $(BUILD) src/paint/paint.rc -O coff -o $(BUILD)/sg-paint-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-paint64.exe $(PAINT_SRC) $(BUILD)/sg-paint-res64.o $(PAINT_LIBS) \
 	    && echo "built sg-paint (64-bit)"
+	@python3 src/sticky/gen-icon.py $(BUILD)/sg-sticky.ico
+	@$(WINDRES64) -I src/sticky -I $(BUILD) src/sticky/sg-sticky.rc -O coff -o $(BUILD)/sg-sticky-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sticky64.exe src/sticky/sg-sticky.c $(BUILD)/sg-sticky-res64.o $(STICKY_LIBS) \
+	    && echo "built sg-sticky (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -104,6 +110,7 @@ test: build
 	@sh test/photos-check.sh
 	@sh test/taskmgr-check.sh
 	@sh test/paint-check.sh
+	@sh test/sticky-check.sh
 
 clean:
 	rm -rf $(BUILD)

@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Sticky Notes (sg-sticky). `stikynot` in the Run box, and
+; ShellExecute of stikynot.exe (Windows 7's Sticky Notes' name, which scripts and
+; guides still use), open it.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\stikynot.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-sticky64.exe"

@@ -54,6 +54,7 @@ wine-sg or an X server.
 | `sg-photos` | **Photos** -- the image viewer, Windows 10 Photos' layout in the Stained Glass Light palette: a toolbar (the file's name and "2 of 5"; Open, Zoom in/out, Actual size/Fit, Rotate, Delete, Edit with Paint, Slideshow, File information, Full screen, See more), the picture fitted (never enlarged), arrows on it for the folder's other pictures in Explorer's name order. Reads whatever WIC decodes (animated GIFs animate, the largest icon size, JPEG EXIF orientation). Zoom (Ctrl+wheel at the pointer, +/-, Ctrl+0, Ctrl+1, double-click) and drag to pan; Left/Right/wheel/Home/End; Ctrl+R rotate, Ctrl+S save it rotated, Save a copy; Delete to the Recycle Bin; F5 slideshow, F11 full screen; Alt+Enter file information; Ctrl+C (picture and file); Ctrl+E Paint; Set as background. Images, `photos.exe` and `ms-photos:` via `defaults/73-sg-photos.reg`. See "Photos" below. |
 | `sg-taskmgr` | **Task Manager**, Windows 10's. Fewer details (the running apps, End task) and More details: Processes (Apps / Background / Windows processes, CPU, memory, disk shaded by load, totals in the headers, sort, End task, Open file location, Go to details), Performance (CPU, memory, network graphs and figures), Startup (Run keys and Startup folders, Enable/Disable through `StartupApproved`), Users, Details, Services (start/stop/restart). File > Run new task (with administrative privileges = `runas`), Always on top, Update speed. `taskmgr.exe` resolves via App Paths (`defaults/76-sg-taskmgr.reg`); sg-start lists it. See "Task Manager" below. |
 | `sg-paint` | **Paint** (`mspaint.exe`), an MS-Paint-class raster editor, our own drawing: Windows 10 Paint's ribbon (File menu; Home: Clipboard, Image -- rectangular/free-form select, select all, invert, delete, transparent selection, Crop, Resize and Skew, Rotate/flip --, Tools -- pencil, fill, text, eraser, colour picker, magnifier --, Brushes (6), Shapes (16, outline/fill), Size, Color 1/Color 2, 20-colour palette + custom row, Edit colors; View: zoom, gridlines, status bar, full screen), a canvas with resize handles, a status bar (cursor, selection, picture size, zoom slider), undo/redo, CF_DIB cut/copy/paste, files through WIC (PNG, JPEG, BMP, GIF, TIFF). App Paths `mspaint.exe` and the pictures' Edit verb: `defaults/71-sg-paint.reg`; sg-start lists it. See "Paint" below. |
+| `sg-sticky` | **Sticky Notes.** Borderless notes with a strip in a darker shade (+ new note, ... menu, x close), a RichEdit body (Ctrl+B/I/U, Ctrl+T strikethrough, Ctrl+Shift+L bullets, and a formatting bar), seven colours, Notes list with search, Delete note (asks). One process owns every note; notes save themselves (debounced) to `%LOCALAPPDATA%\Stained Glass\Sticky Notes\<id>.note` and come back at the next start. `stikynot.exe` resolves via App Paths (`defaults/78-sg-sticky.reg`); sg-start lists it. See "Sticky Notes" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -532,3 +533,37 @@ build time (PIL) -- no binary is committed.
 - **Things that bit:** clicking a taskbar button of the window already in
   front minimizes it, and Alt+F4 with the taskbar focused goes to explorer --
   the gate uses the probe and the caption's close button instead.
+## Sticky Notes (sg-sticky)
+
+`src/sticky/sg-sticky.c`. Each note is a `WS_POPUP` window we draw ourselves
+(strip, buttons, frame, formatting bar) around a RichEdit 4.1 (`msftedit`);
+`WM_NCHITTEST` makes the strip a caption and the edges resize borders. The
+... menu is a child window laid over the strip: the seven colours, Notes list,
+Delete note. Closing a note (x, Ctrl+W) keeps it -- it is in the list and
+comes back from there; the process exits once no note and no list is shown.
+
+- **One process.** Mutex `Local\StainedGlassStickyNotes`; a second start
+  finds the message-only window `SgStickyHost` (`FindWindowEx(HWND_MESSAGE)`)
+  and hands it its command line by `WM_COPYDATA`: nothing (the open notes to
+  the front, or the list), `/new`, `/list`, `/quit`.
+- **Storage.** One file per note: `StickyNote 1`, `Color=`, `Rect=x,y,w,h`,
+  `Open=`, a blank line, then the text as RTF (`EM_STREAMOUT`). Saved 600 ms
+  after the last change or move, through a `.tmp` renamed into place, and at
+  exit and `WM_ENDSESSION`.
+- **Things that bit.** `EM_GETCHARFORMAT` widens `dwMask` to every attribute
+  the selection shares; handing that back to `EM_SETCHARFORMAT` with only the
+  bold bit in `dwEffects` clears `CFE_AUTOBACKCOLOR` and paints the text on
+  black. Keep the mask you asked for. `near` is a macro in `windows.h`.
+- **`SG_STICKY_DUMP=<file>`**: every note (text, colour, rectangle, button
+  centres on screen), the open menu's swatches and items, the list (items,
+  search box), the number of `.note` files; rewritten every 400 ms.
+- **Gate: `test/sticky-check.sh`** (display :118): `stikynot.exe` through App
+  Paths opens a first note and saves it at once; typed text, Ctrl+B, the ...
+  menu's green, a drag of the strip; then `taskkill /f` and a new start: the
+  note is back with its text, bold, colour and place, and the screen shows it
+  green with the text not on a black block; `/new` handled by the running copy;
+  `/list` and its search; Delete note asks and removes only that note's file.
+  Screenshots `build/sticky-*.png`. Mutants built with `-DSG_MUTANT_NO_COLOR`
+  (the colour not read back) and `-DSG_MUTANT_WIDE_MASK` (the black block)
+  (`SG_STICKY_EXE=`) turn it red.
+
