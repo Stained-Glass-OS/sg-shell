@@ -318,9 +318,9 @@ Startup tab; settings in `HKCU\Software\Stained Glass\TaskManager`.
   table in `data.c`.
 - **Startup: disabling is recorded as Windows records it** -- a 12-byte
   `StartupApproved\{Run,Run32,StartupFolder}` value, first byte 02 enabled,
-  03 disabled (HKCU for per-user entries, HKLM for machine ones) -- **but Wine's
-  wineboot runs the Run keys without reading it**, so a disabled entry still
-  starts until wine-sg honours `StartupApproved`.
+  03 disabled (HKCU for per-user entries, HKLM for machine ones) -- and
+  wine-sg 0125 (10.0-35) makes wineboot skip the disabled ones (Run, Run32,
+  the user's Startup folder), so Disable takes effect at the next sign-in.
 - **`taskmgr.exe` is Wine's own first**: CreateProcess and `start` find
   `system32\taskmgr.exe` before App Paths. wine-sg 0121 (10.0-35) makes that
   one hand off to App Paths (as 0072 does for control.exe), and 0123 binds
