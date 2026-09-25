@@ -1,3 +1,15 @@
+sg-shell (0.1.0-23) unstable; urgency=medium
+
+  * Device Manager (devmgmt.msc): the hardware from sg-sysinfo (sysfs, udev,
+    the bound kernel driver and module) and the devices Wine enumerates
+    (SetupAPI), merged, in Windows' categories or by connection;
+    Properties (General with Windows' status text, Driver, Details); a
+    device with no driver is marked and names what sg-drivers would
+    install.
+  * Gate: test/devmgmt-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 08:13:41 -0700
+
 sg-shell (0.1.0-22) unstable; urgency=medium
 
   * Event Viewer (eventvwr.exe, eventvwr.msc; sg-eventvwr64.exe via App

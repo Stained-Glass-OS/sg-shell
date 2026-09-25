@@ -29,7 +29,7 @@ int g_dpi = 96;
 HINSTANCE g_inst;
 HFONT g_font, g_font_bold, g_font_head;
 HWND g_main;
-HIMAGELIST g_icons;
+HIMAGELIST g_icons, g_icons32;
 
 static HWND g_tree, g_list, g_toolbar, g_status, g_actions, g_banner, g_empty;
 static node_t g_roots;              /* a sentinel: its children are the roots */
@@ -57,6 +57,9 @@ static WCHAR g_dump_path[MAX_PATH];
 static verbs_t g_row_verbs, g_node_verbs;
 static BOOL g_have_row;
 static LPARAM g_row_key;
+static BOOL g_custom_have;      /* a custom view's own selection */
+static LPARAM g_custom_key;
+static WCHAR g_custom_name[128];
 
 enum
 {
@@ -176,6 +179,7 @@ void node_select(node_t *n)
         }
     }
     node_expand(n);
+    g_custom_have = FALSE;
     g_custom_list_rc = FALSE;
     n->custom = FALSE;
     frame_banner(NULL);
@@ -482,7 +486,7 @@ static void build_links(void)
     {
         int i2 = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
         if (i2 >= 0) ListView_GetItemText(g_list, i2, 0, name, ARRAY_SIZE(name));
-        if (g_cur->custom && !name[0]) lstrcpyW(name, L"Selected Item");
+        if (g_cur->custom) lstrcpynW(name, g_custom_name[0] ? g_custom_name : L"Selected Item", ARRAY_SIZE(name));
         add_link(0, name, -1, TRUE, TRUE);
         for (i = 0; i < g_row_verbs.n; i++)
             add_link(CMD_ROWVERB + i, g_row_verbs.v[i].name, g_row_verbs.v[i].icon, FALSE, g_row_verbs.v[i].enabled);
@@ -533,7 +537,7 @@ void frame_update_verbs(void)
     {
         g_cur->ops->verbs(g_cur, 0, FALSE, &g_node_verbs);
         if (!g_cur->custom) g_have_row = pane_selected(&g_row_key);
-        else g_have_row = FALSE;
+        else { g_have_row = g_custom_have; g_row_key = g_custom_key; }
         if (g_have_row) g_cur->ops->verbs(g_cur, g_row_key, TRUE, &g_row_verbs);
     }
     else if (g_cur && !g_cur->custom) g_have_row = pane_selected(&g_row_key);
@@ -543,8 +547,11 @@ void frame_update_verbs(void)
 }
 
 /* a custom view reports its own selection: key and whether there is one */
-void frame_custom_selection(LPARAM key, BOOL have)
+void frame_custom_selection(LPARAM key, BOOL have, const WCHAR *name)
 {
+    g_custom_have = have;
+    g_custom_key = key;
+    lstrcpynW(g_custom_name, name ? name : L"", ARRAY_SIZE(g_custom_name));
     memset(&g_row_verbs, 0, sizeof(g_row_verbs));
     g_have_row = have;
     g_row_key = key;
@@ -1280,6 +1287,12 @@ static void load_icons(void)
     }
     if (bmp) ImageList_Add(g_icons, bmp, NULL);
     DeleteObject(bmp);
+    g_icons32 = ImageList_Create(32, 32, ILC_COLOR32, IC_COUNT, 4);
+    if ((bmp = LoadImageW(g_inst, MAKEINTRESOURCEW(3), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION)))
+    {
+        ImageList_Add(g_icons32, bmp, NULL);
+        DeleteObject(bmp);
+    }
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)

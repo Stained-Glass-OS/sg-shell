@@ -851,3 +851,37 @@ saved one. New events appear by themselves (the count is polled every second).
   shell desktop and theme settings in its own hive (`reg add` as that user),
   as a new profile gets them from Default User on the image.
 
+### Device Manager (devmgmt.msc)
+
+`src/mmc/devices.c`, a custom view: a TreeView in the result pane (the
+computer, then Windows' categories -- Audio inputs and outputs, Cameras, Disk
+drives, Display adapters, Human Interface Devices, Keyboards, Mice, Monitors,
+Network adapters, Processors, Storage controllers, System devices, USB
+controllers, ...), or by connection (each device under its `PARENT`).
+**Two sources**: `sg-sysinfo devices` (the real hardware, the bound kernel
+driver and its module's version/file/licence/author, `STATUS nodriver` and
+`SG-DRIVER`) and SetupAPI (`SetupDiGetClassDevs(DIGCF_ALLCLASSES |
+DIGCF_PRESENT)`: what Wine enumerates for Windows programs -- its display
+adapters and monitors, the HID/USB/Bluetooth bus drivers). A Wine device with
+a Linux one's PCI/USB vendor and product (`VEN_`/`DEV_`, `VID_`/`PID_`) is
+one entry, its Windows instance ID among the properties. Properties: General
+(type, maker, location, status in Windows' words -- "This device is working
+properly." or "The drivers for this device are not installed. (Code 28)" and
+what sg-drivers would install), Driver (the kernel driver and module),
+Details (every property). **A device with no driver** gets the warning
+picture (Wine's TreeView draws no overlay images, so the icon itself is the
+warning), its category opens by itself and a banner says so. Nothing is
+changed here: Linux binds drivers, sg-drivers installs third-party ones.
+
+- **Gate: `test/devmgmt-check.sh`**: on this machine through the real
+  sg-sysinfo, every display and network adapter sg-sysinfo reports is under
+  Display adapters / Network adapters with its driver, SetupAPI devices are
+  there, and the display adapter's Properties show its kernel module; then a
+  made-up machine (the gate writes a sysfs for `SG_SYSFS`, a `pci.ids`, and
+  stand-ins for `SG_DRIVERS`/`SG_DPKG_QUERY`): a VM's bochs display and
+  virtio network adapter with their drivers, an NVIDIA card with no driver
+  (marked, visible, the banner, Properties "Code 28" and `nvidia-driver`),
+  and Devices by connection. 14 checks. Mutants `-DSG_MUTANT_NOLINUX` (only
+  SetupAPI) and `-DSG_MUTANT_NOWARN` (no-driver ignored) turn it red.
+  Screenshots `build/devmgmt-*.png`.
+

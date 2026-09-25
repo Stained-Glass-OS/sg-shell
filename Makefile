@@ -49,7 +49,7 @@ UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
 # diskmgmt.msc, compmgmt.msc; the same program as sg-eventvwr for eventvwr.exe):
 # src/mmc/, pictures drawn at build time by gen-icons.py.
 MMC_SRC  = $(wildcard src/mmc/*.c)
-MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lshell32 -ladvapi32 -lgdi32 -luser32 -lole32 -luuid
+MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lsetupapi -lshell32 -ladvapi32 -lgdi32 -luser32 -lole32 -luuid
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -149,6 +149,7 @@ test: build
 	@sh test/charmap-check.sh
 	@sh test/services-check.sh
 	@sh test/eventvwr-check.sh
+	@sh test/devmgmt-check.sh
 
 clean:
 	rm -rf $(BUILD)

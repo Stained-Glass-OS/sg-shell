@@ -58,6 +58,7 @@ enum
     IC_COUNT
 };
 extern HIMAGELIST g_icons;          /* 16x16 (scaled for dpi) */
+extern HIMAGELIST g_icons32;        /* 32x32, for dialogs */
 
 /* ---- the console tree ------------------------------------------------------ */
 typedef struct node node_t;
@@ -143,7 +144,7 @@ void pane_set_list_rect(const RECT *rc);/* a custom view may shrink the list (pr
 /* ---- frame services -------------------------------------------------------- */
 void frame_status(const WCHAR *fmt, ...);
 void frame_update_verbs(void);          /* re-query verbs: toolbar, Action menu, Actions pane */
-void frame_custom_selection(LPARAM key, BOOL have);
+void frame_custom_selection(LPARAM key, BOOL have, const WCHAR *name);  /* a custom view's selection */
 void frame_set_initial(node_t *n);      /* the node to open first (e.g. eventvwr /c:System) */  /* a custom view's selection */
 void frame_banner(const WCHAR *text);   /* a yellow bar above the result pane; NULL hides */
 int frame_message(UINT flags, const WCHAR *title, const WCHAR *fmt, ...);
