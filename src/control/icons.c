@@ -130,8 +130,119 @@ static void check(HDC dc, COLORREF c, int w, int x, int y, int s)
     line(dc, c, w, pts, 3);
 }
 
+
+/* ---- Settings' glyphs: thin line drawings in one colour --------------------------------- */
+COLORREF g_glyph_color = RGB(0x70, 0x30, 0xC0);
+
+static void rect_line(HDC dc, COLORREF c, int w, int l, int t, int r, int b)
+{
+    int pts[] = { l, t, r, t, r, b, l, b, l, t };
+    line(dc, c, w, pts, 5);
+}
+
+static void paint_glyph(HDC dc, int icon)
+{
+    COLORREF c = g_glyph_color;
+    int w = 3;
+    switch (icon) {
+    case IC_G_SYSTEM: {                 /* a laptop */
+        int base[] = { 4, 50, 60, 50 };
+        rect_line(dc, c, w, 12, 14, 52, 44);
+        line(dc, c, w, base, 2);
+        break;
+    }
+    case IC_G_PC: {                     /* a monitor on a stand */
+        int stand[] = { 32, 46, 32, 54 }, foot[] = { 20, 55, 44, 55 };
+        rect_line(dc, c, w, 6, 10, 58, 46);
+        line(dc, c, w, stand, 2); line(dc, c, w, foot, 2);
+        break;
+    }
+    case IC_G_DEVICES: {                /* a keyboard and a speaker */
+        int i;
+        rect_line(dc, c, w, 4, 28, 40, 52);
+        for (i = 0; i < 4; i++) { int k[] = { 10 + i * 8, 36, 12 + i * 8, 36 }; line(dc, c, w, k, 2); }
+        { int sp[] = { 12, 44, 32, 44 }; line(dc, c, w, sp, 2); }
+        rect_line(dc, c, w, 46, 12, 60, 52);
+        ring(dc, c, w, 48, 34, 58, 44);
+        break;
+    }
+    case IC_G_NETWORK: {                /* a globe */
+        int h[] = { 8, 32, 56, 32 }, v[] = { 32, 8, 32, 56 };
+        ring(dc, c, w, 8, 8, 56, 56);
+        ring(dc, c, w, 21, 8, 43, 56);
+        line(dc, c, w, h, 2); line(dc, c, w, v, 2);
+        break;
+    }
+    case IC_G_PERSONAL: {               /* a brush over a canvas */
+        int handle[] = { 54, 8, 30, 34 };
+        rect_line(dc, c, w, 6, 14, 44, 52);
+        line(dc, c, w + 2, handle, 2);
+        brush_ellipse(dc, c, 22, 30, 34, 42);
+        break;
+    }
+    case IC_G_APPS: {                   /* a list of apps */
+        int i;
+        for (i = 0; i < 3; i++) {
+            int y = 12 + i * 16, l[] = { 28, y + 6, 58, y + 6 };
+            rect_line(dc, c, w, 8, y, 20, y + 12);
+            line(dc, c, w, l, 2);
+        }
+        break;
+    }
+    case IC_G_ACCOUNTS:                 /* a person */
+        ring(dc, c, w, 20, 6, 44, 30);
+        arc(dc, c, w, 8, 34, 56, 78, 56, 56, 8, 56);
+        break;
+    case IC_G_TIME: {                   /* a clock and a letter */
+        int hands[] = { 24, 14, 24, 26, 32, 30 }, a[] = { 38, 58, 48, 34, 58, 58 }, bar[] = { 42, 50, 54, 50 };
+        ring(dc, c, w, 6, 4, 42, 40);
+        line(dc, c, w, hands, 3);
+        line(dc, c, w, a, 3); line(dc, c, w, bar, 2);
+        break;
+    }
+    case IC_G_EOA: {                    /* a figure with arms out, in a circle */
+        int arms[] = { 18, 26, 32, 28, 46, 26 }, body[] = { 32, 28, 32, 40 }, legs[] = { 24, 52, 32, 40, 40, 52 };
+        ring(dc, c, w, 4, 4, 60, 60);
+        brush_ellipse(dc, c, 28, 12, 36, 20);
+        line(dc, c, w, arms, 3); line(dc, c, w, body, 2); line(dc, c, w, legs, 3);
+        break;
+    }
+    case IC_G_PRIVACY: {                /* a padlock */
+        rect_line(dc, c, w, 12, 28, 52, 58);
+        arc(dc, c, w, 20, 6, 44, 46, 44, 26, 20, 26);
+        { int s1[] = { 20, 26, 20, 28 }, s2[] = { 44, 26, 44, 28 }; line(dc, c, w, s1, 2); line(dc, c, w, s2, 2); }
+        brush_ellipse(dc, c, 28, 38, 36, 46);
+        break;
+    }
+    case IC_G_UPDATE: {                 /* two arrows chasing each other */
+        int h1[] = { 50, 8, 52, 20, 40, 20 }, h2[] = { 14, 56, 12, 44, 24, 44 };
+        arc(dc, c, w, 8, 8, 56, 56, 52, 20, 8, 32);
+        arc(dc, c, w, 8, 8, 56, 56, 12, 44, 56, 32);
+        line(dc, c, w, h1, 3); line(dc, c, w, h2, 3);
+        break;
+    }
+    case IC_G_HOME: {                   /* a house */
+        int roof[] = { 6, 30, 32, 8, 58, 30 }, walls[] = { 14, 24, 14, 56, 50, 56, 50, 24 }, door[] = { 26, 56, 26, 40, 38, 40, 38, 56 };
+        line(dc, c, w, roof, 3); line(dc, c, w, walls, 4); line(dc, c, w, door, 4);
+        break;
+    }
+    case IC_G_SEARCH: {                 /* a magnifier */
+        int handle[] = { 38, 38, 56, 56 };
+        ring(dc, c, w, 8, 8, 42, 42);
+        line(dc, c, w + 1, handle, 2);
+        break;
+    }
+    case IC_G_BACK: {                   /* an arrow to the left */
+        int shaft[] = { 8, 32, 56, 32 }, head[] = { 26, 14, 8, 32, 26, 50 };
+        line(dc, c, w, shaft, 2); line(dc, c, w, head, 3);
+        break;
+    }
+    }
+}
+
 static void paint_icon(HDC dc, int icon)
 {
+    if (icon >= IC_G_SYSTEM && icon < IC_COUNT) { paint_glyph(dc, icon); return; }
     switch (icon) {
     case IC_SHIELD: {                   /* the elevation shield: gold and blue */
         int left[] = { 32, 4, 32, 60, 10, 38, 8, 12 };
@@ -288,7 +399,7 @@ static void paint_icon(HDC dc, int icon)
     }
 }
 
-struct cached { int icon, size; HBITMAP bmp; };
+struct cached { int icon, size; COLORREF color; HBITMAP bmp; };
 static struct cached g_cache[96];
 static int g_ncache;
 
@@ -337,11 +448,13 @@ void draw_icon(HDC dc, int icon, int x, int y, int size)
     HDC mem;
     if (size <= 0) return;
     for (i = 0; i < g_ncache; i++)
-        if (g_cache[i].icon == icon && g_cache[i].size == size) { bmp = g_cache[i].bmp; break; }
+        if (g_cache[i].icon == icon && g_cache[i].size == size &&
+            (icon < IC_G_SYSTEM || g_cache[i].color == g_glyph_color)) { bmp = g_cache[i].bmp; break; }
     if (!bmp) {
         if (!(bmp = render(icon, size))) return;
         if (g_ncache < (int)ARRAYSIZE(g_cache)) {
-            g_cache[g_ncache].icon = icon; g_cache[g_ncache].size = size; g_cache[g_ncache].bmp = bmp; g_ncache++;
+            g_cache[g_ncache].icon = icon; g_cache[g_ncache].size = size; g_cache[g_ncache].color = g_glyph_color;
+            g_cache[g_ncache].bmp = bmp; g_ncache++;
         }
     }
     mem = CreateCompatibleDC(dc);

@@ -9,13 +9,6 @@
 
 enum { ID_LIST = CMD_PAGE_FIRST + 1, ID_UNINSTALL, ID_CHANGE, ID_REPAIR, CMD_DONE };
 
-struct program {
-    WCHAR name[256], publisher[256], version[64], date[32], key[256], icon[MAX_PATH + 8], help[256];
-    WCHAR uninstall[1024], quiet[1024], modify[1024];
-    DWORD size_kb;
-    BOOL msi, no_modify, no_repair, no_remove;
-    const WCHAR *scope;
-};
 
 static struct program *g_progs;
 static int g_nprogs;
@@ -137,7 +130,18 @@ int program_count(void)
     return g_nprogs;
 }
 
+/* for Settings > Apps */
+int prog_load(void) { load_programs(); return g_nprogs; }
+const struct program *prog_get(int i) { return i >= 0 && i < g_nprogs ? &g_progs[i] : NULL; }
+
 /* the command Windows would run for this action */
+static BOOL command_for(const struct program *p, int action, WCHAR *out, int cch);
+BOOL prog_can(const struct program *p, int action)
+{
+    WCHAR cmd[1100];
+    return command_for(p, action, cmd, ARRAYSIZE(cmd));
+}
+
 static BOOL command_for(const struct program *p, int action, WCHAR *out, int cch)
 {
     out[0] = 0;
@@ -172,7 +176,7 @@ static DWORD WINAPI wait_thread(void *arg)
 }
 
 /* Run it; with wait, block until it ends. Returns FALSE if it did not start. */
-static BOOL run_action(const struct program *p, int action, BOOL wait)
+BOOL prog_run(const struct program *p, int action, BOOL wait)
 {
     WCHAR cmd[1100];
     STARTUPINFOW si = { sizeof(si) };
@@ -299,7 +303,7 @@ BOOL cmd_programs(int id, int code, HWND ctl)
     switch (id) {
     case ID_UNINSTALL: case ID_CHANGE: case ID_REPAIR:
         if ((s = selected()) < 0) return TRUE;
-        if (!run_action(&g_progs[s], id, FALSE)) {
+        if (!prog_run(&g_progs[s], id, FALSE)) {
             WCHAR msg[512];
             _snwprintf(msg, ARRAYSIZE(msg), L"%ls could not be %ls: its %ls program could not be started.", g_progs[s].name,
                        id == ID_UNINSTALL ? L"uninstalled" : id == ID_CHANGE ? L"changed" : L"repaired",
@@ -342,6 +346,6 @@ int programs_uninstall_cli(const WCHAR *name)
     int i;
     load_programs();
     for (i = 0; i < g_nprogs; i++)
-        if (!lstrcmpiW(g_progs[i].name, name)) return run_action(&g_progs[i], ID_UNINSTALL, TRUE) ? 0 : 1;
+        if (!lstrcmpiW(g_progs[i].name, name)) return prog_run(&g_progs[i], ID_UNINSTALL, TRUE) ? 0 : 1;
     return 3;
 }

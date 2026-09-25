@@ -14,7 +14,7 @@ PANELS = sg-taskbar sg-start sg-mstsc
 # The Control Panel is several files (src/control/) and needs more of Windows.
 CONTROL_SRC  = $(wildcard src/control/*.c)
 CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
-               -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi
+               -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi -lwininet -lversion
 # The network programs: sg-netclient.h and a common-controls 6 manifest.
 NET_PANELS = sg-ncpa sg-netflyout
 WINDRES64 ?= x86_64-w64-mingw32-windres
@@ -65,6 +65,12 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
 	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
+	@# Settings (SystemSettings, ms-settings:) is the Control Panel's program in its own frame
+	@# (src/control/settings.c), with its own icon and a common-controls 6 manifest.
+	@python3 src/settings/gen-icon.py $(BUILD)/sg-settings.ico
+	@$(WINDRES64) -I src/settings -I $(BUILD) src/settings/settings.rc -O coff -o $(BUILD)/sg-settings-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-settings64.exe $(CONTROL_SRC) $(BUILD)/sg-settings-res64.o $(CONTROL_LIBS) \
+	    && echo "built sg-settings (64-bit)"
 	@$(WINDRES64) -I src src/sg-net.rc -O coff -o $(BUILD)/sg-net-res64.o
 	@for p in $(NET_PANELS); do \
 	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
@@ -128,6 +134,7 @@ test: build
 	@sh test/mstsc-check.sh
 	@sh test/admind-check.sh
 	@sh test/control-check.sh
+	@sh test/settings-check.sh
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
 	@sh test/dictate-check.sh

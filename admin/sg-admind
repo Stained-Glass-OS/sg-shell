@@ -37,6 +37,7 @@
 #   user-remove NAME keep|delete
 #   timezone AREA/CITY
 #   ntp on|off
+#   time YYYY-MM-DD HH:MM:SS                 (only with synchronisation off)
 #   update-check
 #
 # Copyright (C) 2026 Stained Glass OS contributors
@@ -319,6 +320,30 @@ def op_ntp(args):
     return []
 
 
+TIME_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})")
+
+
+def op_time(args):
+    """Set the clock by hand, as Date & time's "Change" does. Refused while
+    the clock is synchronised: Windows greys the button out then too."""
+    (when,) = args
+    m = TIME_RE.fullmatch(when)
+    if not m:
+        raise Refused("'%s' is not a date and time." % when)
+    y, mo, d, h, mi, s = (int(x) for x in m.groups())
+    try:
+        time.strptime(when, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        raise Refused("'%s' is not a date and time." % when)
+    if not 2000 <= y <= 2099:
+        raise Refused("The year must be between 2000 and 2099.")
+    out = run(["timedatectl", "show", "--property=NTP", "--value"])
+    if out.returncode == 0 and out.stdout.strip() == "yes":
+        raise Refused("Turn off \"Set time automatically\" first.")
+    must(["timedatectl", "set-time", when], "The time could not be changed")
+    return []
+
+
 def op_update_check(args):
     must(["systemctl", "start", "--no-block", "sg-update-prepare.service"],
          "The update check could not be started")
@@ -335,6 +360,7 @@ OPS = {
     "user-remove": (op_user_remove, 2),
     "timezone": (op_timezone, 1),
     "ntp": (op_ntp, 1),
+    "time": (op_time, 1),
     "update-check": (op_update_check, 0),
 }
 SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password

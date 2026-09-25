@@ -90,17 +90,25 @@ struct entry {
 static struct entry *g_apps;
 static int g_napps, g_capapps;
 
-/* Control Panel pages, found by search as Windows' settings are */
+/* Settings and Control Panel pages, found by search as Windows' settings are */
 static struct entry g_settings[] = {
+    { .name = L"Settings", .path = L"ms-settings:", .args = L"", .keywords = L"settings system preferences options", .kind = K_SETTING },
+    { .name = L"Display settings", .path = L"ms-settings:display", .args = L"", .keywords = L"screen resolution monitor scale night light", .kind = K_SETTING },
+    { .name = L"Sound settings", .path = L"ms-settings:sound", .args = L"", .keywords = L"audio volume speakers microphone output input", .kind = K_SETTING },
+    { .name = L"Bluetooth and other devices", .path = L"ms-settings:bluetooth", .args = L"", .keywords = L"bluetooth devices pair", .kind = K_SETTING },
+    { .name = L"Default apps", .path = L"ms-settings:defaultapps", .args = L"", .keywords = L"default programs browser file types", .kind = K_SETTING },
+    { .name = L"Microphone privacy settings", .path = L"ms-settings:privacy-microphone", .args = L"", .keywords = L"microphone privacy access", .kind = K_SETTING },
+    { .name = L"Power & sleep settings", .path = L"ms-settings:powersleep", .args = L"", .keywords = L"power sleep screen timeout", .kind = K_SETTING },
+    { .name = L"About your PC", .path = L"ms-settings:about", .args = L"", .keywords = L"about pc name rename specifications version", .kind = K_SETTING },
     { .name = L"Control Panel", .path = L"control.exe", .args = L"", .keywords = L"settings control panel", .kind = K_SETTING },
-    { .name = L"Apps & features", .path = L"control.exe", .args = L"appwiz.cpl", .keywords = L"programs uninstall remove install add apps features", .kind = K_SETTING },
+    { .name = L"Apps & features", .path = L"ms-settings:appsfeatures", .args = L"", .keywords = L"programs uninstall remove install add apps features", .kind = K_SETTING },
     { .name = L"System", .path = L"control.exe", .args = L"/name Microsoft.System", .keywords = L"about pc computer name rename domain join edition", .kind = K_SETTING },
     { .name = L"Network Connections", .path = L"control.exe", .args = L"ncpa.cpl", .keywords = L"network adapter ethernet wifi ip address dhcp static dns", .kind = K_SETTING },
     { .name = L"Network and Sharing Center", .path = L"control.exe", .args = L"/name Microsoft.NetworkAndSharingCenter", .keywords = L"network internet sharing status", .kind = K_SETTING },
-    { .name = L"Date and time", .path = L"control.exe", .args = L"timedate.cpl", .keywords = L"clock time zone date", .kind = K_SETTING },
+    { .name = L"Date and time", .path = L"ms-settings:dateandtime", .args = L"", .keywords = L"clock time zone date", .kind = K_SETTING },
     { .name = L"User Accounts", .path = L"control.exe", .args = L"userpasswords", .keywords = L"users account password administrator family", .kind = K_SETTING },
     { .name = L"Personalization", .path = L"control.exe", .args = L"/name Microsoft.Personalization", .keywords = L"background wallpaper colors colour theme dark light accent", .kind = K_SETTING },
-    { .name = L"Windows Update", .path = L"control.exe", .args = L"/name Microsoft.WindowsUpdate", .keywords = L"update updates upgrade", .kind = K_SETTING },
+    { .name = L"Windows Update", .path = L"ms-settings:windowsupdate", .args = L"", .keywords = L"update updates upgrade", .kind = K_SETTING },
     { .name = L"Display", .path = L"control.exe", .args = L"desk.cpl", .keywords = L"screen resolution monitor scale", .kind = K_SETTING },
     { .name = L"Internet Options", .path = L"control.exe", .args = L"inetcpl.cpl", .keywords = L"internet proxy browser", .kind = K_SETTING },
 };
@@ -288,6 +296,13 @@ static ULONGLONG first_run(void)
 
 static int recents[3], g_nrecent;
 
+static BOOL reg_show_recent(void)
+{
+    DWORD v = 1, size = sizeof(v);
+    RegGetValueW(HKEY_CURRENT_USER, START_KEY, L"ShowRecentlyAdded", RRF_RT_REG_DWORD, NULL, &v, &size);
+    return v != 0;
+}
+
 static void build_list(void)
 {
     ULONGLONG since = first_run(), now64, week = 7ULL * 24 * 3600 * 10000000ULL;
@@ -303,6 +318,7 @@ static void build_list(void)
     add_beside(L"Task Manager", L"sg-taskmgr64.exe");
     add_beside(L"Remote Desktop Connection", L"sg-mstsc64.exe");
     add_beside(L"Control Panel", L"sg-control64.exe");
+    add_beside(L"Settings", L"sg-settings64.exe");
     add_beside(L"Media Player", L"sg-media64.exe");
     add_beside(L"Calculator", L"sg-calc64.exe");
     add_beside(L"Photos", L"sg-photos64.exe");
@@ -499,7 +515,8 @@ static void build_rows(void)
         return;
     }
 
-    if (g_nrecent)
+    /* Settings > Personalization > Start: "Show recently added apps" */
+    if (g_nrecent && reg_show_recent())
     {
         add_row(R_HEADER, -1, L"Recently added");
         for (i = 0; i < g_nrecent; i++) add_row(R_ITEM, recents[i], NULL);
@@ -825,7 +842,12 @@ static void rail_action(int i, POINT screen)
     case RAIL_USER:     show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", L"userpasswords", NULL, SW_SHOWNORMAL); break;
     case RAIL_DOCS:     open_folder(CSIDL_PERSONAL); break;
     case RAIL_PICS:     open_folder(CSIDL_MYPICTURES); break;
-    case RAIL_SETTINGS: show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", NULL, NULL, SW_SHOWNORMAL); break;
+    case RAIL_SETTINGS:
+        show_panel(FALSE);
+        /* Settings (ms-settings:), or the Control Panel where Settings is not installed */
+        if ((INT_PTR)ShellExecuteW(NULL, NULL, L"ms-settings:", NULL, NULL, SW_SHOWNORMAL) <= 32)
+            ShellExecuteW(NULL, NULL, L"control.exe", NULL, NULL, SW_SHOWNORMAL);
+        break;
     case RAIL_POWER:    power_menu(screen); break;
     }
 }

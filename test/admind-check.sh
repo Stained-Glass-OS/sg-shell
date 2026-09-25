@@ -41,6 +41,14 @@ in=\$(cat 2>/dev/null)
 printf '%s %s | %s\n' "$tool" "\$*" "\$in" >> "$CALLS"
 EOF
 done
+# timedatectl also answers "is the clock synchronised?" (yes while $T/ntp-on exists)
+cat > "$B/timedatectl" <<EOF
+#!/bin/sh
+in=\$(cat 2>/dev/null)
+printf '%s %s | %s\n' timedatectl "\$*" "\$in" >> "$CALLS"
+[ "\$1" = show ] && { [ -f "$T/ntp-on" ] && echo yes || echo no; }
+exit 0
+EOF
 cat > "$B/getent" <<EOF
 #!/bin/sh
 f="$T/\$1"; [ -f "\$f" ] || exit 2
@@ -136,6 +144,19 @@ for bad in '../../etc/passwd' 'America/Nowhere' 'America' '/etc/passwd' 'a b'; d
 done
 [ ! -s "$CALLS" ] && pass "refuses zones that are not in zoneinfo" || fail "bad zone reached timedatectl"
 r=$(ask ntp on); grep -q '^timedatectl set-ntp true' "$CALLS" && pass "turns time synchronisation on" || fail "ntp: $r"
+: > "$CALLS"
+r=$(ask time '2026-09-25 14:30:00')
+grep -q '^timedatectl set-time 2026-09-25 14:30:00 ' "$CALLS" && pass "sets the clock by hand" || fail "time: $r"
+: > "$CALLS"
+for bad in '2026-02-30 10:00:00' '2026-09-25 25:00:00' 'now' '2026-09-25T14:30:00' '1999-01-01 00:00:00' '2026-09-25 14:30:00 --adjust'; do
+    r=$(ask time "$bad")
+    case "$(first "$r")" in "FAILED "*) ;; *) fail "accepted time '$bad'";; esac
+done
+grep -q 'set-time' "$CALLS" && fail "a bad time reached timedatectl" || pass "refuses times that are not a date and time"
+touch "$T/ntp-on"; : > "$CALLS"
+r=$(ask time '2026-09-25 14:30:00')
+case "$(first "$r")" in "FAILED "*) if grep -q 'set-time' "$CALLS"; then fail "set the clock while synchronised"; else pass "refuses a hand-set clock while synchronised"; fi;; *) fail "time with ntp on: $r";; esac
+rm -f "$T/ntp-on"
 
 # --- domain, updates ---
 : > "$CALLS"

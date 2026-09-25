@@ -17,7 +17,6 @@ enum {
     CMD_SELECT = CMD_PAGE_FIRST + 100,       /* + account index */
 };
 
-struct account { WCHAR name[64], full[128]; BOOL admin; };
 static struct account g_acc[128];
 static int g_nacc, g_sel = -1;
 
@@ -54,13 +53,20 @@ static int find_local(const WCHAR *name)
     return -1;
 }
 
-static void elevate(const WCHAR *verb, const WCHAR *name)
+void acc_elevate(const WCHAR *verb, const WCHAR *name)
 {
     WCHAR args[160];
     if (name) _snwprintf(args, ARRAYSIZE(args), L"/admin %ls \"%ls\"", verb, name);
     else _snwprintf(args, ARRAYSIZE(args), L"/admin %ls", verb);
     args[ARRAYSIZE(args) - 1] = 0;
     if (run_elevated(args)) refresh_when_back();
+}
+
+int acc_load(const struct account **out)
+{
+    load_accounts();
+    *out = g_acc;
+    return g_nacc;
 }
 
 /* ---- your account ------------------------------------------------------------------ */
@@ -107,9 +113,9 @@ BOOL cmd_users(int id, int code, HWND ctl)
     (void)code; (void)ctl;
     current_user(name, ARRAYSIZE(name), dom, ARRAYSIZE(dom));
     switch (id) {
-    case CMD_MY_TYPE: elevate(L"user-type", name); return TRUE;
-    case CMD_MY_PASSWORD: elevate(L"user-password", name); return TRUE;
-    case CMD_ADD: elevate(L"user-add", NULL); return TRUE;
+    case CMD_MY_TYPE: acc_elevate(L"user-type", name); return TRUE;
+    case CMD_MY_PASSWORD: acc_elevate(L"user-password", name); return TRUE;
+    case CMD_ADD: acc_elevate(L"user-add", NULL); return TRUE;
     }
     return FALSE;
 }
@@ -155,10 +161,10 @@ BOOL cmd_users_manage(int id, int code, HWND ctl)
     (void)code; (void)ctl;
     if (id >= CMD_SELECT && id < CMD_SELECT + g_nacc) { g_sel = id - CMD_SELECT; refresh_page(); return TRUE; }
     switch (id) {
-    case CMD_ADD: elevate(L"user-add", NULL); return TRUE;
-    case CMD_TYPE: if (g_sel >= 0) elevate(L"user-type", g_acc[g_sel].name); return TRUE;
-    case CMD_PASSWORD: if (g_sel >= 0) elevate(L"user-password", g_acc[g_sel].name); return TRUE;
-    case CMD_REMOVE: if (g_sel >= 0) { elevate(L"user-remove", g_acc[g_sel].name); g_sel = -1; } return TRUE;
+    case CMD_ADD: acc_elevate(L"user-add", NULL); return TRUE;
+    case CMD_TYPE: if (g_sel >= 0) acc_elevate(L"user-type", g_acc[g_sel].name); return TRUE;
+    case CMD_PASSWORD: if (g_sel >= 0) acc_elevate(L"user-password", g_acc[g_sel].name); return TRUE;
+    case CMD_REMOVE: if (g_sel >= 0) { acc_elevate(L"user-remove", g_acc[g_sel].name); g_sel = -1; } return TRUE;
     }
     return FALSE;
 }

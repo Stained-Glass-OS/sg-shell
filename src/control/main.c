@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "settings.h"
 #include <shellapi.h>
 #include <windowsx.h>
 #include <stdarg.h>
@@ -23,6 +24,9 @@ static int g_scroll, g_content_h;
 static BOOL g_refresh_on_activate;
 BOOL g_kbd_cues;                /* show focus rectangles: the keyboard has been used */
 WCHAR g_search_text[128];
+BOOL g_settings;                /* this is the Settings window, not the Control Panel */
+COLORREF g_col_link = COL_LINK, g_col_link_hot = COL_LINK_HOT;
+HWND g_keep_focus;              /* a page change leaves the focus here (Settings' search box) */
 
 #define NAVBAR_H 48
 #define ID_BACK    10
@@ -51,6 +55,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_NETWORK]      = { L"Network and Sharing Center", PG_CAT_NET,    build_network,      cmd_network },
     [PG_SPEECH]       = { L"Speech Recognition",         PG_CAT_HW,     build_speech,       cmd_speech, NULL, timer_speech },
     [PG_ADMINTOOLS]   = { L"Administrative Tools",       PG_CAT_SYSSEC, build_admintools,   cmd_admintools },
+    SETTINGS_PAGE_DEFS
 };
 
 int S(int dip) { return MulDiv(dip, g_dpi, 96); }
@@ -147,6 +152,7 @@ void pg_swatch(int x, int y, int w, int h, COLORREF c, BOOL selected)
 
 void pg_title(int x, int y, const WCHAR *s)
 {
+    if (g_settings) { pg_text(x, y, pg_width() - x - S(24), S(40), g_font_title, COL_TEXT, s, DT_SINGLELINE | DT_END_ELLIPSIS); return; }
     pg_text(x, y, pg_width() - x - S(24), S(28), g_font_title, COL_TITLE, s, DT_SINGLELINE | DT_END_ELLIPSIS);
 }
 
@@ -158,6 +164,8 @@ HWND pg_control(const WCHAR *cls, const WCHAR *text, DWORD style, int x, int y, 
     HWND c = CreateWindowExW(0, cls, text, WS_CHILD | WS_VISIBLE | style, x, y - g_scroll, w, h,
                              g_page, (HMENU)(INT_PTR)id, g_inst, NULL);
     SendMessageW(c, WM_SETFONT, (WPARAM)g_font_body, TRUE);
+    /* a drop-down list's height is its list's: the page ends at its edit box */
+    if (!lstrcmpiW(cls, L"COMBOBOX")) { RECT r; GetWindowRect(c, &r); h = r.bottom - r.top; if (h > S(40)) h = S(30); }
     if (y + h > g_content_h) g_content_h = y + h;
     return c;
 }
@@ -172,6 +180,8 @@ void pg_timer(UINT ms) { SetTimer(g_page, 1, ms, NULL); }
 int pg_left_pane(const WCHAR *const *labels, const int *ids, int n)
 {
     int w = S(230), y = S(20), i;
+    /* the Settings window has its own navigation: no task pane */
+    if (g_settings) return -S(12);
     g_pane_w = w;
     pg_fill(0, 0, w, 32000, COL_PANE);
     pg_fill(w - 1, 0, 1, 32000, COL_PANE_EDGE);
@@ -278,8 +288,8 @@ static LRESULT CALLBACK link_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
             SelectObject(dc, use);
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, !enabled ? COL_SUBTLE : (l && l->hot) ? COL_LINK_HOT :
-                             (l && (l->flags & LINK_CATEGORY)) ? COL_CATLINK : COL_LINK);
+            SetTextColor(dc, !enabled ? COL_SUBTLE : (l && l->hot) ? g_col_link_hot :
+                             (l && (l->flags & LINK_CATEGORY)) ? COL_CATLINK : g_col_link);
             TextOutW(dc, x, S(2), s, lstrlenW(s));
             if (under) { SelectObject(dc, g_font_body); DeleteObject(under); }
         }
@@ -303,6 +313,54 @@ HWND pg_link(int x, int y, const WCHAR *s, int id, int flags)
 
 /* ---- the page window ------------------------------------------------------------ */
 static HBRUSH g_bg_brush, g_pane_brush;
+static LRESULT CALLBACK page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+/* the classes a page is made of: the page itself and its links */
+void register_page_classes(void)
+{
+    WNDCLASSW wc = { 0 };
+    if (!g_bg_brush) g_bg_brush = CreateSolidBrush(COL_BG);
+    if (!g_pane_brush) g_pane_brush = CreateSolidBrush(COL_PANE);
+    wc.lpfnWndProc = link_proc; wc.hInstance = g_inst; wc.lpszClassName = L"SgCplLink";
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_HAND);
+    RegisterClassW(&wc);
+    wc.lpfnWndProc = page_proc; wc.lpszClassName = L"SgCplPage"; wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+    RegisterClassW(&wc);
+}
+
+/* What the page shows, as text: every painted string, then every control
+ * with its class, text and state -- for the gates (SG_SETTINGS_DUMP). */
+static BOOL CALLBACK dump_child(HWND c, LPARAM lp)
+{
+    FILE *f = (FILE *)lp;
+    WCHAR cls[64], text[512];
+    LRESULT check = 0;
+    if (GetParent(c) != g_page) return TRUE;
+    GetClassNameW(c, cls, ARRAYSIZE(cls));
+    GetWindowTextW(c, text, ARRAYSIZE(text));
+    if (!lstrcmpiW(cls, L"ComboBox")) {
+        LRESULT sel = SendMessageW(c, CB_GETCURSEL, 0, 0);
+        if (sel >= 0 && SendMessageW(c, CB_GETLBTEXTLEN, sel, 0) < (LRESULT)ARRAYSIZE(text))
+            SendMessageW(c, CB_GETLBTEXT, sel, (LPARAM)text);
+    }
+    if (!lstrcmpiW(cls, L"msctls_trackbar32")) check = SendMessageW(c, TBM_GETPOS, 0, 0);
+    else if (!lstrcmpiW(cls, L"Button") || !lstrcmpiW(cls, L"SgSetCtl")) check = SendMessageW(c, BM_GETCHECK, 0, 0);
+    {
+        RECT r;
+        GetWindowRect(c, &r);
+        fwprintf(f, L"control %ls id=%d state=%ld at=%ld,%ld%ls: %ls\n", cls, GetDlgCtrlID(c), (long)check,
+                 (r.left + r.right) / 2, (r.top + r.bottom) / 2, IsWindowEnabled(c) ? L"" : L" disabled", text);
+    }
+    return TRUE;
+}
+
+void page_dump(FILE *f)
+{
+    int i;
+    for (i = 0; i < g_nitems; i++)
+        if (g_items[i].kind == IT_TEXT && g_items[i].text && g_items[i].text[0]) fwprintf(f, L"text %ls\n", g_items[i].text);
+    EnumChildWindows(g_page, dump_child, (LPARAM)f);
+}
 
 static void update_scrollbar(void)
 {
@@ -320,6 +378,7 @@ static void scroll_to(int y)
     ScrollWindowEx(g_page, 0, g_scroll - y, NULL, NULL, NULL, NULL, SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
     g_scroll = y;
     update_scrollbar();
+    if (g_settings) settings_dump();        /* the controls moved: say where they are now */
 }
 
 static void paint_items(HDC dc, const RECT *clip)
@@ -397,6 +456,10 @@ static LRESULT CALLBACK page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_NOTIFY:
         if (g_pages[g_cur].notify) return g_pages[g_cur].notify((NMHDR *)lp);
         return 0;
+    case WM_HSCROLL:        /* a slider: its command() hears it, with PG_SCROLL_CODE */
+        if (lp && g_pages[g_cur].command)
+            g_pages[g_cur].command(GetDlgCtrlID((HWND)lp), PG_SCROLL_CODE | (LOWORD(wp) & 0xFF), (HWND)lp);
+        return 0;
     case WM_TIMER:
         if (g_pages[g_cur].timer) g_pages[g_cur].timer();
         return 0;
@@ -427,6 +490,7 @@ static void layout(void);
 
 static void set_title(void)
 {
+    if (g_settings) { settings_page_shown(); return; }
     SetWindowTextW(g_main, g_pages[g_cur].title);
     InvalidateRect(g_addr, NULL, TRUE);
     EnableWindow(g_back, g_hist_pos > 0);
@@ -455,7 +519,8 @@ static void show_page(enum page_id p)
     set_title();
     /* focus the page's first control, so the keyboard starts on the content */
     child = GetNextDlgTabItem(g_page, NULL, FALSE);
-    if (child && GetForegroundWindow() == g_main && GetFocus() != g_search) SetFocus(child);
+    if (child && GetForegroundWindow() == g_main && GetFocus() != g_search && (!g_keep_focus || GetFocus() != g_keep_focus))
+        SetFocus(child);
 }
 
 void navigate(enum page_id p)
@@ -481,9 +546,20 @@ void refresh_page(void)
 
 void page_scroll_to(int y) { scroll_to(y); }
 
+/* history, for Settings' back button */
+BOOL nav_can_back(void) { return g_hist_pos > 0; }
+BOOL nav_back(void)
+{
+    if (g_hist_pos <= 0) return FALSE;
+    show_page(g_hist[--g_hist_pos]);
+    return TRUE;
+}
+int page_scroll_pos(void) { return g_scroll; }
+
 /* After an elevated program ran, the page is rebuilt when this window is
  * active again: what it changed shows without a manual refresh. */
 void refresh_when_back(void) { g_refresh_on_activate = TRUE; }
+BOOL refresh_pending(void) { BOOL r = g_refresh_on_activate; g_refresh_on_activate = FALSE; return r; }
 
 /* ---- the navigation bar -------------------------------------------------------- */
 static void draw_arrow(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
@@ -826,6 +902,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_DATE_CLASSES | ICC_TAB_CLASSES };
     enum page_id start = PG_HOME;
     int argc = 0, i;
+    BOOL settings;
     WCHAR **argv;
     MSG msg;
     (void)prev; (void)cmd;
@@ -834,6 +911,16 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     InitCommonControlsEx(&icc);
     make_fonts();
+    /* The Settings window: this program under the name sg-settings (or
+     * SystemSettings), --settings, or an ms-settings: URI. The headless
+     * commands below (/admin, --dump, --set...) serve both. */
+    {
+        WCHAR self[MAX_PATH], *base;
+        GetModuleFileNameW(NULL, self, MAX_PATH);
+        base = wcsrchr(self, L'\\') ? wcsrchr(self, L'\\') + 1 : self;
+        settings = !_wcsnicmp(base, L"sg-settings", 11) || !_wcsnicmp(base, L"SystemSettings", 14) ||
+                   (argc >= 2 && (!wcscmp(argv[1], L"--settings") || !_wcsnicmp(argv[1], L"ms-settings:", 12)));
+    }
     g_bg_brush = CreateSolidBrush(COL_BG);
     g_pane_brush = CreateSolidBrush(COL_PANE);
 
@@ -841,7 +928,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         if (!wcscmp(argv[1], L"--dump")) return dump(argc > 2 ? argv[2] : NULL);
         if (!wcscmp(argv[1], L"--set")) return personalize_set(argc - 2, argv + 2);
         if (!wcscmp(argv[1], L"--uninstall") && argc > 2) return programs_uninstall_cli(argv[2]);
-        if (!wcscmp(argv[1], L"--resolve") && argc > 2) {
+        if (!wcscmp(argv[1], L"--resolve") && argc > 2 && !settings) {
             /* what control.exe ARG would open, without opening it */
             const WCHAR *cpl, *a = argv[2];
             enum page_id p;
@@ -860,6 +947,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         if (!_wcsicmp(argv[1], L"/admin")) return admin_main(argc - 2, argv + 2);
         if (!_wcsicmp(argv[1], L"/admin-do")) return admin_do(argc - 2, argv + 2);
         if (!_wcsicmp(argv[1], L"/cpl") && argc > 2) return cpl_run_inproc(argv[2], argc > 3 ? argv[3] : NULL) >= 0 ? 0 : 1;
+        if (settings) return settings_main(argc, argv, show);
         for (i = 1; i < argc; i++) {
             const WCHAR *a = argv[i];
             if ((!_wcsicmp(a, L"/name") || !_wcsicmp(a, L"-name") || !wcscmp(a, L"--page")) && i + 1 < argc) a = argv[++i];
@@ -869,11 +957,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         }
     }
 
-    wc.lpfnWndProc = link_proc; wc.hInstance = inst; wc.lpszClassName = L"SgCplLink";
-    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_HAND);
-    RegisterClassW(&wc);
-    wc.lpfnWndProc = page_proc; wc.lpszClassName = L"SgCplPage"; wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
-    RegisterClassW(&wc);
+    register_page_classes();
+    if (settings) return settings_main(argc, argv, show);
+    wc.hInstance = inst; wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     wc.lpfnWndProc = addr_proc; wc.lpszClassName = L"SgCplAddress";
     RegisterClassW(&wc);
     wc.lpfnWndProc = main_proc; wc.lpszClassName = L"SgControlWindow";

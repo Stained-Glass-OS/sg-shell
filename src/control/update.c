@@ -14,12 +14,6 @@
 
 enum { CMD_CHECK = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_HISTORY = CMD_PAGE_FIRST + 3 };
 
-struct ufacts {
-    BOOL pending, checked, managed;
-    WCHAR last[96];
-    WCHAR sources[8][256];
-    int nsources;
-};
 
 static BOOL unix_mtime(const char *path, SYSTEMTIME *st)
 {
@@ -61,7 +55,7 @@ static void read_sources(struct ufacts *u)
     FindClose(h);
 }
 
-static void gather(struct ufacts *u)
+void update_gather(struct ufacts *u)
 {
     SYSTEMTIME st;
     memset(u, 0, sizeof(*u));
@@ -83,9 +77,8 @@ static void gather(struct ufacts *u)
 }
 
 /* the last entries of apt's history: when, and what */
-struct hentry { WCHAR when[40]; WCHAR what[400]; };
 
-static int read_history(struct hentry *out, int max)
+int update_history(struct hentry *out, int max)
 {
     char *text = read_unix_file("/var/log/apt/history.log", NULL), *line, *next;
     struct hentry all[64];
@@ -135,7 +128,7 @@ void build_update(void)
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(36), y = S(24), w = pg_width() - x - S(40), i, nh;
     WCHAR line[512];
 
-    gather(&u);
+    update_gather(&u);
     pg_title(x, y, L"Windows Update");
     y += S(52);
     if (u.managed) {
@@ -170,7 +163,7 @@ void build_update(void)
     pg_text(x, y, w, S(24), g_font_cat, COL_TITLE, L"Update history", DT_SINGLELINE);
     pg_rule(x, y + S(26), w);
     y += S(38);
-    nh = read_history(h, ARRAYSIZE(h));
+    nh = update_history(h, ARRAYSIZE(h));
     for (i = 0; i < nh; i++) {
         pg_text(x + S(16), y, S(170), S(20), g_font_body, COL_SUBTLE, h[i].when, DT_SINGLELINE);
         pg_text(x + S(190), y, w - S(190), S(20), g_font_body, COL_TEXT, h[i].what[0] ? h[i].what : L"(no packages changed)",
@@ -200,11 +193,11 @@ void dump_update(void)
     struct ufacts u;
     struct hentry h[10];
     int i, nh;
-    gather(&u);
+    update_gather(&u);
     wprintf(L"update.pending=%ls\n", u.pending ? L"yes" : L"no");
     wprintf(L"update.lastcheck=%ls\n", u.checked ? u.last : L"never");
     wprintf(L"update.managed=%ls\n", u.managed ? L"yes" : L"no");
     for (i = 0; i < u.nsources; i++) wprintf(L"update.source=%ls\n", u.sources[i]);
-    nh = read_history(h, ARRAYSIZE(h));
+    nh = update_history(h, ARRAYSIZE(h));
     for (i = 0; i < nh; i++) wprintf(L"update.history=%ls|%ls\n", h[i].when, h[i].what);
 }

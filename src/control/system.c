@@ -8,12 +8,6 @@
 
 enum { CMD_CHANGE = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_GPRESULT = CMD_PAGE_FIRST + 2 };
 
-struct facts {
-    WCHAR edition[64], computer[64], fqdn[256], user[256], arch[32], os_build[64], cpu[128], ram[32];
-    WCHAR role[32], realm[128], domain[64];
-    BOOL elevated, admin_account;
-    int policy_count, program_count;
-};
 
 int program_count(void);
 
@@ -27,7 +21,7 @@ static int count_values(HKEY root, const WCHAR *sub)
     return (int)values;
 }
 
-static void gather(struct facts *f)
+void sys_gather(struct sysfacts *f)
 {
     DWORD n;
     SYSTEM_INFO si;
@@ -94,11 +88,11 @@ void build_system(void)
     static const WCHAR *const labels[] = { L"Rename this computer", L"Windows Update", L"Group Policy results",
                                            NULL, L"See also", L"User Accounts", L"Programs and Features" };
     static const int ids[] = { CMD_CHANGE, NAV(PG_UPDATE), CMD_GPRESULT, 0, -1, NAV(PG_USERS), NAV(PG_PROGRAMS) };
-    struct facts f;
+    struct sysfacts f;
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(36), y = S(24), w = pg_width() - x - S(40);
     WCHAR line[256];
 
-    gather(&f);
+    sys_gather(&f);
     pg_title(x, y, L"View basic information about your computer");
     y += S(48);
 
@@ -159,8 +153,8 @@ BOOL cmd_system(int id, int code, HWND ctl)
 
 void dump_system(void)
 {
-    struct facts f;
-    gather(&f);
+    struct sysfacts f;
+    sys_gather(&f);
     wprintf(L"edition=%ls\n", f.edition);
     wprintf(L"computer=%ls\n", f.computer);
     wprintf(L"fullname=%ls\n", f.fqdn);

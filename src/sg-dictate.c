@@ -61,7 +61,7 @@
 #define COL_IDLE    RGB(0x44, 0x44, 0x44)
 #define COL_HOVER   RGB(0x33, 0x33, 0x33)
 
-enum state { ST_IDLE, ST_LOADING, ST_LISTENING, ST_NOMODEL, ST_OFF, ST_NOMIC, ST_ERROR, ST_NOENGINE };
+enum state { ST_IDLE, ST_LOADING, ST_LISTENING, ST_NOMODEL, ST_OFF, ST_NOMIC, ST_ERROR, ST_NOENGINE, ST_PRIVACY };
 enum hot { HOT_NONE, HOT_GEAR, HOT_MIC, HOT_CLOSE };
 
 struct settings {
@@ -379,7 +379,7 @@ static void insert_text(const char *json)
 static void set_state(enum state s)
 {
     static const char *const names[] = { "idle", "loading", "listening", "nomodel", "off", "nomic",
-                                         "error", "noengine" };
+                                         "error", "noengine", "privacy" };
     if (g_state != s) report("sg-dictate: state %s\n", names[s]);
     g_state = s;
     if (s != ST_LISTENING) g_level = 0;
@@ -412,6 +412,25 @@ static void caret_context(HWND fg, char *out, size_t cap)
     if (ch[0]) WideCharToMultiByte(CP_UTF8, 0, ch, -1, out, (int)cap, NULL, NULL);
 }
 
+/* Settings > Privacy > Microphone: the device's switch (HKLM), apps' and
+ * desktop apps' (HKCU) -- Windows' ConsentStore values. Any "Deny" and voice
+ * typing does not listen. */
+static BOOL consent_denied(HKEY root, const WCHAR *sub)
+{
+    WCHAR v[16] = L"";
+    DWORD cb = sizeof(v);
+    WCHAR key[200] = L"Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
+    if (sub) { lstrcatW(key, L"\\"); lstrcatW(key, sub); }
+    if (RegGetValueW(root, key, L"Value", RRF_RT_REG_SZ, NULL, v, &cb)) return FALSE;
+    return !_wcsicmp(v, L"Deny");
+}
+
+static BOOL microphone_allowed(void)
+{
+    return !consent_denied(HKEY_LOCAL_MACHINE, NULL) && !consent_denied(HKEY_CURRENT_USER, NULL) &&
+           !consent_denied(HKEY_CURRENT_USER, L"NonPackaged");
+}
+
 static void start_listening(BOOL hold)
 {
     char req[1024], mic[768], tail[8];
@@ -419,6 +438,7 @@ static void start_listening(BOOL hold)
     load_settings();
     if (!g_bridged) { set_state(ST_NOENGINE); return; }
     if (!g_set.enabled) { set_state(ST_OFF); return; }
+    if (!microphone_allowed()) { set_state(ST_PRIVACY); return; }
     WideCharToMultiByte(CP_UTF8, 0, g_set.mic, -1, mic, sizeof(mic), NULL, NULL);
     snprintf(req, sizeof(req), "{\"cmd\": \"start\", \"continuous\": %s, \"spoken\": %s, \"auto\": %s, "
              "\"fillers\": %s, \"numbers\": %s, \"fresh\": %s, \"mic\": ",
@@ -478,6 +498,9 @@ static void toggle(void)
 
 static void open_settings(void)
 {
+    /* microphone access off: Settings' privacy page says why, and turns it on */
+    if (g_state == ST_PRIVACY &&
+        (INT_PTR)ShellExecuteW(NULL, NULL, L"ms-settings:privacy-microphone", NULL, NULL, SW_SHOWNORMAL) > 32) return;
     ShellExecuteW(NULL, NULL, L"control.exe", L"/name Microsoft.SpeechRecognition", NULL, SW_SHOWNORMAL);
 }
 
@@ -638,6 +661,7 @@ static const WCHAR *status_text(void)
     case ST_NOMIC:     return L"We couldn't find a microphone.";
     case ST_ERROR:     return L"Something went wrong. Try again.";
     case ST_NOENGINE:  return L"Voice typing isn't available on this PC.";
+    case ST_PRIVACY:   return L"Microphone access is off. Select the gear to change it.";
     default:           return L"Click the mic to start";
     }
 }

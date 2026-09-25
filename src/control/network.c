@@ -12,10 +12,6 @@
 
 enum { CMD_ADAPTERS = CMD_PAGE_FIRST + 1, CMD_INET = CMD_PAGE_FIRST + 2 };
 
-struct adapter {
-    WCHAR name[128], desc[256], type[32], ipv4[128], ipv6[256], gateway[128], dns[256], mac[32], speed[32];
-    BOOL up, internet;
-};
 
 static void addr_string(SOCKADDR *sa, WCHAR *out, int cch)
 {
@@ -31,7 +27,7 @@ static void append(WCHAR *list, int cch, const WCHAR *item)
     wcsncat(list, item, cch - lstrlenW(list) - 1);
 }
 
-static int load_adapters(struct adapter *out, int max)
+int load_adapters(struct adapter *out, int max)
 {
     ULONG size = 32768;
     IP_ADAPTER_ADDRESSES *buf = NULL, *a;

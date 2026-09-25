@@ -374,6 +374,44 @@ static void offer_restart(const WCHAR *why)
         ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
 }
 
+/* Settings > About > Rename this PC: Windows 10's "Rename your PC" -- one
+ * name, then a restart offer. */
+static int do_rename_pc(void)
+{
+    WCHAR role[32], realm[128], domain[64], name[64] = L"", old[64] = L"", err[512] = L"", msg[512];
+    DWORD n = ARRAYSIZE(old);
+    machine_role(role, realm, domain, ARRAYSIZE(realm));
+    if (role[0]) {
+        _snwprintf(msg, ARRAYSIZE(msg), L"This PC is %ls the %ls domain. Its name is managed through the domain.",
+                   !lstrcmpW(role, L"dc") ? L"the domain controller of" : L"a member of", realm);
+        message(NULL, L"Rename your PC", msg, FALSE);
+        return 0;
+    }
+    GetComputerNameExW(ComputerNamePhysicalDnsHostname, old, &n);
+    for (;;) {
+        struct form_field f[] = {
+            { L"Current PC name:", NULL, 0, FF_NOTE },
+            { old, NULL, 0, FF_NOTE },
+            { L"New name:", name, 16, FF_TEXT },
+        };
+        if (!run_form(NULL, L"Rename your PC", err[0] ? err :
+                      L"You can use a combination of letters, hyphens, and numbers.", f, ARRAYSIZE(f), L"Next", TRUE))
+            return 1;
+        if (!valid_computer_name(name)) {
+            lstrcpyW(err, L"The name can have up to 15 letters, numbers and hyphens, and cannot start or end with a hyphen.");
+            continue;
+        }
+        if (!lstrcmpiW(name, old)) return 0;
+        {
+            const WCHAR *req[] = { L"hostname", name };
+            if (!admin_request(req, 2, msg, ARRAYSIZE(msg), 60000)) { message(NULL, L"Rename your PC", msg, TRUE); continue; }
+        }
+        _snwprintf(msg, ARRAYSIZE(msg), L"Your PC will be renamed to %ls after it restarts.", name);
+        offer_restart(msg);
+        return 0;
+    }
+}
+
 static int do_rename(void)
 {
     WCHAR role[32], realm[128], domain[64], name[64] = L"", err[512] = L"", msg[512];
@@ -533,7 +571,7 @@ static int do_user_remove(const WCHAR *name)
 }
 
 /* the IANA zones, from tzdata's own table */
-static int load_zones(WCHAR ***out)
+int load_zones(WCHAR ***out)
 {
     char *text = read_unix_file("/usr/share/zoneinfo/zone1970.tab", NULL), *line, *next;
     WCHAR **z = NULL;
@@ -636,16 +674,66 @@ static int do_update_check(void)
     return 0;
 }
 
+/* Settings > Date & time: one change each, no form -- the page chose already */
+static int do_one(const WCHAR *title, const WCHAR *const *req, int n)
+{
+    WCHAR msg[512];
+    if (admin_request(req, n, msg, ARRAYSIZE(msg), 60000)) return 0;
+    message(NULL, title, msg, TRUE);
+    return 1;
+}
+
+/* "Change the date and time": the form Windows 10 shows, then sg-admind's time */
+static int do_set_time(void)
+{
+    SYSTEMTIME now;
+    WCHAR date[16], clock[16], msg[512];
+    GetLocalTime(&now);
+    _snwprintf(date, ARRAYSIZE(date), L"%04d-%02d-%02d", now.wYear, now.wMonth, now.wDay);
+    _snwprintf(clock, ARRAYSIZE(clock), L"%02d:%02d", now.wHour, now.wMinute);
+    for (;;) {
+        struct form_field f[] = {
+            { L"Date (year-month-day):", date, ARRAYSIZE(date), FF_TEXT },
+            { L"Time (hours:minutes, 24-hour):", clock, ARRAYSIZE(clock), FF_TEXT },
+        };
+        int y, mo, d, h, mi;
+        WCHAR when[40];
+        if (!run_form(NULL, L"Change date and time", NULL, f, ARRAYSIZE(f), L"Change", TRUE)) return 1;
+        if (swscanf(date, L"%d-%d-%d", &y, &mo, &d) != 3 || swscanf(clock, L"%d:%d", &h, &mi) != 2 ||
+            mo < 1 || mo > 12 || d < 1 || d > 31 || h < 0 || h > 23 || mi < 0 || mi > 59) {
+            message(NULL, L"Change date and time", L"Type the date as year-month-day and the time as hours:minutes.", TRUE);
+            continue;
+        }
+        _snwprintf(when, ARRAYSIZE(when), L"%04d-%02d-%02d %02d:%02d:00", y, mo, d, h, mi);
+        {
+            const WCHAR *req[] = { L"time", when };
+            if (admin_request(req, 2, msg, ARRAYSIZE(msg), 60000)) return 0;
+        }
+        message(NULL, L"Change date and time", msg, TRUE);
+    }
+}
+
 int admin_main(int argc, WCHAR **argv)
 {
     if (argc < 1) return 2;
     if (!lstrcmpW(argv[0], L"rename")) return do_rename();
+    if (!lstrcmpW(argv[0], L"rename-pc")) return do_rename_pc();
     if (!lstrcmpW(argv[0], L"user-add")) return do_user_add();
     if (!lstrcmpW(argv[0], L"user-type") && argc > 1) return do_user_type(argv[1]);
     if (!lstrcmpW(argv[0], L"user-password") && argc > 1) return do_user_password(argv[1]);
     if (!lstrcmpW(argv[0], L"user-remove") && argc > 1) return do_user_remove(argv[1]);
     if (!lstrcmpW(argv[0], L"timezone")) return do_timezone();
     if (!lstrcmpW(argv[0], L"update-check")) return do_update_check();
+    if (!lstrcmpW(argv[0], L"set-zone") && argc > 1) {
+        const WCHAR *req[] = { L"timezone", argv[1] };
+        return do_one(L"Time zone", req, 2);
+    }
+    if (!lstrcmpW(argv[0], L"ntp") && argc > 1) {
+        const WCHAR *req[] = { L"ntp", argv[1] };
+        return do_one(L"Set time automatically", req, 2);
+    }
+    if (!lstrcmpW(argv[0], L"set-time")) return do_set_time();
+    if (!lstrcmpW(argv[0], L"consent") && argc > 2) return privacy_admin_consent(argv[1], argv[2]);
     return 2;
 }
 

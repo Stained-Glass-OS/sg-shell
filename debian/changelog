@@ -1,3 +1,28 @@
+sg-shell (0.1.0-21) unstable; urgency=medium
+
+  * sg-settings: Settings, Windows 10's (SystemSettings.exe, Win+I with
+    wine-sg 0130, every ms-settings: URI, the Start menu's Settings) -- the
+    Control Panel's program in the Settings frame: navigation pane, Home's
+    category tiles, search, switches. System (Display with night light,
+    scale and resolution; Sound; Notifications; Power & sleep; Storage;
+    Multitasking; About with Rename this PC), Devices (Bluetooth with add
+    and pair, Mouse, Typing), Network & Internet (Status, Wi-Fi, Ethernet,
+    Proxy), Personalization (Background, Colors, Lock screen, Themes, Start,
+    Taskbar), Apps (Apps & features, Default apps, Startup), Accounts,
+    Time & Language (Date & time, Region, Speech), Ease of Access, Privacy
+    (Microphone, Camera, Location, General), Update & Security (Windows
+    Update, Recovery). Shares the Control Panel's code: personalization,
+    programs, accounts, system facts, zone, updates, adapters, speech.
+    Native settings through sg-session's sg-settingsctl; root's through
+    sg-admind. defaults/65-sg-settings.reg.
+  * sg-admind: a time verb (the clock by hand, refused while synchronised).
+  * Voice typing honours Settings > Privacy > Microphone (ConsentStore).
+  * sg-start: Settings in the app list and search; its rail opens Settings;
+    Settings > Start's "Show recently added apps" is honoured.
+  * Gate: test/settings-check.sh; admind-check and dictate-check extended.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 07:55:33 -0700
+
 sg-shell (0.1.0-20) unstable; urgency=medium
 
   * sg-mmc: the administrative consoles' host -- Windows MMC's layout in our

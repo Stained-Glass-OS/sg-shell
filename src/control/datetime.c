@@ -12,9 +12,8 @@ enum { CMD_ZONE = SHIELD_ID(CMD_PAGE_FIRST + 1) };
 
 static HWND g_time, g_date;
 
-struct zone_facts { WCHAR key[128], display[256], iana[128], offset[32], dst[256]; BOOL ntp; };
 
-static void zone_facts(struct zone_facts *z)
+void zone_get(struct zone_facts *z)
 {
     DYNAMIC_TIME_ZONE_INFORMATION dtz;
     TIME_ZONE_INFORMATION tz;
@@ -79,7 +78,7 @@ void build_datetime(void)
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(36), y = S(24), w = pg_width() - x - S(40);
     WCHAR line[400];
 
-    zone_facts(&z);
+    zone_get(&z);
     pg_title(x, y, L"Date and Time");
     y += S(52);
     pg_icon(x, y, S(72), IC_CLOCK);
@@ -128,7 +127,7 @@ void timer_datetime(void) { tick(); }
 void dump_datetime(void)
 {
     struct zone_facts z;
-    zone_facts(&z);
+    zone_get(&z);
     wprintf(L"timezone.windows=%ls\n", z.key);
     wprintf(L"timezone.display=%ls\n", z.display);
     wprintf(L"timezone.iana=%ls\n", z.iana);

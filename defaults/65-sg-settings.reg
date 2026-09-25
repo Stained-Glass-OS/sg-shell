@@ -1,0 +1,24 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Settings (sg-settings: the Control Panel's program in the
+; Windows 10 Settings frame). SystemSettings.exe from the Run box and
+; ShellExecute, and every ms-settings: URI (ms-settings:display,
+; ms-settings:windowsupdate, ms-settings:privacy-microphone...) open it at the
+; page the URI names; an unknown name opens Home, as on Windows. Explorer's
+; Win+I runs ms-settings: (wine-sg 0130).
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\SystemSettings.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-settings64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-settings]
+@="URL:ms-settings"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-settings\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-settings64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-settings\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-settings64.exe\" \"%1\""

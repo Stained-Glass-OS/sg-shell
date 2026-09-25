@@ -24,8 +24,22 @@ enum page_id {
     PG_CAT_SYSSEC, PG_CAT_NET, PG_CAT_HW, PG_CAT_PROG, PG_CAT_USERS, PG_CAT_APPEAR, PG_CAT_CLOCK,
     PG_SYSTEM, PG_PROGRAMS, PG_USERS, PG_USERS_MANAGE, PG_DATETIME, PG_PERSONALIZE,
     PG_UPDATE, PG_NETWORK, PG_SPEECH, PG_ADMINTOOLS,
+    /* Settings (SystemSettings, ms-settings:): the same page machinery in
+     * the Settings window (settings.c) */
+    PG_S_HOME, PG_S_SEARCH,
+    PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT,
+    PG_S_BLUETOOTH, PG_S_MOUSE, PG_S_TYPING,
+    PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
+    PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR,
+    PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP,
+    PG_S_YOURINFO, PG_S_SIGNIN, PG_S_OTHERUSERS,
+    PG_S_DATETIME, PG_S_REGION,
+    PG_S_EOA_DISPLAY, PG_S_EOA_KEYBOARD, PG_S_EOA_MOUSE,
+    PG_S_PRIV_GENERAL, PG_S_PRIV_MIC, PG_S_PRIV_CAMERA, PG_S_PRIV_LOCATION,
+    PG_S_UPDATE, PG_S_RECOVERY,
     PG_COUNT
 };
+#define IS_SETTINGS_PAGE(p) ((p) >= PG_S_HOME && (p) < PG_COUNT)
 
 struct page_def {
     const WCHAR *title;         /* the breadcrumb's last segment and the window title */
@@ -52,12 +66,30 @@ extern const struct page_def g_pages[PG_COUNT];
 void navigate(enum page_id p);
 void refresh_page(void);
 void refresh_when_back(void);
+BOOL refresh_pending(void);     /* and clear it */
 extern BOOL g_kbd_cues;        /* show focus rectangles */
-void page_scroll_to(int y);     /* scroll the page to a content position */
+void page_scroll_to(int y);
+BOOL nav_can_back(void);
+BOOL nav_back(void);
+int  page_scroll_pos(void);
+extern HWND g_keep_focus;     /* scroll the page to a content position */
 void users_reset(void);         /* forget Manage Accounts' selection */   /* rebuild the page when the window is active again */
 BOOL open_network_connections(void);   /* sg-ncpa, if installed */
 extern WCHAR g_search_text[128];
 enum page_id current_page(void);
+/* the Settings window (settings.c): the same pages, another frame */
+extern BOOL g_settings;
+extern COLORREF g_col_link, g_col_link_hot;
+void register_page_classes(void);
+int  settings_main(int argc, WCHAR **argv, int show);
+void settings_page_shown(void);
+void settings_dump(void);        /* SG_SETTINGS_DUMP, now */
+BOOL settings_page_key(MSG *msg);
+/* what the page shows, as text, for the gates (SG_SETTINGS_DUMP) */
+void page_dump(FILE *f);
+/* WM_HSCROLL from a slider on the page reaches its command() with this code */
+#define PG_SCROLL_CODE 0x7F00
+#define IS_SCROLL_CODE(c) (((c) & 0xFF00) == PG_SCROLL_CODE)
 
 /* ---- look ----------------------------------------------------------------- */
 #define COL_BG        RGB(0xFF, 0xFF, 0xFF)
@@ -105,9 +137,13 @@ enum icon {
     IC_SYSSEC, IC_NET, IC_HW, IC_PROG, IC_USERS, IC_APPEAR, IC_CLOCK,
     IC_SYSTEM, IC_UPDATE, IC_DATETIME, IC_PERSONAL, IC_NETCENTER, IC_INET,
     IC_GAME, IC_DISPLAY, IC_GENERIC, IC_USER, IC_SHIELD, IC_OK, IC_WARN, IC_REFRESH, IC_SPEECH, IC_ADMINTOOLS,
+    /* Settings' line glyphs, in the accent colour (g_glyph_color) */
+    IC_G_SYSTEM, IC_G_DEVICES, IC_G_NETWORK, IC_G_PERSONAL, IC_G_APPS, IC_G_ACCOUNTS, IC_G_TIME,
+    IC_G_EOA, IC_G_PRIVACY, IC_G_UPDATE, IC_G_HOME, IC_G_SEARCH, IC_G_BACK, IC_G_PC,
     IC_COUNT
 };
 void draw_icon(HDC dc, int icon, int x, int y, int size);
+extern COLORREF g_glyph_color;
 
 /* ---- the machine: facts shared by pages and --dump ----------------------------- */
 void reg_sz(HKEY root, const WCHAR *sub, const WCHAR *val, WCHAR *out, DWORD cch);
@@ -135,6 +171,8 @@ BOOL admin_request(const WCHAR *const *fields, int n, WCHAR *msg, int cch, DWORD
 BOOL is_elevated(void);
 void current_zone(WCHAR *out, int cch);     /* the IANA zone, from /etc/timezone */
 BOOL ntp_enabled(void);
+int  load_zones(WCHAR ***out);
+int  privacy_admin_consent(const WCHAR *cap, const WCHAR *on_off);   /* set_misc.c */       /* IANA zones, sorted; free each and the array */
 int  admin_main(int argc, WCHAR **argv);        /* /admin VERB ...: the elevated dialogs */
 int  admin_do(int argc, WCHAR **argv);          /* /admin-do VERB ...: non-interactive */
 /* a small modal form: title, fields, returns TRUE on OK */
@@ -150,6 +188,75 @@ enum { FF_TEXT, FF_PASSWORD, FF_RADIO_FIRST, FF_RADIO, FF_NOTE, FF_CHECK, FF_COM
 BOOL run_form(HWND owner, const WCHAR *title, const WCHAR *intro, struct form_field *f, int n,
               const WCHAR *ok_label, BOOL shield);
 void message(HWND owner, const WCHAR *title, const WCHAR *text, BOOL error);
+
+/* ---- personalization (personalize.c), shared with Settings ------------------------- */
+struct pstate {
+    WCHAR wallpaper[MAX_PATH], source[MAX_PATH];
+    int style;
+    BOOL solid;
+    COLORREF background, accent;
+    BOOL apps_light, system_light;
+};
+void pers_read(struct pstate *s);
+const WCHAR *pers_set_wallpaper(const WCHAR *src, int style);   /* NULL, or why not */
+const WCHAR *pers_set_background(COLORREF c);
+const WCHAR *pers_set_accent(COLORREF c);
+const WCHAR *pers_set_mode(BOOL apps, BOOL light);
+extern const COLORREF PERS_ACCENTS[20], PERS_BACKGROUNDS[12];
+extern const WCHAR *const PERS_FIT_NAMES[];
+int  pers_pictures(WCHAR (*out)[MAX_PATH], int max);         /* Windows' and ours */
+HBITMAP pers_thumb(const WCHAR *path, int w, int h);          /* cached */
+void pers_register_classes(void);   /* SgCplTile (a colour or a picture), SgCplPreview */
+#define TILE_SETCOLOR  (WM_USER + 1)
+#define TILE_SETBITMAP (WM_USER + 2)
+#define TILE_SETSEL    (WM_USER + 3)
+extern HBITMAP g_preview_pic;
+
+/* ---- programs (programs.c), shared with Settings > Apps ------------------------------- */
+struct program {
+    WCHAR name[256], publisher[256], version[64], date[32], key[256], icon[MAX_PATH + 8], help[256];
+    WCHAR uninstall[1024], quiet[1024], modify[1024];
+    DWORD size_kb;
+    BOOL msi, no_modify, no_repair, no_remove;
+    const WCHAR *scope;
+};
+enum { PROG_UNINSTALL = CMD_PAGE_FIRST + 2, PROG_CHANGE, PROG_REPAIR, PROG_DONE };
+int  prog_load(void);                       /* reads the Uninstall keys; returns the count */
+const struct program *prog_get(int i);
+BOOL prog_can(const struct program *p, int action);
+BOOL prog_run(const struct program *p, int action, BOOL wait);   /* PROG_DONE posted to g_page after */
+
+/* ---- accounts (users.c) ---------------------------------------------------------------- */
+struct account { WCHAR name[64], full[128]; BOOL admin; };
+int  acc_load(const struct account **out);      /* local people's accounts */
+void acc_elevate(const WCHAR *verb, const WCHAR *name);   /* /admin VERB [NAME], elevated */
+
+/* ---- facts shared with Settings ------------------------------------------------------ */
+struct sysfacts {
+    WCHAR edition[64], computer[64], fqdn[256], user[256], arch[32], os_build[64], cpu[128], ram[32];
+    WCHAR role[32], realm[128], domain[64];
+    BOOL elevated, admin_account;
+    int policy_count, program_count;
+};
+void sys_gather(struct sysfacts *f);
+struct zone_facts { WCHAR key[128], display[256], iana[128], offset[32], dst[256]; BOOL ntp; };
+void zone_get(struct zone_facts *z);
+struct ufacts {
+    BOOL pending, checked, managed;
+    WCHAR last[96];
+    WCHAR sources[8][256];
+    int nsources;
+};
+struct hentry { WCHAR when[40]; WCHAR what[400]; };
+void update_gather(struct ufacts *u);
+int  update_history(struct hentry *out, int max);
+
+/* ---- network adapters (network.c) ------------------------------------------------------ */
+struct adapter {
+    WCHAR name[128], desc[256], type[32], ipv4[128], ipv6[256], gateway[128], dns[256], mac[32], speed[32];
+    BOOL up, internet;
+};
+int load_adapters(struct adapter *out, int max);
 
 /* ---- hosted .cpl applets ------------------------------------------------------ */
 struct cpl_item { WCHAR file[MAX_PATH]; WCHAR name[128]; WCHAR info[256]; int index; };

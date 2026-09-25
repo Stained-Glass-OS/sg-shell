@@ -12,7 +12,7 @@ override_dh_auto_install:
 	install -d debian/sg-shell/usr/libexec/stained-glass/shell
 	install -m0755 build/sg-start64.exe build/sg-start32.exe \
 	    build/sg-mstsc64.exe build/sg-mstsc32.exe \
-	    build/sg-control64.exe build/sg-control32.exe \
+	    build/sg-control64.exe build/sg-control32.exe build/sg-settings64.exe \
 	    build/sg-gpresult64.exe build/sg-gpresult32.exe \
 	    build/sg-ncpa64.exe build/sg-netflyout64.exe build/sg-dictate64.exe build/sg-zip64.exe \
 	    build/sg-media64.exe \

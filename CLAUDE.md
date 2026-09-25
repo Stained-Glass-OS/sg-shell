@@ -44,6 +44,7 @@ wine-sg or an X server.
 | `sg-start` | **The Start menu**, Windows 10-class, our own drawing: a rail (menu button that opens it with labels; the user with an initial avatar, Documents, Pictures, Settings, Power: Lock / Sign out / Restart / Shut down, NoClose and StartMenuLogoff honoured), every app from the user's and common Start Menu (recursive, `.lnk`/`.url`, own icons, letter headers, "Recently added"), pinned tiles (`HKCU\Software\Stained Glass\Start\Pinned`), type-to-search over apps and Control Panel settings, dark owner-drawn context menu (Pin/Unpin, Run as administrator = `runas`, Open file location, Uninstall), keyboard (arrows, Tab, Enter, Escape). Explorer's Start button and the Windows key toggle it (`SgStartPanel`, `WM_USER+10`); Wine's menu is the fallback. See "The Start menu" below. |
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
+| `sg-settings` | **Settings** (Windows 10's, Win+I, `SystemSettings.exe`, every `ms-settings:` URI) -- the Control Panel's program in the Settings frame, sharing its pages' logic. System, Devices, Network & Internet, Personalization, Apps, Accounts, Time & Language, Ease of Access, Privacy, Update & Security. `defaults/65-sg-settings.reg`; sg-start lists it and its rail's Settings opens it. See "Settings" below. |
 | `sg-gpresult` | **Group Policy result.** A console tool, like `gpresult /r`, that reports the machine and user Group Policy actually in force -- every setting under the HKLM and HKCU policy branches, read from the live registry -- so an administrator can confirm what an applied policy does. `gpresult.exe` resolves to it via App Paths (`defaults/62-sg-gpresult.reg`). Gate: `test/gpresult-check.sh` plants a machine and a user policy and requires both (and no non-policy key) in the report. |
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
@@ -182,6 +183,91 @@ elevated path through a real spool, the window (appears, paints, Tab+Enter
 navigate), and the "Create an account" dialog driven by the keyboard. Both
 have been seen to fail: dropping the owner check, logging passwords, and
 writing the accent in the wrong byte order each turn them red.
+
+## Settings (sg-settings)
+
+`build/sg-settings64.exe` is `src/control/*.c` linked again with its own icon
+and a common-controls 6 manifest (`src/settings/`): `main.c` hands over to
+`settings_main()` (`settings.c`) when the program is called `sg-settings*` or
+`SystemSettings*`, or its first argument is `--settings` or an `ms-settings:`
+URI. The headless entry points (`/admin`, `--dump`, `--set`...) serve both,
+so the elevated copy of Settings is the Control Panel's elevated dialogs.
+
+- **One page machinery, two frames.** Settings' pages are more entries in
+  `g_pages` (`PG_S_*`, `SETTINGS_PAGE_DEFS` in `settings.h`) built with the
+  same `pg_*` items and controls; `settings.c` adds the Settings pieces --
+  `st_title/st_head/st_toggle/st_combo/st_slider/st_card...`, the switch
+  (`SgSetCtl`, `BM_GETCHECK`/`BN_CLICKED`), the navigation pane (`SgSetNav`:
+  back, Home, search, the category's pages with the accent bar), Home's
+  category tiles, search over titles and keywords. `pg_left_pane` returns no
+  pane in Settings, so a Control Panel page (Speech Recognition) shows in the
+  Settings frame as it is.
+- **Shared, not copied**: Background/Colors/Themes call personalize.c's
+  `pers_set_wallpaper/accent/mode` (exported for this); Apps & features is
+  programs.c's list and uninstallers (`prog_load/prog_run`); Accounts are
+  users.c's accounts and elevated dialogs; About is system.c's facts; Date &
+  time is datetime.c's zone; Update is update.c's facts and history;
+  Ethernet/Wi-Fi/Status are network.c's adapters and open sg-ncpa and the
+  flyout rather than repeat them.
+- **The pages by where they keep things**: Windows' own values where Windows
+  keeps them (LogPixels, SPI_* for mouse, keyboard, accessibility, the
+  notification switches, `StartupApproved` as Task Manager writes it,
+  WinINet's proxy with `INTERNET_OPTION_SETTINGS_CHANGED`, the ConsentStore
+  for privacy, `HKCU\Software\Classes` for default apps, SetUserGeoID and
+  `Control Panel\International` for the region); **sg-session's
+  `sg-settingsctl`** for what only the machine has -- sound devices and
+  volumes (PipeWire through pactl), Bluetooth (bluez: power, scan, pair,
+  connect, remove), the compositor's modes (wlr-randr), night light
+  (wlsunset), Power & sleep's timers (swayidle), pending updates (apt); and
+  **sg-admind** through the elevated copy for root's: the PC's name (`/admin
+  rename-pc`, Windows 10's "Rename your PC"), time zone (`/admin set-zone`),
+  time synchronisation (`/admin ntp`), the clock by hand (`/admin set-time`,
+  sg-admind's new `time` verb, refused while synchronised), the update check,
+  the device-wide privacy switches (`/admin consent CAP on|off`, HKLM).
+- **sg-settingsctl answers through a file** (`--out`), as sg-dictate --mics
+  does: Wine gives a Windows program no pipes to a native one. `ctl_run`
+  polls for the answer, which the helper renames into place whole.
+  `SG_SETTINGSCTL` names another helper (the gate's stand-in).
+- **Voice typing honours Privacy > Microphone**: with the device's, apps' or
+  desktop apps' ConsentStore value `Deny`, `sg-dictate` says so and does not
+  listen, and its gear opens `ms-settings:privacy-microphone`.
+- **One window**: a second start (another URI, Win+I) hands its page to the
+  running window (`WM_COPYDATA` to `SgSettingsWindow`) and exits.
+  `--resolve URI` prints the page a URI opens; an unknown name opens Home, as
+  on Windows.
+- **Things that bit.** Never rebuild a page inside an edit control's own
+  `EN_CHANGE` (the rebuild destroys the edit mid-message): post a command and
+  rebuild after. A drop-down list's window height is its list's: the page's
+  extent counts its edit box only, or every page with a combo scrolls.
+  Glyphs are drawn in the accent colour and cached by colour too, or a page
+  drawn before an accent change keeps the old one. Wine's `GetGeoInfo` has no
+  names: countries come from the locales (`LOCALE_IGEOID`).
+- **`SG_SETTINGS_DUMP=<file>`**: after every page is shown or scrolled, the
+  window, its rectangle, the page, the category, the accent, the selection
+  bar's and the search box's screen points, every text and every control
+  (class, id, state, screen centre, text).
+- **Gate: `test/settings-check.sh`** (display :120; a stand-in
+  sg-settingsctl): the ms-settings: table through `--resolve` (18 URIs);
+  `ms-settings:display` through ShellExecute; a second URI going to the
+  running window; About showing the device name; Background's picture tile
+  making the desktop red (registry and the desktop's pixels); Colors' accent
+  tile writing `AccentColor` 0xff417c10 and Settings repainting its
+  selection bar in it; Sound's devices and a keyboard-moved slider asking for
+  exactly that volume; the microphone switch writing ConsentStore Deny;
+  search and Enter; Bluetooth's paired device, Add a device (scan) and Pair;
+  Update's pending list; `SystemSettings.exe` through App Paths; Date & time;
+  Region; every other page building; with `WINI=1` Win+I on the X keyboard
+  (a wine-sg with 0130). Screenshots `build/settings-*.png`. Mutants
+  `-DSG_MUTANT_URI` (every URI opens Home) and `-DSG_MUTANT_ACCENT` (the
+  neighbouring accent) turn it red, and so does Win+I on a wine-sg without
+  0130 (the Control Panel opens).
+- **Not yet:** the taskbar does not read Taskbar's switches (alignment,
+  small buttons, auto-hide) nor Start's "more tiles"/"full screen"; the lock
+  screen does not show the chosen picture; night light, resolution and
+  Power & sleep need the Stained Glass compositor (wlopm needs
+  wlr-output-power-management, which sg-compositor lacks, so the screen is
+  never turned off); multiple displays are not arranged; no Windows Hello,
+  Family, Gaming, Phone or Search categories.
 
 ## The Start menu (sg-start)
 

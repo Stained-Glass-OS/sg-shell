@@ -202,6 +202,18 @@ sleep 0.5; import -window root "$OUT/dictate-off.png"
 toggle; wait_gone
 speech Enabled 1
 
+# --- Settings > Privacy > Microphone off: no listening ------------------------------------------------------
+MICKEY='HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'
+wine reg add "$MICKEY" /v Value /d Deny /f >/dev/null 2>&1
+starts=$(grep -c '"start"' "$FAKE_LOG")
+toggle
+i=0; while ! grep -q 'state privacy' "$FAKE_ERR" && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
+grep -q 'state privacy' "$FAKE_ERR" && pass "microphone access denied (ConsentStore): the bar says so" || fail "no 'privacy' state"
+[ "$(grep -c '"start"' "$FAKE_LOG")" = "$starts" ] && pass "...and the microphone was not opened" \
+    || fail "a start was sent with microphone access denied"
+toggle; wait_gone
+wine reg add "$MICKEY" /v Value /d Allow /f >/dev/null 2>&1
+
 # --- hold-to-talk, on the X keyboard ------------------------------------------------------------------------
 speech HoldToTalk 1
 : > "$FAKE_ERR"
