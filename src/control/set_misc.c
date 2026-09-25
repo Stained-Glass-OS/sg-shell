@@ -374,7 +374,7 @@ void set_build_update(void)
     BOOL ok, staged = FALSE;
     char *ans, buf[512];
     const char *pos = NULL;
-    int y = st_title(L"Windows Update"), n = 0, i, nh;
+    int y = st_title(L"Updates"), n = 0, i, nh;
     update_gather(&u);
     ans = ctl_run(L"updates", &ok, err, ARRAYSIZE(err), 60000);
     if (ans && ctl_line(ans, "STAGED", NULL, buf, sizeof(buf))) staged = !strcmp(buf, "yes");
@@ -423,7 +423,7 @@ BOOL set_cmd_update(int id, int code, HWND ctl)
     switch (id) {
     case CMD_CHECK: if (run_elevated(L"/admin update-check")) refresh_when_back(); return TRUE;
     case CMD_RESTART:
-        if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Windows Update",
+        if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
             ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
         return TRUE;

@@ -55,7 +55,7 @@
     [PG_S_PRIV_MIC]     = { L"Microphone",                   PG_S_HOME, set_build_priv_mic,  set_cmd_privacy }, \
     [PG_S_PRIV_CAMERA]  = { L"Camera",                       PG_S_HOME, set_build_priv_camera, set_cmd_privacy }, \
     [PG_S_PRIV_LOCATION]= { L"Location",                     PG_S_HOME, set_build_priv_location, set_cmd_privacy }, \
-    [PG_S_UPDATE]       = { L"Windows Update",               PG_S_HOME, set_build_update,    set_cmd_update }, \
+    [PG_S_UPDATE]       = { L"Updates",                      PG_S_HOME, set_build_update,    set_cmd_update }, \
     [PG_S_RECOVERY]     = { L"Recovery",                     PG_S_HOME, set_build_recovery,  set_cmd_recovery },
 
 /* ---- building a Settings page (settings.c) ----------------------------------------------- */

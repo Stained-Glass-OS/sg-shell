@@ -1,3 +1,13 @@
+sg-shell (0.1.0-44) unstable; urgency=medium
+
+  * No "Windows" as our product's name: Settings' heading is "Settings";
+    Windows Update -> Updates (pages, dialogs, links, Start); the credential
+    prompt is "Security"; "Sign-in PIN"; explorer.exe is "File Explorer" in
+    Task Manager. Windows' own names for what they describe (Windows Logs,
+    Windows PowerShell, the Windows directory) stay.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Fri, 25 Sep 2026 16:27:36 -0700
+
 sg-shell (0.1.0-43) unstable; urgency=medium
 
   * Our own apps follow the app mode (AppsUseLightTheme) live: Calculator,

@@ -20,7 +20,7 @@ struct applet { const WCHAR *name; int icon; int id; const WCHAR *keywords; stru
 /* ---- the applets, as they appear in the category pages and All Items ---------- */
 static const struct applet SYSTEM_A = { L"System", IC_SYSTEM, NAV(PG_SYSTEM), L"computer name domain workgroup ram processor about",
     { { L"View amount of RAM and processor speed", NAV(PG_SYSTEM) }, { L"Rename this computer", CMD_RENAME } } };
-static const struct applet UPDATE_A = { L"Windows Update", IC_UPDATE, NAV(PG_UPDATE), L"updates upgrade patch apt",
+static const struct applet UPDATE_A = { L"Updates", IC_UPDATE, NAV(PG_UPDATE), L"updates upgrade patch apt",
     { { L"Check for updates", NAV(PG_UPDATE) }, { L"View update history", NAV(PG_UPDATE) } } };
 static const struct applet NETCENTER_A = { L"Network and Sharing Center", IC_NETCENTER, NAV(PG_NETWORK), L"network ip address adapter ethernet wifi dns",
     { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"View network connections", CMD_NCPA } } };

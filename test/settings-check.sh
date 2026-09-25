@@ -103,7 +103,7 @@ export SG_SETTINGSCTL="$CTL"
 # --- the ms-settings: table, without a window --------------------------------------------
 resolve() { wine "$T/sg-settings64.exe" --resolve "$1" 2>/dev/null | tr -d '\r' | sed -n 's/^page=//p'; }
 for pair in "ms-settings:|Home" "ms-settings:display|Display" "ms-settings:network|Status" "ms-settings:sound|Sound" \
-            "ms-settings:privacy-microphone|Microphone" "ms-settings:windowsupdate|Windows Update" \
+            "ms-settings:privacy-microphone|Microphone" "ms-settings:windowsupdate|Updates" \
             "ms-settings:appsfeatures|Apps & features" "ms-settings:defaultapps|Default apps" \
             "ms-settings:dateandtime|Date & time" "ms-settings:personalization-background|Background" \
             "ms-settings:colors|Colors" "ms-settings:about|About" "ms-settings:bluetooth|Bluetooth & other devices" \
@@ -281,7 +281,7 @@ if [ $# -eq 2 ]; then
 else fail "no Add Bluetooth or other device button"; fi
 
 wine start ms-settings:windowsupdate >/dev/null 2>&1
-page_is "Windows Update" "ms-settings:windowsupdate"
+page_is "Updates" "ms-settings:windowsupdate"
 has "text Updates available" && has "wine-sg 10.0-38 (installed: 10.0-37)" && pass "Update lists the pending updates" || fail "Update page: $(tr -d '\r' < "$DUMP" | grep '^text' | head -8)"
 shot update
 

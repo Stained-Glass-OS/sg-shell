@@ -65,7 +65,7 @@ static const struct { const WCHAR *exe, *name; } friendly[] = {
     { L"sg-ncpa64.exe", L"Network Connections" },
     { L"sg-mstsc64.exe", L"Remote Desktop Connection" },
     { L"sg-taskmgr64.exe", L"Task Manager" },
-    { L"explorer.exe", L"Windows Explorer" },
+    { L"explorer.exe", L"File Explorer" },
     { L"services.exe", L"Services and Controller app" },
     { L"svchost.exe", L"Service Host" },
     { L"winedevice.exe", L"Device driver host" },

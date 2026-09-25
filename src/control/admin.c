@@ -459,7 +459,7 @@ static int do_rename(void)
             };
             HWND wait;
             BOOL ok;
-            if (!run_form(NULL, L"Windows Security", NULL, c, ARRAYSIZE(c), L"OK", FALSE)) { SecureZeroMemory(pw, sizeof(pw)); return 1; }
+            if (!run_form(NULL, L"Security", NULL, c, ARRAYSIZE(c), L"OK", FALSE)) { SecureZeroMemory(pw, sizeof(pw)); return 1; }
             {
                 const WCHAR *req[] = { L"join-domain", realm_in, user, dc, pw };
                 wait = busy(L"Computer Name/Domain Changes", L"Joining the domain. This can take a minute...");
@@ -668,8 +668,8 @@ static int do_update_check(void)
 {
     WCHAR msg[512];
     const WCHAR *req[] = { L"update-check" };
-    if (!admin_request(req, 1, msg, ARRAYSIZE(msg), 60000)) { message(NULL, L"Windows Update", msg, TRUE); return 1; }
-    message(NULL, L"Windows Update", L"Checking for updates. Updates that are found are downloaded now and installed "
+    if (!admin_request(req, 1, msg, ARRAYSIZE(msg), 60000)) { message(NULL, L"Updates", msg, TRUE); return 1; }
+    message(NULL, L"Updates", L"Checking for updates. Updates that are found are downloaded now and installed "
             L"the next time you restart your computer.", FALSE);
     return 0;
 }

@@ -171,7 +171,7 @@ res() { ctl --resolve "$1"; }
 ok=1
 for pair in 'appwiz.cpl=page=Programs and Features' 'timedate.cpl=page=Date and Time' 'sysdm.cpl=page=System' \
             'C:\Windows\System32\appwiz.cpl,,2=page=Programs and Features' 'userpasswords=page=User Accounts' \
-            'userpasswords2=page=Manage Accounts' 'desktop=page=Personalization' 'Microsoft.WindowsUpdate=page=Windows Update' \
+            'userpasswords2=page=Manage Accounts' 'desktop=page=Personalization' 'Microsoft.WindowsUpdate=page=Updates' \
             'Microsoft.NetworkAndSharingCenter=page=Network and Sharing Center' 'inetcpl.cpl=cpl=inetcpl.cpl' \
             'desk.cpl,@0=cpl=desk.cpl' 'Microsoft.GameControllers=cpl=joy.cpl' 'thirdparty.cpl=cpl=thirdparty.cpl' \
             'nonsense=page=Control Panel'; do

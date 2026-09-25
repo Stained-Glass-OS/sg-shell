@@ -230,7 +230,7 @@ static void show_details(void)
 
 void build_programs(void)
 {
-    static const WCHAR *const labels[] = { L"View installed updates", NULL, L"See also", L"Windows Update", L"System" };
+    static const WCHAR *const labels[] = { L"View installed updates", NULL, L"See also", L"Updates", L"System" };
     static const int ids[] = { NAV(PG_UPDATE), 0, -1, NAV(PG_UPDATE), NAV(PG_SYSTEM) };
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(28), y = S(24), w = pg_width() - x - S(24), h = pg_height();
     LVCOLUMNW col = { LVCF_TEXT | LVCF_WIDTH };

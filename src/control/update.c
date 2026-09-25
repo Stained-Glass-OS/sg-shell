@@ -129,7 +129,7 @@ void build_update(void)
     WCHAR line[512];
 
     update_gather(&u);
-    pg_title(x, y, L"Windows Update");
+    pg_title(x, y, L"Updates");
     y += S(52);
     if (u.managed) {
         pg_text(x, y, w, S(20), g_font_body, COL_WARN, L"*Some settings are managed by your organization.", DT_SINGLELINE);
@@ -179,7 +179,7 @@ BOOL cmd_update(int id, int code, HWND ctl)
     switch (id) {
     case CMD_CHECK: if (run_elevated(L"/admin update-check")) refresh_when_back(); return TRUE;
     case CMD_RESTART:
-        if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Windows Update",
+        if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
             ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
         return TRUE;

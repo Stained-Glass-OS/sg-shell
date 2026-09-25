@@ -85,7 +85,7 @@ static int row(int x, int y, int w, const WCHAR *label, const WCHAR *value)
 
 void build_system(void)
 {
-    static const WCHAR *const labels[] = { L"Rename this computer", L"Windows Update", L"Group Policy results",
+    static const WCHAR *const labels[] = { L"Rename this computer", L"Updates", L"Group Policy results",
                                            NULL, L"See also", L"User Accounts", L"Programs and Features" };
     static const int ids[] = { CMD_CHANGE, NAV(PG_UPDATE), CMD_GPRESULT, 0, -1, NAV(PG_USERS), NAV(PG_PROGRAMS) };
     struct sysfacts f;

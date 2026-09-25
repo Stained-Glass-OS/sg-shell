@@ -146,7 +146,7 @@ static struct entry g_settings[] = {
     { .name = L"Date and time", .path = L"ms-settings:dateandtime", .args = L"", .keywords = L"clock time zone date", .kind = K_SETTING },
     { .name = L"User Accounts", .path = L"control.exe", .args = L"userpasswords", .keywords = L"users account password administrator family", .kind = K_SETTING },
     { .name = L"Personalization", .path = L"control.exe", .args = L"/name Microsoft.Personalization", .keywords = L"background wallpaper colors colour theme dark light accent", .kind = K_SETTING },
-    { .name = L"Windows Update", .path = L"ms-settings:windowsupdate", .args = L"", .keywords = L"update updates upgrade", .kind = K_SETTING },
+    { .name = L"Updates", .path = L"ms-settings:windowsupdate", .args = L"", .keywords = L"windows update updates upgrade", .kind = K_SETTING },
     { .name = L"Display", .path = L"control.exe", .args = L"desk.cpl", .keywords = L"screen resolution monitor scale", .kind = K_SETTING },
     { .name = L"Internet Options", .path = L"control.exe", .args = L"inetcpl.cpl", .keywords = L"internet proxy browser", .kind = K_SETTING },
 };

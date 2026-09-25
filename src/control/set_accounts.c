@@ -63,7 +63,7 @@ void set_build_signin(void)
     y = st_head(y, L"Manage how you sign in to your device");
     y = st_card(y, IC_G_PRIVACY, L"Password", domain ? L"Sign in with your domain password" : L"Sign in with your account's password");
     if (!domain) st_button(&y, L"Change", CMD_PASSWORD);
-    y = st_card(y, IC_G_ACCOUNTS, L"Windows Hello PIN", L"Not available on this device");
+    y = st_card(y, IC_G_ACCOUNTS, L"Sign-in PIN", L"Not available on this device");
     y = st_head(y, L"Require sign-in");
     st_combo(&y, L"If you've been away, when should Windows require you to sign in again?", req, 2,
              reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\SignIn", L"RequireOnWake", 1) ? 0 : 1, CMD_REQUIRE);

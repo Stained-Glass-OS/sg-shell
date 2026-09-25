@@ -56,7 +56,7 @@ static const struct category CATS[] = {
       { PG_S_EOA_DISPLAY, PG_S_EOA_MAGNIFIER, PG_S_EOA_KEYBOARD, PG_S_EOA_MOUSE, PG_COUNT } },
     { L"Privacy", L"Microphone, camera, location", IC_G_PRIVACY,
       { PG_S_PRIV_GENERAL, PG_S_PRIV_MIC, PG_S_PRIV_CAMERA, PG_S_PRIV_LOCATION, PG_COUNT } },
-    { L"Update & Security", L"Windows Update, recovery", IC_G_UPDATE,
+    { L"Update & Security", L"Updates, recovery", IC_G_UPDATE,
       { PG_S_UPDATE, PG_S_RECOVERY, PG_COUNT } },
 };
 #define NCATS ((int)ARRAYSIZE(CATS))
@@ -460,7 +460,7 @@ void set_build_home(void)
 {
     int w = pg_width(), tw = S(290), th = S(84), cols, x0, y = S(28), i;
     HWND e;
-    pg_text(0, y, w, S(44), g_font_big, COL_TEXT, L"Windows Settings", DT_SINGLELINE | DT_CENTER);
+    pg_text(0, y, w, S(44), g_font_big, COL_TEXT, L"Settings", DT_SINGLELINE | DT_CENTER);
     y += S(64);
     e = make_search(g_page, (w - S(420)) / 2, y, S(420), CMD_HOMESEARCH);
     (void)e;
