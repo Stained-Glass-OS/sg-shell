@@ -34,15 +34,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "zipcore.h"
+#include "../sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
-#define COL_BG       RGB(0xFF, 0xFF, 0xFF)
-#define COL_BAR      RGB(0xF3, 0xF3, 0xF3)
-#define COL_LINE     RGB(0xE5, 0xE5, 0xE5)
-#define COL_TEXT     RGB(0x1A, 0x1A, 0x1A)
-#define COL_SUBTLE   RGB(0x6D, 0x6D, 0x6D)
+#define COL_BG (sgm_dark ? RGB(0x20,0x20,0x20) : RGB(0xFF, 0xFF, 0xFF))
+#define COL_BAR (sgm_dark ? RGB(0x2B,0x2B,0x2B) : RGB(0xF3, 0xF3, 0xF3))
+#define COL_LINE (sgm_dark ? RGB(0x3A,0x3A,0x3A) : RGB(0xE5, 0xE5, 0xE5))
+#define COL_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1A, 0x1A, 0x1A))
+#define COL_SUBTLE (sgm_dark ? RGB(0xA8,0xA8,0xA8) : RGB(0x6D, 0x6D, 0x6D))
 #define COL_ACCENT   RGB(112, 48, 192)
-#define COL_HOT      RGB(0xEC, 0xE4, 0xF7)
-#define COL_PRESSED  RGB(0xDD, 0xCE, 0xF1)
+#define COL_HOT (sgm_dark ? RGB(0x3B,0x2E,0x4F) : RGB(0xEC, 0xE4, 0xF7))
+/* the window's background in the app mode's colour: the DC's own brush */
+static HBRUSH bg_brush(HDC dc) { SetDCBrushColor(dc, COL_BG); return GetStockObject(DC_BRUSH); }
+/* a list view keeps the colours it was made with: give it the mode's */
+static BOOL CALLBACK list_colours(HWND hwnd, LPARAM lp)
+{
+    WCHAR cls[32];
+    (void)lp;
+    if (GetClassNameW(hwnd, cls, 32) && !lstrcmpiW(cls, WC_LISTVIEWW))
+    {
+        SendMessageW(hwnd, LVM_SETBKCOLOR, 0, COL_BG);
+        SendMessageW(hwnd, LVM_SETTEXTBKCOLOR, 0, COL_BG);
+        SendMessageW(hwnd, LVM_SETTEXTCOLOR, 0, COL_TEXT);
+    }
+    return TRUE;
+}
+#define COL_PRESSED (sgm_dark ? RGB(0x4A,0x38,0x66) : RGB(0xDD, 0xCE, 0xF1))
 
 #define WM_APP_PROGRESS (WM_APP + 1)
 #define WM_APP_DONE     (WM_APP + 2)
@@ -367,7 +394,7 @@ static void draw_flat_button(DRAWITEMSTRUCT *di, BOOL hot)
     DeleteObject(b);
     GetWindowTextW(di->hwndItem, text, 128);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, disabled ? RGB(0xA0, 0xA0, 0xA0) : COL_TEXT);
+    SetTextColor(dc, disabled ? (sgm_dark ? RGB(0x6E, 0x6E, 0x6E) : RGB(0xA0, 0xA0, 0xA0)) : COL_TEXT);
     SelectObject(dc, g_font);
     switch (di->CtlID)
     {
@@ -378,7 +405,7 @@ static void draw_flat_button(DRAWITEMSTRUCT *di, BOOL hot)
         break;
     case ID_BACK: case ID_FWD: case ID_UP:
         draw_arrow(dc, &r, di->CtlID == ID_BACK ? 0 : di->CtlID == ID_FWD ? 1 : 2,
-                   disabled ? RGB(0xC0, 0xC0, 0xC0) : COL_TEXT);
+                   disabled ? (sgm_dark ? RGB(0x60, 0x60, 0x60) : RGB(0xC0, 0xC0, 0xC0)) : COL_TEXT);
         break;
     default:
         DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
@@ -532,6 +559,8 @@ static int wizard_ask(wizard *w, const WCHAR *full)
 
 static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (msg == WM_CREATE) sg_mode_title(hwnd, sgm_dark);
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     wizard *w = (wizard *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
     switch (msg)
     {
@@ -576,7 +605,7 @@ static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CTLCOLORSTATIC:
         SetBkColor((HDC)wp, COL_BG);
         SetTextColor((HDC)wp, COL_TEXT);
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+        return (LRESULT)bg_brush((HDC)wp);
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -584,7 +613,7 @@ static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         RECT rc, r;
         HBRUSH bar = CreateSolidBrush(COL_BAR), line = CreateSolidBrush(COL_LINE);
         GetClientRect(hwnd, &rc);
-        FillRect(dc, &rc, GetStockObject(WHITE_BRUSH));
+        FillRect(dc, &rc, bg_brush(dc));
         SetRect(&r, 0, rc.bottom - S(44), rc.right, rc.bottom); FillRect(dc, &r, bar);
         SetRect(&r, 0, rc.bottom - S(45), rc.right, rc.bottom - S(44)); FillRect(dc, &r, line);
         SetBkMode(dc, TRANSPARENT);
@@ -956,6 +985,13 @@ static LRESULT CALLBACK list_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 static LRESULT CALLBACK browser_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (msg == WM_CREATE) sg_mode_title(hwnd, sgm_dark);
+    if (sg_mode_changed(msg, lp))
+    {
+        sgm_follow(hwnd);
+        EnumChildWindows(hwnd, list_colours, 0);
+        InvalidateRect(hwnd, NULL, TRUE);
+    }
     browser *b = (browser *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
     switch (msg)
     {
@@ -983,6 +1019,7 @@ static LRESULT CALLBACK browser_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                                   LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS,
                                   0, 0, 10, 10, hwnd, (HMENU)ID_LIST, g_inst, NULL);
         ListView_SetExtendedListViewStyle(b->list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+        list_colours(b->list, 0);
         SendMessageW(b->list, WM_SETFONT, (WPARAM)g_font, FALSE);
         b->images = (HIMAGELIST)SHGetFileInfoW(L"C:\\", 0, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_SMALLICON);
         if (b->images) ListView_SetImageList(b->list, b->images, LVSIL_SMALL);
@@ -1013,7 +1050,7 @@ static LRESULT CALLBACK browser_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CTLCOLORSTATIC:
         SetBkColor((HDC)wp, GetDlgCtrlID((HWND)lp) == ID_ADDR ? COL_BG : COL_BG);
         SetTextColor((HDC)wp, GetDlgCtrlID((HWND)lp) == ID_STATUS ? COL_SUBTLE : COL_TEXT);
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+        return (LRESULT)bg_brush((HDC)wp);
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -1021,7 +1058,7 @@ static LRESULT CALLBACK browser_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         RECT rc, r;
         HBRUSH line = CreateSolidBrush(COL_LINE);
         GetClientRect(hwnd, &rc);
-        FillRect(dc, &rc, GetStockObject(WHITE_BRUSH));
+        FillRect(dc, &rc, bg_brush(dc));
         SetRect(&r, 0, S(44) - 1, rc.right, S(44)); FillRect(dc, &r, line);
         SetRect(&r, 0, rc.bottom - S(24), rc.right, rc.bottom - S(24) + 1); FillRect(dc, &r, line);
         DeleteObject(line);
@@ -1124,6 +1161,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     enum { M_BROWSE, M_WIZARD, M_EXTRACT, M_CREATE, M_LIST } mode = M_BROWSE;
     HDC dc;
     (void)prev; (void)cmdline; (void)show;
+    sgm_dark = sg_apps_dark();
 
     g_inst = inst;
     SetProcessDPIAware();

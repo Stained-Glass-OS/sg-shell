@@ -548,7 +548,8 @@ static LRESULT CALLBACK tabs_sub(HWND h, UINT msg, WPARAM wp, LPARAM lp, UINT_PT
     {
         SetBkColor((HDC)wp, C_BG);
         SetTextColor((HDC)wp, C_TEXT);
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+        SetDCBrushColor((HDC)wp, C_BG);
+        return (LRESULT)GetStockObject(DC_BRUSH);
     }
     if (msg == WM_NOTIFY && ((NMHDR *)lp)->code == TCN_SELCHANGE)
     {

@@ -10,7 +10,7 @@
 
 #define SS 4
 #define KEY RGB(0xFF, 0x00, 0xFF)
-#define INK RGB(56, 56, 66)
+#define INK (sgm_dark ? RGB(215, 215, 225) : RGB(56, 56, 66))
 #define PURPLE ACCENT
 #define LILAC RGB(180, 150, 230)
 #define PAPER RGB(255, 255, 255)
@@ -333,7 +333,7 @@ static HBITMAP render(int glyph, int size)
 
 void glyph_draw(HDC dc, int glyph, int x, int y, int size)
 {
-    static struct { int g, size; HBITMAP bmp; } cache[128];
+    static struct { int g, size; BOOL dark; HBITMAP bmp; } cache[128];
     static int ncache;
     BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
     HBITMAP bmp = NULL;
@@ -341,11 +341,11 @@ void glyph_draw(HDC dc, int glyph, int x, int y, int size)
     HGDIOBJ old;
     int i;
     if (size < 4) return;
-    for (i = 0; i < ncache; i++) if (cache[i].g == glyph && cache[i].size == size) { bmp = cache[i].bmp; break; }
+    for (i = 0; i < ncache; i++) if (cache[i].g == glyph && cache[i].size == size && cache[i].dark == sgm_dark) { bmp = cache[i].bmp; break; }
     if (!bmp)
     {
         bmp = render(glyph, size);
-        if (ncache < (int)ARRAYSIZE(cache)) { cache[ncache].g = glyph; cache[ncache].size = size; cache[ncache].bmp = bmp; ncache++; }
+        if (ncache < (int)ARRAYSIZE(cache)) { cache[ncache].g = glyph; cache[ncache].size = size; cache[ncache].dark = sgm_dark; cache[ncache].bmp = bmp; ncache++; }
     }
     mem = CreateCompatibleDC(dc);
     old = SelectObject(mem, bmp);

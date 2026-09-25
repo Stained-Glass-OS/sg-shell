@@ -667,7 +667,7 @@ static RECT handle_rect(int which)
 
 static void paint(HDC dc, RECT rc)
 {
-    HBRUSH ws = CreateSolidBrush(WORKSPACE), sh = CreateSolidBrush(RGB(188, 184, 200));
+    HBRUSH ws = CreateSolidBrush(WORKSPACE), sh = CreateSolidBrush((sgm_dark ? RGB(10, 10, 12) : RGB(188, 184, 200)));
     int x0 = to_cx(0), y0 = to_cy(0), w = vw(), h = vh(), i;
     RECT r;
     HDC src = g_imgdc;

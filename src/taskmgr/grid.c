@@ -119,7 +119,9 @@ BOOL grid_row_rect(grid_t *g, int i, RECT *out)
 /* Windows' heat scale: pale yellow when idle, deepening as the value grows */
 static COLORREF heat_colour(double f)
 {
-    static const int stops[3][3] = { { 255, 244, 196 }, { 255, 210, 110 }, { 255, 160, 60 } };
+    static const int light[3][3] = { { 255, 244, 196 }, { 255, 210, 110 }, { 255, 160, 60 } };
+    static const int dark[3][3] = { { 64, 56, 30 }, { 110, 82, 26 }, { 150, 90, 20 } };  /* white text reads on it */
+    const int (*stops)[3] = sgm_dark ? dark : light;
     int i = f < 0.5 ? 0 : 1;
     double t;
     if (f < 0) f = 0;

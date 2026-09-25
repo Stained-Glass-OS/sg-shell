@@ -21,22 +21,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include "../sg-mode.h"
+extern BOOL sgm_dark;               /* the app mode (sg-mode.h), in main.c */
+void sgm_follow(HWND hwnd);
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #endif
 
 /* ---- the palette (Stained Glass Light) ---------------------------------- */
-#define C_BG        RGB(255, 255, 255)
-#define C_SURFACE   RGB(243, 243, 243)
-#define C_LINE      RGB(222, 222, 222)
-#define C_TEXT      RGB(0, 0, 0)
-#define C_SUBTLE    RGB(96, 96, 96)
+#define C_BG (sgm_dark ? RGB(32,32,32) : RGB(255, 255, 255))
+#define C_SURFACE (sgm_dark ? RGB(43,43,43) : RGB(243, 243, 243))
+#define C_LINE (sgm_dark ? RGB(60,60,60) : RGB(222, 222, 222))
+#define C_TEXT (sgm_dark ? RGB(255,255,255) : RGB(0, 0, 0))
+#define C_SUBTLE (sgm_dark ? RGB(168,168,168) : RGB(96, 96, 96))
 #define C_ACCENT    RGB(112, 48, 192)
-#define C_ACCENT_LT RGB(231, 222, 246)
-#define C_HOVER     RGB(242, 237, 250)
-#define C_HEAD      RGB(80, 30, 150)
-#define C_WARN_BG   RGB(255, 244, 206)
+#define C_ACCENT_LT (sgm_dark ? RGB(74,46,110) : RGB(231, 222, 246))
+#define C_HOVER (sgm_dark ? RGB(52,44,64) : RGB(242, 237, 250))
+#define C_HEAD (sgm_dark ? RGB(190,150,240) : RGB(80, 30, 150))
+#define C_WARN_BG (sgm_dark ? RGB(70,60,20) : RGB(255, 244, 206))
 
 extern int g_dpi;
 #define S(v) MulDiv((v), g_dpi, 96)

@@ -22,6 +22,36 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "mmc.h"
+/* Stained Glass: the app mode picks the consoles' palette (mmc.h); switched live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
+
+/* list and tree views keep the colours they were made with: give them the mode's */
+static BOOL CALLBACK sgm_view_colours(HWND hwnd, LPARAM lp)
+{
+    WCHAR cls[32];
+    (void)lp;
+    if (!GetClassNameW(hwnd, cls, 32)) return TRUE;
+    if (!lstrcmpiW(cls, WC_LISTVIEWW))
+    {
+        SendMessageW(hwnd, LVM_SETBKCOLOR, 0, C_BG);
+        SendMessageW(hwnd, LVM_SETTEXTBKCOLOR, 0, C_BG);
+        SendMessageW(hwnd, LVM_SETTEXTCOLOR, 0, C_TEXT);
+    }
+    else if (!lstrcmpiW(cls, WC_TREEVIEWW))
+    {
+        SendMessageW(hwnd, TVM_SETBKCOLOR, 0, C_BG);
+        SendMessageW(hwnd, TVM_SETTEXTCOLOR, 0, C_TEXT);
+    }
+    return TRUE;
+}
 #include <stdarg.h>
 #include <uxtheme.h>
 
@@ -1043,6 +1073,11 @@ static void go_history(int delta)
 
 static LRESULT CALLBACK main_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp))
+    {
+        sgm_follow(h);
+        EnumChildWindows(h, sgm_view_colours, 0);
+    }
     switch (msg)
     {
     case WM_SIZE:
@@ -1366,6 +1401,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     ACCEL accels[] = { { FVIRTKEY, VK_F5, CMD_REFRESH }, { FVIRTKEY | FALT, VK_RETURN, CMD_PROPS },
                        { FVIRTKEY | FALT, VK_LEFT, TB_BACK }, { FVIRTKEY | FALT, VK_RIGHT, TB_FORWARD },
                        { FVIRTKEY, VK_F1, CMD_HELP } };
+    sgm_dark = sg_apps_dark();   /* every console and tool this program shows */
 
     (void)prev; (void)cmdline;
     g_inst = inst;
@@ -1447,9 +1483,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
         SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
         w = min(S(1180), (work.right - work.left) * 92 / 100);
         hgt = min(S(720), (work.bottom - work.top) * 90 / 100);
+        sgm_dark = sg_apps_dark();
         g_main = CreateWindowExW(0, L"MMCMainFrame", g_title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                  work.left + (work.right - work.left - w) / 2, work.top + (work.bottom - work.top - hgt) / 2,
                                  w, hgt, NULL, create_menu(), inst, NULL);
+        if (g_main) sg_mode_title(g_main, sgm_dark);
     }
     create_toolbar(g_main);
     g_status = CreateWindowExW(0, STATUSCLASSNAMEW, NULL, WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
@@ -1486,6 +1524,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
         }
     }
     layout();
+    EnumChildWindows(g_main, sgm_view_colours, 0);
     ShowWindow(g_main, show);
     UpdateWindow(g_main);
     /* the console's first item: the first root with a view of its own, or the root */

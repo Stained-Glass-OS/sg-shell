@@ -19,15 +19,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "../sg-mode.h"
+extern BOOL sgm_dark;               /* the app mode (sg-mode.h), in main.c */
+void sgm_follow(HWND hwnd);
 
 #define ACCENT      RGB(112, 48, 192)
-#define ACCENT_HOT  RGB(240, 234, 250)
-#define ACCENT_DOWN RGB(226, 212, 246)
-#define ACCENT_EDGE RGB(196, 172, 234)
-#define RIBBON_BG   RGB(249, 249, 251)
-#define WORKSPACE   RGB(214, 211, 224)
-#define LINE_GREY   RGB(218, 218, 222)
-#define TEXT_GREY   RGB(96, 96, 104)
+#define ACCENT_HOT (sgm_dark ? RGB(58,48,74) : RGB(240, 234, 250))
+#define ACCENT_DOWN (sgm_dark ? RGB(74,58,98) : RGB(226, 212, 246))
+#define ACCENT_EDGE (sgm_dark ? RGB(120,90,170) : RGB(196, 172, 234))
+#define RIBBON_BG (sgm_dark ? RGB(43,43,43) : RGB(249, 249, 251))
+#define WORKSPACE (sgm_dark ? RGB(24,24,24) : RGB(214, 211, 224))
+#define LINE_GREY (sgm_dark ? RGB(64,64,64) : RGB(218, 218, 222))
+#define TEXT_GREY (sgm_dark ? RGB(168,168,168) : RGB(96, 96, 104))
 
 /* ---- the picture: 32-bit, top-down, alpha ignored (always opaque) ---- */
 typedef struct { int w, h; DWORD *px; } Img;

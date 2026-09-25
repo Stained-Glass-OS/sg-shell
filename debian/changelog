@@ -1,3 +1,13 @@
+sg-shell (0.1.0-43) unstable; urgency=medium
+
+  * Our own apps follow the app mode (AppsUseLightTheme) live: Calculator,
+    Task Manager, Photos, Media Player, Alarms & Clock, Snipping Tool, Paint's
+    chrome, Character Map, Compressed folders and the administrative consoles
+    switch palettes and title bars on WM_SETTINGCHANGE "ImmersiveColorSet".
+    Gate: test/appmode-check.sh (make test-appmode).
+
+ -- Stained Glass OS <dev@stained-glass.example>  Fri, 25 Sep 2026 15:52:51 -0700
+
 sg-shell (0.1.0-42) unstable; urgency=medium
 
   * Light and dark mode: sg-mode.h (AppsUseLightTheme / SystemUsesLightTheme);

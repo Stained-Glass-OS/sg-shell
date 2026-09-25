@@ -26,6 +26,18 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <initguid.h>
+#include "sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
 /* winegstreamer's "GStreamer splitter filter" (decodebin) */
 DEFINE_GUID(CLSID_SgDecodebinParser, 0xf9d8d64e, 0xa144, 0x47dc, 0x8e, 0xe0, 0xf5, 0x34, 0x98, 0x37, 0x2c, 0x29);
@@ -39,10 +51,19 @@ DEFINE_GUID(CLSID_SgDecodebinParser, 0xf9d8d64e, 0xa144, 0x47dc, 0x8e, 0xe0, 0xf
 #define COPYDATA_FILES 0x53474d31 /* 'SGM1' */
 
 #define RGBc(r, g, b) RGB(r, g, b)
-static const COLORREF C_BG = RGBc(0xF3, 0xF3, 0xF3), C_BAR = RGBc(0xFB, 0xFB, 0xFB), C_LINE = RGBc(0xE5, 0xE5, 0xE5),
-                      C_TEXT = RGBc(0x1A, 0x1A, 0x1A), C_SUB = RGBc(0x5F, 0x5F, 0x5F), C_HOVER = RGBc(0xEA, 0xEA, 0xEA),
-                      C_PRESS = RGBc(0xDD, 0xDD, 0xDD), C_TRACK = RGBc(0xC4, 0xC4, 0xC4), C_ACCENT = RGBc(112, 48, 192),
-                      C_ACCENT_HOT = RGBc(128, 64, 208), C_WHITE = RGBc(0xFF, 0xFF, 0xFF), C_DIM = RGBc(0xA0, 0xA0, 0xA0);
+/* the palette follows the app mode (sg-mode.h): Media Player's light, or dark */
+#define C_BG         (sgm_dark ? RGB(0x20, 0x20, 0x20) : RGB(0xF3, 0xF3, 0xF3))
+#define C_BAR        (sgm_dark ? RGB(0x2B, 0x2B, 0x2B) : RGB(0xFB, 0xFB, 0xFB))
+#define C_LINE       (sgm_dark ? RGB(0x3A, 0x3A, 0x3A) : RGB(0xE5, 0xE5, 0xE5))
+#define C_TEXT       (sgm_dark ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x1A, 0x1A, 0x1A))
+#define C_SUB        (sgm_dark ? RGB(0xA8, 0xA8, 0xA8) : RGB(0x5F, 0x5F, 0x5F))
+#define C_HOVER      (sgm_dark ? RGB(0x3A, 0x3A, 0x3A) : RGB(0xEA, 0xEA, 0xEA))
+#define C_PRESS      (sgm_dark ? RGB(0x48, 0x48, 0x48) : RGB(0xDD, 0xDD, 0xDD))
+#define C_TRACK      (sgm_dark ? RGB(0x60, 0x60, 0x60) : RGB(0xC4, 0xC4, 0xC4))
+#define C_ACCENT     RGB(112, 48, 192)
+#define C_ACCENT_HOT RGB(128, 64, 208)
+#define C_WHITE      RGB(0xFF, 0xFF, 0xFF)
+#define C_DIM        (sgm_dark ? RGB(0x6E, 0x6E, 0x6E) : RGB(0xA0, 0xA0, 0xA0))
 
 enum { ST_CLOSED, ST_STOPPED, ST_PLAYING, ST_PAUSED };
 static const WCHAR *const STATE_NAMES[] = { L"Closed", L"Stopped", L"Playing", L"Paused" };
@@ -1027,6 +1048,7 @@ static LRESULT CALLBACK video_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg)
     {
     case WM_CREATE:
@@ -1225,9 +1247,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     wc.hbrBackground = GetStockObject(BLACK_BRUSH);
     RegisterClassExW(&wc);
 
+    sgm_dark = sg_apps_dark();
     CreateWindowExW(WS_EX_ACCEPTFILES, CLASS_MAIN, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT,
                     CW_USEDEFAULT, S(860), S(600), NULL, NULL, inst, NULL);
     if (!g_main) return 1;
+    sg_mode_title(g_main, sgm_dark);
     update_title();
     ShowWindow(g_main, show);
     UpdateWindow(g_main);

@@ -20,6 +20,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include "../sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
 /* the generated name table (build/charmap-names.c) */
 extern const char cm_words[];
@@ -382,13 +394,16 @@ static int cell_at(int x, int y)
 static void paint_grid(HWND hwnd, HDC dc)
 {
     RECT cr, r;
-    HBRUSH white = GetStockObject(WHITE_BRUSH), sel = CreateSolidBrush(g_accent);
-    HPEN line = CreatePen(PS_SOLID, 1, RGB(160, 160, 160)), oldpen;
+    /* the cells follow the app mode: white, or dark (sg-mode.h) */
+    HBRUSH white = CreateSolidBrush(sgm_dark ? RGB(32, 32, 32) : RGB(255, 255, 255)), sel = CreateSolidBrush(g_accent);
+    HPEN line = CreatePen(PS_SOLID, 1, sgm_dark ? RGB(80, 80, 80) : RGB(160, 160, 160)), oldpen;
+    HGDIOBJ oldbrush;
     HFONT oldfont;
     int row, col;
 
     GetClientRect(hwnd, &cr);
     FillRect(dc, &cr, white);
+    oldbrush = SelectObject(dc, white);
     oldpen = SelectObject(dc, line);
     oldfont = SelectObject(dc, g_cell_font);
     SetBkMode(dc, TRANSPARENT);
@@ -410,13 +425,15 @@ static void paint_grid(HWND hwnd, HDC dc)
                     DrawFocusRect(dc, &in);
                 }
             }
-            else SetTextColor(dc, RGB(0, 0, 0));
+            else SetTextColor(dc, sgm_dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
             DrawTextW(dc, &g_shown[i], 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         }
     SelectObject(dc, oldfont);
     SelectObject(dc, oldpen);
+    SelectObject(dc, oldbrush);
     DeleteObject(line);
     DeleteObject(sel);
+    DeleteObject(white);
 }
 
 static void show_zoom(void)
@@ -450,21 +467,23 @@ static LRESULT CALLBACK zoom_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
         RECT r;
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(64, 64, 64));
-        HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, GetStockObject(WHITE_BRUSH)), of;
+        HPEN pen = CreatePen(PS_SOLID, 1, sgm_dark ? RGB(160, 160, 160) : RGB(64, 64, 64));
+        HBRUSH bg = CreateSolidBrush(sgm_dark ? RGB(32, 32, 32) : RGB(255, 255, 255));
+        HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, bg), of;
         GetClientRect(hwnd, &r);
         Rectangle(dc, r.left, r.top, r.right, r.bottom);
         if (g_nshown)
         {
             of = SelectObject(dc, g_zoom_font);
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, RGB(0, 0, 0));
+            SetTextColor(dc, sgm_dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
             DrawTextW(dc, &g_shown[g_sel], 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
             SelectObject(dc, of);
         }
         SelectObject(dc, ob);
         SelectObject(dc, op);
         DeleteObject(pen);
+        DeleteObject(bg);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -810,6 +829,7 @@ static void create_controls(void)
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg)
     {
     case WM_SIZE:
@@ -931,9 +951,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmd, int show)
     r.right = COLS * g_cell + 1 + GetSystemMetrics(SM_CXVSCROLL) + 4 + S(20);
     r.bottom = S(400);
     AdjustWindowRectEx(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, WS_EX_CONTROLPARENT);
+    sgm_dark = sg_apps_dark();
     g_hwnd = CreateWindowExW(WS_EX_CONTROLPARENT, L"SgCharMap", L"Character Map",
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
                              CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, NULL, NULL, inst, NULL);
+    if (g_hwnd) sg_mode_title(g_hwnd, sgm_dark);
     g_zoom = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"SgCharZoom", L"", WS_POPUP, 0, 0, 10, 10,
                              g_hwnd, NULL, inst, NULL);
     create_controls();

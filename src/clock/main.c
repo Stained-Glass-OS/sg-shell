@@ -28,14 +28,26 @@
 #include <stdlib.h>
 #include <math.h>
 #include <wchar.h>
+#include "../sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
-#define C_BG       RGB(0xF3, 0xF3, 0xF3)
-#define C_CARD     RGB(0xFF, 0xFF, 0xFF)
-#define C_CARD_HOT RGB(0xF7, 0xF4, 0xFB)
-#define C_EDGE     RGB(0xE3, 0xE0, 0xE8)
-#define C_TEXT     RGB(0x1A, 0x1A, 0x1A)
-#define C_TEXT2    RGB(0x60, 0x60, 0x68)
-#define C_DIM      RGB(0xA8, 0xA6, 0xAE)
+#define C_BG (sgm_dark ? RGB(0x20,0x20,0x20) : RGB(0xF3, 0xF3, 0xF3))
+#define C_CARD (sgm_dark ? RGB(0x2B,0x2B,0x2B) : RGB(0xFF, 0xFF, 0xFF))
+#define C_CARD_HOT (sgm_dark ? RGB(0x36,0x31,0x3F) : RGB(0xF7, 0xF4, 0xFB))
+#define C_EDGE (sgm_dark ? RGB(0x3F,0x3C,0x46) : RGB(0xE3, 0xE0, 0xE8))
+#define C_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1A, 0x1A, 0x1A))
+#define C_TEXT2 (sgm_dark ? RGB(0xA8,0xA8,0xB0) : RGB(0x60, 0x60, 0x68))
+#define C_DIM (sgm_dark ? RGB(0x6E,0x6C,0x74) : RGB(0xA8, 0xA6, 0xAE))
 #define C_ACCENT   RGB(0x70, 0x30, 0xC0)
 #define C_ACCENT_HOT RGB(0x86, 0x4E, 0xD0)
 #define REG_KEY L"Software\\Stained Glass\\Clock"
@@ -564,12 +576,12 @@ static void toggle(HDC dc, RECT r, BOOL on)
     int h = S(20), y = (r.top + r.bottom - h) / 2, kx;
     RECT p = { r.left, y, r.left + S(44), y + h };
     HBRUSH br = CreateSolidBrush(on ? C_ACCENT : C_CARD);
-    HPEN pen = CreatePen(PS_SOLID, S(2) > 1 ? S(2) : 1, on ? C_ACCENT : RGB(0x33, 0x33, 0x33));
+    HPEN pen = CreatePen(PS_SOLID, S(2) > 1 ? S(2) : 1, on ? C_ACCENT : (sgm_dark ? RGB(0xD0, 0xD0, 0xD0) : RGB(0x33, 0x33, 0x33)));
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, pen);
     RoundRect(dc, p.left, p.top, p.right, p.bottom, h, h);
     SelectObject(dc, GetStockObject(NULL_PEN));
     DeleteObject(br);
-    br = CreateSolidBrush(on ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x33, 0x33, 0x33));
+    br = CreateSolidBrush(on ? RGB(0xFF, 0xFF, 0xFF) : (sgm_dark ? RGB(0xD0, 0xD0, 0xD0) : RGB(0x33, 0x33, 0x33)));
     SelectObject(dc, br);
     kx = on ? p.right - S(15) : p.left + S(5);
     Ellipse(dc, kx, p.top + S(5), kx + S(10) + 1, p.top + S(15) + 1);
@@ -602,7 +614,7 @@ static void glyph(HDC dc, const WCHAR *what, RECT r, COLORREF c)
 
 static void circle_button(HDC dc, RECT r, BOOL accent, BOOL hot, const WCHAR *g)
 {
-    HBRUSH br = CreateSolidBrush(accent ? (hot ? C_ACCENT_HOT : C_ACCENT) : (hot ? RGB(0xE6, 0xE2, 0xEC) : RGB(0xEC, 0xEA, 0xF0)));
+    HBRUSH br = CreateSolidBrush(accent ? (hot ? C_ACCENT_HOT : C_ACCENT) : (hot ? (sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC)) : (sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0))));
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, GetStockObject(NULL_PEN));
     Ellipse(dc, r.left, r.top, r.right, r.bottom);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br);
@@ -700,7 +712,7 @@ static void paint(HDC dc, RECT *c)
             break;
         }
         case B_CITY_REMOVE: case B_TIMER_REMOVE:
-            if (hot) round_fill(dc, b->r, S(6), RGB(0xEC, 0xEA, 0xF0), RGB(0xEC, 0xEA, 0xF0));
+            if (hot) round_fill(dc, b->r, S(6), sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0), sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0));
             glyph(dc, L"x", b->r, C_TEXT2);
             break;
         case B_TIMER_CARD: {
@@ -713,7 +725,7 @@ static void paint(HDC dc, RECT *c)
             text(dc, g_f_small, C_TEXT2, b->r.left + S(16), b->r.top + S(12), b->r.right - S(48), b->r.top + S(32),
                  t->name[0] ? t->name : L"Timer", DT_SINGLELINE | DT_END_ELLIPSIS);
             /* the ring: the time left, in the accent */
-            pen = CreatePen(PS_SOLID, S(4), RGB(0xE3, 0xE0, 0xE8));
+            pen = CreatePen(PS_SOLID, S(4), C_EDGE);
             op = SelectObject(dc, pen); SelectObject(dc, GetStockObject(NULL_BRUSH));
             Ellipse(dc, ring.left, ring.top, ring.right, ring.bottom);
             SelectObject(dc, op); DeleteObject(pen);
@@ -741,7 +753,7 @@ static void paint(HDC dc, RECT *c)
         case B_SW_LAP: circle_button(dc, b->r, FALSE, hot, L"lap"); break;
         case B_ADD: {
             RECT r = b->r;
-            if (hot) round_fill(dc, r, S(6), RGB(0xE6, 0xE2, 0xEC), RGB(0xE6, 0xE2, 0xEC));
+            if (hot) round_fill(dc, r, S(6), sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC), sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC));
             glyph(dc, L"+", r, C_TEXT);
             break;
         }
@@ -934,7 +946,17 @@ static LRESULT CALLBACK dlg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         break;
     case WM_CTLCOLORSTATIC: case WM_CTLCOLORBTN:
         SetBkColor((HDC)wp, C_CARD);
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+        SetTextColor((HDC)wp, C_TEXT);
+        SetDCBrushColor((HDC)wp, C_CARD);
+        return (LRESULT)GetStockObject(DC_BRUSH);
+    case WM_ERASEBKGND:
+    {
+        RECT r;
+        GetClientRect(hwnd, &r);
+        SetDCBrushColor((HDC)wp, C_CARD);
+        FillRect((HDC)wp, &r, GetStockObject(DC_BRUSH));
+        return 1;
+    }
     case WM_CLOSE: close_dialog(); return 0;
     case WM_DESTROY: g_dlg = NULL; EnableWindow(g_wnd, TRUE); write_dump(); return 0;
     }
@@ -961,6 +983,7 @@ static void open_dialog(int kind, int index)
     g_dlg_kind = kind; g_dlg_index = index;
     g_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT, L"SgClockDialog", title, WS_POPUP | WS_CAPTION | WS_SYSMENU,
                             (wr.left + wr.right - w) / 2, wr.top + S(60), w, h, g_wnd, NULL, g_inst, NULL);
+    if (g_dlg) sg_mode_title(g_dlg, sgm_dark);
     if (kind == D_ALARM || kind == D_TIMER) {
         const struct alarm *a = kind == D_ALARM && index >= 0 ? &g_alarms[index] : NULL;
         int n = kind == D_TIMER ? 3 : 2;
@@ -1180,6 +1203,7 @@ static void show_main(void)
 #define COPYDATA_PAGE 0x53474350
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg) {
     case WM_SIZE: relayout(); return 0;
     case WM_GETMINMAXINFO: { MINMAXINFO *mm = (MINMAXINFO *)lp; mm->ptMinTrackSize.x = S(420); mm->ptMinTrackSize.y = S(420); return 0; }
@@ -1332,9 +1356,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     wc.lpfnWndProc = main_proc; wc.lpszClassName = L"SgClockWindow";
     wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
     RegisterClassW(&wc);
+    sgm_dark = sg_apps_dark();
     g_wnd = CreateWindowExW(0, L"SgClockWindow", L"Alarms & Clock", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                             S(760), S(600), NULL, NULL, inst, NULL);
     if (!g_wnd) return 1;
+    sg_mode_title(g_wnd, sgm_dark);
     layout();
     if (!g_background) ShowWindow(g_wnd, show ? show : SW_SHOWNORMAL);
     SetTimer(g_wnd, TIMER_TICK, 250, NULL);

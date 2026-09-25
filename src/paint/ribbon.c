@@ -204,7 +204,7 @@ static void draw_item(HDC dc, int idx)
             b.top = b.bottom - 1; b.left++; b.right--; fill(dc, &b, RIBBON_BG);
         }
         else if (hot) fill(dc, &r, ACCENT_HOT);
-        SetTextColor(dc, on ? ACCENT : RGB(40, 40, 48));
+        SetTextColor(dc, on ? (sgm_dark ? RGB(179, 139, 235) : ACCENT) : (sgm_dark ? RGB(235, 235, 240) : RGB(40, 40, 48)));
         DrawTextW(dc, it->label, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         return;
     case K_GROUP:
@@ -217,16 +217,16 @@ static void draw_item(HDC dc, int idx)
         int i = it->cmd - CMD_PALETTE_BASE;
         RECT in = r;
         BOOL empty = i >= 20 && i - 20 >= g_ncustom;
-        frame(dc, &r, hot ? ACCENT : RGB(160, 160, 168));
+        frame(dc, &r, hot ? ACCENT : (sgm_dark ? RGB(100, 100, 108) : RGB(160, 160, 168)));
         InflateRect(&in, -S(2), -S(2));
         if (!empty) fill(dc, &in, g_palette[i]);
-        else fill(dc, &in, RGB(250, 250, 250));
+        else fill(dc, &in, (sgm_dark ? RGB(50, 50, 50) : RGB(250, 250, 250)));
         return;
     }
     }
     if (on) { fill(dc, &r, ACCENT_DOWN); frame(dc, &r, ACCENT_EDGE); }
     else if (hot) { fill(dc, &r, ACCENT_HOT); frame(dc, &r, ACCENT_EDGE); }
-    SetTextColor(dc, RGB(30, 30, 36));
+    SetTextColor(dc, (sgm_dark ? RGB(235, 235, 240) : RGB(30, 30, 36)));
     switch (it->kind)
     {
     case K_BIG:
@@ -250,8 +250,8 @@ static void draw_item(HDC dc, int idx)
     case K_CHECK:
     {
         RECT b = { r.left + S(4), r.top + (r.bottom - r.top - S(13)) / 2, r.left + S(17), r.top + (r.bottom - r.top - S(13)) / 2 + S(13) };
-        fill(dc, &b, on ? ACCENT : RGB(255, 255, 255));
-        frame(dc, &b, on ? ACCENT : RGB(120, 120, 128));
+        fill(dc, &b, on ? ACCENT : (sgm_dark ? RGB(43, 43, 43) : RGB(255, 255, 255)));
+        frame(dc, &b, on ? ACCENT : (sgm_dark ? RGB(150, 150, 158) : RGB(120, 120, 128)));
         if (on)
         {
             HPEN p = CreatePen(PS_SOLID, max(1, S(2)), RGB(255, 255, 255));
@@ -282,7 +282,7 @@ static void ribbon_paint(HWND hwnd, HDC dc)
     RECT rc, r;
     int i;
     GetClientRect(hwnd, &rc);
-    fill(dc, &rc, RGB(255, 255, 255));
+    fill(dc, &rc, (sgm_dark ? RGB(32, 32, 32) : RGB(255, 255, 255)));
     r = rc; r.top = S(24); fill(dc, &r, RIBBON_BG);
     r.bottom = r.top + 1; fill(dc, &r, LINE_GREY);
     r = rc; r.top = r.bottom - 1; fill(dc, &r, LINE_GREY);
@@ -485,11 +485,11 @@ LRESULT CALLBACK status_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         GetClientRect(hwnd, &rc);
         bb = CreateCompatibleBitmap(dc, max(1, (int)rc.right), max(1, (int)rc.bottom));
         SelectObject(mem, bb);
-        fill(mem, &rc, RGB(243, 243, 246));
+        fill(mem, &rc, (sgm_dark ? RGB(43, 43, 43) : RGB(243, 243, 246)));
         t = rc; t.bottom = 1; fill(mem, &t, LINE_GREY);
         SelectObject(mem, g_font);
         SetBkMode(mem, TRANSPARENT);
-        SetTextColor(mem, RGB(40, 40, 48));
+        SetTextColor(mem, (sgm_dark ? RGB(235, 235, 240) : RGB(40, 40, 48)));
         canvas_cursor_info(&x, &y, &in);
         t = rc; t.left = S(10); t.right = S(170);
         if (in) { _snwprintf(s, ARRAYSIZE(s), L"\x2316  %d, %dpx", x, y); DrawTextW(mem, s, -1, &t, DT_VCENTER | DT_SINGLELINE); }
@@ -518,7 +518,7 @@ LRESULT CALLBACK status_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             RECT line = g_ztrack, th;
             line.top = (rc.bottom - S(2)) / 2; line.bottom = line.top + S(2);
-            fill(mem, &line, RGB(160, 160, 168));
+            fill(mem, &line, (sgm_dark ? RGB(90, 90, 98) : RGB(160, 160, 168)));
             for (i = 0; i < (int)ARRAYSIZE(ZLEVELS); i++) if (ZLEVELS[i] <= g_zoom) pos = i;
             x = g_ztrack.left + (g_ztrack.right - g_ztrack.left) * pos / ((int)ARRAYSIZE(ZLEVELS) - 1);
             SetRect(&th, x - S(3), (rc.bottom - S(14)) / 2, x + S(3), (rc.bottom - S(14)) / 2 + S(14));

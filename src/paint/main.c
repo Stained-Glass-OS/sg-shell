@@ -12,6 +12,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "paint.h"
+/* Stained Glass: the app mode picks the chrome's palette (paint.h); switched live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 #include "resource.h"
 
 HINSTANCE g_inst;
@@ -607,6 +617,7 @@ void status_message(const WCHAR *s) { lstrcpynW(g_status_msg, s, ARRAYSIZE(g_sta
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg)
     {
     case WM_SIZE: layout(); return 0;
@@ -698,9 +709,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         /* wide enough for the whole ribbon, as far as the screen allows */
         RECT wa;
         SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+        sgm_dark = sg_apps_dark();
         g_main = CreateWindowExW(0, L"SgPaintMain", L"Untitled - Paint", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                  CW_USEDEFAULT, CW_USEDEFAULT, min(S(1000), (int)(wa.right - wa.left)),
                                  min(S(700), (int)(wa.bottom - wa.top)), NULL, NULL, inst, NULL);
+        if (g_main) sg_mode_title(g_main, sgm_dark);
     }
     g_ribbon = CreateWindowExW(0, L"SgPaintRibbon", NULL, WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, g_main, NULL, inst, NULL);
     g_canvas = CreateWindowExW(0, L"SgPaintCanvas", NULL, WS_CHILD | WS_VISIBLE | WS_HSCROLL | WS_VSCROLL | WS_CLIPCHILDREN,

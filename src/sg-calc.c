@@ -36,22 +36,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include "sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
 #define APP_KEY L"Software\\Stained Glass\\Calculator"
 
 /* ---- colours: the Stained Glass Light palette -------------------------------------------- */
-#define C_BG        RGB(236, 234, 240)
-#define C_KEY_NUM   RGB(251, 251, 252)
-#define C_KEY_FN    RGB(244, 243, 246)
-#define C_KEY_HOT   RGB(222, 219, 228)
-#define C_KEY_DOWN  RGB(202, 198, 210)
+#define C_BG (sgm_dark ? RGB(32,32,32) : RGB(236, 234, 240))
+#define C_KEY_NUM (sgm_dark ? RGB(59,59,59) : RGB(251, 251, 252))
+#define C_KEY_FN (sgm_dark ? RGB(50,50,50) : RGB(244, 243, 246))
+#define C_KEY_HOT (sgm_dark ? RGB(74,74,74) : RGB(222, 219, 228))
+#define C_KEY_DOWN (sgm_dark ? RGB(42,42,42) : RGB(202, 198, 210))
 #define C_ACCENT    RGB(112, 48, 192)
 #define C_ACCENT_HOT RGB(134, 78, 208)
 #define C_ACCENT_DN RGB(90, 34, 160)
-#define C_TEXT      RGB(0, 0, 0)
-#define C_TEXT2     RGB(96, 96, 104)
-#define C_DISABLED  RGB(172, 170, 178)
-#define C_PANEL     RGB(248, 247, 250)
+#define C_TEXT (sgm_dark ? RGB(255,255,255) : RGB(0, 0, 0))
+#define C_TEXT2 (sgm_dark ? RGB(168,168,168) : RGB(96, 96, 104))
+#define C_DISABLED (sgm_dark ? RGB(110,110,110) : RGB(172, 170, 178))
+#define C_PANEL (sgm_dark ? RGB(43,43,43) : RGB(248, 247, 250))
 
 enum mode { M_STD, M_SCI, M_PROG };
 static const WCHAR *const MODE_NAME[] = { L"Standard", L"Scientific", L"Programmer" };
@@ -1382,7 +1394,7 @@ static void paint(HDC out)
     if (g_nav)
     {
         RECT sh = L.nav, h = L.nav;
-        fill(dc, &L.nav, RGB(255, 255, 255));
+        fill(dc, &L.nav, sgm_dark ? RGB(43, 43, 43) : RGB(255, 255, 255));
         sh.left = sh.right; sh.right += S(1); fill(dc, &sh, C_KEY_DOWN);
         h.left += S(20); h.top += S(8); h.bottom = h.top + S(32);
         f = font(13, FW_SEMIBOLD); of = SelectObject(dc, f);
@@ -1511,6 +1523,7 @@ static void do_key(enum key k, int index)
 
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg)
     {
     case WM_SIZE:
@@ -1711,8 +1724,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     h = load_dword(L"Height", 560);
     if (w < 320 || w > 4000) w = 340;
     if (h < 480 || h > 4000) h = 560;
+    sgm_dark = sg_apps_dark();
     g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"Calculator", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                              S(w), S(h), NULL, NULL, inst, NULL);
+    if (g_hwnd) sg_mode_title(g_hwnd, sgm_dark);
     if (!g_hwnd) return 1;
     SendMessageW(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)make_icon(16));
     SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)make_icon(32));

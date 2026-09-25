@@ -110,6 +110,38 @@ test did not -- every real argument is space-free, and CreateProcess resolves an
 unquoted path by trying each space-separated prefix -- hence `/sg-echo-args`,
 honoured only with `SG_MSTSC_TEST=1`.)
 
+## Light and dark mode
+
+Settings > Personalization > Colors keeps Windows' two modes
+(`HKCU\...\Themes\Personalize`): `AppsUseLightTheme` for programs,
+`SystemUsesLightTheme` for the shell, announced with `WM_SETTINGCHANGE
+"ImmersiveColorSet"`. wine-sg (0160-0163) switches the visual style and the
+system colours; our own drawing follows through `src/sg-mode.h`
+(`sg_apps_dark()`, `sg_system_dark()`, `sg_mode_changed()`,
+`sg_mode_title()` -- the title bar through DWMWA_USE_IMMERSIVE_DARK_MODE).
+
+- **The pattern in the apps** (Calculator, Task Manager, Photos, Media Player,
+  Alarms & Clock, Snipping Tool, Paint's chrome, Character Map, Compressed
+  folders, the consoles): each palette macro is `(sgm_dark ? dark : light)`;
+  `sgm_dark` is read before the main window is made, and `sgm_follow(hwnd)` at
+  the top of the main window procedure re-reads it on ImmersiveColorSet, sets
+  the title bar and repaints everything. Multi-file apps declare it in their
+  header (`taskmgr.h`, `paint.h`, `mmc.h`) and define it in `main.c`.
+- **Things that bite:** caches drawn in a colour (Photos' and Paint's glyph
+  bitmaps) must be keyed by the mode; `WM_CTLCOLOR*` must not return
+  `WHITE_BRUSH` (use `SetDCBrushColor` + `DC_BRUSH`); **list and tree views keep
+  the colours they were created with** -- set them (`LVM_SETBKCOLOR`,
+  `LVM_SETTEXTBKCOLOR`, `LVM_SETTEXTCOLOR`, `TVM_SET*`) at creation and on
+  the change (zip, consoles).
+- Settings/Control Panel (`g_pal`, `pal_apply`), Start and the network flyout
+  (the Windows mode) have their own palettes. Terminal, WordPad, Magnifier,
+  the On-Screen Keyboard, Sticky Notes' note colours and the voice-typing bar
+  keep their own looks.
+- **Gate: `test/appmode-check.sh`** (needs a wine-sg with 0162; `SG_WINE`):
+  each app opened light, the mode switched as Settings does and back -- the
+  mean brightness of its own drawing and of its title bar must go dark and
+  come back, live. Screenshots `build/appmode-<app>-{light,dark,back}.png`.
+
 ## The Control Panel (sg-control)
 
 `src/control/`: one window, a navigation bar (back, forward, up, a breadcrumb

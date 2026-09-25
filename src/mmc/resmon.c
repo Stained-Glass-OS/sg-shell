@@ -623,6 +623,7 @@ static void dump(void)
 
 static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(h);
     switch (msg)
     {
     case WM_SIZE: layout(); return 0;
@@ -645,9 +646,8 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         SetBkColor((HDC)wp, C_SURFACE);
         SetTextColor((HDC)wp, C_HEAD);
         {
-            static HBRUSH b;
-            if (!b) b = CreateSolidBrush(C_SURFACE);
-            return (LRESULT)b;
+            SetDCBrushColor((HDC)wp, C_SURFACE);
+            return (LRESULT)GetStockObject(DC_BRUSH);
         }
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
@@ -678,9 +678,11 @@ int resmon_main(void)
     AppendMenuW(file, MF_STRING, 1, L"E&xit");
     AppendMenuW(bar, MF_POPUP, (UINT_PTR)file, L"&File");
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    sgm_dark = sg_apps_dark();
     g_wnd = CreateWindowExW(0, L"SgResourceMonitor", L"Resource Monitor", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                             work.left + S(30), work.top + S(20), min(S(1180), work.right - work.left - S(60)),
                             min(S(720), work.bottom - work.top - S(40)), NULL, bar, g_inst, NULL);
+    if (g_wnd) sg_mode_title(g_wnd, sgm_dark);
     g_main = g_wnd;
     g_tabs = CreateWindowExW(0, WC_TABCONTROLW, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, 0, 0, g_wnd, NULL,
                              g_inst, NULL);

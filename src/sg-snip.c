@@ -38,16 +38,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
 #define ACCENT      RGB(112, 48, 192)
 #define ACCENT_DARK RGB(90, 36, 160)
-#define ACCENT_SOFT RGB(236, 226, 248)
-#define SURFACE     RGB(243, 243, 243)
-#define BAR         RGB(249, 249, 249)
-#define LINE        RGB(224, 224, 224)
-#define COL_TEXT        RGB(26, 26, 26)
-#define COL_DIM    RGB(96, 96, 96)
-#define HOVER       RGB(234, 234, 234)
+#define ACCENT_SOFT (sgm_dark ? RGB(62,46,86) : RGB(236, 226, 248))
+#define SURFACE (sgm_dark ? RGB(32,32,32) : RGB(243, 243, 243))
+#define BAR (sgm_dark ? RGB(43,43,43) : RGB(249, 249, 249))
+#define LINE (sgm_dark ? RGB(64,64,64) : RGB(224, 224, 224))
+#define COL_TEXT (sgm_dark ? RGB(255,255,255) : RGB(26, 26, 26))
+#define COL_DIM (sgm_dark ? RGB(168,168,168) : RGB(96, 96, 96))
+#define HOVER (sgm_dark ? RGB(58,58,58) : RGB(234, 234, 234))
 
 #define MAIN_CLASS    L"SgSnippingTool"
 #define OVERLAY_CLASS L"SgScreenClip"
@@ -806,7 +818,7 @@ static void ov_paint(HDC hdc)
     if (!ov.dragging)
     {
         bar = ov_bar_rect();
-        round_fill(mem, &bar, RGB(255, 255, 255), LINE, S(8));
+        round_fill(mem, &bar, (sgm_dark ? RGB(43, 43, 43) : RGB(255, 255, 255)), LINE, S(8));
         for (i = 0; i < 5; i++)
         {
             RECT b = ov.buttons[i];
@@ -1162,7 +1174,7 @@ static void ed_button(HDC dc, int i)
     BOOL active = (i == B_PEN && ed.tool == T_PEN) || (i == B_HIGHLIGHTER && ed.tool == T_HIGHLIGHTER) ||
                   (i == B_ERASER && ed.tool == T_ERASER) || (i == B_CROP && ed.cropping);
     BOOL disabled = (i == B_UNDO && g_cur <= 0) || (i == B_REDO && g_cur >= g_nhist - 1);
-    COLORREF ink = disabled ? RGB(170, 170, 170) : active ? ACCENT : COL_TEXT;
+    COLORREF ink = disabled ? (sgm_dark ? RGB(100, 100, 100) : RGB(170, 170, 170)) : active ? (sgm_dark ? RGB(179, 139, 235) : ACCENT) : COL_TEXT;
     int gs = S(20), gy = (b.top + b.bottom - gs) / 2;
 
     if (i == B_NEW || i == B_APPLY)
@@ -1197,7 +1209,7 @@ static void ed_button(HDC dc, int i)
         break; }
     case B_CANCEL: {
         RECT t = b;
-        round_fill(dc, &b, ed.hot == i ? HOVER : RGB(255, 255, 255), LINE, S(8));
+        round_fill(dc, &b, ed.hot == i ? HOVER : (sgm_dark ? RGB(43, 43, 43) : RGB(255, 255, 255)), LINE, S(8));
         draw_glyph(dc, G_CLOSE, b.left + S(10), gy, gs, COL_TEXT);
         t.left += S(10) + gs + S(6);
         text(dc, g_font, COL_TEXT, L"Cancel", &t, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
@@ -1566,6 +1578,7 @@ static void ink_add(POINT p)
 
 static LRESULT CALLBACK ed_proc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
+    if (sg_mode_changed(m, l)) sgm_follow(h);
     POINT p = { GET_X_LPARAM(l), GET_Y_LPARAM(l) };
     switch (m)
     {
@@ -1693,8 +1706,10 @@ static void editor_create(void)
     if (ed.hwnd) return;
     ed.hot = ed.pressed = -1;
     ed.tool = T_PEN;
+    sgm_dark = sg_apps_dark();
     CreateWindowExW(0, MAIN_CLASS, APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, S(560), S(160),
                     NULL, NULL, g_inst, NULL);
+    if (ed.hwnd) sg_mode_title(ed.hwnd, sgm_dark);
     SendMessageW(ed.hwnd, WM_SETICON, ICON_BIG, (LPARAM)g_icon);
     SendMessageW(ed.hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_icon_small);
 }
@@ -1764,7 +1779,7 @@ static void toast_paint(HDC hdc)
     mem = CreateCompatibleDC(hdc);
     back = CreateCompatibleBitmap(hdc, c.right, c.bottom);
     SelectObject(mem, back);
-    fill(mem, &c, toast.hot ? RGB(236, 236, 236) : RGB(248, 248, 248));
+    fill(mem, &c, toast.hot ? (sgm_dark ? RGB(58, 58, 58) : RGB(236, 236, 236)) : (sgm_dark ? RGB(43, 43, 43) : RGB(248, 248, 248)));
     r = c; r.right = r.left + 1; fill(mem, &r, LINE);
     r = c; r.bottom = r.top + 1; fill(mem, &r, LINE);
     r = c; r.left = r.right - 1; fill(mem, &r, LINE);
@@ -1939,6 +1954,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     LPWSTR *argv;
     const WCHAR *file = NULL;
     HANDLE once = NULL;
+    sgm_dark = sg_apps_dark();   /* the toast and the clip bar too */
 
     (void)prev; (void)cmdline; (void)show;
     g_inst = inst;

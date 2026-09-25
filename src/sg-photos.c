@@ -36,20 +36,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "sg-mode.h"
+/* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
+ * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 
 #define APP_NAME L"Photos"
 #define CLASS_NAME L"SgPhotosWindow"
 
 /* colours: Stained Glass Light */
-#define C_TOOLBAR  RGB(0xFF, 0xFF, 0xFF)
-#define C_LINE     RGB(0xE5, 0xE5, 0xE5)
-#define C_CANVAS   RGB(0xF3, 0xF3, 0xF3)
-#define C_TEXT     RGB(0x1F, 0x1F, 0x1F)
-#define C_SUBTEXT  RGB(0x60, 0x60, 0x60)
-#define C_HOVER    RGB(0xEB, 0xEB, 0xEB)
-#define C_PRESS    RGB(0xDD, 0xDD, 0xDD)
+#define C_TOOLBAR (sgm_dark ? RGB(0x20,0x20,0x20) : RGB(0xFF, 0xFF, 0xFF))
+#define C_LINE (sgm_dark ? RGB(0x3A,0x3A,0x3A) : RGB(0xE5, 0xE5, 0xE5))
+#define C_CANVAS (sgm_dark ? RGB(0x18,0x18,0x18) : RGB(0xF3, 0xF3, 0xF3))
+#define C_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1F, 0x1F, 0x1F))
+#define C_SUBTEXT (sgm_dark ? RGB(0xA8,0xA8,0xA8) : RGB(0x60, 0x60, 0x60))
+#define C_HOVER (sgm_dark ? RGB(0x33,0x33,0x33) : RGB(0xEB, 0xEB, 0xEB))
+#define C_PRESS (sgm_dark ? RGB(0x44,0x44,0x44) : RGB(0xDD, 0xDD, 0xDD))
 #define C_ACCENT   RGB(112, 48, 192)
-#define C_ACTIVE   RGB(0xEE, 0xE6, 0xF8)   /* a toggled button: the accent, faint */
+#define C_ACTIVE (sgm_dark ? RGB(0x3B,0x2E,0x4F) : RGB(0xEE, 0xE6, 0xF8))   /* a toggled button: the accent, faint */
 
 enum { B_OPEN, B_ZOOMIN, B_ZOOMOUT, B_ACTUAL, B_ROTATE, B_DELETE, B_EDIT, B_SLIDESHOW, B_INFO,
        B_FULLSCREEN, B_MORE, B_COUNT };
@@ -261,11 +273,13 @@ static void blit_glyph(HDC dc, int g, int x, int y)
     int size = S(20);
     HDC mem;
     BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-    if (g_glyph_size != size)
+    static BOOL glyphs_dark;
+    if (g_glyph_size != size || glyphs_dark != sgm_dark)   /* the glyphs are drawn in the mode's text colour */
     {
         int i;
         for (i = 0; i < G_COUNT; i++) if (g_glyphs[i]) { DeleteObject(g_glyphs[i]); g_glyphs[i] = NULL; }
         g_glyph_size = size;
+        glyphs_dark = sgm_dark;
     }
     if (!g_glyphs[g]) g_glyphs[g] = render_glyph(g, size, C_TEXT);
     mem = CreateCompatibleDC(dc);
@@ -1078,13 +1092,13 @@ static void paint_nav(HDC dc, const RECT *c)
     if (g_index > 0)
     {
         SetRect(&g_nav_left, c->left + S(12), cy - h / 2, c->left + S(12) + w, cy + h / 2);
-        round_fill(dc, &g_nav_left, S(8), g_nav_hot == 1 ? C_HOVER : C_TOOLBAR, RGB(0xD4, 0xD4, 0xD4));
+        round_fill(dc, &g_nav_left, S(8), g_nav_hot == 1 ? C_HOVER : C_TOOLBAR, sgm_dark ? RGB(0x55, 0x55, 0x55) : RGB(0xD4, 0xD4, 0xD4));
         blit_glyph(dc, G_LEFT, g_nav_left.left + (w - S(20)) / 2, cy - S(10));
     }
     if (g_index < g_count - 1)
     {
         SetRect(&g_nav_right, c->right - S(12) - w, cy - h / 2, c->right - S(12), cy + h / 2);
-        round_fill(dc, &g_nav_right, S(8), g_nav_hot == 2 ? C_HOVER : C_TOOLBAR, RGB(0xD4, 0xD4, 0xD4));
+        round_fill(dc, &g_nav_right, S(8), g_nav_hot == 2 ? C_HOVER : C_TOOLBAR, sgm_dark ? RGB(0x55, 0x55, 0x55) : RGB(0xD4, 0xD4, 0xD4));
         blit_glyph(dc, G_RIGHT, g_nav_right.left + (w - S(20)) / 2, cy - S(10));
     }
 }
@@ -1603,6 +1617,7 @@ static void track_leave(void)
 
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     POINT p;
     RECT c;
     switch (msg)
@@ -1853,9 +1868,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     w = min(S(1100), (work.right - work.left) * 9 / 10);
     h = min(S(760), (work.bottom - work.top) * 9 / 10);
+    sgm_dark = sg_apps_dark();
     g_hwnd = CreateWindowExW(WS_EX_ACCEPTFILES, CLASS_NAME, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              work.left + (work.right - work.left - w) / 2, work.top + (work.bottom - work.top - h) / 2,
                              w, h, NULL, NULL, inst, NULL);
+    if (g_hwnd) sg_mode_title(g_hwnd, sgm_dark);
     if (!g_hwnd) return 1;
     {
         typedef UINT (WINAPI *dpi_fn)(HWND);

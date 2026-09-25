@@ -79,7 +79,7 @@ BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi3
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
-.PHONY: all build test clean
+.PHONY: all build test clean test-appmode
 all: build
 
 build:
@@ -194,6 +194,11 @@ build:
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
 	done
+
+# Our apps follow the app mode, live (needs a wine-sg with dark title bars, 0162:
+# SG_WINE=<wine> SG_WINESERVER=<wineserver> for a build tree).
+test-appmode: build
+	@sh test/appmode-check.sh
 
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build

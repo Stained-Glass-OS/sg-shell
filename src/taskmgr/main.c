@@ -16,6 +16,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "taskmgr.h"
+/* Stained Glass: the app mode picks the palette (taskmgr.h); switched live */
+BOOL sgm_dark;
+void sgm_follow(HWND hwnd)
+{
+    BOOL dark = sg_apps_dark();
+    if (dark == sgm_dark) return;
+    sgm_dark = dark;
+    sg_mode_title(hwnd, dark);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
 #include <commdlg.h>
 
 #define MAIN_CLASS L"SgTaskManagerWindow"
@@ -668,9 +678,9 @@ static void fmt_rate(double kbps, WCHAR *out, int cch)
 
 static void graph(HDC dc, RECT r, const double *hist, double max, BOOL big)
 {
-    HPEN grid_pen = CreatePen(PS_SOLID, 1, RGB(226, 214, 244)), line_pen = CreatePen(PS_SOLID, big ? S(1) : 1, C_ACCENT),
+    HPEN grid_pen = CreatePen(PS_SOLID, 1, sgm_dark ? RGB(70, 52, 100) : RGB(226, 214, 244)), line_pen = CreatePen(PS_SOLID, big ? S(1) : 1, C_ACCENT),
          border = CreatePen(PS_SOLID, 1, C_ACCENT);
-    HBRUSH shade = CreateSolidBrush(RGB(243, 237, 251));
+    HBRUSH shade = CreateSolidBrush(sgm_dark ? RGB(52, 40, 72) : RGB(243, 237, 251));
     POINT pts[62];
     int i, w = r.right - r.left, h = r.bottom - r.top;
     HGDIOBJ op, ob;
@@ -1239,13 +1249,13 @@ static void paint_main(HDC dc, RECT *rc)
     {
         BOOL en = action_enabled();
         RECT b = g_button_rc;
-        HPEN pen = CreatePen(PS_SOLID, 1, en ? (g_hot_button ? C_ACCENT : RGB(190, 190, 190)) : RGB(220, 220, 220));
-        HBRUSH br = CreateSolidBrush(en && g_hot_button ? C_HOVER : RGB(253, 253, 253));
+        HPEN pen = CreatePen(PS_SOLID, 1, en ? (g_hot_button ? C_ACCENT : (sgm_dark ? RGB(90, 90, 90) : RGB(190, 190, 190))) : (sgm_dark ? RGB(60, 60, 60) : RGB(220, 220, 220)));
+        HBRUSH br = CreateSolidBrush(en && g_hot_button ? C_HOVER : (sgm_dark ? RGB(51, 51, 51) : RGB(253, 253, 253)));
         HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, br);
         RoundRect(dc, b.left, b.top, b.right, b.bottom, S(4), S(4));
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen); DeleteObject(br);
         SelectObject(dc, g_font);
-        SetTextColor(dc, en ? C_TEXT : RGB(160, 160, 160));
+        SetTextColor(dc, en ? C_TEXT : (sgm_dark ? RGB(110, 110, 110) : RGB(160, 160, 160)));
         DrawTextW(dc, action_label(), -1, &b, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 }
@@ -1279,6 +1289,7 @@ static void set_topmost(BOOL on)
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg)
     {
     case WM_CREATE:
@@ -1453,9 +1464,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     if (cmd && wcsstr(cmd, L"/startup")) { g_more = TRUE; start_tab = TAB_STARTUP; }
     g_tab = start_tab;
 
+    sgm_dark = sg_apps_dark();
     CreateWindowExW(0, MAIN_CLASS, L"Task Manager", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                     g_more ? S(760) : S(380), g_more ? S(680) : S(400), NULL, g_more ? g_menu : NULL, inst, NULL);
     if (!g_main) return 1;
+    sg_mode_title(g_main, sgm_dark);
     {
         int sp = setting(L"UpdateSpeed", 1);
         set_speed(IDM_SPEED_HIGH + (sp >= 0 && sp <= 3 ? sp : 1));
