@@ -50,6 +50,7 @@
     [PG_S_EOA_DISPLAY]  = { L"Display",                      PG_S_HOME, set_build_eoa_display, set_cmd_eoa }, \
     [PG_S_EOA_KEYBOARD] = { L"Keyboard",                     PG_S_HOME, set_build_eoa_keyboard, set_cmd_eoa }, \
     [PG_S_EOA_MOUSE]    = { L"Mouse pointer",                PG_S_HOME, set_build_eoa_mouse, set_cmd_eoa }, \
+    [PG_S_EOA_MAGNIFIER] = { L"Magnifier",                   PG_S_HOME, set_build_eoa_magnifier, set_cmd_eoa }, \
     [PG_S_PRIV_GENERAL] = { L"General",                      PG_S_HOME, set_build_priv_general, set_cmd_privacy }, \
     [PG_S_PRIV_MIC]     = { L"Microphone",                   PG_S_HOME, set_build_priv_mic,  set_cmd_privacy }, \
     [PG_S_PRIV_CAMERA]  = { L"Camera",                       PG_S_HOME, set_build_priv_camera, set_cmd_privacy }, \
@@ -113,7 +114,7 @@ void set_build_startup(void);   BOOL set_cmd_startup(int, int, HWND);
 void set_build_yourinfo(void);  void set_build_signin(void); void set_build_otherusers(void); BOOL set_cmd_accounts(int, int, HWND);
 void set_build_datetime(void);  BOOL set_cmd_datetime(int, int, HWND); void set_timer_datetime(void);
 void set_build_region(void);    BOOL set_cmd_region(int, int, HWND);
-void set_build_eoa_display(void); void set_build_eoa_keyboard(void); void set_build_eoa_mouse(void); BOOL set_cmd_eoa(int, int, HWND);
+void set_build_eoa_display(void); void set_build_eoa_keyboard(void); void set_build_eoa_mouse(void); void set_build_eoa_magnifier(void); BOOL set_cmd_eoa(int, int, HWND);
 void set_build_priv_general(void); void set_build_priv_mic(void); void set_build_priv_camera(void);
 void set_build_priv_location(void); BOOL set_cmd_privacy(int, int, HWND);
 void set_build_update(void);    BOOL set_cmd_update(int, int, HWND);

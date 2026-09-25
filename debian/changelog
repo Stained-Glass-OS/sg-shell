@@ -1,3 +1,23 @@
+sg-shell (0.1.0-35) unstable; urgency=medium
+
+  * Magnifier (magnify.exe, sg-magnify64.exe via App Paths): Windows 10's
+    toolbar and its full-screen (click-through), lens and docked (an AppBar)
+    views, following the pointer, the keyboard focus or the text cursor;
+    Win+Plus / Win+Minus / Win+Esc (wine-sg 0181), Ctrl+Alt+F/L/D,
+    Ctrl+Alt+wheel, Ctrl+Alt+I. The lens and full-screen views compose the
+    screen from the other windows' own surfaces, so they never show
+    themselves. defaults/82-sg-magnify.reg; in the Start menu.
+  * On-Screen Keyboard (osk.exe, sg-osk64.exe via App Paths, Win+Ctrl+O):
+    the full keyboard with sticky modifiers, Caps Lock, Fn, navigation keys,
+    the numeric key pad, Mv Up/Mv Dn, Dock, Fade, click or hover typing; real
+    key presses, and it never takes the focus. defaults/83-sg-osk.reg; in the
+    Start menu.
+  * Settings > Ease of Access > Magnifier (ms-settings:easeofaccess-magnifier),
+    and "Use the On-Screen Keyboard" on the Keyboard page.
+  * Gates: test/magnify-check.sh, test/osk-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 11:56:25 -0700
+
 sg-shell (0.1.0-34) unstable; urgency=medium
 
   * Settings > Lock screen: a chosen picture (tile or Browse) and the

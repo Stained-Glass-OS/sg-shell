@@ -19,6 +19,8 @@ static const WCHAR PERSONALIZE[] = L"Software\\Microsoft\\Windows\\CurrentVersio
 enum {
     CMD_TEXTSIZE = CMD_PAGE_FIRST + 1, CMD_ANIM, CMD_TRANSP, CMD_SCROLLBARS, CMD_STICKY, CMD_TOGGLE, CMD_FILTER,
     CMD_UNDERLINE, CMD_PRTSC, CMD_CURSOR, CMD_TRAILS, CMD_APPLYTEXT,
+    CMD_MAG_ON, CMD_MAG_ZOOM, CMD_MAG_INC, CMD_MAG_START, CMD_MAG_INVERT, CMD_MAG_VIEW, CMD_MAG_FMOUSE,
+    CMD_MAG_FFOCUS, CMD_MAG_FCARET, CMD_OSK,
 };
 
 void set_build_eoa_display(void)
@@ -37,6 +39,130 @@ void set_build_eoa_display(void)
               reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Accessibility", L"DynamicScrollbars", 0) != 0, CMD_SCROLLBARS);
 }
 
+/* ---- Ease of Access > Magnifier (sg-shell's magnify.exe) and the On-Screen Keyboard ----------- */
+static const WCHAR MAGKEY[] = L"Software\\Microsoft\\ScreenMagnifier";
+static const WCHAR RUNKEY[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+static const DWORD MAG_ZOOMS[] = { 100, 125, 150, 200, 250, 300, 400, 500, 600, 800, 1000, 1200, 1600 };
+static const DWORD MAG_INCS[] = { 25, 50, 100, 150, 200, 400 };
+static const DWORD MAG_VIEWS[] = { 2, 1, 3 };  /* Docked, Full screen, Lens: MagnificationMode */
+
+static HWND magnifier_window(void) { return FindWindowW(L"SgMagnifier", NULL); }
+
+/* a running Magnifier takes the command (and reads its settings again) */
+static void magnifier_run(const WCHAR *args)
+{
+    ShellExecuteW(NULL, NULL, L"magnify.exe", args, NULL, SW_SHOWNORMAL);
+}
+
+static void magnifier_reload(void)
+{
+    if (magnifier_window()) magnifier_run(L"/reload");
+}
+
+static BOOL run_value(const WCHAR *name)
+{
+    HKEY k;
+    BOOL ret = FALSE;
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, RUNKEY, 0, KEY_QUERY_VALUE, &k))
+    {
+        ret = !RegQueryValueExW(k, name, NULL, NULL, NULL, NULL);
+        RegCloseKey(k);
+    }
+    return ret;
+}
+
+void set_build_eoa_magnifier(void)
+{
+    static const WCHAR *views[] = { L"Docked", L"Full screen", L"Lens" };
+    static WCHAR zoom_text[ARRAYSIZE(MAG_ZOOMS)][8], inc_text[ARRAYSIZE(MAG_INCS)][8];
+    const WCHAR *zooms[ARRAYSIZE(MAG_ZOOMS)], *incs[ARRAYSIZE(MAG_INCS)];
+    DWORD zoom = reg_dword(HKEY_CURRENT_USER, MAGKEY, L"Magnification", 200);
+    DWORD inc = reg_dword(HKEY_CURRENT_USER, MAGKEY, L"ZoomIncrement", 100);
+    DWORD mode = reg_dword(HKEY_CURRENT_USER, MAGKEY, L"MagnificationMode", 1);
+    int i, zsel = 3, isel = 2, vsel = 1;
+    int y = st_title(L"Magnifier");
+
+    for (i = 0; i < (int)ARRAYSIZE(MAG_ZOOMS); i++)
+    {
+        _snwprintf(zoom_text[i], 8, L"%lu%%", (unsigned long)MAG_ZOOMS[i]);
+        zooms[i] = zoom_text[i];
+        if (MAG_ZOOMS[i] == zoom) zsel = i;
+    }
+    for (i = 0; i < (int)ARRAYSIZE(MAG_INCS); i++)
+    {
+        _snwprintf(inc_text[i], 8, L"%lu%%", (unsigned long)MAG_INCS[i]);
+        incs[i] = inc_text[i];
+        if (MAG_INCS[i] == inc) isel = i;
+    }
+    for (i = 0; i < 3; i++) if (MAG_VIEWS[i] == mode) vsel = i;
+    y = st_para(y, L"Magnifier makes part or all of your screen bigger so you can see words and images better.");
+    y = st_head(y, L"Use Magnifier");
+    st_toggle(&y, L"Turn on Magnifier", magnifier_window() != NULL, CMD_MAG_ON);
+    y = st_para(y - S(6), L"Press the Windows logo key + Plus (+) to turn on Magnifier. Press the Windows logo key + Esc to turn it off.");
+    st_combo(&y, L"Change zoom level", zooms, ARRAYSIZE(MAG_ZOOMS), zsel, CMD_MAG_ZOOM);
+    st_combo(&y, L"Change zoom increments", incs, ARRAYSIZE(MAG_INCS), isel, CMD_MAG_INC);
+    st_toggle(&y, L"Start Magnifier after sign-in", run_value(L"Magnifier"), CMD_MAG_START);
+    st_toggle(&y, L"Invert colors (Ctrl + Alt + I)", reg_dword(HKEY_CURRENT_USER, MAGKEY, L"Invert", 0) != 0, CMD_MAG_INVERT);
+    y = st_head(y, L"Change Magnifier view");
+    st_combo(&y, L"Choose a view", views, 3, vsel, CMD_MAG_VIEW);
+    y = st_para(y - S(6), L"Full screen: Ctrl + Alt + F. Lens: Ctrl + Alt + L. Docked: Ctrl + Alt + D.");
+    y = st_head(y, L"Have Magnifier follow");
+    st_checkbox(&y, L"The mouse pointer", reg_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowMouse", 1) != 0, CMD_MAG_FMOUSE);
+    st_checkbox(&y, L"The keyboard focus", reg_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowFocus", 1) != 0, CMD_MAG_FFOCUS);
+    st_checkbox(&y, L"The text cursor", reg_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowCaret", 1) != 0, CMD_MAG_FCARET);
+}
+
+static BOOL set_cmd_magnifier(int id, int code, HWND ctl, BOOL on)
+{
+    int i;
+    switch (id) {
+    case CMD_MAG_ON:
+        if (on && !magnifier_window()) magnifier_run(NULL);
+        else if (!on && magnifier_window()) PostMessageW(magnifier_window(), WM_CLOSE, 0, 0);
+        return TRUE;
+    case CMD_MAG_ZOOM:
+        if (code == CBN_SELCHANGE && (i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)) >= 0) {
+            reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"Magnification", MAG_ZOOMS[i]);
+            magnifier_reload();
+        }
+        return TRUE;
+    case CMD_MAG_INC:
+        if (code == CBN_SELCHANGE && (i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)) >= 0) {
+            reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"ZoomIncrement", MAG_INCS[i]);
+            magnifier_reload();
+        }
+        return TRUE;
+    case CMD_MAG_VIEW:
+        if (code == CBN_SELCHANGE && (i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)) >= 0) {
+            reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"MagnificationMode", MAG_VIEWS[i]);
+            magnifier_reload();
+        }
+        return TRUE;
+    case CMD_MAG_START:
+    {
+        HKEY k;
+        if (!RegCreateKeyExW(HKEY_CURRENT_USER, RUNKEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) {
+            if (on) RegSetValueExW(k, L"Magnifier", 0, REG_SZ, (const BYTE *)L"magnify.exe", sizeof(L"magnify.exe"));
+            else RegDeleteValueW(k, L"Magnifier");
+            RegCloseKey(k);
+        }
+        return TRUE;
+    }
+    case CMD_MAG_INVERT: reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"Invert", on); magnifier_reload(); return TRUE;
+    case CMD_MAG_FMOUSE: reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowMouse", on); magnifier_reload(); return TRUE;
+    case CMD_MAG_FFOCUS: reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowFocus", on); magnifier_reload(); return TRUE;
+    case CMD_MAG_FCARET: reg_set_dword(HKEY_CURRENT_USER, MAGKEY, L"FollowCaret", on); magnifier_reload(); return TRUE;
+    case CMD_OSK:
+    {
+        HWND osk = FindWindowW(L"OSKMainClass", NULL);
+        if (on && !osk) ShellExecuteW(NULL, NULL, L"osk.exe", NULL, NULL, SW_SHOWNORMAL);
+        else if (!on && osk) PostMessageW(osk, WM_CLOSE, 0, 0);
+        return TRUE;
+    }
+    }
+    return FALSE;
+}
+
 void set_build_eoa_keyboard(void)
 {
     STICKYKEYS sk = { sizeof(sk) };
@@ -48,6 +174,9 @@ void set_build_eoa_keyboard(void)
     SystemParametersInfoW(SPI_GETTOGGLEKEYS, sizeof(tk), &tk, 0);
     SystemParametersInfoW(SPI_GETFILTERKEYS, sizeof(fk), &fk, 0);
     SystemParametersInfoW(SPI_GETKEYBOARDCUES, 0, &cues, 0);
+    y = st_head(y, L"Use the On-Screen Keyboard");
+    st_toggle(&y, L"Turns on the On-Screen Keyboard", FindWindowW(L"OSKMainClass", NULL) != NULL, CMD_OSK);
+    y = st_para(y - S(6), L"Press the Windows logo key + Ctrl + O to turn the On-Screen Keyboard on or off.");
     y = st_head(y, L"Use Sticky Keys");
     st_toggle(&y, L"Press one key at a time for keyboard shortcuts", (sk.dwFlags & SKF_STICKYKEYSON) != 0, CMD_STICKY);
     y = st_head(y, L"Use Toggle Keys");
@@ -77,6 +206,7 @@ BOOL set_cmd_eoa(int id, int code, HWND ctl)
 {
     const UINT F = SPIF_UPDATEINIFILE | SPIF_SENDCHANGE;
     BOOL on = st_checked(ctl);
+    if (set_cmd_magnifier(id, code, ctl, on)) return TRUE;
     switch (id) {
     case CMD_TEXTSIZE: return TRUE;
     case CMD_APPLYTEXT: {

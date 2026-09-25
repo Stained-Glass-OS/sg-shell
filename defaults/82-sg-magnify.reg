@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Magnifier (sg-magnify). Wine has no magnify.exe; wine-sg's
+; system32 launcher (patch 0181), explorer's Win+Plus, `magnify` in the Run box
+; and ShellExecute find ours here.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\magnify.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-magnify64.exe"

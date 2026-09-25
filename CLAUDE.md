@@ -60,6 +60,8 @@ wine-sg or an X server.
 | `sg-sticky` | **Sticky Notes.** Borderless notes with a strip in a darker shade (+ new note, ... menu, x close), a RichEdit body (Ctrl+B/I/U, Ctrl+T strikethrough, Ctrl+Shift+L bullets, and a formatting bar), seven colours, Notes list with search, Delete note (asks). One process owns every note; notes save themselves (debounced) to `%LOCALAPPDATA%\Stained Glass\Sticky Notes\<id>.note` and come back at the next start. `stikynot.exe` resolves via App Paths (`defaults/78-sg-sticky.reg`); sg-start lists it. See "Sticky Notes" below. |
 | `sg-snip` | **Snipping Tool** (and Snip & Sketch's screen clip). `/clip` -- what explorer's Win+Shift+S and PrtScn run, and the `ms-screenclip:` URI -- freezes the screen, shows it dimmed with the mode bar (rectangle, free-form, window, full screen, close), puts the snip on the clipboard (CF_DIB, PNG; CF_BITMAP synthesized) and shows a "Snip saved to clipboard" toast that opens the editor. Without it: the Snipping Tool window (New, mode, delay 0/3/5/10 s) that grows into the editor -- pen, highlighter, eraser, crop, undo/redo, copy, save as PNG/JPEG/GIF/BMP (WIC) to `Pictures\Screenshots`. `snippingtool.exe` via App Paths (`defaults/72-sg-snip.reg`); sg-start lists it. See "Snipping Tool" below. |
 | `sg-charmap` | **Character Map** (`charmap.exe`) -- Wine has none. A font drop-down (every installed family), the font's characters in a 20-column grid (only what `GetFontUnicodeRanges` says it has), a magnified view while the mouse holds a cell or the keyboard moves, "Characters to copy" (in the chosen font) with Select and Copy, and the Advanced view: character set, search by name or `U+XXXX`/`0xXXXX` (a name search narrows the grid; Reset), Go to Unicode. The status bar names the character ("U+00E9: Latin Small Letter E With Acute") and gives Windows' Alt+0nnn keystroke. The font and the view are remembered in `HKCU\Software\Microsoft\CharMap`, as Windows keeps them. `defaults/77-sg-charmap.reg`; sg-start lists it. See "Character Map" below. |
+| `sg-magnify` | **Magnifier** (`magnify.exe`, Win+Plus / Win+Minus / Win+Esc): Windows 10's toolbar (zoom out, the zoom level, zoom in, Views, Settings, Help) and its three views -- full screen (click-through, the point under the pointer shown under the pointer), lens and docked (an AppBar across the top) -- following the pointer, the keyboard focus or the text cursor; Ctrl+Alt+F/L/D, Ctrl+Alt+wheel, Ctrl+Alt+I inverts. Settings in `HKCU\Software\Microsoft\ScreenMagnifier`; Settings > Ease of Access > Magnifier. `defaults/82-sg-magnify.reg`; sg-start lists it. See "Magnifier" below. |
+| `sg-osk` | **On-Screen Keyboard** (`osk.exe`, Win+Ctrl+O): Windows 10's dark keyboard -- the full layout, sticky Shift/Ctrl/Alt/Win, Caps Lock lit from the keyboard's state, Fn (F1-F12), the navigation keys, the numeric key pad, Mv Up/Mv Dn, Dock (an AppBar across the bottom), Fade, Options (click sound, hover to type). Real key presses (SendInput with scan codes); it never takes the focus. `defaults/83-sg-osk.reg`; sg-start lists it; Settings > Ease of Access > Keyboard turns it on. See "On-Screen Keyboard" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
@@ -890,6 +892,104 @@ view an owned `WS_EX_NOACTIVATE` popup (`SgCharZoom`).
   Shift). Screenshots `build/charmap-*.png`. Mutants built with
   `-DSG_MUTANT_SELECT` (Select adds the next character) or
   `-DSG_MUTANT_SEARCH` (no `U+` search) via `SG_CHARMAP_EXE=` turn it red.
+
+## Magnifier (sg-magnify)
+
+`src/magnify/main.c`. The toolbar is the program's window (class
+`SgMagnifier`, what explorer's keys look for: wine-sg 0181 puts
+`magnify.exe` in system32, 0182's explorer posts `WM_COMMAND` 0x101/0x102
+for Win+Plus/Win+Minus and `WM_CLOSE` for Win+Esc, and runs `magnify.exe`
+when none is open); the view is a second, topmost `WS_EX_NOACTIVATE` window.
+One instance (mutex `Local\StainedGlassMagnifier`; a second start hands its
+command line over by `WM_COPYDATA`: `/fullscreen`, `/lens`, `/docked`,
+`/zoomin`, `/zoomout`, `/zoom:N`, `/close`, `/reload`).
+
+- **Where the picture comes from.** The docked view never covers what it
+  shows, so it copies the screen DC. The lens and full-screen views do cover
+  it: a screen copy would copy the view itself and feed back (each frame the
+  last one magnified again -- the `-DSG_MUTANT_FEEDBACK` build shows it).
+  They compose the picture instead: the desktop window, then every other
+  process's visible top-level window bottom to top, each from its own
+  surface with `PrintWindow(PW_RENDERFULLCONTENT)` -- wine-sg 0076 makes that
+  work across processes -- with layered windows' alpha and colour key; our
+  own windows are never in it. A hung window keeps its last picture
+  (`IsHungAppWindow`). **Wine's `PaintDesktop` into a memory DC draws
+  nothing**: the desktop comes from `PrintWindow(GetDesktopWindow())`. No
+  compositor help is needed; the same code runs under Xwayland in a session.
+- **Full screen is click-through** (`WS_EX_LAYERED | WS_EX_TRANSPARENT`) and
+  shows the screen from `p * (1 - 1/zoom)`, so the point under the pointer is
+  drawn under the pointer and a click lands on what is seen. The pointer is
+  drawn magnified (`GetCursorInfo`). At 100% the view hides.
+- **Docked is an AppBar** at the top (a quarter of the screen): wine-sg 0182
+  makes explorer take an AppBar's space off the work area, and gives it back
+  when it goes.
+- **Follows** the pointer when it moves, else the text cursor
+  (`GetGUIThreadInfo`'s caret) or a newly focused control. Ctrl+Alt+wheel is
+  a `WH_MOUSE_LL` hook (the wheel is swallowed only with Ctrl+Alt held).
+- Settings are Windows' `HKCU\Software\Microsoft\ScreenMagnifier`
+  (`Magnification`, `ZoomIncrement`, `MagnificationMode` 1 full / 2 docked /
+  3 lens, `Invert`, `FollowMouse`/`FollowFocus`/`FollowCaret`, `LensWidth`,
+  `LensHeight`, `DockedHeight`). **Settings > Ease of Access > Magnifier**
+  (`ms-settings:easeofaccess-magnifier`, `set_misc.c`): on/off, zoom level
+  and increment, start after sign-in (HKCU Run), invert, view, follow;
+  a running Magnifier is told `/reload`.
+- **`SG_MAGNIFY_DUMP=<file>`**: mode, zoom, view and source rectangles, the
+  pointer, the view's styles, the toolbar's buttons' screen centres, frames;
+  `CLOSED` when it exits.
+- **Gate: `test/magnify-check.sh`** (display :171; `SG_WINE_DIR` may be a
+  build tree -- the Windows-key and work-area checks need wine-sg
+  0181/0182, and are skipped with a note on a Wine without `magnify.exe`):
+  a window of 8-pixel colour blocks (`test/sg-a11y-probe.c pattern`) and a
+  reference screenshot; Win+Plus starts full screen at 200%; every sampled
+  view pixel must equal the reference at SOURCE + offset/zoom (the toolbar
+  and pointer left out): full screen at 200% and 300%, the source origin
+  p(1-1/zoom), a click passing through; Win+Plus/Win+Minus, Ctrl+Alt+wheel,
+  the toolbar's +; lens twice a second apart (no feedback); docked and the
+  work area; Ctrl+Alt+I (inverted pixels); the setting kept; Win+Esc closes
+  and the work area comes back. 21 checks. Mutants `-DSG_MUTANT_SCALE` and
+  `-DSG_MUTANT_FEEDBACK` (`SG_MAGNIFY_EXE=`) fail 6 and 4+ of them.
+  Screenshots `build/magnify-*.png`.
+
+## On-Screen Keyboard (sg-osk)
+
+`src/osk/main.c`, window class `OSKMainClass` (what programs and explorer's
+Win+Ctrl+O look for). One instance (`Local\StainedGlassOnScreenKeyboard`).
+
+- **It never takes the focus**: `WS_EX_NOACTIVATE | WS_EX_TOPMOST`,
+  `MA_NOACTIVATE`, and **its own title bar** -- moved and sized with the mouse
+  captured and `SWP_NOACTIVATE`, because Wine's move loop (an `HTCAPTION`
+  hit) makes the window the foreground window first. Minimize
+  (`SW_SHOWMINNOACTIVE`) and close are ours too.
+- **Keys are real key presses**: `SendInput` with the virtual key and its scan
+  code (`MapVirtualKey`), extended keys flagged; Shift/Ctrl/Alt/Win latch
+  (accent colour) and are held round the next key, then let go; Caps Lock is
+  a real press and its light is `GetKeyState(VK_CAPITAL)` (a physical Caps
+  Lock shows too). Labels follow Shift, Caps and Fn.
+- Layout in key units (the main block 15 wide) scaled to the window: Nav's
+  keys, Options/Help, the right column (Nav, Mv Up, Mv Dn, Dock, Fade), the
+  numeric key pad (Options). Dock is an AppBar across the bottom (the work
+  area shrinks, wine-sg 0182); Fade makes it 43% opaque while the pointer is
+  elsewhere; hover typing (Options) presses the key the pointer rests on.
+  Glyph keys (Backspace, Windows, arrows) are drawn, not text: the UI font
+  has no U+232B/U+229E.
+- Settings: Windows' `HKCU\Software\Microsoft\Osk` (`WindowLeft/Top/Width/
+  Height`, `ShowNavigationKeys`, `ShowNumPad`, `ClickSound`, `Mode`,
+  `HoverPeriod`, `Dock`, `Fade`). Settings > Ease of Access > Keyboard has
+  "Use the On-Screen Keyboard".
+- **`SG_OSK_DUMP=<file>`**: window, styles, latched modifiers, Caps, Fn,
+  Nav, key pad, dock, fade/alpha, and every key's screen centre, lit state
+  and label, rewritten on every change (and on `WM_MOVE`); `CLOSED` at exit.
+- **Gate: `test/osk-check.sh`** (display :172; `SG_WINE_DIR` may be a build
+  tree; Win+Ctrl+O and the work area need wine-sg 0181/0182): Notepad in
+  front, Win+Ctrl+O opens it (topmost, NOACTIVATE); clicking Shift h e l l o
+  , space Shift w o r l d Shift 1 types "Hello, World!" into Notepad
+  (`WM_GETTEXT`), Shift lets go, labels follow Shift; Caps Lock lit and
+  capitals; Fn's F1..F12; Ctrl+A then Backspace; dragging the title bar, Mv
+  Up, Dock (the work area) and undock; Notepad keeping the focus at every
+  step; Win+Ctrl+O closes it; its place kept. 28 checks. Mutants
+  `-DSG_MUTANT_ACTIVATE` (no NOACTIVATE: Notepad loses the focus, nothing is
+  typed) and `-DSG_MUTANT_STICKY` (Shift never lets go: "HELLO< world!")
+  (`SG_OSK_EXE=`) turn it red. Screenshots `build/osk-*.png`.
 
 ## The administrative consoles (sg-mmc)
 

@@ -45,6 +45,10 @@ SNIP_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lgdi32 -luser32 -lole32 -luuid -lwi
 # Character Database (Debian's unicode-data) into build/charmap-names.c.
 CHARMAP_LIBS = -lcomctl32 -lgdi32 -luser32 -ladvapi32
 UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
+# Magnifier (magnify.exe) and the On-Screen Keyboard (osk.exe): src/magnify/ and
+# src/osk/, their icons drawn at build time.
+MAGNIFY_LIBS = -lshell32 -ldwmapi -lmsimg32 -lgdi32 -luser32 -ladvapi32
+OSK_LIBS     = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32
 # The administrative consoles (sg-mmc: services.msc, eventvwr.msc, devmgmt.msc,
 # diskmgmt.msc, compmgmt.msc; the same program as sg-eventvwr for eventvwr.exe):
 # src/mmc/, pictures drawn at build time by gen-icons.py.
@@ -124,6 +128,14 @@ build:
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
 	    $(BUILD)/charmap-names.c $(BUILD)/sg-charmap-res64.o $(CHARMAP_LIBS) && echo "built sg-charmap (64-bit)"
+	@python3 src/magnify/gen-icon.py $(BUILD)/sg-magnify.ico
+	@$(WINDRES64) -I src/magnify -I $(BUILD) src/magnify/magnify.rc -O coff -o $(BUILD)/sg-magnify-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-magnify64.exe src/magnify/main.c \
+	    $(BUILD)/sg-magnify-res64.o $(MAGNIFY_LIBS) && echo "built sg-magnify (64-bit)"
+	@python3 src/osk/gen-icon.py $(BUILD)/sg-osk.ico
+	@$(WINDRES64) -I src/osk -I $(BUILD) src/osk/osk.rc -O coff -o $(BUILD)/sg-osk-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-osk64.exe src/osk/main.c \
+	    $(BUILD)/sg-osk-res64.o $(OSK_LIBS) && echo "built sg-osk (64-bit)"
 	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico $(BUILD)/sg-msinfo32.ico \
 	    $(BUILD)/sg-resmon.ico $(BUILD)/sg-cleanmgr.ico
 	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-mmc.rc -O coff -o $(BUILD)/sg-mmc-res64.o
@@ -181,6 +193,8 @@ test: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/magnify-check.sh
+	@sh test/osk-check.sh
 	@sh test/services-check.sh
 	@sh test/eventvwr-check.sh
 	@sh test/devmgmt-check.sh
