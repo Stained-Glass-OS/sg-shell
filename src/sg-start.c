@@ -330,6 +330,7 @@ static void build_list(void)
     add_beside(L"Sticky Notes", L"sg-sticky64.exe");
     add_beside(L"Snipping Tool", L"sg-snip64.exe");
     add_beside(L"Character Map", L"sg-charmap64.exe");
+    add_beside(L"WordPad", L"sg-wordpad64.exe");
     add_beside(L"PDF Viewer", L"sg-pdf64.exe");
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");

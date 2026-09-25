@@ -59,6 +59,11 @@ TERMINAL_SRC  = $(wildcard src/terminal/*.c)
 TERMINAL_LIBS = -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
 # Alarms & Clock (sg-clock): src/clock/, its icon drawn at build time.
 CLOCK_LIBS = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32 -lm
+# WordPad (wordpad.exe, write.exe): src/wordpad/, on RichEdit; .docx/.odt through our
+# own readers and writers over src/zip/zipcore.c; its icon drawn at build time.
+WORDPAD_SRC  = $(wildcard src/wordpad/*.c) src/zip/zipcore.c
+WORDPAD_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -lmsimg32 -lole32 -loleaut32 -luuid \
+               -lwindowscodecs -ladvapi32
 # PDF Viewer (sg-pdf): src/pdf/, its icon drawn at build time; poppler is
 # sg-session's sg-pdf, reached through its bridge.
 PDF_SRC  = $(wildcard src/pdf/*.c)
@@ -169,6 +174,10 @@ build:
 	@$(WINDRES64) -I src/clock -I $(BUILD) src/clock/clock.rc -O coff -o $(BUILD)/sg-clock-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-clock64.exe src/clock/main.c \
 	    $(BUILD)/sg-clock-res64.o $(CLOCK_LIBS) && echo "built sg-clock (64-bit)"
+	@python3 src/wordpad/gen-icon.py $(BUILD)/sg-wordpad.ico
+	@$(WINDRES64) -I src/wordpad -I $(BUILD) src/wordpad/wordpad.rc -O coff -o $(BUILD)/sg-wordpad-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-wordpad64.exe $(WORDPAD_SRC) \
+	    $(BUILD)/sg-wordpad-res64.o $(WORDPAD_LIBS) && echo "built sg-wordpad (64-bit)"
 	@python3 src/pdf/gen-icon.py $(BUILD)/sg-pdf.ico
 	@$(WINDRES64) -I src/pdf -I $(BUILD) src/pdf/pdf.rc -O coff -o $(BUILD)/sg-pdf-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-pdf64.exe $(PDF_SRC) \
@@ -209,6 +218,7 @@ test: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/wordpad-check.sh
 	@sh test/fontview-check.sh
 	@sh test/magnify-check.sh
 	@sh test/osk-check.sh

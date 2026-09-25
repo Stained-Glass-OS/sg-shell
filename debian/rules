@@ -23,6 +23,7 @@ override_dh_auto_install:
 	    build/sg-sticky64.exe \
 	    build/sg-snip64.exe \
 	    build/sg-charmap64.exe \
+	    build/sg-wordpad64.exe \
 	    build/sg-fontview64.exe \
 	    build/sg-pdf64.exe \
 	    build/sg-magnify64.exe build/sg-osk64.exe \

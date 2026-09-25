@@ -56,6 +56,7 @@ typedef struct zwriter zwriter;
 zwriter *zw_open(const WCHAR *path);
 int  zw_add_file(zwriter *w, const WCHAR *arcname, const WCHAR *src);
 int  zw_add_dir(zwriter *w, const WCHAR *arcname, const FILETIME *ft);
+int  zw_add_mem(zwriter *w, const WCHAR *arcname, const void *data, DWORD n, BOOL store);
 int  zw_close(zwriter *w, BOOL keep);   /* keep=FALSE discards the partial file */
 
 const WCHAR *zip_strerror(int e);

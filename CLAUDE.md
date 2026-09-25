@@ -63,6 +63,7 @@ wine-sg or an X server.
 | `sg-magnify` | **Magnifier** (`magnify.exe`, Win+Plus / Win+Minus / Win+Esc): Windows 10's toolbar (zoom out, the zoom level, zoom in, Views, Settings, Help) and its three views -- full screen (click-through, the point under the pointer shown under the pointer), lens and docked (an AppBar across the top) -- following the pointer, the keyboard focus or the text cursor; Ctrl+Alt+F/L/D, Ctrl+Alt+wheel, Ctrl+Alt+I inverts. Settings in `HKCU\Software\Microsoft\ScreenMagnifier`; Settings > Ease of Access > Magnifier. `defaults/82-sg-magnify.reg`; sg-start lists it. See "Magnifier" below. |
 | `sg-osk` | **On-Screen Keyboard** (`osk.exe`, Win+Ctrl+O): Windows 10's dark keyboard -- the full layout, sticky Shift/Ctrl/Alt/Win, Caps Lock lit from the keyboard's state, Fn (F1-F12), the navigation keys, the numeric key pad, Mv Up/Mv Dn, Dock (an AppBar across the bottom), Fade, Options (click sound, hover to type). Real key presses (SendInput with scan codes); it never takes the focus. `defaults/83-sg-osk.reg`; sg-start lists it; Settings > Ease of Access > Keyboard turns it on. See "On-Screen Keyboard" below. |
 | `sg-fontview` | **The font viewer and the Fonts folder** (`fontview.exe`, `control fonts`, `shell:fonts`, %WINDIR%\Fonts). A font file (.ttf .otf .ttc .fon) shows its own names read from the file, version, kind, the alphabet and a sample line at 12-72 pt, with Print, Install (for you) and Install for all users (elevated), a face picker for collections. The Fonts folder: a tile per family drawn in its font, search, details (styles, where installed, files), Preview, Delete, Install new font, dropped files. Per-user fonts where Windows 10 keeps them (and in `~/.local/share/fonts` for Linux programs), all users' through the elevated copy and sg-admind. `defaults/81-sg-fontview.reg`; wine-sg 0183 gives the launcher, the associations, per-user font loading and `shell:` URLs. See "Fonts (sg-fontview)" below. |
+| `sg-wordpad` | **WordPad** (`wordpad.exe`, `write.exe`) -- Windows 10's WordPad in our own drawing: ribbon (File menu; Home: Clipboard, Font -- face and size boxes, grow/shrink, bold/italic/underline/strike, sub/superscript, highlight and text colour --, Paragraph -- indents, lists (bullets, numbers, letters, Roman), line spacing, alignment, Paragraph and Tabs dialogs --, Insert -- picture, date and time --, Editing -- Find, Replace, Select all; View: zoom, ruler, status bar, word wrap, units), a ruler with draggable indents and tab stops, a status-bar zoom slider, Page Setup, Print and Print preview (RichEdit's EM_FORMATRANGE, wine-sg 0184). Opens and saves RTF, .docx and .odt (our own readers and writers) and text. `defaults/68-sg-wordpad.reg`; wine-sg 0180 hands Wine's wordpad.exe/write.exe over; sg-start lists it. See "WordPad" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
 | `sg-browser` | **Get a web browser** -- we ship no browser (Edge is Microsoft's). Web links (`http`, `https`) and `.htm`/`.html` open it until the user has one: none installed -- it offers Firefox, Chrome and Brave, downloads the maker's installer as the winget community repository describes it, checks its SHA-256, installs it silently (or through winget when the user has it), makes it the default and opens the link; one installed -- the link opens there; several -- "How do you want to open this?". The user's choice (UserChoice, as Settings > Default apps writes it) is honoured on every link. Internet Explorer (Wine's, Gecko) is offered for simple pages. `defaults/81-sg-browser.reg`; sg-start lists it. See "Get a web browser" below. |
@@ -1100,6 +1101,68 @@ command line; `folder.c` the Fonts folder. Icons are drawn by `gen-icon.py`.
   font's designer/licence page, variable-font axes, a Details view of the
   folder, drag out of the folder, printing tested only as far as the dialog
   (no printer).
+
+## WordPad (sg-wordpad)
+
+`src/wordpad/`: `main.c` (window, commands, files, the dump), `ribbon.c`
+(the ribbon and the status bar's zoom, one item list for layout, drawing,
+clicks and the dump, as Paint's; the font name and size are real combo
+boxes placed by it), `ruler.c`, `glyphs.c` (our own pictures, drawn at 4x and
+box-filtered), `docmodel.c` (a document as paragraphs of runs; RTF to and
+from it), `ooxml.c` (.docx), `odf.c` (.odt), `xml.c` (a small XML reader),
+`picture.c` (WIC), `print.c` (printing, preview, Page Setup), `dialogs.c`
+(Date and Time, Paragraph, Tabs, Find/Replace). The icon is drawn by
+`gen-icon.py`. The text is a RichEdit 4.1 control (msftedit).
+
+- **Files.** RTF is RichEdit's own reader and writer. **.docx and .odt are
+  our own readers and writers** (ECMA-376, OASIS ODF), over `src/zip/zipcore.c`
+  (its `zw_add_mem` is new -- ODF's `mimetype` must be first and stored):
+  reading makes the model and hands RichEdit RTF; saving streams RichEdit's
+  RTF out and parses it into the model. Paragraphs (alignment, indents,
+  spacing, line height, tab stops, bullets and numbering), runs (bold,
+  italic, underline, strike, super/subscript, size, font, colour,
+  highlight), styles followed through basedOn / parent-style-name,
+  pictures (PNG parts; RichEdit gets them as `\dibitmap`), tables
+  flattened. Text: UTF-16 by BOM, UTF-8 when valid, else ANSI; saves
+  "Text Document" as UTF-8 and "Unicode Text Document" as UTF-16 after
+  Windows' Text-Only warning. A typed extension decides the format.
+- **Windows' interface kept**: class `WordPadClass`, title "<name> -
+  WordPad", Calibri 11 / 1.15 lines / 10 pt after for a new document (the
+  first installed of Calibri, Carlito, Segoe UI, Inter...; text files in the
+  first monospace), `/p` and `/pt`, unquoted paths with spaces,
+  `Applets\Wordpad\Options` in HKCU, Ctrl+B/I/U/E/L/R/J, Ctrl+Shift+>/<,
+  Ctrl+=, Ctrl+Shift+L, Ctrl+1/2/5, F12, Ctrl+wheel zoom.
+- **Printing is RichEdit's EM_FORMATRANGE**, which Wine lacked: **wine-sg
+  0184** implements it (and fixes `\dibitmap` colours, PNG/JPEG pictures,
+  bitmaps dropped on save, `\li`/`\fi` swapped by the writer, and zoomed
+  letters overlapping). `SG_WORDPAD_PRINT_EMF=<dir>` prints each page as
+  `page<N>.emf` (and `pages.txt`) instead, for the gate.
+- **wordpad.exe / write.exe**: App Paths (`defaults/68-sg-wordpad.reg`,
+  which also takes .docx/.odt and points rtffile at us); **wine-sg 0180**
+  makes Wine's wordpad.exe (which write.exe and the rtffile/wrifile
+  associations start) hand off to it. sg-start lists it.
+- **`SG_WORDPAD_DUMP=<file>`**: title, path, format, dirty, zoom, ruler,
+  wrap, units, selection, length, the selection's character and paragraph
+  format, `advance10` (EM_POSFROMCHAR over ten characters), the edit
+  control's and text's screen place, every ribbon item's screen rectangle
+  and state, the ruler's markers, the status bar's zoom buttons, the print
+  preview's page and buttons, the last message box.
+- **Gate: `test/wordpad-check.sh`** (display :197, `SG_WINE_DIR` an install
+  or a build tree): 58 checks -- `wordpad.exe` via App Paths, write.exe and
+  Wine's wordpad.exe handing off (0180); Bold, Center, Start a list, the
+  size box, Date and time, a ruler drag, all in the saved RTF; Find; zoom
+  (View, status bar) with the text's advance scaling (0184); Save/Don't
+  Save; a .docx made by `test/wordpad-mkdocs.py` shown with its colours and
+  picture (pixels) and saved back as .docx (document.xml and the PNG part
+  checked by Python); the .odt likewise; a picture through RTF (0184); UTF-16
+  and UTF-8 text; `/p` of 120 lines on 3 pages inside the margins (EMF played
+  by `test/sg-wordpad-probe.c`); Print preview. Screenshots
+  `build/wordpad-*.png`. Mutants `-DSG_MUTANT_NOBOLD` and
+  `-DSG_MUTANT_DOCXRPR` (`SG_WORDPAD_EXE=`) turn it red, and so does a
+  wine-sg without 0180/0184.
+- **Not yet:** tables (read flattened, never written), Paint drawings and
+  OLE objects, "Send in email", headers/footers and page numbers in print,
+  .doc (Word 97) files, spelling.
 
 ## The administrative consoles (sg-mmc)
 

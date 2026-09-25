@@ -830,6 +830,24 @@ int zw_add_file(zwriter *w, const WCHAR *arcname, const WCHAR *src)
     return r;
 }
 
+/* an entry from memory; store=TRUE keeps it uncompressed (as OpenDocument's
+ * "mimetype" must be) */
+int zw_add_mem(zwriter *w, const WCHAR *arcname, const void *data, DWORD n, BOOL store)
+{
+    FILETIME ft;
+    BYTE *packed = NULL;
+    size_t plen = 0;
+    DWORD crc = crc32_update(0, data, n);
+    int r;
+    GetSystemTimeAsFileTime(&ft);
+    if (!store && n && !deflate_buf(data, n, &packed, &plen) && plen < n)
+        r = add_entry(w, arcname, &ft, 8, crc, packed, (DWORD)plen, n, FILE_ATTRIBUTE_ARCHIVE);
+    else
+        r = add_entry(w, arcname, &ft, 0, crc, data, n, n, FILE_ATTRIBUTE_ARCHIVE);
+    free(packed);
+    return r;
+}
+
 int zw_close(zwriter *w, BOOL keep)
 {
     BYTE h[46];

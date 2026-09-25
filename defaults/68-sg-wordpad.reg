@@ -1,0 +1,88 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- WordPad (sg-wordpad). `wordpad` and `write` in the Run
+; box, ShellExecute and scripts find it here; wine-sg's wordpad.exe (in
+; Program Files\Windows NT\Accessories, which write.exe and the rtffile and
+; wrifile associations start) hands off to this App Paths entry (0180).
+;
+; .docx and .odt open in WordPad, as on a Windows 10 without Office: their
+; default ProgIDs are ours, and WordPad is in each type's OpenWithProgids, so an
+; office suite installed later that takes the type still leaves WordPad in Open
+; with. .rtf keeps Wine's rtffile, whose command is pointed at WordPad here.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\wordpad.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\write.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\rtffile\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\rtffile\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\rtffile\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\rtffile\shell\printto\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /pt \"%1\" \"%2\" \"%3\" \"%4\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.docx]
+@="Office Open XML Document"
+"FriendlyTypeName"="Office Open XML Document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.docx\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.docx\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.docx\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.odt]
+@="OpenDocument Text"
+"FriendlyTypeName"="OpenDocument Text"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.odt\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.odt\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.odt\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docx]
+@="StainedGlass.WordPad.docx"
+"Content Type"="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docx\OpenWithProgids]
+"StainedGlass.WordPad.docx"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odt]
+@="StainedGlass.WordPad.odt"
+"Content Type"="application/vnd.oasis.opendocument.text"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odt\OpenWithProgids]
+"StainedGlass.WordPad.odt"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.rtf\OpenWithProgids]
+"rtffile"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-wordpad64.exe]
+"FriendlyAppName"="WordPad"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-wordpad64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-wordpad64.exe\SupportedTypes]
+".rtf"=""
+".docx"=""
+".odt"=""
+".txt"=""
+".wri"=""

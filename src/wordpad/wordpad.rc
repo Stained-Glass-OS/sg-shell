@@ -1,0 +1,60 @@
+/* sg-wordpad -- resources: the icon (generated at build time by gen-icon.py,
+ * our own drawing), the common-controls 6 manifest and the dialogs.
+ * SPDX-License-Identifier: AGPL-3.0-or-later */
+#include <windows.h>
+#include "resource.h"
+
+IDI_WORDPAD ICON "sg-wordpad.ico"
+1 24 "wordpad.manifest"
+
+IDD_DATETIME DIALOGEX 0, 0, 180, 170
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Date and Time"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "&Available formats:", -1, 7, 7, 120, 10
+    LISTBOX         IDC_DT_LIST, 7, 19, 166, 124, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK, 66, 150, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 123, 150, 50, 14
+END
+
+IDD_PARAGRAPH DIALOGEX 0, 0, 220, 170
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Paragraph"
+FONT 9, "Segoe UI"
+BEGIN
+    GROUPBOX        "Indentation", -1, 7, 7, 206, 68
+    LTEXT           "&Left:", -1, 16, 23, 70, 10
+    EDITTEXT        IDC_PA_LEFT, 100, 21, 60, 13, WS_TABSTOP | ES_AUTOHSCROLL
+    LTEXT           "", IDC_PA_UNITS1, 164, 23, 40, 10
+    LTEXT           "&Right:", -1, 16, 40, 70, 10
+    EDITTEXT        IDC_PA_RIGHT, 100, 38, 60, 13, WS_TABSTOP | ES_AUTOHSCROLL
+    LTEXT           "", IDC_PA_UNITS2, 164, 40, 40, 10
+    LTEXT           "&First line:", -1, 16, 57, 70, 10
+    EDITTEXT        IDC_PA_FIRST, 100, 55, 60, 13, WS_TABSTOP | ES_AUTOHSCROLL
+    LTEXT           "", IDC_PA_UNITS3, 164, 57, 40, 10
+    GROUPBOX        "Spacing", -1, 7, 80, 206, 44
+    LTEXT           "Line &spacing:", -1, 16, 95, 70, 10
+    COMBOBOX        IDC_PA_SPACING, 100, 93, 60, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    AUTOCHECKBOX    "Add 10pt space after &paragraphs", IDC_PA_AFTER, 16, 110, 180, 10, WS_TABSTOP
+    LTEXT           "&Alignment:", -1, 16, 133, 70, 10
+    COMBOBOX        IDC_PA_ALIGN, 100, 131, 60, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Tabs...", IDC_PA_TABS, 7, 150, 50, 14
+    DEFPUSHBUTTON   "OK", IDOK, 106, 150, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 163, 150, 50, 14
+END
+
+IDD_TABS DIALOGEX 0, 0, 180, 150
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Tabs"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "&Tab stop position:", -1, 7, 7, 100, 10
+    EDITTEXT        IDC_TB_EDIT, 7, 19, 100, 13, WS_TABSTOP | ES_AUTOHSCROLL
+    LISTBOX         IDC_TB_LIST, 7, 34, 100, 88, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON      "&Set", IDC_TB_SET, 116, 19, 57, 14
+    PUSHBUTTON      "&Clear", IDC_TB_CLEAR, 116, 37, 57, 14
+    PUSHBUTTON      "Clear &all", IDC_TB_CLEARALL, 116, 55, 57, 14
+    DEFPUSHBUTTON   "OK", IDOK, 66, 130, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 123, 130, 50, 14
+END

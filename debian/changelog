@@ -1,3 +1,20 @@
+sg-shell (0.1.0-40) unstable; urgency=medium
+
+  * WordPad (sg-wordpad; wordpad.exe and write.exe via App Paths,
+    defaults/68-sg-wordpad.reg; wine-sg 0180 hands Wine's wordpad.exe
+    over): Windows 10's ribbon (File; Home: Clipboard, Font, Paragraph,
+    Insert, Editing; View: zoom, ruler, status bar, word wrap, units), a
+    ruler with draggable indents and tab stops, the status bar's zoom
+    slider, Paragraph, Tabs, Date and Time, Find/Replace, Page Setup, Print
+    and Print preview (RichEdit's EM_FORMATRANGE, wine-sg 0184). Opens and
+    saves RTF, Office Open XML (.docx) and OpenDocument Text (.odt) -- our
+    own readers and writers -- and text (UTF-8, UTF-16, ANSI). In the
+    Start menu; .docx and .odt open in it.
+  * zip: zw_add_mem (an entry from memory, stored or deflated).
+  * Gate: test/wordpad-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 13:59:02 -0700
+
 sg-shell (0.1.0-39) unstable; urgency=medium
 
   * Disk Management: New Simple Volume, Delete Volume, Extend Volume and
