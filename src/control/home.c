@@ -41,10 +41,13 @@ static const struct applet DATETIME_A = { L"Date and Time", IC_DATETIME, NAV(PG_
     { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } } };
 static const struct applet SPEECH_A = { L"Speech Recognition", IC_SPEECH, NAV(PG_SPEECH), L"speech voice typing dictation microphone dictate talk",
     { { L"Set up voice typing", NAV(PG_SPEECH) }, { L"Set up a microphone", NAV(PG_SPEECH) } } };
+static const struct applet ADMIN_A = { L"Administrative Tools", IC_ADMINTOOLS, NAV(PG_ADMINTOOLS),
+    L"administrative tools services event viewer device manager disk management computer management msinfo resource monitor cleanup",
+    { { L"View event logs", NAV(PG_ADMINTOOLS) }, { L"Free up disk space", NAV(PG_ADMINTOOLS) } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
-    &DATETIME_A, &DISPLAY_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
+    &ADMIN_A, &DATETIME_A, &DISPLAY_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
     &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A,
 };
 
@@ -52,7 +55,7 @@ struct category { enum page_id page; int icon; const WCHAR *title; struct task l
 static const struct category CATS[] = {
     { PG_CAT_SYSSEC, IC_SYSSEC, L"System and Security",
       { { L"View basic information about this computer", NAV(PG_SYSTEM) }, { L"Check for updates", NAV(PG_UPDATE) } },
-      { &SYSTEM_A, &UPDATE_A } },
+      { &SYSTEM_A, &UPDATE_A, &ADMIN_A } },
     { PG_CAT_NET, IC_NET, L"Network and Internet",
       { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"Internet Options", CMD_INET } },
       { &NETCENTER_A, &INET_A } },

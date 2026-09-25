@@ -1,3 +1,21 @@
+sg-shell (0.1.0-20) unstable; urgency=medium
+
+  * sg-mmc: the administrative consoles' host -- Windows MMC's layout in our
+    own code (console tree, result pane, Actions pane, toolbar, Action menu,
+    Export List) for services.msc, eventvwr.msc, devmgmt.msc, diskmgmt.msc
+    and compmgmt.msc; mmc.exe via App Paths (defaults/79-sg-admin-tools.reg);
+    the Linux side through sg-session's sg-sysinfo bridge.
+  * Services (services.msc): Windows services from the SCM -- start, stop,
+    pause, resume, restart with Windows' progress box, Properties (General,
+    Log On, Dependencies; startup type, display name, description, account);
+    the SCM's own access checks decide (wine-sg 0141) -- and the Stained
+    Glass system services (systemd units) read-only beside them.
+  * Control Panel: Administrative Tools (System and Security; control
+    admintools, /name Microsoft.AdministrativeTools).
+  * Gate: test/services-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 07:39:31 -0700
+
 sg-shell (0.1.0-19) unstable; urgency=medium
 
   * Chinese, Japanese and Korean text: Windows' CJK font names (Microsoft

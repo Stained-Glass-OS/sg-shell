@@ -45,6 +45,11 @@ SNIP_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lgdi32 -luser32 -lole32 -luuid -lwi
 # Character Database (Debian's unicode-data) into build/charmap-names.c.
 CHARMAP_LIBS = -lcomctl32 -lgdi32 -luser32 -ladvapi32
 UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
+# The administrative consoles (sg-mmc: services.msc, eventvwr.msc, devmgmt.msc,
+# diskmgmt.msc, compmgmt.msc; the same program as sg-eventvwr for eventvwr.exe):
+# src/mmc/, pictures drawn at build time by gen-icons.py.
+MMC_SRC  = $(wildcard src/mmc/*.c)
+MMC_LIBS = -lcomctl32 -lcomdlg32 -luxtheme -lshell32 -ladvapi32 -lgdi32 -luser32 -lole32 -luuid
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -104,6 +109,13 @@ build:
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
 	    $(BUILD)/charmap-names.c $(BUILD)/sg-charmap-res64.o $(CHARMAP_LIBS) && echo "built sg-charmap (64-bit)"
+	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico
+	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-mmc.rc -O coff -o $(BUILD)/sg-mmc-res64.o
+	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-eventvwr.rc -O coff -o $(BUILD)/sg-eventvwr-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-mmc64.exe $(MMC_SRC) $(BUILD)/sg-mmc-res64.o $(MMC_LIBS) \
+	    && echo "built sg-mmc (64-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-eventvwr64.exe $(MMC_SRC) $(BUILD)/sg-eventvwr-res64.o $(MMC_LIBS) \
+	    && echo "built sg-eventvwr (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -128,6 +140,7 @@ test: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/services-check.sh
 
 clean:
 	rm -rf $(BUILD)

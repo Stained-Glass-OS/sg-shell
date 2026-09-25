@@ -57,6 +57,7 @@ wine-sg or an X server.
 | `sg-sticky` | **Sticky Notes.** Borderless notes with a strip in a darker shade (+ new note, ... menu, x close), a RichEdit body (Ctrl+B/I/U, Ctrl+T strikethrough, Ctrl+Shift+L bullets, and a formatting bar), seven colours, Notes list with search, Delete note (asks). One process owns every note; notes save themselves (debounced) to `%LOCALAPPDATA%\Stained Glass\Sticky Notes\<id>.note` and come back at the next start. `stikynot.exe` resolves via App Paths (`defaults/78-sg-sticky.reg`); sg-start lists it. See "Sticky Notes" below. |
 | `sg-snip` | **Snipping Tool** (and Snip & Sketch's screen clip). `/clip` -- what explorer's Win+Shift+S and PrtScn run, and the `ms-screenclip:` URI -- freezes the screen, shows it dimmed with the mode bar (rectangle, free-form, window, full screen, close), puts the snip on the clipboard (CF_DIB, PNG; CF_BITMAP synthesized) and shows a "Snip saved to clipboard" toast that opens the editor. Without it: the Snipping Tool window (New, mode, delay 0/3/5/10 s) that grows into the editor -- pen, highlighter, eraser, crop, undo/redo, copy, save as PNG/JPEG/GIF/BMP (WIC) to `Pictures\Screenshots`. `snippingtool.exe` via App Paths (`defaults/72-sg-snip.reg`); sg-start lists it. See "Snipping Tool" below. |
 | `sg-charmap` | **Character Map** (`charmap.exe`) -- Wine has none. A font drop-down (every installed family), the font's characters in a 20-column grid (only what `GetFontUnicodeRanges` says it has), a magnified view while the mouse holds a cell or the keyboard moves, "Characters to copy" (in the chosen font) with Select and Copy, and the Advanced view: character set, search by name or `U+XXXX`/`0xXXXX` (a name search narrows the grid; Reset), Go to Unicode. The status bar names the character ("U+00E9: Latin Small Letter E With Acute") and gives Windows' Alt+0nnn keystroke. The font and the view are remembered in `HKCU\Software\Microsoft\CharMap`, as Windows keeps them. `defaults/77-sg-charmap.reg`; sg-start lists it. See "Character Map" below. |
+| `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -639,3 +640,76 @@ view an owned `WS_EX_NOACTIVATE` popup (`SgCharZoom`).
   Shift). Screenshots `build/charmap-*.png`. Mutants built with
   `-DSG_MUTANT_SELECT` (Select adds the next character) or
   `-DSG_MUTANT_SEARCH` (no `U+` search) via `SG_CHARMAP_EXE=` turn it red.
+
+## The administrative consoles (sg-mmc)
+
+`src/mmc/`: `main.c` is the host -- Windows MMC's layout in our own code: a
+menu bar (File, Action -- rebuilt from the verbs on every opening --, View,
+Help), a toolbar (Back, Forward, Up, Show/Hide Console Tree, Properties,
+Refresh, Export List, Help, then the selection's verbs that have a picture),
+the console tree (a TreeView), the result pane (a report ListView, sortable by
+any column, or a snap-in's own view) and the Actions pane on the right (our
+own drawing: the node's and the selection's verbs as links). A yellow banner
+above the result pane carries notices ("You are signed in as a standard
+user..."). `util.c` has the sg-sysinfo bridge client, in-memory dialog
+templates, formatting and elevation (`runas`). **No MMC snap-in COM**: a
+`.msc` file only names the console -- wine-sg 0142 writes ours as an
+`MMC_ConsoleFile` with `<StainedGlass Console="services"/>`; any other `.msc`
+is recognised by its file name. `sg-eventvwr64.exe` is the same program,
+opening Event Viewer by its own name (App Paths values cannot carry
+arguments). Pictures: `gen-icons.py` draws a 16px and a 32px strip in
+`mmc.h`'s `IC_*` order (the build's check: 56 names = 56 enum entries) and the
+program icons, at build time.
+
+- **Snap-in interface** (`snapin_t` in `mmc.h`): `expand` (children, once),
+  `show` (columns and rows through `pane_*`, or a custom view), `verbs` (for
+  the node, or the selected row), `invoke`, `open` (double-click, Enter,
+  Properties), `selchange`, `tick` (once a second), `layout` (a custom view's
+  windows), `hide`, `dump`. Row keys are the snap-in's own stable numbers,
+  so a refresh keeps the selection.
+- **The Linux side** is sg-session's `sg-sysinfo`, through its bridge: the
+  console re-launches itself as `sg-sysinfo --bridge wine <itself> --bridged
+  ...` at start (as sg-ncpa does with sg-netctl); `SG_SYSINFO` points at
+  another copy; `--no-bridge` skips it.
+- **`SG_MMC_DUMP=<file>`** (a Windows path) is rewritten after every change:
+  title, console, admin/bridged, the selected node, the tree with each item's
+  screen centre, the fixed toolbar buttons, columns, every row (key, screen
+  centre or -1, selected, cells tab-separated), the verbs (`VERB node|row id
+  enabled toolbar-x toolbar-y actions-x actions-y name`), the Actions links,
+  banner, status, the last message box's text, and the snap-in's own lines.
+
+### Services (services.msc)
+
+`src/mmc/services.c`. **Services (Local)**: every Win32 service from
+`EnumServicesStatusEx` -- Name (display name), Description, Status (blank
+when stopped, as Windows 10), Startup Type (Automatic, Automatic (Delayed
+Start), Manual, Disabled), Log On As -- with Start, Stop, Pause, Resume and
+Restart (toolbar, Actions pane, Action and context menus) and Windows'
+"Windows is attempting to start the following service..." progress box
+while the state changes; Properties: General (display name, description,
+path, startup type, status and its buttons, start parameters), Log On (Local
+System + interact with desktop, or an account and password), Dependencies
+(both directions). **The console decides nothing**: each step opens the
+SCM and the service with only the access it needs, and wine-sg 0141 makes
+the SCM refuse a standard user's start/stop/change -- the console shows
+Windows' "Windows could not stop the X service on Local Computer. Error 5:
+Access is denied." and, for a standard user, a banner. **Stained Glass
+System Services**: the Linux units under Windows from `sg-sysinfo units`,
+read-only (no verbs; Properties shows the unit's fields).
+
+- **Wine's `sc` has no `qc` or `queryex`**: the gate's test service
+  (`test/sg-svc-test.c`, a real start/stop/pause service) answers `info NAME`
+  with its state, PID and start type itself.
+- **Gate: `test/services-check.sh`** (Xvfb picks its display, a shell
+  desktop; `SG_WINE_DIR` may be a build tree): `services.msc` through wine-sg
+  0142 (or sg-mmc directly on a Wine without it); a service made with `sc
+  create` is listed with its description, stopped, Manual, Local System;
+  bridged to sg-sysinfo; the row selects with a click; Start (toolbar) ->
+  RUNNING and the row says Running; Pause (toolbar) -> PAUSED; Resume
+  (Actions pane); Restart (toolbar) -> a new process; Stop (Actions pane) ->
+  STOPPED, blank status; Properties, Alt+U, D, Enter -> start type DISABLED,
+  the row says Disabled, Start disabled; Stained Glass System Services lists
+  exactly what `sg-sysinfo units` does, with no verbs. 18 checks. Mutants
+  (`-DSG_MUTANT_NOSTART`, `-DSG_MUTANT_STATUS`, via `SG_MMC_EXE`) turn it
+  red. Screenshots `build/services-*.png`.
+

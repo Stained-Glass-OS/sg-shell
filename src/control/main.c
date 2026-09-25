@@ -50,6 +50,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_UPDATE]       = { L"Windows Update",             PG_CAT_SYSSEC, build_update,       cmd_update },
     [PG_NETWORK]      = { L"Network and Sharing Center", PG_CAT_NET,    build_network,      cmd_network },
     [PG_SPEECH]       = { L"Speech Recognition",         PG_CAT_HW,     build_speech,       cmd_speech, NULL, timer_speech },
+    [PG_ADMINTOOLS]   = { L"Administrative Tools",       PG_CAT_SYSSEC, build_admintools,   cmd_admintools },
 };
 
 int S(int dip) { return MulDiv(dip, g_dpi, 96); }
@@ -714,7 +715,7 @@ static const struct target TARGETS[] = {
     { L"netconnections", PG_NETWORK },  { L"update",        PG_UPDATE },
     { L"system",         PG_SYSTEM },   { L"printers",      PG_CAT_HW },
     { L"mouse",          PG_CAT_HW },   { L"keyboard",      PG_CAT_HW },
-    { L"admintools",     PG_CAT_SYSSEC },
+    { L"admintools",     PG_ADMINTOOLS },
     /* canonical names (control /name ...) */
     { L"Microsoft.System",                  PG_SYSTEM },
     { L"Microsoft.ProgramsAndFeatures",     PG_PROGRAMS },
@@ -732,10 +733,11 @@ static const struct target TARGETS[] = {
     { L"Microsoft.ActionCenter",            PG_CAT_SYSSEC },
     { L"Microsoft.SecurityAndMaintenance",  PG_CAT_SYSSEC },
     { L"Microsoft.SpeechRecognition",       PG_SPEECH },
+    { L"Microsoft.AdministrativeTools",     PG_ADMINTOOLS },
     /* our own page names, for --page */
     { L"home", PG_HOME }, { L"all", PG_ALL }, { L"programs", PG_PROGRAMS }, { L"users", PG_USERS },
     { L"accounts", PG_USERS_MANAGE }, { L"datetime", PG_DATETIME }, { L"personalization", PG_PERSONALIZE },
-    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
+    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
     { L"cat-hardware", PG_CAT_HW }, { L"cat-programs", PG_CAT_PROG }, { L"cat-users", PG_CAT_USERS },
     { L"cat-appearance", PG_CAT_APPEAR }, { L"cat-clock", PG_CAT_CLOCK },
 };
@@ -807,7 +809,7 @@ static int dump(const WCHAR *what)
     struct { const WCHAR *name; void (*fn)(void); } parts[] = {
         { L"system", dump_system }, { L"programs", dump_programs }, { L"users", dump_users },
         { L"datetime", dump_datetime }, { L"personalization", dump_personalize },
-        { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech },
+        { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech }, { L"admintools", dump_admintools },
         { L"items", dump_items },
     };
     size_t i;

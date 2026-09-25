@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the administrative tools (sg-mmc, sg-shell). wine-sg 0142
+; puts mmc.exe, eventvwr.exe, resmon.exe and cleanmgr.exe in system32 as
+; launchers for these App Paths entries, hands msinfo32.exe off the same way,
+; writes services.msc, eventvwr.msc, devmgmt.msc, diskmgmt.msc and
+; compmgmt.msc, and opens .msc files with mmc.exe -- so the Run box, cmd,
+; scripts, Win+X, the Start menu's Administrative Tools and the Control
+; Panel's all reach these.
+;
+; The paths are the package's install location reached through Z:. If Z: is
+; ever removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\mmc.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-mmc64.exe"
