@@ -543,7 +543,7 @@ void set_build_storage(void)
         _snwprintf(line, ARRAYSIZE(line), L"%ls  %ls used of %ls", d, a, b);
         pg_text(st_x(), y, st_w(), S(22), g_font_body, COL_TEXT, line, DT_SINGLELINE | DT_END_ELLIPSIS);
         y += S(26);
-        pg_fill(st_x(), y, S(400), S(10), RGB(0xE0, 0xE0, 0xE0));
+        pg_fill(st_x(), y, S(400), S(10), g_dark ? RGB(0x3A, 0x3A, 0x3A) : RGB(0xE0, 0xE0, 0xE0));
         pg_fill(st_x(), y, (int)(S(400) * ((double)(total.QuadPart - free_.QuadPart) / total.QuadPart)), S(10), st_accent());
         y += S(24);
     }

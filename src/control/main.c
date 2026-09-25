@@ -6,6 +6,7 @@
  */
 #include "control.h"
 #include "settings.h"
+#include "../sg-mode.h"
 #include <shellapi.h>
 #include <windowsx.h>
 #include <stdarg.h>
@@ -25,7 +26,39 @@ static BOOL g_refresh_on_activate;
 BOOL g_kbd_cues;                /* show focus rectangles: the keyboard has been used */
 WCHAR g_search_text[128];
 BOOL g_settings;                /* this is the Settings window, not the Control Panel */
-COLORREF g_col_link = COL_LINK, g_col_link_hot = COL_LINK_HOT;
+
+/* ---- the palette: light, or dark in the dark app mode ---------------------------- */
+static const struct cpl_palette light_palette = {
+    .bg = RGB(0xFF, 0xFF, 0xFF), .pane = RGB(0xF4, 0xF7, 0xFC), .pane_edge = RGB(0xE3, 0xE8, 0xF0),
+    .text = RGB(0x1A, 0x1A, 0x1A), .subtle = RGB(0x60, 0x60, 0x60), .title = RGB(0x1E, 0x32, 0x87),
+    .link = RGB(0x00, 0x66, 0xCC), .link_hot = RGB(0x33, 0x99, 0xFF), .catlink = RGB(0x0E, 0x7A, 0x0D),
+    .rule = RGB(0xDD, 0xDD, 0xDD), .ok = RGB(0x10, 0x7C, 0x10), .warn = RGB(0xC4, 0x2B, 0x1C),
+    .navbar = RGB(0xFF, 0xFF, 0xFF),
+    .nav = RGB(0xF3, 0xF3, 0xF3), .nav_hot = RGB(0xE6, 0xE6, 0xE6), .nav_sel = RGB(0xE0, 0xDA, 0xEC),
+    .card = RGB(0xF7, 0xF7, 0xF7),
+    .field = RGB(0xFF, 0xFF, 0xFF), .strong = RGB(0x00, 0x00, 0x00), .soft = RGB(0x33, 0x33, 0x33),
+    .disabled = RGB(0xA0, 0xA0, 0xA0), .hot = RGB(0xE5, 0xF1, 0xFB), .line = RGB(0xD9, 0xD9, 0xD9),
+};
+static const struct cpl_palette dark_palette = {
+    .bg = RGB(0x20, 0x20, 0x20), .pane = RGB(0x2B, 0x2B, 0x2B), .pane_edge = RGB(0x3A, 0x3A, 0x3A),
+    .text = RGB(0xFF, 0xFF, 0xFF), .subtle = RGB(0xA8, 0xA8, 0xA8), .title = RGB(0xC9, 0xA9, 0xF2),
+    .link = RGB(0xB3, 0x8B, 0xEB), .link_hot = RGB(0xD2, 0xB6, 0xFF), .catlink = RGB(0x6C, 0xCB, 0x5F),
+    .rule = RGB(0x3A, 0x3A, 0x3A), .ok = RGB(0x6C, 0xCB, 0x5F), .warn = RGB(0xFF, 0x6B, 0x5B),
+    .navbar = RGB(0x20, 0x20, 0x20),
+    .nav = RGB(0x1A, 0x1A, 0x1A), .nav_hot = RGB(0x2D, 0x2D, 0x2D), .nav_sel = RGB(0x3B, 0x2E, 0x4F),
+    .card = RGB(0x2B, 0x2B, 0x2B),
+    .field = RGB(0x2D, 0x2D, 0x2D), .strong = RGB(0xFF, 0xFF, 0xFF), .soft = RGB(0xD0, 0xD0, 0xD0),
+    .disabled = RGB(0x6E, 0x6E, 0x6E), .hot = RGB(0x2D, 0x2D, 0x2D), .line = RGB(0x3A, 0x3A, 0x3A),
+};
+struct cpl_palette g_pal;
+BOOL g_dark;
+
+void pal_load(void)
+{
+    g_dark = sg_apps_dark();
+    g_pal = g_dark ? dark_palette : light_palette;
+}
+COLORREF g_col_link = RGB(0x00, 0x66, 0xCC), g_col_link_hot = RGB(0x33, 0x99, 0xFF);   /* pal_apply() */
 HWND g_keep_focus;              /* a page change leaves the focus here (Settings' search box) */
 
 #define NAVBAR_H 48
@@ -315,6 +348,22 @@ HWND pg_link(int x, int y, const WCHAR *s, int id, int flags)
 static HBRUSH g_bg_brush, g_pane_brush;
 static LRESULT CALLBACK page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
+/* the mode changed: the palette, the brushes made from it, the title bar and
+ * the page (built with the old colours) all follow */
+void pal_apply(HWND frame)
+{
+    pal_load();
+    if (g_bg_brush) DeleteObject(g_bg_brush);
+    if (g_pane_brush) DeleteObject(g_pane_brush);
+    g_bg_brush = CreateSolidBrush(COL_BG);
+    g_pane_brush = CreateSolidBrush(COL_PANE);
+    if (!g_settings) { g_col_link = COL_LINK; g_col_link_hot = COL_LINK_HOT; }   /* Settings' are the accent */
+    if (!frame) return;
+    sg_mode_title(frame, g_dark);
+    if (g_page) refresh_page();
+    RedrawWindow(frame, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
+
 /* the classes a page is made of: the page itself and its links */
 void register_page_classes(void)
 {
@@ -565,7 +614,7 @@ BOOL refresh_pending(void) { BOOL r = g_refresh_on_activate; g_refresh_on_activa
 static void draw_arrow(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
 {
     int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, a = S(6);
-    HPEN pen = CreatePen(PS_SOLID, S(2), enabled ? (hot ? COL_LINK_HOT : RGB(0x40, 0x40, 0x40)) : RGB(0xC0, 0xC0, 0xC0));
+    HPEN pen = CreatePen(PS_SOLID, S(2), enabled ? (hot ? COL_LINK_HOT : g_pal.soft) : g_pal.disabled);
     HGDIOBJ old = SelectObject(dc, pen);
     switch (dir) {
     case 0: MoveToEx(dc, cx + a, cy, NULL); LineTo(dc, cx - a, cy); MoveToEx(dc, cx - a + S(5), cy - S(5), NULL);
@@ -610,7 +659,7 @@ static LRESULT CALLBACK addr_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         enum page_id chain[4];
         int n = 0, i, x;
         HBRUSH b = CreateSolidBrush(COL_BG);
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(0xD9, 0xD9, 0xD9));
+        HPEN pen = CreatePen(PS_SOLID, 1, g_pal.line);
         HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, b);
         Rectangle(dc, r.left, r.top, r.right, r.bottom);
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen); DeleteObject(b);
@@ -668,7 +717,7 @@ static LRESULT CALLBACK search_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         rc.left += S(4);
         SelectObject(dc, g_font_body);
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(0x80, 0x80, 0x80));
+        SetTextColor(dc, COL_SUBTLE);
         DrawTextW(dc, L"Search Control Panel", -1, &rc, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
         ReleaseDC(hwnd, dc);
     } else if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS) InvalidateRect(hwnd, NULL, TRUE);
@@ -692,6 +741,7 @@ static void layout(void)
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp) && sg_apps_dark() != g_dark) pal_apply(hwnd);
     switch (msg) {
     case WM_SIZE:
         if (g_page) {
@@ -721,7 +771,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         DRAWITEMSTRUCT *di = (DRAWITEMSTRUCT *)lp;
         int dir = di->CtlID == ID_BACK ? 0 : di->CtlID == ID_FWD ? 1 : di->CtlID == ID_UP ? 2 : 3;
         BOOL hot = GetPropW(di->hwndItem, L"hot") != NULL && !(di->itemState & ODS_DISABLED);
-        HBRUSH b = CreateSolidBrush(hot ? RGB(0xE5, 0xF1, 0xFB) : COL_NAVBAR);
+        HBRUSH b = CreateSolidBrush(hot ? g_pal.hot : COL_NAVBAR);
         FillRect(di->hDC, &di->rcItem, b); DeleteObject(b);
         draw_arrow(di->hDC, &di->rcItem, dir, !(di->itemState & ODS_DISABLED), hot);
         if ((di->itemState & ODS_FOCUS) && g_kbd_cues) DrawFocusRect(di->hDC, &di->rcItem);
@@ -937,8 +987,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         settings = !_wcsnicmp(base, L"sg-settings", 11) || !_wcsnicmp(base, L"SystemSettings", 14) ||
                    (argc >= 2 && (!wcscmp(argv[1], L"--settings") || !_wcsnicmp(argv[1], L"ms-settings:", 12)));
     }
-    g_bg_brush = CreateSolidBrush(COL_BG);
-    g_pane_brush = CreateSolidBrush(COL_PANE);
+    pal_apply(NULL);
 
     if (argc >= 2) {
         if (!wcscmp(argv[1], L"--dump")) return dump(argc > 2 ? argv[2] : NULL);
@@ -986,6 +1035,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              CW_USEDEFAULT, CW_USEDEFAULT, S(1000), S(700), NULL, NULL, inst, NULL);
     if (!g_main) return 1;
+    sg_mode_title(g_main, g_dark);
     g_back = CreateWindowW(L"BUTTON", L"Back", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 0, 0, g_main, (HMENU)ID_BACK, inst, NULL);
     g_fwd = CreateWindowW(L"BUTTON", L"Forward", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 0, 0, g_main, (HMENU)ID_FWD, inst, NULL);
     g_up = CreateWindowW(L"BUTTON", L"Up", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 0, 0, g_main, (HMENU)ID_UP, inst, NULL);

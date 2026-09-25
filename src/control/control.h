@@ -93,19 +93,32 @@ void page_dump(FILE *f);
 #define IS_SCROLL_CODE(c) (((c) & 0xFF00) == PG_SCROLL_CODE)
 
 /* ---- look ----------------------------------------------------------------- */
-#define COL_BG        RGB(0xFF, 0xFF, 0xFF)
-#define COL_PANE      RGB(0xF4, 0xF7, 0xFC)
-#define COL_PANE_EDGE RGB(0xE3, 0xE8, 0xF0)
-#define COL_TEXT      RGB(0x1A, 0x1A, 0x1A)
-#define COL_SUBTLE    RGB(0x60, 0x60, 0x60)
-#define COL_TITLE     RGB(0x1E, 0x32, 0x87)
-#define COL_LINK      RGB(0x00, 0x66, 0xCC)
-#define COL_LINK_HOT  RGB(0x33, 0x99, 0xFF)
-#define COL_CATLINK   RGB(0x0E, 0x7A, 0x0D)
-#define COL_RULE      RGB(0xDD, 0xDD, 0xDD)
-#define COL_OK        RGB(0x10, 0x7C, 0x10)
-#define COL_WARN      RGB(0xC4, 0x2B, 0x1C)
-#define COL_NAVBAR    RGB(0xFF, 0xFF, 0xFF)
+/* the palette follows the app mode (AppsUseLightTheme, sg-mode.h): light
+ * as the Control Panel always was, or dark; pal_load() picks it, and a
+ * window rebuilds its page when WM_SETTINGCHANGE "ImmersiveColorSet" says
+ * the mode changed */
+struct cpl_palette {
+    COLORREF bg, pane, pane_edge, text, subtle, title, link, link_hot, catlink, rule, ok, warn, navbar;
+    COLORREF nav, nav_hot, nav_sel, card;       /* the Settings frame */
+    COLORREF field, strong, soft, disabled, hot, line;
+};
+extern struct cpl_palette g_pal;
+extern BOOL g_dark;
+void pal_load(void);            /* read the mode */
+void pal_apply(HWND frame);     /* and follow it: brushes, title bar, page (frame may be NULL) */
+#define COL_BG        (g_pal.bg)
+#define COL_PANE      (g_pal.pane)
+#define COL_PANE_EDGE (g_pal.pane_edge)
+#define COL_TEXT      (g_pal.text)
+#define COL_SUBTLE    (g_pal.subtle)
+#define COL_TITLE     (g_pal.title)
+#define COL_LINK      (g_pal.link)
+#define COL_LINK_HOT  (g_pal.link_hot)
+#define COL_CATLINK   (g_pal.catlink)
+#define COL_RULE      (g_pal.rule)
+#define COL_OK        (g_pal.ok)
+#define COL_WARN      (g_pal.warn)
+#define COL_NAVBAR    (g_pal.navbar)
 
 extern HWND g_main, g_page;
 extern HINSTANCE g_inst;

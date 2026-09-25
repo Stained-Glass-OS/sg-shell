@@ -275,8 +275,21 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
   `-DSG_MUTANT_URI` (every URI opens Home) and `-DSG_MUTANT_ACCENT` (the
   neighbouring accent) turn it red, and so does Win+I on a wine-sg without
   0130 (the Control Panel opens).
-- **Not yet:** the taskbar does not read Taskbar's switches (alignment,
-  small buttons, auto-hide) nor Start's "more tiles"/"full screen"; night light, resolution and
+- **Modes and the taskbar.** Settings and the Control Panel follow the app
+  mode (AppsUseLightTheme): `control.h`'s `COL_*` are the `g_pal` palette,
+  `pal_apply()` picks light or dark, remakes the brushes, rebuilds the page
+  and sets the title bar (`sg_mode_title`) on `WM_SETTINGCHANGE
+  "ImmersiveColorSet"`; wine-sg 0160-0163 turn the controls and the system
+  colours dark. Personalization > Taskbar writes position (`Software\Stained
+  Glass\Taskbar Position`, ABE_*), auto-hide, small buttons, combining
+  (`TaskbarGlomLevel`), Task View, search (`Search\SearchboxTaskbarMode`) and
+  alignment and announces every change with "TraySettings" (wine-sg 0164
+  applies them); Start's page adds "Show most used apps"
+  (`Start_TrackProgs`) and "Show suggestions occasionally"
+  (`ContentDeliveryManager SubscribedContent-338388Enabled`). The gate's
+  Taskbar check: the stored location/search/combining show, the Task View
+  switch writes `ShowTaskViewButton`.
+- **Not yet:** night light, resolution and
   Power & sleep need the Stained Glass compositor (sg-compositor 0.2.0+sg5
   has wlr-output-power-management for wlopm); multiple displays are not arranged; no Windows Hello,
   Family, Gaming, Phone or Search categories.
@@ -451,6 +464,20 @@ happens at start-up, so it opens in well under 200 ms with 200 apps.
   names a stand-in; the gate's answers yes, then no. NoClose takes them
   away with Restart and Shut down. Mutants: Sleep always shown, Sleep
   asking nothing -- both fail `start-check.sh`.
+- **Settings > Personalization > Start and the modes** (read at every
+  opening): Start is dark or light by the Windows mode
+  (`SystemUsesLightTheme`, `src/sg-mode.h`; tiles keep white on the
+  accent); "Most used" -- the five apps this user starts most from Start,
+  counted in `Start\Usage` while `Start_TrackProgs` is on (read in one pass
+  per opening); "Suggested" -- one bundled app never started, another each
+  day, nothing from outside the machine; "Show app list" off leaves rail
+  and tiles, the list appearing for a search or the menu button ("All
+  apps"); "more tiles" is four columns; "full screen" all of the screen but
+  the taskbar. **Placement follows the taskbar's edge** from
+  `ABM_GETTASKBARPOS` (asked at start-up and after "TraySettings" or a
+  display change -- a round trip at each opening was measurable); a 1 px
+  answer (an older shell) means the bottom. `WM_USER+10` with wparam 1 (the
+  taskbar's search) opens without toggling.
 - **"Recently added"** is what was created after this user's Start menu
   first ran (`FirstRun` in the Start key) and within a week -- otherwise a
   fresh profile would call everything recent.
@@ -466,8 +493,14 @@ happens at start-up, so it opens in well under 200 ms with 200 apps.
   desktop, and drives the menu with xdotool: placement, speed, apps, icons,
   headers, Recently added, default tiles, arrows/Tab, search (apps and
   settings), Escape twice, Enter launching, pin/unpin through the context
-  menu and the registry, the rail, the power menu and `NoClose`, click-away.
-  Screenshots: `build/start-{open,search,context,power,rail}.png`. xdotool's
+  menu and the registry, the rail, the power menu and `NoClose`, the Windows
+  mode (dark, then light), Most used, Suggested and turning both off, app
+  list off (388 px, and the list for a search), more tiles (812 px), full
+  screen, the search entry, click-away; with `SG_TASKBAR_POSITIONS=1` (a
+  wine-sg with 0164) Start below a top taskbar and beside a right one.
+  Opening speed under 200 ms fails under a heavily loaded machine (load
+  50+: 250-500 ms for the old and new build alike, all in the list scan).
+  Screenshots: `build/start-{open,light,search,context,power,rail,nolist,fullscreen}.png`. xdotool's
   window geometry is not the panel's in a Wine desktop -- the gate reads
   the rectangle from the dump.
 
@@ -685,7 +718,10 @@ call `EnableThemeDialogTexture`, or every label paints a grey box on the tab.
 
 - **The flyout places itself from `Shell_TrayWnd`'s rectangle.** Under Wine
   `ABM_GETTASKBARPOS` answered TRUE with an empty rectangle, and the work area
-  includes the taskbar. It is owned by the (never shown) tray window, so it
+  includes the taskbar. With wine-sg 0164 it answers the real edge, and the
+  flyout opens at the tray's corner of a top, left or right taskbar. The
+  flyout and the tray icon's glyph follow the Windows mode (light flyout,
+  black glyph on a light taskbar). It is owned by the (never shown) tray window, so it
   gets no taskbar button.
 - **`GetNumberFormat` prints 0 as nothing** with `LeadingZero = 0`.
 - **Gate: `test/net-ui-check.sh`** runs both programs under Wine against the

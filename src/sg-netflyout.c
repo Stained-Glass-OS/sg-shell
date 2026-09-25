@@ -22,6 +22,7 @@
 #include <shellapi.h>
 #include <stdio.h>
 #include "sg-netclient.h"
+#include "sg-mode.h"
 
 #define FLY_W 360
 #define ROW_H 60
@@ -34,16 +35,34 @@
 #define WM_TRAY (WM_APP + 1)
 #define ID_KEY 100
 
-#define COL_BG      RGB(0x1F, 0x1F, 0x1F)
-#define COL_HOVER   RGB(0x33, 0x33, 0x33)
-#define COL_OPEN    RGB(0x2B, 0x2B, 0x2B)
-#define COL_TEXT    RGB(0xFF, 0xFF, 0xFF)
-#define COL_SUBTLE  RGB(0xA8, 0xA8, 0xA8)
+/* the flyout and the icon follow the Windows mode (SystemUsesLightTheme,
+ * sg-mode.h), as the taskbar they belong to does */
+struct fly_palette {
+    COLORREF bg, hover, open, text, subtle, link, button, button_hot, error, line, off, field;
+    DWORD glyph;                /* the tray icon's colour (premultiplied: white, or black) */
+};
+static const struct fly_palette fly_dark = {
+    RGB(0x1F, 0x1F, 0x1F), RGB(0x33, 0x33, 0x33), RGB(0x2B, 0x2B, 0x2B), RGB(0xFF, 0xFF, 0xFF),
+    RGB(0xA8, 0xA8, 0xA8), RGB(0xB9, 0x8C, 0xF0), RGB(0x44, 0x44, 0x44), RGB(0x55, 0x55, 0x55),
+    RGB(0xFF, 0x99, 0xA4), RGB(0x3A, 0x3A, 0x3A), RGB(0x60, 0x60, 0x60), RGB(0x10, 0x10, 0x10), 0xFFFFFF,
+};
+static const struct fly_palette fly_light = {
+    RGB(0xF2, 0xF2, 0xF2), RGB(0xDA, 0xDA, 0xDA), RGB(0xE6, 0xE6, 0xE6), RGB(0x00, 0x00, 0x00),
+    RGB(0x5A, 0x5A, 0x5A), RGB(0x5F, 0x24, 0x96), RGB(0xCC, 0xCC, 0xCC), RGB(0xB8, 0xB8, 0xB8),
+    RGB(0xC4, 0x2B, 0x1C), RGB(0xCC, 0xCC, 0xCC), RGB(0xB0, 0xB0, 0xB0), RGB(0xFF, 0xFF, 0xFF), 0x000000,
+};
+static const struct fly_palette *g_pal = &fly_dark;
+static void load_mode(void) { g_pal = sg_system_dark() ? &fly_dark : &fly_light; }
+#define COL_BG      (g_pal->bg)
+#define COL_HOVER   (g_pal->hover)
+#define COL_OPEN    (g_pal->open)
+#define COL_TEXT    (g_pal->text)
+#define COL_SUBTLE  (g_pal->subtle)
 #define COL_ACCENT  RGB(0x7B, 0x2F, 0xBE)
-#define COL_LINK    RGB(0xB9, 0x8C, 0xF0)
-#define COL_BUTTON  RGB(0x44, 0x44, 0x44)
-#define COL_ERROR   RGB(0xFF, 0x99, 0xA4)
-#define COL_LINE    RGB(0x3A, 0x3A, 0x3A)
+#define COL_LINK    (g_pal->link)
+#define COL_BUTTON  (g_pal->button)
+#define COL_ERROR   (g_pal->error)
+#define COL_LINE    (g_pal->line)
 
 struct wnet {
     char hex[72];
@@ -235,7 +254,7 @@ static HICON make_icon(int size)
     for (i = 0; i < size * size; i++)
     {
         BYTE a = (BYTE)(px[i] & 0xFF);
-        px[i] = a ? ((DWORD)a << 24) | 0x00FFFFFF : 0;
+        px[i] = a ? ((DWORD)a << 24) | (g_pal->glyph ? 0x00FFFFFF : 0) : 0;
     }
     SelectObject(dc, old);
     mask = CreateBitmap(size, size, 1, 1, NULL);
@@ -309,6 +328,19 @@ static void place_flyout(void)
         x = tb.right - FLY_W;
         y = tb.top - h;
     }
+    /* a taskbar on another edge (Settings > Taskbar): beside its tray corner */
+    abd.uEdge = ABE_BOTTOM;
+    if (SHAppBarMessage(ABM_GETTASKBARPOS, &abd) && abd.rc.bottom - abd.rc.top > 1)
+    {
+        tb = abd.rc;
+        switch (abd.uEdge)
+        {
+        case ABE_TOP:   x = tb.right - FLY_W; y = tb.bottom; break;
+        case ABE_LEFT:  x = tb.right; y = tb.bottom - h; break;
+        case ABE_RIGHT: x = tb.left - FLY_W; y = tb.bottom - h; break;
+        default:        x = tb.right - FLY_W; y = tb.top - h; break;
+        }
+    }
     SetWindowPos(g_fly, HWND_TOPMOST, x, y, FLY_W, h, SWP_NOACTIVATE);
 }
 
@@ -318,7 +350,7 @@ static void draw_wifi_glyph(HDC dc, int x, int y, int signal, BOOL lit)
     for (i = 0; i < 4; i++)
     {
         int rad = 5 + i * 5;
-        COLORREF c = lit && i < (bars < 1 ? 1 : bars) ? COL_TEXT : RGB(0x60, 0x60, 0x60);
+        COLORREF c = lit && i < (bars < 1 ? 1 : bars) ? COL_TEXT : g_pal->off;
         HPEN pen = CreatePen(PS_SOLID, 2, c), op = SelectObject(dc, pen);
         if (i == 0)
         {
@@ -356,7 +388,7 @@ static RECT button_rect(int right, int y, int w) { RECT r = { right - w, y, righ
 
 static void draw_button(HDC dc, RECT r, const WCHAR *text, BOOL accent, BOOL hot)
 {
-    HBRUSH b = CreateSolidBrush(accent ? (hot ? RGB(0x8E, 0x45, 0xD0) : COL_ACCENT) : (hot ? RGB(0x55, 0x55, 0x55) : COL_BUTTON));
+    HBRUSH b = CreateSolidBrush(accent ? (hot ? RGB(0x8E, 0x45, 0xD0) : COL_ACCENT) : (hot ? g_pal->button_hot : COL_BUTTON));
     FillRect(dc, &r, b);
     DeleteObject(b);
     SetTextColor(dc, COL_TEXT);
@@ -676,6 +708,7 @@ static void open_settings(void)
 
 static void show_flyout(void)
 {
+    load_mode();
     g_exp = -1;
     g_exp_state = EXP_IDLE;
     g_scroll = 0;
@@ -708,9 +741,10 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CTLCOLOREDIT:
     {
         static HBRUSH b;
-        if (!b) b = CreateSolidBrush(RGB(0x10, 0x10, 0x10));
+        static COLORREF made = CLR_INVALID;
+        if (made != g_pal->field) { if (b) DeleteObject(b); b = CreateSolidBrush(made = g_pal->field); }
         SetTextColor((HDC)wp, COL_TEXT);
-        SetBkColor((HDC)wp, RGB(0x10, 0x10, 0x10));
+        SetBkColor((HDC)wp, g_pal->field);
         return (LRESULT)b;
     }
     case WM_MOUSEMOVE:
@@ -775,6 +809,14 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == g_taskbar_created && g_taskbar_created) { tray_update(TRUE); return 0; }
+    if (sg_mode_changed(msg, lp))
+    {
+        /* the Windows mode may have changed: the icon and the flyout follow */
+        load_mode();
+        tray_update(FALSE);
+        if (IsWindowVisible(g_fly)) InvalidateRect(g_fly, NULL, FALSE);
+        return 0;
+    }
     switch (msg)
     {
     case WM_TRAY:
@@ -886,6 +928,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     char expand[72] = "";
     MSG msg;
     (void)prev; (void)cmdline; (void)show;
+
+    load_mode();
 
     if (!net_init(GetCommandLineW()))
     {

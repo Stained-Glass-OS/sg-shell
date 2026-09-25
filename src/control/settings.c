@@ -15,14 +15,15 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "settings.h"
+#include "../sg-mode.h"
 #include <shellapi.h>
 #include <windowsx.h>
 
 #define NAV_W        300
-#define COL_NAV      RGB(0xF3, 0xF3, 0xF3)
-#define COL_NAV_HOT  RGB(0xE6, 0xE6, 0xE6)
-#define COL_NAV_SEL  RGB(0xE0, 0xDA, 0xEC)
-#define COL_CARD     RGB(0xF7, 0xF7, 0xF7)
+#define COL_NAV      (g_pal.nav)
+#define COL_NAV_HOT  (g_pal.nav_hot)
+#define COL_NAV_SEL  (g_pal.nav_sel)
+#define COL_CARD     (g_pal.card)
 #define ID_NAV       20
 #define ID_NAVSEARCH 21
 #define CMD_HOMESEARCH (CMD_PAGE_FIRST + 900)
@@ -335,7 +336,7 @@ static LRESULT CALLBACK toggle_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         HDC dc = BeginPaint(hwnd, &ps);
         RECT r, pill;
         BOOL checked = on & 1, en = IsWindowEnabled(hwnd), hot = (on & 2) != 0;
-        COLORREF fg = !en ? RGB(0xA0, 0xA0, 0xA0) : checked ? g_accent : hot ? RGB(0, 0, 0) : RGB(0x33, 0x33, 0x33);
+        COLORREF fg = !en ? g_pal.disabled : checked ? g_accent : hot ? g_pal.strong : g_pal.soft;
         HBRUSH b;
         HPEN pen;
         int h, kx;
@@ -357,7 +358,7 @@ static LRESULT CALLBACK toggle_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         DeleteObject(b); DeleteObject(pen);
         SelectObject(dc, g_font_body);
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, en ? COL_TEXT : RGB(0xA0, 0xA0, 0xA0));
+        SetTextColor(dc, en ? COL_TEXT : g_pal.disabled);
         TextOutW(dc, pill.right + S(12), (r.bottom - S(18)) / 2, checked ? L"On" : L"Off", checked ? 2 : 3);
         if (GetFocus() == hwnd && g_kbd_cues) { RECT f = pill; InflateRect(&f, S(3), S(3)); DrawFocusRect(dc, &f); }
         EndPaint(hwnd, &ps);
@@ -396,7 +397,7 @@ static LRESULT CALLBACK tile_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         GetClientRect(hwnd, &r);
         b = CreateSolidBrush(COL_BG); FillRect(dc, &r, b); DeleteObject(b);
         if (hot || GetFocus() == hwnd) {
-            b = CreateSolidBrush(hot ? RGB(0xCC, 0xCC, 0xCC) : g_accent);
+            b = CreateSolidBrush(hot ? (g_dark ? RGB(0x5A, 0x5A, 0x5A) : RGB(0xCC, 0xCC, 0xCC)) : g_accent);
             FrameRect(dc, &r, b); DeleteObject(b);
         }
         if (cat >= 0 && cat < NCATS) {
@@ -437,7 +438,7 @@ static LRESULT CALLBACK search_edit_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
         rc.left += S(6);
         SelectObject(dc, g_font_body);
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(0x80, 0x80, 0x80));
+        SetTextColor(dc, COL_SUBTLE);
         DrawTextW(dc, L"Find a setting", -1, &rc, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
         draw_icon(dc, IC_G_SEARCH, rc.right - S(24), (rc.bottom - S(16)) / 2, S(16));
         ReleaseDC(hwnd, dc);
@@ -621,7 +622,12 @@ static LRESULT CALLBACK nav_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         break;
-    case WM_CTLCOLOREDIT: return (LRESULT)GetStockObject(WHITE_BRUSH);
+    case WM_CTLCOLOREDIT: {
+        static HBRUSH field; static COLORREF made = CLR_INVALID;
+        if (made != g_pal.field) { if (field) DeleteObject(field); field = CreateSolidBrush(made = g_pal.field); }
+        SetTextColor((HDC)wp, COL_TEXT); SetBkColor((HDC)wp, g_pal.field);
+        return (LRESULT)field;
+    }
     case WM_ERASEBKGND: return 1;
     case WM_PAINT: {
         PAINTSTRUCT ps;
@@ -782,6 +788,12 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (lp && !lstrcmpW((const WCHAR *)lp, L"ImmersiveColorSet")) {
             DWORD a = reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFC03070);
             g_accent = g_glyph_color = g_col_link = a & 0xFFFFFF;
+            g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
+            /* the app mode: the palette, the title bar, the page */
+            if (sg_apps_dark() != g_dark) {
+                pal_apply(hwnd);
+                g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
+            }
             InvalidateRect(hwnd, NULL, TRUE);
             RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
@@ -866,7 +878,7 @@ int settings_main(int argc, WCHAR **argv, int show)
     a = reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFC03070);
     g_accent = g_glyph_color = a & 0xFFFFFF;
     g_col_link = g_accent;
-    g_col_link_hot = RGB(0x33, 0x33, 0x33);
+    g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
 
     register_page_classes();
     pers_register_classes();
@@ -893,6 +905,7 @@ int settings_main(int argc, WCHAR **argv, int show)
                                  CW_USEDEFAULT, CW_USEDEFAULT, w, h, NULL, NULL, g_inst, NULL);
     }
     if (!g_main) return 1;
+    sg_mode_title(g_main, g_dark);
     g_nav = CreateWindowExW(WS_EX_CONTROLPARENT, L"SgSetNav", L"Navigation", WS_CHILD | WS_TABSTOP | WS_CLIPCHILDREN,
                             0, 0, 0, 0, g_main, (HMENU)ID_NAV, g_inst, NULL);
     g_nav_search = make_search(g_nav, 0, 0, 0, ID_NAVSEARCH);

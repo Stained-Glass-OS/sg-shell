@@ -337,7 +337,8 @@ BOOL set_cmd_themes(int id, int code, HWND ctl)
 }
 
 /* ---- Start ------------------------------------------------------------------------------------ */
-enum { CMD_RECENT = CMD_PAGE_FIRST + 1, CMD_APPLIST, CMD_MORETILES, CMD_FULLSCREEN };
+enum { CMD_RECENT = CMD_PAGE_FIRST + 1, CMD_APPLIST, CMD_MORETILES, CMD_FULLSCREEN, CMD_MOSTUSED, CMD_SUGGEST };
+#define CDM L"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager"
 
 void set_build_start(void)
 {
@@ -345,6 +346,9 @@ void set_build_start(void)
     st_toggle(&y, L"Show more tiles on Start", reg_dword(HKEY_CURRENT_USER, SG_START, L"MoreTiles", 0) != 0, CMD_MORETILES);
     st_toggle(&y, L"Show app list in Start menu", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowAppList", 1) != 0, CMD_APPLIST);
     st_toggle(&y, L"Show recently added apps", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowRecentlyAdded", 1) != 0, CMD_RECENT);
+    st_toggle(&y, L"Show most used apps", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"Start_TrackProgs", 1) != 0, CMD_MOSTUSED);
+    st_toggle(&y, L"Show suggestions occasionally in Start",
+              reg_dword(HKEY_CURRENT_USER, CDM, L"SubscribedContent-338388Enabled", 1) != 0, CMD_SUGGEST);
     st_toggle(&y, L"Use Start full screen", reg_dword(HKEY_CURRENT_USER, SG_START, L"FullScreen", 0) != 0, CMD_FULLSCREEN);
 }
 
@@ -353,44 +357,82 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
     const WCHAR *v = id == CMD_RECENT ? L"ShowRecentlyAdded" : id == CMD_APPLIST ? L"ShowAppList" :
                      id == CMD_MORETILES ? L"MoreTiles" : id == CMD_FULLSCREEN ? L"FullScreen" : NULL;
     (void)code;
+    /* Windows keeps these two where Windows programs look for them */
+    if (id == CMD_MOSTUSED) { reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"Start_TrackProgs", st_checked(ctl)); return TRUE; }
+    if (id == CMD_SUGGEST) { reg_set_dword(HKEY_CURRENT_USER, CDM, L"SubscribedContent-338388Enabled", st_checked(ctl)); return TRUE; }
     if (!v) return FALSE;
     reg_set_dword(HKEY_CURRENT_USER, SG_START, v, st_checked(ctl));
     return TRUE;
 }
 
 /* ---- Taskbar ----------------------------------------------------------------------------------- */
-enum { CMD_LOCKBAR = CMD_PAGE_FIRST + 1, CMD_AUTOHIDE, CMD_SMALL, CMD_ALIGN, CMD_PEEK, CMD_BADGES };
+/* Where Windows keeps them (Explorer\Advanced, Search), the position and
+ * auto-hide in our own key; every change is announced with WM_SETTINGCHANGE
+ * "TraySettings", which the taskbar (wine-sg 0164) reads them again on. */
+enum { CMD_LOCKBAR = CMD_PAGE_FIRST + 1, CMD_AUTOHIDE, CMD_SMALL, CMD_ALIGN, CMD_PEEK, CMD_BADGES,
+       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH };
+#define SG_TASKBAR L"Software\\Stained Glass\\Taskbar"
+#define SEARCH_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Search"
 
 void set_build_taskbar(void)
 {
     static const WCHAR *const align[] = { L"Left", L"Center" };
+    /* in Windows' order; the values are the ABE_ edges */
+    static const WCHAR *const where[] = { L"Left", L"Top", L"Right", L"Bottom" };
+    static const WCHAR *const combine[] = { L"Always, hide labels", L"When taskbar is full", L"Never" };
+    static const WCHAR *const search[] = { L"Hidden", L"Show search icon", L"Show search box" };
+    DWORD pos = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", 3), glom = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", 2);
+    DWORD box = reg_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", 0);
     int y = st_title(L"Taskbar");
     st_toggle(&y, L"Lock the taskbar", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSizeMove", 0) == 0, CMD_LOCKBAR);
     st_toggle(&y, L"Automatically hide the taskbar in desktop mode",
-              reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Taskbar", L"AutoHide", 0) != 0, CMD_AUTOHIDE);
+              reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"AutoHide", 0) != 0, CMD_AUTOHIDE);
     st_toggle(&y, L"Use small taskbar buttons", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSmallIcons", 0) != 0, CMD_SMALL);
     st_toggle(&y, L"Show badges on taskbar buttons", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarBadges", 1) != 0, CMD_BADGES);
     st_toggle(&y, L"Use Peek to preview the desktop when you move your mouse to the Show desktop button",
               reg_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", 1) == 0, CMD_PEEK);
+    st_toggle(&y, L"Show Task View button", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", 1) != 0, CMD_TASKVIEW);
+    st_combo(&y, L"Taskbar location on screen", where, 4, pos <= 3 ? (int)pos : 3, CMD_POSITION);
+    st_combo(&y, L"Combine taskbar buttons", combine, 3, glom <= 2 ? (int)glom : 2, CMD_COMBINE);
+    st_combo(&y, L"Search", search, 3, box <= 2 ? (int)box : 0, CMD_SEARCH);
     st_combo(&y, L"Taskbar alignment", align, 2, reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1 ? 1 : 0, CMD_ALIGN);
-    y = st_para(y, L"Some taskbar changes take effect the next time you sign in.");
+}
+
+static void tray_settings_changed(void)
+{
+    DWORD_PTR r;
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, &r);
 }
 
 BOOL set_cmd_taskbar(int id, int code, HWND ctl)
 {
+    int sel = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
     switch (id) {
-    case CMD_LOCKBAR: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSizeMove", !st_checked(ctl)); return TRUE;
-    case CMD_AUTOHIDE: reg_set_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Taskbar", L"AutoHide", st_checked(ctl)); return TRUE;
-    case CMD_SMALL: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSmallIcons", st_checked(ctl)); return TRUE;
-    case CMD_BADGES: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarBadges", st_checked(ctl)); return TRUE;
-    case CMD_PEEK: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", !st_checked(ctl)); return TRUE;
+    case CMD_LOCKBAR: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSizeMove", !st_checked(ctl)); break;
+    case CMD_AUTOHIDE: reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"AutoHide", st_checked(ctl)); break;
+    case CMD_SMALL: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarSmallIcons", st_checked(ctl)); break;
+    case CMD_BADGES: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarBadges", st_checked(ctl)); break;
+    case CMD_PEEK: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", !st_checked(ctl)); break;
+    case CMD_TASKVIEW: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", st_checked(ctl)); break;
     case CMD_ALIGN:
-        if (code == CBN_SELCHANGE) {
-            DWORD_PTR r;
-            reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 1);
-            SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, &r);
-        }
-        return TRUE;
+        if (code != CBN_SELCHANGE) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", sel == 1);
+        break;
+    case CMD_POSITION:
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", sel);
+        break;
+    case CMD_COMBINE:
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", sel);
+        break;
+    case CMD_SEARCH:
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", sel);
+        break;
+    default:
+        return FALSE;
     }
-    return FALSE;
+    tray_settings_changed();
+    return TRUE;
 }

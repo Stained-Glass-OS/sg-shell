@@ -51,7 +51,7 @@ void set_build_apps(void)
         const struct program *p = prog_get(g_order[i]);
         size[0] = 0;
         if (p->size_kb) format_size((ULONGLONG)p->size_kb * 1024, size, ARRAYSIZE(size));
-        if (g_sel == g_order[i]) pg_fill(st_x(), y - S(4), st_w(), S(96), RGB(0xF2, 0xF2, 0xF2));
+        if (g_sel == g_order[i]) pg_fill(st_x(), y - S(4), st_w(), S(96), g_dark ? RGB(0x2D, 0x2D, 0x2D) : RGB(0xF2, 0xF2, 0xF2));
         pg_icon(st_x() + S(8), y + S(2), S(32), IC_G_APPS);
         pg_link(st_x() + S(52), y, p->name, CMD_SELECT + g_order[i], 0);
         pg_text(st_x() + st_w() - S(120), y, S(112), S(20), g_font_body, COL_TEXT, size, DT_SINGLELINE | DT_RIGHT);

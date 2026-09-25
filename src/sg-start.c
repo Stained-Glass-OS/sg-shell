@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wctype.h>
+#include "sg-mode.h"
 
 #define SG_START_TOGGLE (WM_USER + 10)
 
@@ -53,19 +54,39 @@
 #define SEARCH_H    32
 #define TASKBAR_H   40
 
-#define COL_PANEL    RGB(0x1F, 0x1F, 0x1F)
-#define COL_RAIL     RGB(0x17, 0x17, 0x17)
-#define COL_RAIL_OPEN RGB(0x26, 0x26, 0x26)
-#define COL_HOVER    RGB(0x33, 0x33, 0x33)
-#define COL_PRESS    RGB(0x44, 0x44, 0x44)
-#define COL_TEXT     RGB(0xFF, 0xFF, 0xFF)
-#define COL_SUBTLE   RGB(0xA8, 0xA8, 0xA8)
+/* Start follows the Windows mode (SystemUsesLightTheme, sg-mode.h), as
+ * Windows 10's does: dark unless the shell is set to light */
+struct start_palette {
+    COLORREF panel, rail, rail_open, hover, press, text, subtle, field, dim, scroll;
+    COLORREF menu, menu_sel, line, edge, best;
+};
+static const struct start_palette dark_palette = {
+    RGB(0x1F, 0x1F, 0x1F), RGB(0x17, 0x17, 0x17), RGB(0x26, 0x26, 0x26), RGB(0x33, 0x33, 0x33),
+    RGB(0x44, 0x44, 0x44), RGB(0xFF, 0xFF, 0xFF), RGB(0xA8, 0xA8, 0xA8), RGB(0x2B, 0x2B, 0x2B),
+    RGB(0x55, 0x55, 0x55), RGB(0x5A, 0x5A, 0x5A),
+    RGB(0x2B, 0x2B, 0x2B), RGB(0x41, 0x41, 0x41), RGB(0x55, 0x55, 0x55), RGB(0x3A, 0x3A, 0x3A), RGB(0x29, 0x29, 0x29),
+};
+static const struct start_palette light_palette = {
+    RGB(0xF2, 0xF2, 0xF2), RGB(0xE6, 0xE6, 0xE6), RGB(0xEC, 0xEC, 0xEC), RGB(0xDA, 0xDA, 0xDA),
+    RGB(0xC8, 0xC8, 0xC8), RGB(0x00, 0x00, 0x00), RGB(0x5A, 0x5A, 0x5A), RGB(0xFF, 0xFF, 0xFF),
+    RGB(0xB0, 0xB0, 0xB0), RGB(0xA0, 0xA0, 0xA0),
+    RGB(0xF9, 0xF9, 0xF9), RGB(0xE0, 0xE0, 0xE0), RGB(0xCC, 0xCC, 0xCC), RGB(0xCC, 0xCC, 0xCC), RGB(0xE4, 0xE4, 0xE4),
+};
+static const struct start_palette *g_pal = &dark_palette;
+#define COL_PANEL    (g_pal->panel)
+#define COL_RAIL     (g_pal->rail)
+#define COL_RAIL_OPEN (g_pal->rail_open)
+#define COL_HOVER    (g_pal->hover)
+#define COL_PRESS    (g_pal->press)
+#define COL_TEXT     (g_pal->text)
+#define COL_SUBTLE   (g_pal->subtle)
 #define COL_ACCENT   RGB(0x7B, 0x2F, 0xBE)
 #define COL_ACCENT_HI RGB(0x8A, 0x3F, 0xCE)
 #define COL_ACCENT_BR RGB(0x8A, 0x2B, 0xE2)
-#define COL_FIELD    RGB(0x2B, 0x2B, 0x2B)
-#define COL_DIM      RGB(0x55, 0x55, 0x55)
-#define COL_SCROLL   RGB(0x5A, 0x5A, 0x5A)
+#define COL_ON_ACCENT RGB(0xFF, 0xFF, 0xFF)   /* text and glyphs on the accent, either mode */
+#define COL_FIELD    (g_pal->field)
+#define COL_DIM      (g_pal->dim)
+#define COL_SCROLL   (g_pal->scroll)
 
 static const WCHAR LISTENER_CLASS[] = L"SgStartPanel";
 static const WCHAR PANEL_CLASS[]    = L"SgStartWindow";
@@ -73,6 +94,21 @@ static const WCHAR START_KEY[]      = L"Software\\Stained Glass\\Start";
 
 static int g_dpi = 96;
 static int S(int v) { return MulDiv(v, g_dpi, 96); }
+
+/* Settings > Personalization > Start, read at every opening */
+static const WCHAR ADVANCED_KEY[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+static const WCHAR CDM_KEY[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager";
+static BOOL g_app_list = TRUE;      /* "Show app list in Start menu" */
+static BOOL g_show_list = TRUE;     /* the list column is shown now (the app list, or search, or All apps) */
+static BOOL g_fullscreen;           /* "Use Start full screen" */
+static int g_tile_cols = 3;         /* "Show more tiles on Start": 4 */
+
+static DWORD reg_value(const WCHAR *key, const WCHAR *name, DWORD def)
+{
+    DWORD v = def, size = sizeof(v);
+    if (RegGetValueW(HKEY_CURRENT_USER, key, name, RRF_RT_REG_DWORD, NULL, &v, &size)) v = def;
+    return v;
+}
 
 /* ---- what the menu offers ---------------------------------------------- */
 
@@ -297,6 +333,49 @@ static ULONGLONG first_run(void)
 }
 
 static int recents[3], g_nrecent;
+
+/* "Show most used apps": what this user starts from Start, counted as
+ * Windows counts it only while Start_TrackProgs is on */
+static const WCHAR USAGE_KEY[] = L"Software\\Stained Glass\\Start\\Usage";
+static BOOL track_progs(void) { return reg_value(ADVANCED_KEY, L"Start_TrackProgs", 1) != 0; }
+
+/* the counts, read in one pass per opening (a registry read per app was
+ * most of the time Start took to open) */
+struct usage { WCHAR name[128]; DWORD count; };
+static struct usage g_usage[64];
+static int g_nusage;
+
+static void usage_load(void)
+{
+    HKEY key;
+    DWORD i, len, type, count, size;
+    g_nusage = 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, USAGE_KEY, 0, KEY_READ, &key)) return;
+    for (i = 0; g_nusage < (int)ARRAYSIZE(g_usage); i++)
+    {
+        len = ARRAYSIZE(g_usage[0].name); size = sizeof(count);
+        if (RegEnumValueW(key, i, g_usage[g_nusage].name, &len, NULL, &type, (BYTE *)&count, &size)) break;
+        if (type != REG_DWORD || !count) continue;
+        g_usage[g_nusage++].count = count;
+    }
+    RegCloseKey(key);
+}
+
+static DWORD usage_of(const WCHAR *name)
+{
+    int i;
+    for (i = 0; i < g_nusage; i++) if (!lstrcmpiW(g_usage[i].name, name)) return g_usage[i].count;
+    return 0;
+}
+
+static void count_launch(const WCHAR *name)
+{
+    DWORD n = reg_value(USAGE_KEY, name, 0) + 1;
+    HKEY key;
+    if (!track_progs() || RegCreateKeyExW(HKEY_CURRENT_USER, USAGE_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &key, NULL)) return;
+    RegSetValueExW(key, name, 0, REG_DWORD, (BYTE *)&n, sizeof(n));
+    RegCloseKey(key);
+}
 
 static BOOL reg_show_recent(void)
 {
@@ -524,11 +603,48 @@ static void build_rows(void)
         return;
     }
 
-    /* Settings > Personalization > Start: "Show recently added apps" */
+    /* Settings > Personalization > Start: "Show most used apps" -- the five
+     * this user starts most, from Start */
+    usage_load();
+    if (track_progs() && g_nusage)
+    {
+        int most[5], counts[5], n = 0, j;
+        for (i = 0; i < g_napps; i++)
+        {
+            DWORD c = usage_of(g_apps[i].name);
+            if (!c) continue;
+            for (j = n; j > 0 && counts[j - 1] < (int)c; j--)
+                if (j < 5) { most[j] = most[j - 1]; counts[j] = counts[j - 1]; }
+            if (j < 5) { most[j] = i; counts[j] = c; if (n < 5) n++; }
+        }
+        if (n) add_row(R_HEADER, -1, L"Most used");
+        for (j = 0; j < n; j++) add_row(R_ITEM, most[j], NULL);
+    }
+    /* "Show recently added apps" */
     if (g_nrecent && reg_show_recent())
     {
         add_row(R_HEADER, -1, L"Recently added");
         for (i = 0; i < g_nrecent; i++) add_row(R_ITEM, recents[i], NULL);
+    }
+    /* "Show suggestions occasionally in Start": one of the apps that came
+     * with the system and this user has never started -- another each day.
+     * Nothing from outside the machine. */
+    if (reg_value(CDM_KEY, L"SubscribedContent-338388Enabled", 1))
+    {
+        static const WCHAR *const offer[] = { L"Calculator", L"Photos", L"Paint", L"Sticky Notes", L"Media Player",
+                                              L"Snipping Tool", L"Alarms & Clock", L"Terminal", L"Character Map" };
+        SYSTEMTIME st;
+        int k, n = ARRAYSIZE(offer), start;
+        GetLocalTime(&st);
+        start = (st.wYear * 372 + st.wMonth * 31 + st.wDay) % n;
+        for (k = 0; k < n; k++)
+        {
+            int a = find_app(offer[(start + k) % n]);
+            if (a < 0 || usage_of(g_apps[a].name) || g_apps[a].recent) continue;
+            add_row(R_HEADER, -1, L"Suggested");
+            add_row(R_ITEM, a, NULL);
+            break;
+        }
     }
     {
         WCHAR last = 0;
@@ -569,7 +685,8 @@ static const WCHAR *const rail_labels[RAIL_COUNT] = { L"Start", L"", L"Documents
 static int list_left(void) { return S(RAIL_W); }
 static int list_top(void) { return 0; }
 static int list_bottom(void) { return g_panel_h; }
-static int tiles_left(void) { return S(RAIL_W + LIST_W + GAP); }
+static int list_w(void) { return g_show_list ? S(LIST_W) : 0; }
+static int tiles_left(void) { return S(RAIL_W) + list_w() + S(GAP); }
 static int tiles_top(void) { return S(TOP_PAD) + S(32); }
 
 static RECT rail_rect(int i)
@@ -588,7 +705,7 @@ static RECT rail_rect(int i)
 static RECT tile_rect(int i)
 {
     RECT r;
-    int c = i % TILE_COLS, rw = i / TILE_COLS;
+    int c = i % g_tile_cols, rw = i / g_tile_cols;
     SetRect(&r, tiles_left() + c * S(TILE + TILE_GAP), tiles_top() + rw * S(TILE + TILE_GAP),
             tiles_left() + c * S(TILE + TILE_GAP) + S(TILE), tiles_top() + rw * S(TILE + TILE_GAP) + S(TILE));
     return r;
@@ -625,6 +742,8 @@ static void dump(void)
         dprint(f, L"visible=%d\n", IsWindowVisible(g_panel));
         dprint(f, L"rect=%ld,%ld,%ld,%ld\n", wr.left, wr.top, wr.right, wr.bottom);
     }
+    dprint(f, L"mode=%ls\n", g_pal == &dark_palette ? L"dark" : L"light");
+    dprint(f, L"list=%d tile_cols=%d fullscreen=%d\n", g_show_list, g_tile_cols, g_fullscreen);
     dprint(f, L"search=%ls\n", g_search);
     dprint(f, L"rail_open=%d\n", g_rail_open);
     dprint(f, L"open_ms=%d\n", (int)g_open_ms);
@@ -649,11 +768,14 @@ static void dump(void)
 /* ---- actions ------------------------------------------------------------------- */
 
 static void show_panel(BOOL show);
+static void show_list(BOOL on);
+static void query_taskbar(void);
 
 static void run_entry(const struct entry *e, const WCHAR *verb)
 {
     if (!e) return;
     _snwprintf(g_launched, ARRAYSIZE(g_launched), L"%ls%ls", verb ? L"runas " : L"", e->name);
+    if (e->kind == K_APP) count_launch(e->name);
     show_panel(FALSE);
     ShellExecuteW(NULL, verb, e->path, e->args[0] ? e->args : NULL, NULL, SW_SHOWNORMAL);
 }
@@ -763,15 +885,16 @@ static void go_to_sleep(BOOL hibernate)
 #define MENU_MAX 12
 static const WCHAR *g_mlabels[MENU_MAX];
 static int g_nmlabels;
-#define COL_MENU     RGB(0x2B, 0x2B, 0x2B)
-#define COL_MENU_SEL RGB(0x41, 0x41, 0x41)
+#define COL_MENU     (g_pal->menu)
+#define COL_MENU_SEL (g_pal->menu_sel)
 
 static HMENU menu_new(void)
 {
     MENUINFO mi = { sizeof(mi), MIM_BACKGROUND };
     HMENU m = CreatePopupMenu();
     static HBRUSH bg;
-    if (!bg) bg = CreateSolidBrush(COL_MENU);
+    static COLORREF made = CLR_INVALID;
+    if (made != COL_MENU) { if (bg) DeleteObject(bg); bg = CreateSolidBrush(made = COL_MENU); }
     mi.hbrBack = bg;
     SetMenuInfo(m, &mi);
     g_nmlabels = 0;
@@ -810,7 +933,7 @@ static void menu_draw(DRAWITEMSTRUCT *dis)
     {
         RECT line = { r.left + S(10), (r.top + r.bottom) / 2, r.right - S(10), (r.top + r.bottom) / 2 + 1 };
         b = CreateSolidBrush(COL_MENU); FillRect(dis->hDC, &r, b); DeleteObject(b);
-        b = CreateSolidBrush(RGB(0x55, 0x55, 0x55)); FillRect(dis->hDC, &line, b); DeleteObject(b);
+        b = CreateSolidBrush(g_pal->line); FillRect(dis->hDC, &line, b); DeleteObject(b);
         return;
     }
     b = CreateSolidBrush((dis->itemState & ODS_SELECTED) ? COL_MENU_SEL : COL_MENU);
@@ -936,7 +1059,10 @@ static void rail_action(int i, POINT screen)
 {
     switch (i)
     {
-    case RAIL_MENU:     g_rail_open = !g_rail_open; InvalidateRect(g_panel, NULL, FALSE); break;
+    case RAIL_MENU:
+        /* the app list is off: the menu button is "All apps" */
+        if (!g_app_list && !g_search[0]) { show_list(!g_show_list); InvalidateRect(g_panel, NULL, FALSE); break; }
+        g_rail_open = !g_rail_open; InvalidateRect(g_panel, NULL, FALSE); break;
     case RAIL_USER:     show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", L"userpasswords", NULL, SW_SHOWNORMAL); break;
     case RAIL_DOCS:     open_folder(CSIDL_PERSONAL); break;
     case RAIL_PICS:     open_folder(CSIDL_MYPICTURES); break;
@@ -1040,7 +1166,7 @@ static void draw_badge(HDC dc, int x, int cy, int size)
 {
     RECT b = { x, cy - size / 2, x + size, cy + size / 2 };
     fill(dc, &b, COL_ACCENT);
-    draw_glyph(dc, RAIL_SETTINGS, x + size / 2, cy, COL_TEXT);
+    draw_glyph(dc, RAIL_SETTINGS, x + size / 2, cy, COL_ON_ACCENT);
 }
 
 static void draw_avatar(HDC dc, int cx, int cy)
@@ -1052,7 +1178,7 @@ static void draw_avatar(HDC dc, int cx, int cy)
     Ellipse(dc, r.left, r.top, r.right, r.bottom);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b); DeleteObject(p);
-    text(dc, initial, r, g_font_bold, COL_TEXT, DT_CENTER | DT_VCENTER);
+    text(dc, initial, r, g_font_bold, COL_ON_ACCENT, DT_CENTER | DT_VCENTER);
 }
 
 static void draw_rail(HDC dc)
@@ -1079,21 +1205,24 @@ static void draw_rail(HDC dc)
     {
         /* an edge between the open rail and the list beneath it */
         RECT edge = { rail.right, 0, rail.right + S(1), g_panel_h };
-        fill(dc, &edge, RGB(0x3A, 0x3A, 0x3A));
+        fill(dc, &edge, g_pal->edge);
     }
 }
 
 static void draw_list(HDC dc)
 {
-    RECT clip = { list_left(), list_top(), list_left() + S(LIST_W), list_bottom() };
-    HRGN rgn = CreateRectRgnIndirect(&clip);
+    RECT clip = { list_left(), list_top(), list_left() + list_w(), list_bottom() };
+    HRGN rgn;
     int i;
+
+    if (!g_show_list) return;   /* the app list is off */
+    rgn = CreateRectRgnIndirect(&clip);
 
     SelectClipRgn(dc, rgn);
     if (g_search[0])
     {
         /* the search field, where the typing goes */
-        RECT field = { list_left() + S(12), S(TOP_PAD), list_left() + S(LIST_W) - S(12), S(TOP_PAD) + S(SEARCH_H) }, t;
+        RECT field = { list_left() + S(12), S(TOP_PAD), list_left() + list_w() - S(12), S(TOP_PAD) + S(SEARCH_H) }, t;
         SIZE sz;
         fill(dc, &field, COL_FIELD);
         frame(dc, &field, COL_ACCENT_BR, S(1) + (g_dpi >= 144));
@@ -1108,7 +1237,7 @@ static void draw_list(HDC dc)
         const struct row *rw = &g_rows[i];
         const struct entry *e = entry_of(rw->id);
         int y = rw->y - g_scroll;
-        RECT r = { list_left() + S(4), y, list_left() + S(LIST_W) - S(8), y + rw->h }, t;
+        RECT r = { list_left() + S(4), y, list_left() + list_w() - S(8), y + rw->h }, t;
 
         if (r.bottom < 0 || r.top > g_panel_h) continue;
         if (g_search[0] && r.top < S(TOP_PAD) + S(SEARCH_H)) continue;
@@ -1121,7 +1250,7 @@ static void draw_list(HDC dc)
         }
         if (i == g_hot_row) fill(dc, &r, COL_HOVER);
         if (i == g_sel_row) frame(dc, &r, COL_SUBTLE, S(1) + (g_dpi >= 144));
-        if (rw->type == R_BEST && i != g_hot_row) fill(dc, &r, RGB(0x29, 0x29, 0x29));
+        if (rw->type == R_BEST && i != g_hot_row) fill(dc, &r, g_pal->best);
         if (e && (e->kind == K_SETTING || !e->icon || is_control_panel(e)))
             draw_badge(dc, r.left + S(10), (r.top + r.bottom) / 2, rw->type == R_BEST ? S(32) : S(24));
         else if (e && e->icon)
@@ -1147,7 +1276,7 @@ static void draw_list(HDC dc)
     {
         int track = g_panel_h - S(16), bar = max(S(24), track * g_panel_h / g_content_h);
         int top = S(8) + (track - bar) * g_scroll / max(1, g_content_h - g_panel_h);
-        RECT b = { list_left() + S(LIST_W) - S(5), top, list_left() + S(LIST_W) - S(2), top + bar };
+        RECT b = { list_left() + list_w() - S(5), top, list_left() + list_w() - S(2), top + bar };
         fill(dc, &b, COL_SCROLL);
     }
     SelectClipRgn(dc, NULL);
@@ -1171,7 +1300,7 @@ static void draw_tiles(HDC dc)
         if (is_control_panel(&g_apps[a]))
         {
             RECT gr = { (r.left + r.right) / 2 - S(16), r.top + S(22), (r.left + r.right) / 2 + S(16), r.top + S(54) };
-            draw_glyph_scaled(dc, RAIL_SETTINGS, (gr.left + gr.right) / 2, (gr.top + gr.bottom) / 2, COL_TEXT, 2);
+            draw_glyph_scaled(dc, RAIL_SETTINGS, (gr.left + gr.right) / 2, (gr.top + gr.bottom) / 2, COL_ON_ACCENT, 2);
         }
         else if (g_apps[a].icon)
             DrawIconEx(dc, (r.left + r.right) / 2 - S(16), r.top + S(22), g_apps[a].icon, S(32), S(32), 0, NULL, DI_NORMAL);
@@ -1187,7 +1316,7 @@ static void draw_tiles(HDC dc)
             calc.right = name.right - name.left; calc.bottom = 0;
             DrawTextW(dc, g_apps[a].name, -1, &calc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
             name.top = name.bottom - min(calc.bottom, 2 * line);
-            SetTextColor(dc, COL_TEXT);
+            SetTextColor(dc, COL_ON_ACCENT);
             DrawTextW(dc, g_apps[a].name, -1, &name, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS | DT_NOPREFIX | DT_EDITCONTROL);
         }
         n++;
@@ -1211,7 +1340,7 @@ static void on_paint(HWND hwnd)
     draw_list(mem);
     draw_tiles(mem);
     draw_rail(mem);   /* last: the open rail lies over the list */
-    frame(mem, &all, RGB(0x3A, 0x3A, 0x3A), S(1));
+    frame(mem, &all, g_pal->edge, S(1));
     BitBlt(dc, 0, 0, g_panel_w, g_panel_h, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldbmp);
     DeleteObject(bmp);
@@ -1245,7 +1374,7 @@ static int rail_at(POINT pt)
 static int row_at(POINT pt)
 {
     int i, y = pt.y + g_scroll;
-    if (pt.x < list_left() || pt.x >= list_left() + S(LIST_W)) return -1;
+    if (pt.x < list_left() || pt.x >= list_left() + list_w()) return -1;
     if (g_search[0] && pt.y < S(TOP_PAD) + S(SEARCH_H)) return -1;
     for (i = 0; i < g_nrows; i++)
         if (g_rows[i].type != R_HEADER && y >= g_rows[i].y && y < g_rows[i].y + g_rows[i].h) return i;
@@ -1290,6 +1419,7 @@ static int first_item(void) { return next_item(-1, 1); }
 
 static void search_changed(void)
 {
+    show_list(g_search[0] != 0);
     build_rows();
     g_scroll = 0;
     g_hot_row = -1;
@@ -1297,6 +1427,76 @@ static void search_changed(void)
     g_sel_row = g_search[0] ? first_item() : -1;
     if (g_sel_row >= 0 && g_rows[g_sel_row].type == R_HEADER) g_sel_row = -1;
     InvalidateRect(g_panel, NULL, FALSE);
+}
+
+static void load_start_settings(void)
+{
+    g_app_list = reg_value(START_KEY, L"ShowAppList", 1) != 0;
+    g_show_list = g_app_list;
+    g_fullscreen = reg_value(START_KEY, L"FullScreen", 0) != 0;
+    g_tile_cols = reg_value(START_KEY, L"MoreTiles", 0) ? 4 : 3;
+}
+
+/* Start's place: beside the Start button, on whichever edge the taskbar is
+ * (SHAppBarMessage says where, even while it hides itself), or all of the
+ * screen but the taskbar with "Use Start full screen" */
+/* where the taskbar is: asked once, and again when Settings changes it or
+ * the screen changes (a round trip to the shell at every opening made Start
+ * four times slower to open) */
+static APPBARDATA g_bar;
+static BOOL g_bar_known;
+
+static void query_taskbar(void)
+{
+    int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
+    memset(&g_bar, 0, sizeof(g_bar));
+    g_bar.cbSize = sizeof(g_bar);
+    g_bar.uEdge = ABE_BOTTOM;
+    if (!SHAppBarMessage(ABM_GETTASKBARPOS, &g_bar) || (g_bar.rc.bottom - g_bar.rc.top < 2 && g_bar.rc.right - g_bar.rc.left < 2))
+        SetRect(&g_bar.rc, 0, sh - S(TASKBAR_H), sw, sh);
+    if (g_bar.rc.bottom - g_bar.rc.top <= 1) g_bar.rc.top = sh - S(TASKBAR_H);   /* an older shell's 1 px answer */
+    g_bar_known = TRUE;
+}
+
+static void layout_panel(void)
+{
+    int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN), x, y;
+    APPBARDATA abd;
+    RECT work = { 0, 0, sw, sh };
+
+    if (!g_bar_known) query_taskbar();
+    abd = g_bar;
+    switch (abd.uEdge)
+    {
+    case ABE_TOP:   work.top = abd.rc.bottom; break;
+    case ABE_LEFT:  work.left = abd.rc.right; break;
+    case ABE_RIGHT: work.right = abd.rc.left; break;
+    default:        work.bottom = abd.rc.top; break;
+    }
+    if (g_fullscreen)
+    {
+        g_panel_w = work.right - work.left;
+        g_panel_h = work.bottom - work.top;
+        x = work.left; y = work.top;
+    }
+    else
+    {
+        g_panel_w = min(S(RAIL_W) + list_w() + S(GAP) + g_tile_cols * S(TILE) + (g_tile_cols - 1) * S(TILE_GAP) + S(GAP),
+                        work.right - work.left);
+        g_panel_h = min(S(PANEL_H), work.bottom - work.top);
+        x = abd.uEdge == ABE_RIGHT ? work.right - g_panel_w : work.left;
+        y = abd.uEdge == ABE_BOTTOM || abd.uEdge > ABE_BOTTOM ? work.bottom - g_panel_h : work.top;
+    }
+    SetWindowPos(g_panel, HWND_TOPMOST, x, y, g_panel_w, g_panel_h, SWP_NOACTIVATE);
+}
+
+/* with the app list turned off, the list column appears for a search and
+ * for "All apps" (the menu button), and goes again */
+static void show_list(BOOL on)
+{
+    if (g_app_list || g_show_list == on) return;
+    g_show_list = on;
+    layout_panel();
 }
 
 static void show_panel(BOOL show)
@@ -1307,6 +1507,7 @@ static void show_panel(BOOL show)
         RECT work;
         QueryPerformanceCounter(&g_open_start);
         g_open_ms = -1;
+        g_pal = sg_system_dark() ? &dark_palette : &light_palette;
         build_list();
         load_pins();
         g_search[0] = 0;
@@ -1315,11 +1516,9 @@ static void show_panel(BOOL show)
         g_scroll = 0;
         g_hot_row = g_hot_tile = g_hot_rail = g_sel_row = g_sel_tile = -1;
         g_launched[0] = 0;
-        if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0) || work.bottom <= 0) SetRect(&work, 0, 0, sw, sh - S(TASKBAR_H));
-        if (work.bottom >= sh) work.bottom = sh - S(TASKBAR_H);   /* the taskbar is always there */
-        g_panel_w = min(S(PANEL_W), sw);
-        g_panel_h = min(S(PANEL_H), work.bottom - work.top);
-        SetWindowPos(g_panel, HWND_TOPMOST, 0, work.bottom - g_panel_h, g_panel_w, g_panel_h, SWP_NOACTIVATE);
+        (void)work; (void)sh; (void)sw;
+        load_start_settings();
+        layout_panel();
         ShowWindow(g_panel, SW_SHOW);
         SetForegroundWindow(g_panel);
         SetFocus(g_panel);
@@ -1360,7 +1559,7 @@ static void key_down(WPARAM vk)
     case VK_DOWN: case VK_UP:
         if (g_sel_tile >= 0)
         {
-            int t = g_sel_tile + (vk == VK_DOWN ? TILE_COLS : -TILE_COLS);
+            int t = g_sel_tile + (vk == VK_DOWN ? g_tile_cols : -g_tile_cols);
             if (t >= 0 && t < tiles) g_sel_tile = t;
         }
         else
@@ -1453,6 +1652,13 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_KEYDOWN:
         key_down(wp);
         return 0;
+    case WM_SETTINGCHANGE:
+        /* the taskbar moved (Settings > Taskbar) */
+        if (lp && !lstrcmpW((const WCHAR *)lp, L"TraySettings")) g_bar_known = FALSE;
+        break;
+    case WM_DISPLAYCHANGE:
+        g_bar_known = FALSE;
+        break;
     case WM_MEASUREITEM:
         if (((MEASUREITEMSTRUCT *)lp)->CtlType == ODT_MENU) { menu_measure((MEASUREITEMSTRUCT *)lp); return TRUE; }
         break;
@@ -1483,7 +1689,9 @@ static LRESULT CALLBACK listener_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == SG_START_TOGGLE)
     {
-        show_panel(!IsWindowVisible(g_panel));
+        /* wparam 1: the taskbar's search -- open, ready for typing */
+        if (wp == 1) { if (!IsWindowVisible(g_panel)) show_panel(TRUE); }
+        else show_panel(!IsWindowVisible(g_panel));
         return 0;
     }
     if (msg == WM_DESTROY) { PostQuitMessage(0); return 0; }
@@ -1530,6 +1738,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     build_list();
     first_run();
     refresh_sleep_caps();
+    query_taskbar();
 
     while (GetMessageW(&msg, NULL, 0, 0))
     {

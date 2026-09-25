@@ -1,3 +1,18 @@
+sg-shell (0.1.0-42) unstable; urgency=medium
+
+  * Light and dark mode: sg-mode.h (AppsUseLightTheme / SystemUsesLightTheme);
+    Settings and the Control Panel follow the app mode live (palette, title
+    bar, pages); Start and the network flyout and its tray icon follow the
+    Windows mode.
+  * Settings > Personalization > Taskbar: location on screen, combine
+    buttons, Task View button, search; every change sends "TraySettings"
+    (wine-sg 0164 applies them). Start: show most used apps, suggestions.
+  * Start honours its settings: most used, suggested, app list off (All
+    apps), more tiles, full screen; opens beside the taskbar on any edge;
+    the taskbar's search opens it. Gates: start-check.sh, settings-check.sh.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Fri, 25 Sep 2026 14:10:00 -0700
+
 sg-shell (0.1.0-41) unstable; urgency=medium
 
   * Send to > Compressed (zipped) Folder: .ZFSendToTarget's sendto command

@@ -319,6 +319,23 @@ page_is Region "ms-settings:regionformatting"
 has ": English (United States)" && has ": United States" && pass "Region shows this user's format and country" \
     || fail "Region: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 
+# --- Taskbar: what the page shows and writes (the taskbar itself: wine-sg's test/taskbar-gate.sh) --
+wine reg add 'HKCU\Software\Stained Glass\Taskbar' /v Position /t REG_DWORD /d 1 /f >/dev/null 2>&1
+wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Search' /v SearchboxTaskbarMode /t REG_DWORD /d 2 /f >/dev/null 2>&1
+wine start ms-settings:taskbar >/dev/null 2>&1
+page_is Taskbar "ms-settings:taskbar (again)"
+sleep 0.5
+has ": Top" && has ": Show search box" && has ": Never" \
+    && pass "Taskbar shows the location, search and combining as stored" || fail "Taskbar page: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+# the sixth switch: "Show Task View button"
+set -- $(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | sed -n '6s/.* at=\([0-9]*\),\([0-9]*\).*/\1 \2/p')
+if [ $# -eq 2 ]; then
+    click_at "$1" "$2"
+    regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' ShowTaskViewButton | grep -q '0x0' \
+        && pass "the Task View switch writes Explorer\\Advanced ShowTaskViewButton" || fail "ShowTaskViewButton: $(regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' ShowTaskViewButton)"
+else fail "no Task View switch on the Taskbar page"; fi
+sleep 0.5; shot taskbar-settings
+
 if [ "${WINI:-0}" = 1 ]; then
     wine start ms-settings:about >/dev/null 2>&1; page_is About "(before Win+I)"
     xdotool key super+i; sleep 2

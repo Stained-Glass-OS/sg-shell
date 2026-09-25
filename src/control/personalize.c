@@ -276,7 +276,7 @@ static LRESULT CALLBACK tile_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         RECT r, in;
         HBRUSH b;
         GetClientRect(hwnd, &r);
-        b = CreateSolidBrush(t->sel ? COL_TEXT : t->hot ? RGB(0x99, 0x99, 0x99) : COL_BG);
+        b = CreateSolidBrush(t->sel ? COL_TEXT : t->hot ? (g_dark ? RGB(0x77, 0x77, 0x77) : RGB(0x99, 0x99, 0x99)) : COL_BG);
         FillRect(dc, &r, b); DeleteObject(b);
         in = r; InflateRect(&in, -S(2), -S(2));
         b = CreateSolidBrush(COL_BG); FillRect(dc, &in, b); DeleteObject(b);

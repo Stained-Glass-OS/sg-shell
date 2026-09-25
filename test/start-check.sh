@@ -11,7 +11,9 @@
 # and settings, Enter runs the best match, Escape clears then closes), the
 # context menu pinning and unpinning, the power menu and machine policy,
 # the expanding rail, keyboard selection, click-away, and how fast it opens.
-# Screenshots: build/start-{open,search,context,power,rail}.png.
+# Start follows the Windows mode (SystemUsesLightTheme) and Settings >
+# Personalization > Start.
+# Screenshots: build/start-{open,light,search,context,power,rail,nolist,fullscreen}.png.
 #
 #   make test, or: sh test/start-check.sh
 #   SG_WINE=<wine> SG_WINESERVER=<wineserver> to use another Wine build.
@@ -102,6 +104,16 @@ shot open
 colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
 [ "${colors:-1}" -ge 8 ] && pass "it paints icons, tiles and text ($colors colours)" || fail "flat panel ($colors colours)"
 
+# --- the Windows mode (SystemUsesLightTheme) --------------------------------------------
+px() { convert "$HERE/build/start-$1.png" -format "%[fx:int(255*p{$2,$3}.r)],%[fx:int(255*p{$2,$3}.g)],%[fx:int(255*p{$2,$3}.b)]" info: 2>/dev/null; }
+[ "$(val mode)" = dark ] && [ "$(px open 700 $((H - BAR - 12)))" = "31,31,31" ] && pass "Start is dark in the default (dark) Windows mode" || fail "dark mode: $(val mode) $(px open 700 $((H - BAR - 12)))"
+"$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v SystemUsesLightTheme /t REG_DWORD /d 1 /f >/dev/null 2>&1
+poke; poke
+shot light
+[ "$(val mode)" = light ] && [ "$(px light 700 $((H - BAR - 12)))" = "242,242,242" ] && pass "and light when the Windows mode is light" || fail "light mode: $(val mode) $(px light 700 $((H - BAR - 12)))"
+"$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v SystemUsesLightTheme /t REG_DWORD /d 0 /f >/dev/null 2>&1
+poke; poke
+
 # --- keyboard -------------------------------------------------------------------
 xdotool key Down; sleep 0.8
 d | grep -q '^selected ' && pass "arrow keys select in the list: $(d | sed -n 's/^selected //p')" || fail "no selection on Down"
@@ -170,6 +182,58 @@ xdotool key Escape; sleep 2
 click 24 $((panel_y + 640 - 28))
 case "$(val menu_items)" in "Lock,Sign out") pass "machine policy NoClose takes Restart and Shut down away" ;; *) fail "with NoClose: $(val menu_items)" ;; esac
 xdotool key Escape; sleep 0.8
+
+# --- Settings > Personalization > Start ------------------------------------------------------
+xdotool key Escape; sleep 0.5
+[ "$(val visible)" = 1 ] && { poke; }
+START_REG='HKCU\Software\Stained Glass\Start'
+setreg() { "$WINE" reg add "$1" /v "$2" /t REG_DWORD /d "$3" /f >/dev/null 2>&1; }
+poke
+d | sed -n '/^header Most used$/{n;p;}' | grep -qxF "item Notepad" && pass "Most used: Notepad, started from Start earlier" || fail "Most used: $(d | grep -A1 '^header Most used' | tr '\n' '|')"
+has "header Suggested" && pass "a suggestion: an app that came with the system, never started" || fail "no Suggested group"
+poke
+setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' SubscribedContent-338388Enabled 0
+setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' Start_TrackProgs 0
+poke
+has "header Suggested" && fail "suggestions still shown when turned off" || pass "suggestions off: none"
+has "header Most used" && fail "most used still shown when turned off" || pass "most used off: none"
+poke
+setreg "$START_REG" ShowAppList 0
+poke
+[ "$(val list | cut -d' ' -f1)" = 0 ] && [ "$(val rect)" = "0,$panel_y,388,$((H - BAR))" ] && pass "app list off: tiles only, narrower ($(val rect))" || fail "app list off: $(val list) $(val rect)"
+shot nolist
+xdotool type --delay 80 note; sleep 1.5
+[ "$(val list | cut -d' ' -f1)" = 1 ] && [ "$(d | sed -n 's/^best //p')" = Notepad ] && pass "and typing still searches, in a list that appears" || fail "search without the list: $(val list) $(d | grep '^best')"
+xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 0.8
+setreg "$START_REG" ShowAppList 1
+setreg "$START_REG" MoreTiles 1
+poke
+case "$(val list)" in *"tile_cols=4"*) [ "$(val rect)" = "0,$panel_y,812,$((H - BAR))" ] && pass "more tiles: four columns ($(val rect))" || fail "more tiles rect: $(val rect)" ;; *) fail "more tiles: $(val list)" ;; esac
+poke
+setreg "$START_REG" MoreTiles 0
+setreg "$START_REG" FullScreen 1
+poke
+[ "$(val rect)" = "0,0,$W,$((H - BAR))" ] && pass "full screen: all of the screen above the taskbar" || fail "full screen: $(val rect)"
+shot fullscreen
+poke
+setreg "$START_REG" FullScreen 0
+"$WINE" "$T/poke.exe" search >/dev/null 2>&1; sleep 2
+[ "$(val visible)" = 1 ] && pass "the taskbar's search opens Start" || fail "search did not open Start"
+"$WINE" "$T/poke.exe" search >/dev/null 2>&1; sleep 2
+[ "$(val visible)" = 1 ] && pass "and a second search keeps it open (it does not toggle)" || fail "search toggled Start closed"
+poke
+if [ -n "${SG_TASKBAR_POSITIONS:-}" ]; then
+    # a wine-sg whose taskbar moves (0164): Start stands beside it
+    setreg 'HKCU\Software\Stained Glass\Taskbar' Position 1; "$WINE" "$T/poke.exe" tray >/dev/null 2>&1; sleep 2
+    poke
+    [ "$(val rect)" = "0,$BAR,708,$((BAR + 640))" ] && pass "taskbar at the top: Start opens below it" || fail "top: $(val rect)"
+    poke
+    setreg 'HKCU\Software\Stained Glass\Taskbar' Position 2; "$WINE" "$T/poke.exe" tray >/dev/null 2>&1; sleep 2
+    poke
+    [ "$(val rect)" = "$((W - 62 - 708)),0,$((W - 62)),640" ] && pass "taskbar on the right: Start opens at the top right, beside it" || fail "right: $(val rect)"
+    poke
+    setreg 'HKCU\Software\Stained Glass\Taskbar' Position 3; "$WINE" "$T/poke.exe" tray >/dev/null 2>&1; sleep 2
+fi
 
 # --- click away --------------------------------------------------------------------------
 [ "$(val visible)" = 1 ] || poke
