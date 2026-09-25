@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Task Manager (sg-taskmgr), Windows 10's: taskmgr in the
+; Run box, ShellExecute and the Win+X menu open it. Wine's own taskmgr.exe in
+; system32 (what CreateProcess finds first) hands off to this App Paths entry
+; in wine-sg.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\taskmgr.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-taskmgr64.exe"

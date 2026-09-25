@@ -300,7 +300,7 @@ static void build_list(void)
     add_app(L"Notepad", L"notepad.exe", NULL);
     add_app(L"File Explorer", L"explorer.exe", NULL);
     add_app(L"Command Prompt", L"cmd.exe", NULL);
-    add_app(L"Task Manager", L"taskmgr.exe", NULL);
+    add_beside(L"Task Manager", L"sg-taskmgr64.exe");
     add_beside(L"Remote Desktop Connection", L"sg-mstsc64.exe");
     add_beside(L"Control Panel", L"sg-control64.exe");
     add_beside(L"Media Player", L"sg-media64.exe");

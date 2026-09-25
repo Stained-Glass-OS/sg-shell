@@ -12,7 +12,7 @@ Architecture: all
 Depends: ${misc:Depends}, wine-sg | wine, fonts-inter, fonts-liberation,
          fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code,
          python3, sg-session
-Description: Stained Glass OS shell panels (Start menu, Control Panel)
+Description: Stained Glass OS shell panels (Start menu, Control Panel, Task Manager)
  Windows 10-style panels for the surfaces Wine's explorer does not provide:
  the Start menu (sg-start), the Control Panel (sg-control), Remote Desktop
  Connection (sg-mstsc) and gpresult. The taskbar's appearance is handled in

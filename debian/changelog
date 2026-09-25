@@ -1,3 +1,17 @@
+sg-shell (0.1.0-14) unstable; urgency=medium
+
+  * sg-taskmgr: Task Manager, as Windows 10 has it -- Fewer details (the
+    running apps, End task) and More details: Processes (Apps, Background and
+    Windows processes; CPU, memory and disk shaded by load, totals in the
+    headers, sorting, End task, Open file location, Go to details),
+    Performance (CPU, memory and network graphs), Startup (Run keys and
+    Startup folders, Enable/Disable through StartupApproved), Users, Details
+    and Services (start, stop, restart); File > Run new task, with
+    administrative privileges; Always on top; Update speed. App Paths:
+    defaults/76-sg-taskmgr.reg; the Start menu lists it.
+  * Gate: test/taskmgr-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 01:53:06 -0700
 sg-shell (0.1.0-13) unstable; urgency=medium
 
   * sg-photos: Photos, the image viewer -- Windows 10 Photos' layout in the

@@ -31,6 +31,9 @@ MEDIA_LIBS = -lole32 -luuid -lstrmiids -lgdi32 -luser32 -lshell32 -lcomdlg32 -la
 CALC_LIBS = -lgdi32 -luser32 -ladvapi32 -lm
 # Photos (sg-photos): WIC, and its own icon drawn by src/sg-photos-icon.py at build time.
 PHOTOS_LIBS = -lwindowscodecs -lole32 -luuid -lshlwapi -lshell32 -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -lmsimg32
+# Task Manager (sg-taskmgr): several files, an icon generated at build time.
+TASKMGR_SRC  = $(wildcard src/taskmgr/*.c)
+TASKMGR_LIBS = -lntdll -lversion -liphlpapi -ladvapi32 -lcomdlg32 -lshell32 -lgdi32 -luser32 -lole32 -luuid
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -69,6 +72,10 @@ build:
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-photos.rc -O coff -o $(BUILD)/sg-photos-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-photos64.exe src/sg-photos.c $(BUILD)/sg-photos-res64.o $(PHOTOS_LIBS) \
 	    && echo "built sg-photos (64-bit)"
+	@python3 src/taskmgr/gen-icon.py $(BUILD)/sg-taskmgr.ico
+	@$(WINDRES64) -I src -I $(BUILD) src/taskmgr/taskmgr.rc -O coff -o $(BUILD)/sg-taskmgr-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-taskmgr64.exe $(TASKMGR_SRC) \
+	    $(BUILD)/sg-taskmgr-res64.o $(TASKMGR_LIBS) && echo "built sg-taskmgr (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -88,6 +95,7 @@ test: build
 	@sh test/media-check.sh
 	@sh test/calc-check.sh
 	@sh test/photos-check.sh
+	@sh test/taskmgr-check.sh
 
 clean:
 	rm -rf $(BUILD)

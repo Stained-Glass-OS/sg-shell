@@ -52,6 +52,7 @@ wine-sg or an X server.
 | `sg-media` | **Media Player** -- audio and video, Windows 11 Media Player's layout in the Stained Glass Light palette: an "Open file(s)" bar, the video pane (letterboxed; a drawn album tile for audio), and the transport bar -- seek bar with elapsed/total, now playing ("1 of 3"), Stop, Previous, Play/Pause, Next, mute and volume, full screen. Space/Ctrl+P, Ctrl+S, Ctrl+B/F, Left/Right (5 s, Ctrl 60 s), Up/Down, M/F7, F11/Alt+Enter/double-click, Escape, media keys, the wheel for volume, dropped files. One instance: a second launch hands its files over. DirectShow through winegstreamer. `wmplayer.exe` and 17 audio/video types via `defaults/74-sg-media.reg`. See "Media Player" below. |
 | `sg-calc` | **Calculator** (`calc.exe`). Windows 10's Calculator, our own drawing: Standard (immediate execution), Scientific (precedence, parentheses, trigonometry in DEG/RAD/GRAD, 2nd functions, F-E) and Programmer (HEX/DEC/OCT/BIN readouts, QWORD..BYTE, AND/OR/XOR/NOT, Lsh/Rsh, Mod); memory, History, keyboard, copy/paste. `calc.exe` and the `calculator:` URI resolve to it (`defaults/70-sg-calc.reg`); sg-start lists it. See "Calculator" below. |
 | `sg-photos` | **Photos** -- the image viewer, Windows 10 Photos' layout in the Stained Glass Light palette: a toolbar (the file's name and "2 of 5"; Open, Zoom in/out, Actual size/Fit, Rotate, Delete, Edit with Paint, Slideshow, File information, Full screen, See more), the picture fitted (never enlarged), arrows on it for the folder's other pictures in Explorer's name order. Reads whatever WIC decodes (animated GIFs animate, the largest icon size, JPEG EXIF orientation). Zoom (Ctrl+wheel at the pointer, +/-, Ctrl+0, Ctrl+1, double-click) and drag to pan; Left/Right/wheel/Home/End; Ctrl+R rotate, Ctrl+S save it rotated, Save a copy; Delete to the Recycle Bin; F5 slideshow, F11 full screen; Alt+Enter file information; Ctrl+C (picture and file); Ctrl+E Paint; Set as background. Images, `photos.exe` and `ms-photos:` via `defaults/73-sg-photos.reg`. See "Photos" below. |
+| `sg-taskmgr` | **Task Manager**, Windows 10's. Fewer details (the running apps, End task) and More details: Processes (Apps / Background / Windows processes, CPU, memory, disk shaded by load, totals in the headers, sort, End task, Open file location, Go to details), Performance (CPU, memory, network graphs and figures), Startup (Run keys and Startup folders, Enable/Disable through `StartupApproved`), Users, Details, Services (start/stop/restart). File > Run new task (with administrative privileges = `runas`), Always on top, Update speed. `taskmgr.exe` resolves via App Paths (`defaults/76-sg-taskmgr.reg`); sg-start lists it. See "Task Manager" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -288,6 +289,53 @@ outside HEX, MC/MR with nothing stored) and the dump come from one place.
   the = key's accent pixel. Screenshots `build/calc-*.png`. Mutants (+ computing
   -, a click pressing the neighbouring key, Standard with precedence) each
   turn it red.
+
+## Task Manager (sg-taskmgr)
+
+`src/taskmgr/`: `data.c` samples (once a second, View > Update speed),
+`grid.c` is the list every page shows (our own control: two-line headers with
+the total above the name, group rows, heat-shaded cells, the selection kept
+across refreshes by PID or name), `main.c` the window, pages, Performance
+graphs, Run new task and the dump. The icon is drawn by `gen-icon.py` at build
+time. One instance (`Local\StainedGlassTaskManager`); `/startup` opens the
+Startup tab; settings in `HKCU\Software\Stained Glass\TaskManager`.
+
+- **What Wine answers.** `NtQuerySystemInformation(SystemProcessInformation)`
+  lists every Windows process on the machine's wineserver with real CPU times,
+  thread and handle counts and working sets (`PrivatePageCount` and the private
+  working set are 0, so Memory is the working set). The Linux processes under
+  them are not listed -- they are not Windows processes. `GetSystemTimes` and
+  `GlobalMemoryStatusEx` come from `/proc`, so Performance is the whole
+  machine's. `GetPerformanceInfo` answers zeros: the counts are summed from the
+  process list. Per-process I/O counters are 0 (Disk shows 0.0 MB/s); there is
+  no per-process network, so there is no Network column.
+- **Names.** A process's name is its `FileDescription`; Wine's builtins carry
+  none, so apps go by their window's title and the shell's processes by a
+  table in `data.c`.
+- **Startup: disabling is recorded as Windows records it** -- a 12-byte
+  `StartupApproved\{Run,Run32,StartupFolder}` value, first byte 02 enabled,
+  03 disabled (HKCU for per-user entries, HKLM for machine ones) -- **but Wine's
+  wineboot runs the Run keys without reading it**, so a disabled entry still
+  starts until wine-sg honours `StartupApproved`.
+- **`taskmgr.exe` is Wine's own first**: CreateProcess and `start` find
+  `system32\taskmgr.exe` before App Paths. wine-sg 0121 (10.0-35) makes that
+  one hand off to App Paths (as 0072 does for control.exe), and 0123 binds
+  Ctrl+Shift+Esc in explorer to `taskmgr.exe`, as is the Win+X menu's Task
+  Manager. On a wine-sg without 0121 the gate notes it and starts ours directly.
+- **`SG_TASKMGR_DUMP=<file>`** writes, after every refresh, the mode and tab,
+  tab/link/button centres in screen coordinates, every process, the
+  performance figures, startup entries, users, services, the visible rows of
+  the current list with their centres, the selection and the last action.
+- **Gate: `test/taskmgr-check.sh`** (Xvfb, a shell desktop, X mouse and keys):
+  fewer details lists Clock and not a background process; a CPU-burning test
+  process (`test/sg-taskmgr-burn.c`) is listed busy under Background processes
+  and in Details (PID, user, x64), and End task (row click, then the button)
+  ends the process; Performance's memory total matches `/proc/meminfo` and its
+  process count the list; a planted Run entry is listed, Disable writes 03 to
+  `StartupApproved\Run` and Enable 02; Users; PlugPlay running in Services;
+  File > Run new task starts winemine. Screenshots `build/taskmgr-*.png`.
+  Mutants with CPU always 0, an End task that does not terminate, Disable
+  writing 02, and no Apps group each turn it red.
 
 ## Start bar alignment
 
