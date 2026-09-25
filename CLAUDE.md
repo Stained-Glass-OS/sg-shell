@@ -41,7 +41,7 @@ wine-sg or an X server.
 
 | Panel | State |
 |---|---|
-| `sg-start` | **The Start menu**, Windows 10-class, our own drawing: a rail (menu button that opens it with labels; the user with an initial avatar, Documents, Pictures, Settings, Power: Lock / Sign out / Restart / Shut down, NoClose and StartMenuLogoff honoured), every app from the user's and common Start Menu (recursive, `.lnk`/`.url`, own icons, letter headers, "Recently added"), pinned tiles (`HKCU\Software\Stained Glass\Start\Pinned`), type-to-search over apps and Control Panel settings, dark owner-drawn context menu (Pin/Unpin, Run as administrator = `runas`, Open file location, Uninstall), keyboard (arrows, Tab, Enter, Escape). Explorer's Start button and the Windows key toggle it (`SgStartPanel`, `WM_USER+10`); Wine's menu is the fallback. See "The Start menu" below. |
+| `sg-start` | **The Start menu**, Windows 10-class, our own drawing: a rail (menu button that opens it with labels; the user with an initial avatar, Documents, Pictures, Settings, Power: Lock / Sign out / Sleep and Hibernate (when logind allows) / Restart / Shut down, NoClose and StartMenuLogoff honoured), every app from the user's and common Start Menu (recursive, `.lnk`/`.url`, own icons, letter headers, "Recently added"), pinned tiles (`HKCU\Software\Stained Glass\Start\Pinned`), type-to-search over apps and Control Panel settings, dark owner-drawn context menu (Pin/Unpin, Run as administrator = `runas`, Open file location, Uninstall), keyboard (arrows, Tab, Enter, Escape). Explorer's Start button and the Windows key toggle it (`SgStartPanel`, `WM_USER+10`); Wine's menu is the fallback. See "The Start menu" below. |
 | `sg-mstsc` | **Remote Desktop Connection** -- the outbound half of RDP. A Windows dialog (and mstsc's command line: `.rdp` files, `/v:`, `/f`, `/w:`/`/h:`) that starts FreeRDP's native `sdl-freerdp3` through Wine's `\\?\unix\` path. `mstsc` resolves to it via App Paths (`defaults/60-sg-remote-desktop.reg`), and sg-start lists it. |
 | `sg-control` | **Control Panel** -- see "The Control Panel" below. `control.exe` resolves to it via App Paths (`defaults/61-sg-control-panel.reg`); sg-start lists it. |
 | `sg-settings` | **Settings** (Windows 10's, Win+I, `SystemSettings.exe`, every `ms-settings:` URI) -- the Control Panel's program in the Settings frame, sharing its pages' logic. System, Devices, Network & Internet, Personalization, Apps, Accounts, Time & Language, Ease of Access, Privacy, Update & Security. `defaults/65-sg-settings.reg`; sg-start lists it and its rail's Settings opens it. See "Settings" below. |
@@ -266,9 +266,8 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
 - **Not yet:** the taskbar does not read Taskbar's switches (alignment,
   small buttons, auto-hide) nor Start's "more tiles"/"full screen"; the lock
   screen does not show the chosen picture; night light, resolution and
-  Power & sleep need the Stained Glass compositor (wlopm needs
-  wlr-output-power-management, which sg-compositor lacks, so the screen is
-  never turned off); multiple displays are not arranged; no Windows Hello,
+  Power & sleep need the Stained Glass compositor (sg-compositor 0.2.0+sg5
+  has wlr-output-power-management for wlopm); multiple displays are not arranged; no Windows Hello,
   Family, Gaming, Phone or Search categories.
 
 ## Terminal (sg-terminal)
@@ -387,6 +386,16 @@ happens at start-up, so it opens in well under 200 ms with 200 apps.
   Windows folder (File Explorer -- Wine's explorer carries no icon) and of a
   `program.exe` by attributes. Settings and the Control Panel get a drawn
   gear on the accent colour. COM is initialised for `IShellLink`.
+- **Sleep and Hibernate** are in the power menu only when logind says this
+  session may (`sg-settingsctl sleep-caps`: `CanSuspend`/`CanHibernate`
+  "yes"; polkit's "challenge" is no -- no agent runs to ask, and a remote
+  or inactive session is refused), asked at start-up and again, on a
+  thread, after every power menu. Choosing one runs `sg-settingsctl sleep
+  suspend|hibernate`, which locks the session first (Windows asks for the
+  password on waking), then `systemctl suspend|hibernate`. `SG_SETTINGSCTL`
+  names a stand-in; the gate's answers yes, then no. NoClose takes them
+  away with Restart and Shut down. Mutants: Sleep always shown, Sleep
+  asking nothing -- both fail `start-check.sh`.
 - **"Recently added"** is what was created after this user's Start menu
   first ran (`FirstRun` in the Start key) and within a week -- otherwise a
   fresh profile would call everything recent.

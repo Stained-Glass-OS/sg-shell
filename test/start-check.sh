@@ -22,7 +22,7 @@ WINE="${SG_WINE:-$WINE_DIR/bin/wine}"
 export WINESERVER="${SG_WINESERVER:-$(dirname "$WINE")/wineserver}"
 [ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
 START="$HERE/build/sg-start64.exe"
-RC=0; DPY=87; T=$(mktemp -d); chmod 755 "$T"; XP=""
+RC=0; DPY=${SG_DISPLAY:-87}; T=$(mktemp -d); chmod 755 "$T"; XP=""
 W=1280; H=800; BAR=40
 export HOME="$T"
 # shellcheck disable=SC2317
@@ -58,6 +58,21 @@ export DISPLAY=":$DPY"
 "$WINE" explorer /desktop=shell,${W}x${H} > "$T/explorer.log" 2>&1 &
 i=0; while [ $i -lt 60 ] && ! xdotool search --name 'shell - Wine Desktop' >/dev/null 2>&1; do sleep 0.5; i=$((i+1)); done
 sleep 2
+# Sleep's native half (sg-session's sg-settingsctl), stood in for: it records
+# what it is asked, and says this session may suspend but not hibernate --
+# until the gate makes it say no.
+cat > "$T/settingsctl" <<EOS
+#!/bin/sh
+out=""; prev=""; for a; do [ "\$prev" = --out ] && out="\$a"; prev="\$a"; done
+echo "\$1 \$2" >> "$T/ctl.log"
+case "\$1" in
+  sleep-caps) if [ -f "$T/cannot-sleep" ]; then printf 'CAN suspend no\\nCAN hibernate na\\nOK\\n'
+              else printf 'CAN suspend yes\\nCAN hibernate no\\nOK\\n'; fi ;;
+  *) printf 'OK\\n' ;;
+esac > "\$out.part" && mv "\$out.part" "\$out"
+EOS
+chmod +x "$T/settingsctl"
+export SG_SETTINGSCTL="$T/settingsctl"
 "$WINE" "$START" >/dev/null 2>&1 &
 sleep 4
 # added after the menu first ran: "Recently added"
@@ -135,9 +150,22 @@ shot rail
 click 24 $((panel_y + 28))
 click 24 $((panel_y + 640 - 28))
 [ "$(val menu)" = power ] && pass "Power opens its menu: $(val menu_items)" || fail "no power menu"
-case "$(val menu_items)" in "Lock,Sign out,Restart,Shut down") pass "Lock, Sign out, Restart, Shut down" ;; *) fail "power items: $(val menu_items)" ;; esac
+case "$(val menu_items)" in "Lock,Sign out,Sleep,Restart,Shut down") pass "Lock, Sign out, Sleep (logind allows it; not Hibernate), Restart, Shut down" ;; *) fail "power items: $(val menu_items)" ;; esac
 shot power
+: > "$T/ctl.log"
+xdotool key s; sleep 2
+grep -qx 'sleep suspend' "$T/ctl.log" && pass "Sleep asks sg-settingsctl to lock and suspend" || fail "Sleep did not ask: $(cat "$T/ctl.log")"
+[ "$(val launched)" = Sleep ] && [ "$(val visible)" = 0 ] && pass "Sleep closes Start" || fail "after Sleep: launched '$(val launched)' visible $(val visible)"
+touch "$T/cannot-sleep"
+poke
+click 24 $((panel_y + 640 - 28))
+xdotool key Escape; sleep 2          # the menu closing asks logind again
+click 24 $((panel_y + 640 - 28))
+case "$(val menu_items)" in "Lock,Sign out,Restart,Shut down") pass "Sleep leaves the menu when logind says no (asked again after each menu)" ;; *) fail "with no suspend: $(val menu_items)" ;; esac
 xdotool key Escape; sleep 0.8
+rm -f "$T/cannot-sleep"
+click 24 $((panel_y + 640 - 28))
+xdotool key Escape; sleep 2
 "$WINE" reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer' /v NoClose /t REG_DWORD /d 1 /f >/dev/null 2>&1
 click 24 $((panel_y + 640 - 28))
 case "$(val menu_items)" in "Lock,Sign out") pass "machine policy NoClose takes Restart and Shut down away" ;; *) fail "with NoClose: $(val menu_items)" ;; esac

@@ -8,7 +8,8 @@
  * The panel, our own design in the project palette:
  *   - a rail down the left: the menu button (expands the rail with labels),
  *     and at the bottom the signed-in user, Documents, Pictures, Settings and
- *     Power (Lock, Sign out, Restart, Shut down, as policy allows);
+ *     Power (Lock, Sign out, Sleep and Hibernate when logind allows them,
+ *     Restart, Shut down, as policy allows);
  *   - every app, alphabetically with letter headers and a "Recently added"
  *     group, read from the user's and the common Start Menu folders
  *     (recursively, .lnk and .url), each with its own icon;
@@ -30,6 +31,7 @@
 #include <shellapi.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <wctype.h>
 
@@ -667,6 +669,90 @@ static void open_location(const struct entry *e)
 static BOOL may_shut_down(void) { return !SHRestricted(REST_NOCLOSE); }
 static BOOL may_sign_out(void) { return !SHRestricted(REST_STARTMENULOGOFF); }
 
+/* ---- Sleep and Hibernate --------------------------------------------------------
+ * logind decides, through sg-session's sg-settingsctl (SG_SETTINGSCTL names
+ * another, the gate's stand-in): `sleep-caps` says whether this session may
+ * suspend or hibernate (polkit's "challenge" counts as no: no agent runs to
+ * ask), and `sleep suspend|hibernate` locks the session, then asks logind. A
+ * Windows program gets no pipe to a native one, so the answer comes back in a
+ * file, as Settings' does. The capabilities are asked at start-up and again
+ * after every power menu, on a thread, so the menu never waits for them. */
+static volatile LONG g_can_suspend, g_can_hibernate, g_caps_busy;
+
+static char *power_ctl(const WCHAR *args, DWORD timeout_ms)
+{
+    static LONG seq;
+    char *(CDECL *to_unix)(const WCHAR *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+    WCHAR tool[MAX_PATH] = L"/usr/bin/sg-settingsctl", dir[MAX_PATH], dos[MAX_PATH], cmd[1024], *p;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    char *unix_out, *text = NULL;
+    DWORD waited = 0;
+    HANDLE h;
+    GetEnvironmentVariableW(L"SG_SETTINGSCTL", tool, MAX_PATH);
+    if (!to_unix || !GetTempPathW(MAX_PATH, dir)) return NULL;
+    _snwprintf(dos, MAX_PATH, L"%lssg-start-%lu-%ld.txt", dir, GetCurrentProcessId(), InterlockedIncrement(&seq));
+    dos[MAX_PATH - 1] = 0;
+    CloseHandle(CreateFileW(dos, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL));   /* so it has a Unix name */
+    unix_out = to_unix(dos);
+    DeleteFileW(dos);
+    if (!unix_out) return NULL;
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\\\\?\\unix%ls %ls --out %S", tool, args, unix_out);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    HeapFree(GetProcessHeap(), 0, unix_out);
+    for (p = cmd + 8; *p && *p != L' '; p++) if (*p == L'/') *p = L'\\';
+    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return NULL;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    while (GetFileAttributesW(dos) == INVALID_FILE_ATTRIBUTES && waited < timeout_ms) { Sleep(50); waited += 50; }
+    h = CreateFileW(dos, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE)
+    {
+        DWORD size = GetFileSize(h, NULL), got = 0;
+        if (size < 65536 && (text = malloc(size + 1))) { ReadFile(h, text, size, &got, NULL); text[got] = 0; }
+        CloseHandle(h);
+        DeleteFileW(dos);
+    }
+    return text;
+}
+
+static BOOL cap_yes(const char *text, const char *line)
+{
+    const char *p = text ? strstr(text, line) : NULL;
+    return p && (p[strlen(line)] == '\n' || p[strlen(line)] == '\r');
+}
+
+static DWORD WINAPI caps_thread(void *arg)
+{
+    char *text = power_ctl(L"sleep-caps", 20000);
+    (void)arg;
+    InterlockedExchange(&g_can_suspend, cap_yes(text, "CAN suspend yes"));
+    InterlockedExchange(&g_can_hibernate, cap_yes(text, "CAN hibernate yes"));
+    free(text);
+    InterlockedExchange(&g_caps_busy, 0);
+    return 0;
+}
+
+static void refresh_sleep_caps(void)
+{
+    HANDLE t;
+    if (InterlockedCompareExchange(&g_caps_busy, 1, 0)) return;
+    if ((t = CreateThread(NULL, 0, caps_thread, NULL, 0, NULL))) CloseHandle(t);
+    else InterlockedExchange(&g_caps_busy, 0);
+}
+
+static DWORD WINAPI sleep_thread(void *arg)
+{
+    free(power_ctl(arg, 60000));
+    return 0;
+}
+
+static void go_to_sleep(BOOL hibernate)
+{
+    HANDLE t = CreateThread(NULL, 0, sleep_thread, (void *)(hibernate ? L"sleep hibernate" : L"sleep suspend"), 0, NULL);
+    if (t) CloseHandle(t);
+}
+
 /* The menus are drawn dark, as the Start menu is: owner-drawn items whose
  * labels live here while the menu is up. */
 #define MENU_MAX 12
@@ -771,7 +857,7 @@ static int track(HMENU menu, POINT pt, const WCHAR *what)
 
 static void power_menu(POINT pt)
 {
-    enum { P_LOCK = 1, P_SIGNOUT, P_RESTART, P_SHUTDOWN };
+    enum { P_LOCK = 1, P_SIGNOUT, P_SLEEP, P_HIBERNATE, P_RESTART, P_SHUTDOWN };
     HMENU m = menu_new();
     int cmd;
     menu_add(m, P_LOCK, L"&Lock");
@@ -779,17 +865,22 @@ static void power_menu(POINT pt)
     if (may_shut_down())
     {
         menu_add(m, 0, NULL);
+        if (g_can_suspend) menu_add(m, P_SLEEP, L"&Sleep");
+        if (g_can_hibernate) menu_add(m, P_HIBERNATE, L"&Hibernate");
         menu_add(m, P_RESTART, L"&Restart");
         menu_add(m, P_SHUTDOWN, L"Sh&ut down");
     }
     cmd = track(m, pt, L"power");
     DestroyMenu(m);
+    refresh_sleep_caps();   /* for the next time: a lid, a dock, a policy may change them */
     if (!cmd) { dump(); return; }
     show_panel(FALSE);
     switch (cmd)
     {
     case P_LOCK:     LockWorkStation(); break;   /* wine-sg routes it to the compositor */
     case P_SIGNOUT:  if (may_sign_out()) ExitWindowsEx(EWX_LOGOFF, 0); break;
+    case P_SLEEP:    if (may_shut_down()) { lstrcpyW(g_launched, L"Sleep"); dump(); go_to_sleep(FALSE); } break;
+    case P_HIBERNATE: if (may_shut_down()) { lstrcpyW(g_launched, L"Hibernate"); dump(); go_to_sleep(TRUE); } break;
     case P_RESTART:  if (may_shut_down()) ExitWindowsEx(EWX_REBOOT, 0); break;
     case P_SHUTDOWN: if (may_shut_down()) ExitWindowsEx(EWX_SHUTDOWN, 0); break;
     }
@@ -1433,6 +1524,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     /* warm the list and its icons, so the first opening is quick */
     build_list();
     first_run();
+    refresh_sleep_caps();
 
     while (GetMessageW(&msg, NULL, 0, 0))
     {
