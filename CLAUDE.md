@@ -61,6 +61,7 @@ wine-sg or an X server.
 | `sg-snip` | **Snipping Tool** (and Snip & Sketch's screen clip). `/clip` -- what explorer's Win+Shift+S and PrtScn run, and the `ms-screenclip:` URI -- freezes the screen, shows it dimmed with the mode bar (rectangle, free-form, window, full screen, close), puts the snip on the clipboard (CF_DIB, PNG; CF_BITMAP synthesized) and shows a "Snip saved to clipboard" toast that opens the editor. Without it: the Snipping Tool window (New, mode, delay 0/3/5/10 s) that grows into the editor -- pen, highlighter, eraser, crop, undo/redo, copy, save as PNG/JPEG/GIF/BMP (WIC) to `Pictures\Screenshots`. `snippingtool.exe` via App Paths (`defaults/72-sg-snip.reg`); sg-start lists it. See "Snipping Tool" below. |
 | `sg-charmap` | **Character Map** (`charmap.exe`) -- Wine has none. A font drop-down (every installed family), the font's characters in a 20-column grid (only what `GetFontUnicodeRanges` says it has), a magnified view while the mouse holds a cell or the keyboard moves, "Characters to copy" (in the chosen font) with Select and Copy, and the Advanced view: character set, search by name or `U+XXXX`/`0xXXXX` (a name search narrows the grid; Reset), Go to Unicode. The status bar names the character ("U+00E9: Latin Small Letter E With Acute") and gives Windows' Alt+0nnn keystroke. The font and the view are remembered in `HKCU\Software\Microsoft\CharMap`, as Windows keeps them. `defaults/77-sg-charmap.reg`; sg-start lists it. See "Character Map" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
+| `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -1177,3 +1178,73 @@ whose owner this user cannot see is "(not this user's)".
   a 300 MB working set, a writer syncing ~19 MB/s, a listener on 47123;
   each shows on its tab; Storage lists C:. `-DSG_MUTANT_CPU` turns it red.
 
+
+## PDF Viewer (sg-pdf)
+
+`src/pdf/`: `main.c` (window, toolbar, commands, the command line, the
+dump), `view.c` (the continuous scroll: layout, painting, zoom, rotation,
+selection, search, links), `bridge.c` (the pipe to poppler and the render
+thread), `side.c` (thumbnails and the bookmarks tree), `print.c`. The icon is
+drawn by `gen-icon.py` at build time; `pdf.rc` carries it, a common-controls 6
+manifest, the password prompt and the version information (FileDescription
+"PDF Viewer", which Settings > Default apps shows).
+
+- **Poppler does the PDF, we do the window.** sg-session's `sg-pdf` (Debian's
+  poppler through GObject introspection, cairo) opens the document, renders a
+  page to BGRA at any scale and quarter turn, and answers each page's text
+  with a box per UTF-16 unit, its links, the outline and search hits -- all
+  in top-left page points; the protocol is in sg-session's CLAUDE.md. Wine
+  gives a Windows program no pipe to a native one, so the viewer re-launches
+  itself as `sg-pdf --bridge wine <itself> --bridged <args>` (as sg-dictate
+  does); `SG_PDF` names another sg-pdf. Without it the window says what is
+  missing rather than failing silently.
+- **Rendering is off the UI thread.** The view asks, at each paint, for the
+  visible pages (and the next) at the current scale and rotation; the render
+  thread reads the pixels straight into a DIB section and posts it back.
+  While a new zoom renders, the old bitmap is stretched in its place. Pages
+  far from the view drop their bitmaps. One critical section keeps each
+  request and its answer together on the shared pipe (the UI thread asks for
+  text, links and search itself -- small answers).
+- **Highlights are multiplied into the page** (`PatBlt` with DPa): the
+  selection light blue, search hits yellow, the current hit orange, and the
+  text under them stays black.
+- **Selection is by character boxes**: a caret position is the nearest box's
+  near or far side (above the first line: the start; below the last: the
+  end); a drag can cross pages; Ctrl+A loads every page's text. Copied text
+  has `\r\n` line ends.
+- **Print** renders each page at the printer's resolution (at most 300 dpi),
+  turns a page whose shape is the paper's other way round, fits and centres
+  it; `/p <file>` is Explorer's Print verb. No printer in the gate's prefix,
+  so printing is not gated yet (`SG_PDF_PRINT_TO` exists for when it is).
+- **Things that bit.** cairo (the gate's PDF maker) places every page's links
+  by the *last* page's height, so a landscape page at the end moved page 1's
+  links -- the gate's document is all Letter. The render queue's lock must
+  exist before the first paint (it did not, and the first window hung).
+  `pkill -f` on a pattern that appears in your own command line kills your
+  shell: the gate uses `taskkill`.
+- **`SG_PDF_DUMP=<file>`** (a Windows path) is rewritten after every paint
+  and change: file, title, bridged, pages, current page, zoom, fit, rotation,
+  sidebar, bookmarks, hits and the current hit's screen rectangle, the
+  selection's length, each visible page's screen rectangle and whether its
+  bitmap is current, its first word's screen rectangle, its links, the
+  thumbnails, the tree's items, the toolbar's buttons and boxes, the focus,
+  an error.
+- **Gate: `test/pdf-check.sh`** (Xvfb picks its display; the PDF is made at
+  test time by `test/mkpdf.py` with cairo; `SG_PDF_HELPER` or a sibling
+  `../sg-session/bin/sg-pdf` or `/usr/bin/sg-pdf`): a PDF in a folder with a
+  space opened through its association (`wine start`), 4 pages, title,
+  bookmarks, page 1's word in ink where poppler puts it; Page Down to page 2,
+  its word and purple bar on the screen where the layout puts them; find
+  "zebra" (2 hits, the current one orange, F3 to page 3, Escape); a mouse
+  drag over page 2's word and Ctrl+C gives exactly "Zebra" (xclip); Ctrl+A
+  copies all four pages in order; zoom in/out, Ctrl+0; rotate; page 1's link
+  to page 3 and its web link; the bookmarks and thumbnails going to their
+  pages; **double-clicking the .pdf in an Explorer window** (the icon found
+  by its purple band in the screenshot); a qpdf-encrypted PDF asking for its
+  password; a damaged file; no sg-pdf. 32 checks. Mutants
+  `-DSG_MUTANT_FIRSTPAGE` (every page renders page 1), `-DSG_MUTANT_COPY`
+  (the copy starts one character late) and `-DSG_MUTANT_NOHITS` (hits not
+  drawn), run with `SG_PDF_EXE=`, each turn it red. Screenshots
+  `build/pdf-*.png`.
+- **Not yet:** forms, annotations and highlighting of our own, two-page view,
+  presentation mode, a printing gate, remembering the last page per file.

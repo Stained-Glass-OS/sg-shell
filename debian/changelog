@@ -1,3 +1,16 @@
+sg-shell (0.1.0-33) unstable; urgency=medium
+
+  * PDF Viewer (sg-pdf64.exe, the .pdf association, the Print verb, the
+    Start menu): one continuous scroll, zoom, fit width/page, rotate, page
+    thumbnails and the document's bookmarks, find with every hit
+    highlighted, text selection and copy, links, print, password-protected
+    documents. Pages come from Debian's poppler through sg-session's sg-pdf
+    (0.1.0-25), over its bridge. defaults/80-sg-pdf.reg.
+  * Settings > Default apps: a PDF viewer row.
+  * Gate: test/pdf-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 11:53:10 -0700
+
 sg-shell (0.1.0-32) unstable; urgency=medium
 
   * Terminal: split panes -- each pane its own shell on its own pseudo

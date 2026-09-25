@@ -1,0 +1,63 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- PDF Viewer (sg-pdf).
+;
+; PDF files open in our viewer out of the box (Windows opens them in its
+; browser, which we do not ship): .pdf's default ProgID is
+; StainedGlass.PDF.Document, with the viewer in OpenWithProgids so a PDF
+; program installed later still leaves it in Open with. Wine's own "pdffile"
+; ProgID (wine.inf, which sends PDFs to winebrowser) is pointed at it too.
+; The Print verb is `sg-pdf64.exe /p <file>`.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-pdf.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document]
+@="PDF Document"
+"FriendlyTypeName"="PDF Document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\shell\open]
+@="Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.PDF.Document\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\pdffile\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\pdffile\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-pdf64.exe]
+"FriendlyAppName"="PDF Viewer"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-pdf64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-pdf64.exe\SupportedTypes]
+".pdf"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pdf]
+@="StainedGlass.PDF.Document"
+"Content Type"="application/pdf"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithProgids]
+"StainedGlass.PDF.Document"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\MIME\Database\Content Type\application/pdf]
+"Extension"=".pdf"

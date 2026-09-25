@@ -112,6 +112,7 @@ static const struct { const WCHAR *label, *exts[8], *proto; } KINDS[] = {
     { L"Music player", { L".mp3", L".wav", L".ogg", L".flac", L".wma", L".m4a", NULL } },
     { L"Video player", { L".mp4", L".mkv", L".avi", L".webm", L".wmv", L".mov", NULL } },
     { L"Text editor", { L".txt", L".log", L".ini", NULL } },
+    { L"PDF viewer", { L".pdf", NULL } },
     { L"Web browser", { L".htm", L".html", NULL }, L"http" },
     { L"Email", { NULL }, L"mailto" },
 };
