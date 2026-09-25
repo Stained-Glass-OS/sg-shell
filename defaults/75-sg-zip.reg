@@ -1,0 +1,57 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Compressed (zipped) Folders (sg-zip). Wine has no
+; zipfldr.dll; opening a .zip browses it read-only like a folder, "Extract
+; All..." runs the Extract Compressed (Zipped) Folders wizard, and "Compress to
+; ZIP file" on any file or folder makes <name>.zip beside it -- the ProgID and
+; verbs Windows uses (CompressedFolder), so programs that ask for them find them.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-zip.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.zip]
+@="CompressedFolder"
+"Content Type"="application/x-zip-compressed"
+"PerceivedType"="compressed"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.zip\OpenWithProgids]
+"CompressedFolder"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder]
+@="Compressed (zipped) Folder"
+"FriendlyTypeName"="Compressed (zipped) Folder"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder\shell\extract]
+@="Extract &All..."
+"MUIVerb"="Extract All..."
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CompressedFolder\shell\extract\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" /extractall \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\*\shell\SgCompressToZip]
+@="Compress to ZIP file"
+"MUIVerb"="Compress to ZIP file"
+"Icon"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\*\shell\SgCompressToZip\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" /create \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Directory\shell\SgCompressToZip]
+@="Compress to ZIP file"
+"MUIVerb"="Compress to ZIP file"
+"Icon"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Directory\shell\SgCompressToZip\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-zip64.exe\" /create \"%1\""

@@ -1,3 +1,17 @@
+sg-shell (0.1.0-10) unstable; urgency=medium
+
+  * sg-zip: Compressed (zipped) Folders -- Wine has no zipfldr.dll. A .zip
+    (ProgID CompressedFolder) opens as a read-only folder window with
+    Windows' columns and "Extract all"; the Extract Compressed (Zipped)
+    Folders wizard (destination, Browse, show when complete, progress,
+    Replace or Skip); "Compress to ZIP file" on files and folders. Our own
+    inflate, deflate, CRC-32 and ZIP reader/writer (ZIP64 read, UTF-8 names);
+    hostile names (zip-slip) and damaged entries are refused. Headless
+    /extract, /create, /list. Associations: defaults/75-sg-zip.reg.
+  * Gate: test/zip-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 01:52:54 -0700
+
 sg-shell (0.1.0-9) unstable; urgency=medium
 
   * sg-dictate: voice typing, as Windows 10's Win+H -- a dark bar at the top

@@ -48,6 +48,7 @@ wine-sg or an X server.
 | `sg-ncpa` | **Network Connections** (`ncpa.cpl`). A tile per adapter with its status (our own drawn icons), a command bar (Disable/Enable, View status, Change settings -- a UAC shield on the administrator ones for a standard user), and the classic dialogs from in-memory templates: Status (connectivity, media state, SSID, speed, bytes), Network Connection Details (Windows' rows, the lease in local time), Properties (IPv4/IPv6 items; unticking IPv6 disables it), and **Internet Protocol Version 4 (TCP/IPv4) Properties** with the real `SysIPAddress32` fields -- automatic/fixed address and DNS, the class mask filled in on leaving the address, a fixed address forcing fixed DNS, Windows' validation messages. `ncpa.cpl`/`ncpa.exe` resolve to it via App Paths (`defaults/63-sg-network.reg`). `--dump`, `--set-ipv4` and `--open` exist for the gate. |
 | `sg-netflyout` | **The taskbar's network icon and flyout.** A notification-area icon (`Shell_NotifyIcon`, drawn at runtime: Wi-Fi bands by signal, a monitor for wired, a cross when not connected) with a tooltip, and the dark Windows 10 flyout above the taskbar: the wired connection, Wi-Fi networks by signal with security and a padlock, Connect with "Connect automatically", the network security key prompt (Next/Cancel, Enter/Escape), "The network security key isn't correct", Disconnect, the Wi-Fi button, "Network & Internet settings" (opens sg-ncpa). sg-session's `sg-run-explorer` starts it with the session. `--dump`, `--connect` and `--open` exist for the gate. |
 | `sg-dictate` | **Voice typing** (Win+H). A dark bar at the top centre (mic button with a level ring in the accent colour while listening, "Listening...", a gear for Control Panel > Speech Recognition, close) that never takes the focus; what is said is typed into the program that has it. The engine is sg-session's `sg-dictate` (Parakeet on the CPU). `sg-dictate.exe` resolves via App Paths (`defaults/64-sg-dictate.reg`) for explorer's Win+H. See "Voice typing" below. |
+| `sg-zip` | **Compressed (zipped) Folders** -- Wine has no `zipfldr.dll`. Opening a `.zip` (ProgID `CompressedFolder`) browses it read-only like a folder (Name, Type, Compressed size, Password protected, Size, Ratio, Date modified; Enter/double-click opens folders, Backspace/Alt+Up goes up, Back/Forward; a file opens from a temporary copy), "Extract all" / the "Extract All..." verb runs the **Extract Compressed (Zipped) Folders** wizard (destination named like the zip, Browse, "Show extracted files when complete", progress, Replace-or-Skip with "Do this for all conflicts"), and "Compress to ZIP file" on any file or folder makes `<name>.zip` beside it. Our own inflate/deflate. `defaults/75-sg-zip.reg`. See "Compressed folders" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
 ## What Wine gives us, and what it does not
@@ -287,3 +288,42 @@ call `EnableThemeDialogTexture`, or every label paints a grey box on the tab.
   desktop** (`HKCU\Software\Wine\Explorer\Desktop=shell`, as
   sg-run-explorer does), or every window is a bare X window outside it with no
   caption. The real NetworkManager, radio and DHCP are sg-image's `make net-test`.
+
+## Compressed folders (sg-zip)
+
+`src/zip/`: `zipcore.c` is the format, written from RFC 1951 and PKWARE's
+APPNOTE -- inflate (stored, fixed and dynamic blocks), deflate (LZ77 over hash
+chains, each block the cheapest of dynamic Huffman, fixed or stored; about
+zlib's size on text), CRC-32, the reader (ZIP64 sizes and offsets, UTF-8 or
+CP437 names) and the writer (UTF-8 flag only when needed; a `.part` file
+renamed into place, so a failure leaves no half zip). **No zlib, nothing
+bundled.** `main.c` is the command line, the browse window and the wizard.
+
+- **Archives are hostile input.** `zip_safe_path` refuses a name that is
+  absolute, has a `:` (a drive or an NTFS stream), or has a component made
+  only of dots and spaces (`..`, and `...`, which Windows trims to it); the
+  entry is logged `REFUSED` and never written. Every entry is checked against
+  its CRC before the file is created, and inflate never writes past the
+  declared size (an entry that lies about its size fails, it does not overrun).
+- **Headless**: `/extract <zip> <dir> [/overwrite|/skip] [/quiet] [/log f]`,
+  `/create <items...> [/out zip]`, `/list <zip> /log f`; exit 1 when anything
+  failed or was refused. `SG_ZIP_DUMP=<file>` writes what the windows show;
+  `SG_ZIP_NO_SHOW=1` stops them opening Explorer afterwards.
+- **Wine's `SHGetFileInfo` type name is ".ext file"**; we show Windows'
+  "EXT File". The Replace-or-Skip prompt is a `TaskDialogIndirect` (hence
+  the common-controls 6 manifest, `src/zip/sg-zip.manifest`).
+- **Not yet:** password-protected (ZipCrypto/AES) entries are listed but not
+  extracted; no drag-out or copy from the browse window; entries over 4 GB are
+  not written (ZIP64 is read only); no "Send to > Compressed (zipped) folder"
+  shortcut (that is a per-user SendTo item, sg-session's to plant). A
+  multi-selection "Compress to ZIP file" gets one zip per item (a static verb).
+- **Gate: `test/zip-check.sh`** (display :115): Python-made zips (deflate at
+  level 9, stored, nested, unicode names, an empty file and folder) extract
+  byte-identically with their dates; `/skip`, `/overwrite`; seven zip-slip
+  names refused with nothing written outside; a damaged stored entry caught by
+  its CRC; our zips pass Python's `testzip`, content equality and `unzip -t`
+  and round-trip; `<name>.zip`, then `(2)`; the browse window through the
+  `.zip` association, keyboard navigation, the wizard typed into and its
+  Replace prompt. Screenshots `build/zip-*.png`. Mutants built with
+  `-DSG_MUTANT_NOCRC` or `-DSG_MUTANT_TRAVERSAL` (`SG_ZIP_EXE=`) turn it red.
+

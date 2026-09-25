@@ -21,6 +21,9 @@ WINDRES64 ?= x86_64-w64-mingw32-windres
 NET_LIBS = -lcomctl32 -luxtheme $(LIBS)
 # Voice typing's toolbar (sg-dictate): its engine is sg-session's sg-dictate.
 DICTATE_LIBS = -lshell32 -lgdi32 -luser32
+# Compressed (zipped) Folders (sg-zip): our own inflate/deflate, src/zip/.
+ZIP_SRC  = $(wildcard src/zip/*.c)
+ZIP_LIBS = -lcomctl32 -lshell32 -lshlwapi -lgdi32 -luser32 -lole32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -43,6 +46,10 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
 	    && echo "built sg-dictate (64-bit)"
+	@python3 src/zip/gen-icon.py $(BUILD)/sg-zip.ico
+	@$(WINDRES64) -I src/zip -I $(BUILD) src/zip/sg-zip.rc -O coff -o $(BUILD)/sg-zip-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-zip64.exe $(ZIP_SRC) $(BUILD)/sg-zip-res64.o $(ZIP_LIBS) \
+	    && echo "built sg-zip (64-bit)"
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
@@ -58,6 +65,7 @@ test: build
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
 	@sh test/dictate-check.sh
+	@sh test/zip-check.sh
 
 clean:
 	rm -rf $(BUILD)
