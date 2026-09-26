@@ -49,11 +49,16 @@ void set_build_datetime(void)
     if (!g_zones) g_nzones = load_zones(&g_zones);
     items = malloc((g_nzones + 1) * sizeof(*items));
     if (items) {
+        int n = g_nzones;
         for (i = 0; i < g_nzones; i++) { items[i] = g_zones[i]; if (!lstrcmpW(g_zones[i], z.iana)) sel = i; }
-        st_combo(&y, NULL, items, g_nzones, sel, CMD_ZONE);
+        /* a zone the list does not have is still the one set: show it */
+        if (sel < 0 && z.iana[0]) { items[n] = z.iana; sel = n++; }
+        st_combo(&y, NULL, items, n, sel, CMD_ZONE);
         free(items);
     }
-    _snwprintf(line, ARRAYSIZE(line), L"(%ls) %ls", z.offset, z.display);
+    /* the zones' display names already start with their offset, "(UTC+01:00) ..." */
+    if (!wcsncmp(z.display, L"(UTC", 4)) lstrcpynW(line, z.display, ARRAYSIZE(line));
+    else _snwprintf(line, ARRAYSIZE(line), L"(%ls) %ls", z.offset, z.display);
     y = st_para(y - S(6), line);
     if (z.dst[0]) y = st_para(y, z.dst);
     y = st_head(y, L"Related settings");

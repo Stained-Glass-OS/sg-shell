@@ -607,13 +607,36 @@ int load_zones(WCHAR ***out)
 
 /* The IANA zone: what /etc/localtime links to (the zone systemd set), or
  * Debian's /etc/timezone. Wine resolves the link for us. */
+/* The zone's name as the list has it: Debian's zoneinfo/UTC is a link to
+ * Etc/UTC (and UCT, Universal, Zulu are more names for it), which is not in
+ * zone1970.tab -- the list offers "UTC". */
+static void zone_canonical(WCHAR *z)
+{
+    static const WCHAR *const utc[] = { L"Etc/UTC", L"Etc/UCT", L"Etc/Universal", L"Etc/Zulu",
+                                        L"UCT", L"Universal", L"Zulu", L"Etc/GMT", L"Etc/GMT0",
+                                        L"Etc/GMT+0", L"Etc/GMT-0", L"Etc/Greenwich", L"GMT" };
+    int i;
+    for (i = 0; i < (int)ARRAYSIZE(utc); i++)
+        if (!lstrcmpW(z, utc[i])) { lstrcpyW(z, L"UTC"); return; }
+}
+
+static void current_zone_raw(WCHAR *out, int cch);
+
 void current_zone(WCHAR *out, int cch)
+{
+    current_zone_raw(out, cch);
+    if (cch >= 4) zone_canonical(out);
+}
+
+static void current_zone_raw(WCHAR *out, int cch)
 {
     WCHAR path[MAX_PATH], final[MAX_PATH], *z;
     HANDLE h;
-    char *t, *nl;
+    char *t, *nl, lt[MAX_PATH] = "/etc/localtime";
     out[0] = 0;
-    unix_to_dos("/etc/localtime", path, MAX_PATH);
+    /* SG_SETTINGS_LOCALTIME: another localtime link, for the gate */
+    if (GetEnvironmentVariableA("SG_SETTINGS_LOCALTIME", lt, sizeof(lt)) && lt[0] != '/') strcpy(lt, "/etc/localtime");
+    unix_to_dos(lt, path, MAX_PATH);
     h = CreateFileW(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     if (h != INVALID_HANDLE_VALUE) {
         if (GetFinalPathNameByHandleW(h, final, MAX_PATH, 0) && (z = wcsstr(final, L"\\zoneinfo\\"))) {

@@ -49,6 +49,9 @@ trap cleanup EXIT INT TERM
 Xvfb ":$DPY" -screen 0 1024x768x24 -nolisten tcp >/dev/null 2>&1 & XP=$!
 export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDLLOVERRIDES='mscoree,mshtml=' WINEDEBUG=-all
 export PATH="$WINE_DIR/bin:$PATH"
+# the machine's zone as Debian's installer leaves UTC: /etc/localtime -> zoneinfo/UTC, itself a link to Etc/UTC
+ln -s /usr/share/zoneinfo/UTC "$T/localtime"
+export SG_SETTINGS_LOCALTIME="$T/localtime"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 cp "$EXE" "$T/sg-settings64.exe"
 winexe=$(wine winepath -w "$T/sg-settings64.exe" 2>/dev/null | tr -d '\r')
@@ -295,6 +298,13 @@ wine start ms-settings:no-such-page >/dev/null 2>&1
 wine start ms-settings:dateandtime >/dev/null 2>&1
 page_is "Date & time" "ms-settings:dateandtime"
 has "text Set time automatically" && pass "Date & time: the clock, time synchronisation and the zone" || fail "Date & time page"
+# the zone box shows the zone that is set (UTC -- Debian's Etc/UTC -- was an empty box), and the
+# zone's line has its offset once ("(UTC+00:00) (UTC+00:00) Monrovia" was the 2026-09-26 ISO's)
+tr -d '\r' < "$DUMP" | grep -q '^control ComboBox .*: UTC$' && pass "the time zone box shows UTC (Etc/UTC)" \
+    || fail "zone box: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox' | head -2)"
+zl=$(tr -d '\r' < "$DUMP" | grep '^text (UTC' | head -1)
+[ -n "$zl" ] && [ "$(printf '%s' "$zl" | grep -o '(UTC' | wc -l)" = 1 ] && pass "the zone's line has its offset once ($zl)" \
+    || fail "zone line: '$zl'"
 sleep 0.5; shot datetime
 wine start ms-settings:no-such-page >/dev/null 2>&1
 page_is Home "an unknown ms-settings: name"
