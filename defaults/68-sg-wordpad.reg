@@ -5,8 +5,8 @@ Windows Registry Editor Version 5.00
 ; Program Files\Windows NT\Accessories, which write.exe and the rtffile and
 ; wrifile associations start) hands off to this App Paths entry (0180).
 ;
-; .docx and .odt open in WordPad, as on a Windows 10 without Office: their
-; default ProgIDs are ours, and WordPad is in each type's OpenWithProgids, so an
+; .docx, .odt and .doc (Word 97-2003, read only) open in WordPad, as on a
+; Windows 10 without Office: their default ProgIDs are ours, and WordPad is in each type's OpenWithProgids, so an
 ; office suite installed later that takes the type still leaves WordPad in Open
 ; with. .rtf keeps Wine's rtffile, whose command is pointed at WordPad here.
 ;
@@ -57,6 +57,19 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.odt\shell\print\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /p \"%1\""
 
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.doc]
+@="Microsoft Word 97 - 2003 Document"
+"FriendlyTypeName"="Microsoft Word 97 - 2003 Document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.doc\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.doc\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\StainedGlass.WordPad.doc\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-wordpad64.exe\" /p \"%1\""
+
 [HKEY_LOCAL_MACHINE\Software\Classes\.docx]
 @="StainedGlass.WordPad.docx"
 "Content Type"="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -71,6 +84,13 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\.odt\OpenWithProgids]
 "StainedGlass.WordPad.odt"=""
 
+[HKEY_LOCAL_MACHINE\Software\Classes\.doc]
+@="StainedGlass.WordPad.doc"
+"Content Type"="application/msword"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.doc\OpenWithProgids]
+"StainedGlass.WordPad.doc"=""
+
 [HKEY_LOCAL_MACHINE\Software\Classes\.rtf\OpenWithProgids]
 "rtffile"=""
 
@@ -83,6 +103,7 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-wordpad64.exe\SupportedTypes]
 ".rtf"=""
 ".docx"=""
+".doc"=""
 ".odt"=""
 ".txt"=""
 ".wri"=""

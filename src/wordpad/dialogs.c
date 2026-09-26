@@ -67,6 +67,108 @@ void dlg_datetime(void)
     DialogBoxW(g_inst, MAKEINTRESOURCEW(IDD_DATETIME), g_main, datetime_proc);
 }
 
+/* ---------------------------------------------------------------- Insert Table */
+
+typedef struct { const BYTE *p; size_t n, off; } tblstream;
+
+static DWORD CALLBACK tbl_cb(DWORD_PTR cookie, BYTE *buf, LONG cb, LONG *got)
+{
+    tblstream *m = (tblstream *)cookie;
+    size_t left = m->n - m->off;
+    if ((size_t)cb > left) cb = (LONG)left;
+    memcpy(buf, m->p + m->off, cb);
+    m->off += cb;
+    *got = cb;
+    return 0;
+}
+
+/* a table of rows x cols across the line, bordered, at the selection (on a
+ * paragraph of its own) */
+void insert_table(int rows, int cols)
+{
+    Buf b = { 0 };
+    CHARRANGE cr;
+    int lw = line_width_twips();
+    LONG start;
+    tblstream m;
+    EDITSTREAM es = { 0, 0, tbl_cb };
+    SendMessageW(g_edit, EM_EXGETSEL, 0, (LPARAM)&cr);
+    start = (LONG)SendMessageW(g_edit, EM_LINEINDEX, SendMessageW(g_edit, EM_EXLINEFROMCHAR, 0, cr.cpMin), 0);
+    buf_str(&b, "{\\rtf1\\ansi ");
+    if (cr.cpMin != start) buf_str(&b, "\\par ");
+    for (int r = 0; r < rows; r++)
+    {
+        buf_str(&b, "\\pard\\sb0\\sa0\\sl240\\slmult1\\trowd\\trgaph108");
+        for (int c = 0; c < cols; c++)
+            buf_printf(&b, "\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10"
+                           "\\clbrdrr\\brdrs\\brdrw10\\cellx%d", lw * (c + 1) / cols);
+        buf_str(&b, " ");
+        for (int c = 0; c < cols; c++) buf_str(&b, "\\pard\\intbl\\sb0\\sa0\\sl240\\slmult1\\cell ");
+        buf_str(&b, "\\row ");
+    }
+    buf_str(&b, "}");
+    m.p = (const BYTE *)b.p; m.n = b.n; m.off = 0;
+    es.dwCookie = (DWORD_PTR)&m;
+    SendMessageW(g_edit, EM_STREAMIN, SF_RTF | SFF_SELECTION, (LPARAM)&es);
+    free(b.p);
+    {
+        /* the rows' start and end paragraphs took the paragraph's spacing
+         * where the table went in; a table has none */
+        CHARRANGE end, tbl;
+        PARAFORMAT2 pf;
+        SendMessageW(g_edit, EM_EXGETSEL, 0, (LPARAM)&end);
+        tbl.cpMin = cr.cpMin + (cr.cpMin != start ? 1 : 0);
+        tbl.cpMax = end.cpMin;
+        SendMessageW(g_edit, EM_EXSETSEL, 0, (LPARAM)&tbl);
+        memset(&pf, 0, sizeof(pf));
+        pf.cbSize = sizeof(pf);
+        pf.dwMask = PFM_SPACEBEFORE | PFM_SPACEAFTER | PFM_LINESPACING;
+        pf.bLineSpacingRule = 0;
+        SendMessageW(g_edit, EM_SETPARAFORMAT, 0, (LPARAM)&pf);
+    }
+    /* into the first cell: past the row's start, a paragraph of two
+     * characters ("\r\n") that RichEdit keeps before each row */
+    {
+        LONG at = cr.cpMin + (cr.cpMin != start ? 1 : 0) + 2;
+        SendMessageW(g_edit, EM_SETSEL, at, at);
+    }
+    refresh_state();
+}
+
+static INT_PTR CALLBACK table_proc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    (void)l;
+    switch (m)
+    {
+    case WM_INITDIALOG:
+        SendDlgItemMessageW(h, IDC_TA_COLSPIN, UDM_SETRANGE32, 1, MAX_CELLS);
+        SendDlgItemMessageW(h, IDC_TA_ROWSPIN, UDM_SETRANGE32, 1, 500);
+        SetDlgItemInt(h, IDC_TA_COLS, 3, FALSE);
+        SetDlgItemInt(h, IDC_TA_ROWS, 2, FALSE);
+        return TRUE;
+    case WM_COMMAND:
+        if (LOWORD(w) == IDOK)
+        {
+            int cols = GetDlgItemInt(h, IDC_TA_COLS, NULL, FALSE), rows = GetDlgItemInt(h, IDC_TA_ROWS, NULL, FALSE);
+            if (cols < 1 || cols > MAX_CELLS || rows < 1 || rows > 500)
+            {
+                MessageBoxW(h, L"Enter from 1 to 63 columns and from 1 to 500 rows.", L"WordPad", MB_OK | MB_ICONWARNING);
+                return TRUE;
+            }
+            EndDialog(h, IDOK);
+            insert_table(rows, cols);
+        }
+        else if (LOWORD(w) == IDCANCEL) EndDialog(h, IDCANCEL);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+void dlg_table(void)
+{
+    DialogBoxW(g_inst, MAKEINTRESOURCEW(IDD_TABLE), g_main, table_proc);
+}
+
 /* ---------------------------------------------------------------- measurements */
 
 static const WCHAR *unit_name(void)

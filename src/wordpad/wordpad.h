@@ -45,7 +45,7 @@ enum {
     CMD_FONTDLG,
     CMD_INDENT_LESS, CMD_INDENT_MORE, CMD_LIST, CMD_LIST_MENU, CMD_SPACING_MENU,
     CMD_ALIGN_LEFT, CMD_ALIGN_CENTER, CMD_ALIGN_RIGHT, CMD_ALIGN_JUSTIFY, CMD_PARADLG, CMD_TABSDLG,
-    CMD_PICTURE, CMD_DATETIME,
+    CMD_PICTURE, CMD_DATETIME, CMD_TABLE,
     CMD_ZOOMIN, CMD_ZOOMOUT, CMD_ZOOM100, CMD_RULER, CMD_STATUSBAR, CMD_WRAP_MENU, CMD_UNITS_MENU,
     CMD_ESCAPE,
     CMD_LIST_BASE = 300,        /* + 0 none, 1 bullet, 2 1., 3 a., 4 A., 5 i., 6 I. */
@@ -60,7 +60,7 @@ enum {
 extern const COLORREF g_pal[NPAL];
 
 /* file formats */
-enum { FMT_RTF, FMT_DOCX, FMT_ODT, FMT_TXT, FMT_UTXT, FMT_COUNT };
+enum { FMT_RTF, FMT_DOCX, FMT_ODT, FMT_TXT, FMT_UTXT, FMT_COUNT, FMT_DOC = FMT_COUNT /* read only */ };
 
 /* state (main.c) */
 extern HINSTANCE g_inst;
@@ -76,6 +76,8 @@ extern WCHAR g_path[MAX_PATH];
 extern int g_format;
 extern int g_pagew, g_pageh;            /* twips */
 extern RECT g_margins;                  /* twips */
+extern int g_page_numbers;              /* Page Setup's "Print page numbers" */
+extern WCHAR g_header[256], g_footer[256];   /* printed in the margins; &f &p &P &d &t &l &c &r && */
 
 int  S(int v);
 void layout(void);
@@ -108,7 +110,7 @@ int  px_to_twips(int px);
 enum { G_PASTE, G_CUT, G_COPY, G_GROW, G_SHRINK, G_BOLD, G_ITALIC, G_UNDERLINE, G_STRIKE, G_SUB, G_SUPER,
        G_HIGHLIGHT, G_COLOR, G_INDENT_LESS, G_INDENT_MORE, G_LIST, G_SPACING, G_ALEFT, G_ACENTER, G_ARIGHT,
        G_AJUSTIFY, G_PARA, G_PICTURE, G_DATETIME, G_FIND, G_REPLACE, G_SELECTALL, G_ZOOMIN, G_ZOOMOUT,
-       G_ZOOM100, G_RULER, G_STATUS, G_WRAP, G_UNITS, G_LAUNCHER, G_COUNT };
+       G_ZOOM100, G_RULER, G_STATUS, G_WRAP, G_UNITS, G_LAUNCHER, G_TABLE, G_COUNT };
 void glyph_draw(HDC dc, int glyph, int x, int y, int size);
 
 /* docmodel.c: a document as paragraphs of runs -- what the DOCX and ODT
@@ -138,10 +140,20 @@ typedef struct {
     int line;                           /* 240ths of a line: 240 single, 276 1.15 */
     int list;                           /* LS_x */
     int ntabs, tabs[32];
+    int row;                            /* 0: not in a table, else 1 + index into Doc.rows */
+    int cell;                           /* the cell it is in */
+    int cell_end;                       /* the cell's last paragraph */
     Run *runs; int nruns, cap;
 } Para;
 
-typedef struct { Para *p; int n, cap; } Doc;
+#define MAX_CELLS 63
+typedef struct {
+    int ncells, left;                   /* twips */
+    int cellx[MAX_CELLS];               /* each cell's right edge, twips from the left margin */
+} Row;
+
+typedef struct { Para *p; int n, cap; Row *rows; int nrows; } Doc;
+int doc_add_row(Doc *d, const Row *r);  /* its number (1-based) */
 
 void doc_init(Doc *d);
 void doc_free(Doc *d);
@@ -166,6 +178,7 @@ BOOL docx_read(const WCHAR *path, Doc *d, WCHAR *err, int cch);
 BOOL docx_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch);
 BOOL odt_read(const WCHAR *path, Doc *d, WCHAR *err, int cch);
 BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch);
+BOOL doc97_read(const WCHAR *path, Doc *d, WCHAR *err, int cch);
 
 /* xml.c: a small non-validating XML reader */
 typedef struct XNode {
@@ -193,6 +206,7 @@ void page_setup(void);
 
 /* dialogs.c */
 void dlg_datetime(void);
+void dlg_table(void);
 void dlg_paragraph(void);
 void dlg_tabs(void);
 void find_open(BOOL replace);

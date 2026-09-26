@@ -102,8 +102,9 @@ void ribbon_layout(void)
         /* Insert */
         x = g_group_x;
         add(CMD_PICTURE, K_BIG, G_PICTURE, L"Picture", x, 30, 52, 70);
-        add(CMD_DATETIME, K_BIG, G_DATETIME, L"Date and time", x + 54, 30, 62, 70);
-        group_end(L"Insert", 118, 0);
+        add(CMD_TABLE, K_BIG, G_TABLE, L"Table", x + 54, 30, 48, 70);
+        add(CMD_DATETIME, K_BIG, G_DATETIME, L"Date and time", x + 104, 30, 62, 70);
+        group_end(L"Insert", 168, 0);
         /* Editing */
         x = g_group_x;
         add(CMD_FIND, K_SMALL, G_FIND, L"Find", x, 32, 90, 22);

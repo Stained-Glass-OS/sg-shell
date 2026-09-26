@@ -7,7 +7,7 @@
 # Writes in.docx and in.odt (the same content: a bold heading, a paragraph
 # with italic, underline, red and highlighted words, a centred paragraph, a
 # two-item bulleted list, a numbered item, a picture 2 x 1 inches of red over
-# blue halves) and pic.png.
+# blue halves, a 2 x 2 table 2000 + 3000 twips wide) and pic.png.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import io
@@ -45,6 +45,10 @@ doc = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:p><w:r><w:drawing><wp:inline><wp:extent cx="1828800" cy="914400"/><wp:docPr id="1" name="p"/>
 <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>
 <pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="3000"/></w:tblGrid>
+<w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell A1</w:t></w:r></w:p></w:tc>
+<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Cell B1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>Cell A2</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Cell B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
 <w:p><w:r><w:t>The end.</w:t></w:r></w:p>
 </w:body></w:document>'''
 styles = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -86,7 +90,8 @@ NS = ('xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
       'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
       'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
       'xmlns:xlink="http://www.w3.org/1999/xlink" '
-      'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"')
+      'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+      'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"')
 content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content {NS} office:version="1.3"><office:automatic-styles>
 <style:style style:name="H" style:family="paragraph"><style:text-properties fo:font-weight="bold" fo:font-size="16pt"/></style:style>
@@ -97,6 +102,8 @@ content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <style:style style:name="M" style:family="text"><style:text-properties fo:background-color="#ffff00"/></style:style>
 <style:style style:name="S" style:family="text"><style:text-properties style:text-position="super 58%"/></style:style>
 <style:style style:name="B" style:family="text"><style:text-properties fo:font-size="18pt" style:font-name="Courier New"/></style:style>
+<style:style style:name="TC1" style:family="table-column"><style:table-column-properties style:column-width="1.3889in"/></style:style>
+<style:style style:name="TC2" style:family="table-column"><style:table-column-properties style:column-width="2.0833in"/></style:style>
 <text:list-style style:name="LB"><text:list-level-style-bullet text:level="1" text:bullet-char="*"/></text:list-style>
 <text:list-style style:name="LN"><text:list-level-style-number text:level="1" style:num-format="1"/></text:list-style>
 </office:automatic-styles><office:body><office:text>
@@ -106,6 +113,9 @@ content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <text:list text:style-name="LB"><text:list-item><text:p>First bullet</text:p></text:list-item><text:list-item><text:p>Second bullet</text:p></text:list-item></text:list>
 <text:list text:style-name="LN"><text:list-item><text:p>Numbered item</text:p></text:list-item></text:list>
 <text:p><draw:frame svg:width="2in" svg:height="1in" text:anchor-type="as-char"><draw:image xlink:href="Pictures/p.png"/></draw:frame></text:p>
+<table:table table:name="T1"><table:table-column table:style-name="TC1"/><table:table-column table:style-name="TC2"/>
+<table:table-row><table:table-cell><text:p>Cell A1</text:p></table:table-cell><table:table-cell><text:p><text:span text:style-name="I">Cell B1</text:span></text:p></table:table-cell></table:table-row>
+<table:table-row><table:table-cell><text:p>Cell A2</text:p></table:table-cell><table:table-cell><text:p>Cell B2</text:p></table:table-cell></table:table-row></table:table>
 <text:p>The end.</text:p>
 </office:text></office:body></office:document-content>'''
 manifest = '''<?xml version="1.0" encoding="UTF-8"?>

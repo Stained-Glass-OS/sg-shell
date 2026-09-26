@@ -22,6 +22,92 @@ static void no_printer(void)
                         L"you need to install a printer.", L"WordPad", MB_OK | MB_ICONWARNING);
 }
 
+/* ---------------------------------------------------------------- headers, footers, page numbers
+ *
+ * Drawn in the margins, so the text's pages are what they would be without:
+ * the header centred in the top margin, the footer and "Page N" (Page
+ * Setup's "Print page numbers") in the bottom one. &l, &c, &r put what
+ * follows left, centred or right; &f the file name, &p the page, &P the
+ * pages, &d the date, &t the time, && an ampersand. */
+
+static void expand(const WCHAR *pat, int page, int pages, WCHAR out[3][256])
+{
+    int n[3] = { 0, 0, 0 }, where = 1;
+    const WCHAR *p = wcsrchr(g_path, '\\');
+    memset(out, 0, 3 * 256 * sizeof(WCHAR));
+    while (*pat)
+    {
+        WCHAR buf[128] = L"";
+        if (*pat == '&' && pat[1])
+        {
+            WCHAR c = pat[1];
+            pat += 2;
+            switch (c)
+            {
+            case 'l': case 'L': where = 0; continue;
+            case 'c': case 'C': where = 1; continue;
+            case 'r': case 'R': where = 2; continue;
+            case 'f': case 'F': lstrcpynW(buf, g_path[0] ? (p ? p + 1 : g_path) : L"Document", 128); break;
+            case 'p': swprintf(buf, 128, L"%d", page); break;
+            case 'P': swprintf(buf, 128, L"%d", pages); break;
+            case 'd': case 'D': GetDateFormatW(LOCALE_USER_DEFAULT, DATE_SHORTDATE, NULL, NULL, buf, 128); break;
+            case 't': case 'T': GetTimeFormatW(LOCALE_USER_DEFAULT, 0, NULL, NULL, buf, 128); break;
+            case '&': lstrcpyW(buf, L"&"); break;
+            }
+        }
+        else { buf[0] = *pat++; buf[1] = 0; }
+        if (n[where] + lstrlenW(buf) < 255) { lstrcpyW(out[where] + n[where], buf); n[where] += lstrlenW(buf); }
+    }
+}
+
+/* dc is in device units of dpix/dpiy with its origin offx/offy twips into the page */
+static void draw_margins(HDC dc, int page, int pages, int offx, int offy)
+{
+    int dpix = GetDeviceCaps(dc, LOGPIXELSX), dpiy = GetDeviceCaps(dc, LOGPIXELSY);
+    static const UINT al[3] = { DT_LEFT, DT_CENTER, DT_RIGHT };
+    WCHAR parts[3][256], foot[256];
+    LOGFONTW lf;
+    HFONT f, old;
+    int left = MulDiv(g_margins.left - offx, dpix, 1440), right = MulDiv(g_pagew - g_margins.right - offx, dpix, 1440);
+    int lh = MulDiv(10 * 20 * 14 / 10, dpiy, 1440);          /* 10 pt text, 1.4 lines */
+    extern const WCHAR *default_face(BOOL mono);
+    if (!g_header[0] && !g_footer[0] && !g_page_numbers) return;
+#ifdef SG_MUTANT_NOPAGENUM
+    return;
+#endif
+    memset(&lf, 0, sizeof(lf));
+    lf.lfHeight = -MulDiv(10, dpiy, 72);
+    lstrcpynW(lf.lfFaceName, default_face(FALSE), LF_FACESIZE);
+    f = CreateFontIndirectW(&lf);
+    old = SelectObject(dc, f);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    if (g_header[0])
+    {
+        int y = MulDiv(g_margins.top - offy, dpiy, 1440) - 2 * lh;
+        expand(g_header, page, pages, parts);
+        for (int i = 0; i < 3; i++)
+        {
+            RECT r = { left, y, right, y + lh };
+            if (parts[i][0]) DrawTextW(dc, parts[i], -1, &r, al[i] | DT_SINGLELINE | DT_NOPREFIX | DT_BOTTOM);
+        }
+    }
+    lstrcpynW(foot, g_footer, 256);
+    if (!foot[0] && g_page_numbers) lstrcpyW(foot, L"&cPage &p");
+    if (foot[0])
+    {
+        int y = MulDiv(g_pageh - g_margins.bottom - offy, dpiy, 1440) + lh;
+        expand(foot, page, pages, parts);
+        for (int i = 0; i < 3; i++)
+        {
+            RECT r = { left, y, right, y + lh };
+            if (parts[i][0]) DrawTextW(dc, parts[i], -1, &r, al[i] | DT_SINGLELINE | DT_NOPREFIX | DT_TOP);
+        }
+    }
+    SelectObject(dc, old);
+    DeleteObject(f);
+}
+
 /* one page from cp into hdc; returns the next page's first character */
 static LONG format_page(HDC hdc, HDC target, LONG cp, LONG end, BOOL render)
 {
@@ -78,6 +164,7 @@ static void print_to_emf(const WCHAR *dir)
         swprintf(path, MAX_PATH, L"%ls\\page%d.emf", dir, i + 1);
         dc = CreateEnhMetaFileW(ref, path, &r, L"WordPad\0Page\0");
         format_page(dc, measure, starts[i], -1, TRUE);
+        draw_margins(dc, i + 1, n, 0, 0);
         DeleteEnhMetaFile(CloseEnhMetaFile(dc));
     }
     SendMessageW(g_edit, EM_FORMATRANGE, FALSE, 0);
@@ -109,6 +196,8 @@ static void print_dc(HDC dc, int from, int to)
         {
             StartPage(dc);
             format_page(dc, dc, starts[i], -1, TRUE);
+            draw_margins(dc, i + 1, n, MulDiv(GetDeviceCaps(dc, PHYSICALOFFSETX), 1440, GetDeviceCaps(dc, LOGPIXELSX)),
+                         MulDiv(GetDeviceCaps(dc, PHYSICALOFFSETY), 1440, GetDeviceCaps(dc, LOGPIXELSY)));
             EndPage(dc);
         }
         EndDoc(dc);
@@ -159,6 +248,70 @@ void print_file_silently(const WCHAR *printer)
     DeleteDC(dc);
 }
 
+/* Page Setup grown by "Print page numbers" (WordPad's) and Header/Footer boxes */
+static UINT_PTR CALLBACK setup_hook(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    (void)lp;
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+    {
+        RECT rw, rc, child, du = { 0, 0, 4, 8 };
+        HWND c, after = HWND_TOP;
+        HFONT font = (HFONT)SendMessageW(dlg, WM_GETFONT, 0, 0);
+        int lh, extra, bottom = 0, x0, labw, editw;
+        static const WCHAR *labels[2] = { L"&Header:", L"&Footer:" };
+        MapDialogRect(dlg, &du);
+        lh = du.bottom * 14 / 8;
+        extra = lh * 3 + du.bottom;
+        GetWindowRect(dlg, &rw);
+        GetClientRect(dlg, &rc);
+        for (c = GetWindow(dlg, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT))
+        {
+            WCHAR cls[16];
+            GetWindowRect(c, &child);
+            MapWindowPoints(NULL, dlg, (POINT *)&child, 2);
+            GetClassNameW(c, cls, 16);
+            if (!lstrcmpiW(cls, L"Button") && (GetWindowLongW(c, GWL_STYLE) & BS_TYPEMASK) <= BS_DEFPUSHBUTTON && child.top > rc.bottom * 3 / 4)
+                SetWindowPos(c, NULL, child.left, child.top + extra, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            else if (child.bottom > bottom) { bottom = child.bottom; after = c; }
+        }
+        SetWindowPos(dlg, NULL, 0, 0, rw.right - rw.left, rw.bottom - rw.top + extra, SWP_NOMOVE | SWP_NOZORDER);
+        x0 = du.right * 2; labw = du.right * 10; editw = rc.right - x0 * 2 - labw;
+        {
+            HWND cb = CreateWindowExW(0, L"Button", L"Print page n&umbers", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                      x0, bottom + du.bottom / 2, editw + labw, lh - 4, dlg, (HMENU)0x3f0, NULL, NULL);
+            SendMessageW(cb, WM_SETFONT, (WPARAM)font, 0);
+            SendMessageW(cb, BM_SETCHECK, g_page_numbers ? BST_CHECKED : BST_UNCHECKED, 0);
+            SetWindowPos(cb, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            after = cb;
+        }
+        for (int i = 0; i < 2; i++)
+        {
+            int y = bottom + du.bottom / 2 + lh * (i + 1);
+            HWND l = CreateWindowExW(0, L"Static", labels[i], WS_CHILD | WS_VISIBLE, x0, y + 3, labw, lh - 4, dlg, (HMENU)(UINT_PTR)(0x3f1 + i * 2), NULL, NULL);
+            HWND e = CreateWindowExW(WS_EX_CLIENTEDGE, L"Edit", i ? g_footer : g_header, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                     x0 + labw, y, editw, lh - 4, dlg, (HMENU)(UINT_PTR)(0x3f2 + i * 2), NULL, NULL);
+            SendMessageW(l, WM_SETFONT, (WPARAM)font, 0);
+            SendMessageW(e, WM_SETFONT, (WPARAM)font, 0);
+            SetWindowPos(l, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(e, l, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            after = e;
+        }
+        return FALSE;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK)
+        {
+            g_page_numbers = IsDlgButtonChecked(dlg, 0x3f0) == BST_CHECKED;
+            GetDlgItemTextW(dlg, 0x3f2, g_header, 256);
+            GetDlgItemTextW(dlg, 0x3f4, g_footer, 256);
+        }
+        return FALSE;
+    }
+    return FALSE;
+}
+
 void page_setup(void)
 {
     memset(&g_psd, 0, sizeof(g_psd));
@@ -166,7 +319,8 @@ void page_setup(void)
     g_psd.hwndOwner = g_main;
     g_psd.hDevMode = g_devmode;
     g_psd.hDevNames = g_devnames;
-    g_psd.Flags = PSD_MARGINS | (g_units == 1 ? PSD_INHUNDREDTHSOFMILLIMETERS : PSD_INTHOUSANDTHSOFINCHES);
+    g_psd.Flags = PSD_MARGINS | PSD_ENABLEPAGESETUPHOOK | (g_units == 1 ? PSD_INHUNDREDTHSOFMILLIMETERS : PSD_INTHOUSANDTHSOFINCHES);
+    g_psd.lpfnPageSetupHook = setup_hook;
     if (g_units == 1)
         SetRect(&g_psd.rtMargin, MulDiv(g_margins.left, 2540, 1440), MulDiv(g_margins.top, 2540, 1440),
                 MulDiv(g_margins.right, 2540, 1440), MulDiv(g_margins.bottom, 2540, 1440));
@@ -234,6 +388,7 @@ static void draw_page(HDC dc, int idx, RECT box)
     RECT r = { 0, 0, w, h };
     FillRect(mem, &r, GetStockObject(WHITE_BRUSH));
     format_page(mem, g_measure, g_starts[idx], -1, TRUE);
+    draw_margins(mem, idx + 1, g_npages, 0, 0);
     SetStretchBltMode(dc, HALFTONE);
     StretchBlt(dc, box.left, box.top, box.right - box.left, box.bottom - box.top, mem, 0, 0, w, h, SRCCOPY);
     SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem);

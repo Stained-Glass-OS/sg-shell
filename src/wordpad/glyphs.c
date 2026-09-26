@@ -240,6 +240,12 @@ static void draw(HDC dc, int g)
         for (int i = 0; i < 7; i++) line(dc, INK, 3, 10 + i * 8, 14, 10 + i * 8, i % 2 ? 22 : 30);
         text(dc, L"cm", PURPLE, 20, FW_BOLD, FALSE, FALSE, FALSE, 10, 28, 56, 50);
         break;
+    case G_TABLE:
+        rect(dc, PAPER, INK, 3, 6, 10, 58, 54, 0);
+        rect(dc, PURPLE, CLR_NONE, 0, 6, 10, 58, 21, 0);
+        line(dc, INK, 3, 6, 32, 58, 32); line(dc, INK, 3, 6, 43, 58, 43);
+        line(dc, INK, 3, 23, 10, 23, 54); line(dc, INK, 3, 41, 10, 41, 54);
+        break;
     case G_LAUNCHER:
         line(dc, TEXT_GREY, 5, 12, 12, 12, 52); line(dc, TEXT_GREY, 5, 12, 12, 52, 12);
         line(dc, TEXT_GREY, 5, 24, 24, 52, 52);

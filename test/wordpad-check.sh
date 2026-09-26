@@ -243,8 +243,15 @@ if pngs:
     w, h = im.size
     ok = im.getpixel((w // 2, h // 4))[0] > 200 and im.getpixel((w // 2, 3 * h // 4))[2] > 200
 has("picture", ok)
+tbl = re.search(r"<w:tbl>.*?</w:tbl>", d, re.S)
+t = tbl.group(0) if tbl else ""
+rows = re.findall(r"<w:tr>.*?</w:tr>", t, re.S)
+has("table", len(rows) == 2 and all(r.count("<w:tc>") == 2 for r in rows) and "Cell A1" in rows[0] and "Cell B2" in rows[1])
+w = [int(x) for x in re.findall(r'<w:gridCol w:w="(\d+)"/>', t)]
+has("table widths", len(w) == 2 and abs(w[0] - 2000) <= 30 and abs(w[1] - 3000) <= 30)
+has("table bold cell", bool(rows) and re.search(r"<w:b/>.*?Cell B1", rows[0], re.S) is not None and "Cell A1</w:t>" in rows[0])
 EOF
-    for k in zip "heading bold" "italic run" "underline run" "red run" "highlight" "superscript" "centred" "list" "accent" "picture"; do
+    for k in zip "heading bold" "italic run" "underline run" "red run" "highlight" "superscript" "centred" "list" "accent" "picture" "table" "table widths" "table bold cell"; do
         grep -q "^$k yes" "$T/docx.out" && pass "out.docx: $k" || fail "out.docx: $k missing"
     done
 else fail "Save As .docx wrote nothing"; fi
@@ -282,8 +289,12 @@ if pics:
     w, h = im.size
     ok = im.getpixel((w // 2, h // 4))[0] > 200 and im.getpixel((w // 2, 3 * h // 4))[2] > 200
 has("picture", ok and "Pictures/" in z.read("META-INF/manifest.xml").decode())
+rows = re.findall(r"<table:table-row>.*?</table:table-row>", c, re.S)
+has("table", len(rows) == 2 and all(r.count("<table:table-cell") == 2 for r in rows) and "Cell A1" in rows[0] and "Cell B2" in rows[1])
+cw = [float(x) for x in re.findall(r'style:family="table-column"><style:table-column-properties style:column-width="([0-9.]+)in"', c)]
+has("table widths", len(cw) == 2 and abs(cw[0] - 1.3889) < 0.03 and abs(cw[1] - 2.0833) < 0.03)
 EOF
-    for k in "mimetype first and stored" "bold heading" "italic" "red" "list" "picture"; do
+    for k in "mimetype first and stored" "bold heading" "italic" "red" "list" "picture" "table" "table widths"; do
         grep -q "^$k yes" "$T/odt.out" && pass "out.odt: $k" || fail "out.odt: $k missing"
     done
 else fail "Save As .odt wrote nothing"; fi
@@ -293,6 +304,8 @@ start "$EXE" 'C:\t\in.docx'
 wait_dump title "in.docx - WordPad" 20
 sleep 1.5
 saveas 'c:\t\pic.rtf'
+grep -q 'trowd' "$C/t/pic.rtf" 2>/dev/null && grep -q 'cellx5000' "$C/t/pic.rtf" && pass "the .docx's table is a table in the RTF (trowd, cellx5000)" \
+    || fail "no table in the RTF saved from the .docx"
 grep -q 'dibitmap' "$C/t/pic.rtf" 2>/dev/null && pass "the picture is written into the RTF (\\dibitmap)" \
     || fail "the RTF has no picture (RichEdit without 0184 drops bitmaps)"
 start "$EXE" 'C:\t\pic.rtf'
@@ -328,6 +341,106 @@ xdotool key Return; sleep 1.5
 python3 -c "import sys; s = open(sys.argv[1], 'rb').read(); sys.exit(0 if s == b'plain words' else 1)" "$C/t/u8.txt" \
     && pass "a new document saves as .txt in UTF-8" || fail "u8.txt: $(od -c "$C/t/u8.txt" 2>/dev/null | head -2 | tr '\n' ' ')"
 quit
+
+# a table drawn as one grid: its long horizontal lines (the edit area's), evenly spaced
+grid() {
+    python3 - "$OUT/wordpad-$1.png" "$(dv edit)" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("L")
+l, t, r, b = map(int, sys.argv[2].split())
+ys = []
+for y in range(t, b):
+    run = best = 0
+    for x in range(l, r):
+        if im.getpixel((x, y)) < 100: run += 1; best = max(best, run)
+        else: run = 0
+    if best > 300 and (not ys or y > ys[-1] + 1): ys.append(y)
+gaps = [b2 - a for a, b2 in zip(ys, ys[1:])]
+print(len(ys), "even" if gaps and max(gaps) - min(gaps) <= 2 else "uneven", ",".join(map(str, gaps)))
+EOF
+}
+# --- 6b. Insert > Table ------------------------------------------------------------------------------
+start "$EXE"
+wait_dump title "Document - WordPad" 20
+sleep 1.5
+xdotool type --delay 40 "before"; sleep 0.3
+click "Table"; sleep 1.2
+shot tabledlg
+xdotool key Return; sleep 1.2
+xdotool type --delay 40 "xyz"; sleep 0.3
+shot table
+saveas 'c:\t\ins.docx'
+python3 - "$C/t/ins.docx" > "$T/ins.out" <<'EOF'
+import re, sys, zipfile
+d = zipfile.ZipFile(sys.argv[1]).read("word/document.xml").decode()
+t = re.search(r"<w:tbl>.*?</w:tbl>", d, re.S)
+t = t.group(0) if t else ""
+rows = re.findall(r"<w:tr>.*?</w:tr>", t, re.S)
+cells = re.findall(r"<w:tc>.*?</w:tc>", rows[0], re.S) if rows else []
+print("rows", len(rows), "cols", len(re.findall(r"<w:gridCol ", t)), "first", "xyz" in (cells[0] if cells else ""),
+      "before", "before" in d.split("<w:tbl>")[0])
+EOF
+[ "$(cat "$T/ins.out")" = "rows 2 cols 3 first True before True" ] && pass "Insert > Table: a 3 x 2 table after the paragraph, typing goes into its first cell" \
+    || fail "inserted table: $(cat "$T/ins.out")"
+G=$(grid table)
+case "$G" in "3 even "*) pass "it is drawn as one grid, no gaps between rows (lines $G)";; *) fail "the inserted table is drawn as: $G";; esac
+# through RTF and back (wine-sg 0240: the first cell kept its \intbl, the rows their spacing)
+saveas 'c:\t\ins.rtf'
+start "$EXE" 'C:\t\ins.rtf'
+wait_dump title "ins.rtf - WordPad" 20
+sleep 1.5
+shot tablertf
+G=$(grid tablertf)
+case "$G" in "3 even "*) pass "saved as RTF and reopened, still a table, one grid (lines $G)";; *) fail "the RTF table reopened as: $G";; esac
+saveas 'c:\t\ins2.docx'
+python3 - "$C/t/ins2.docx" > "$T/ins.out" <<'EOF'
+import re, sys, zipfile
+d = zipfile.ZipFile(sys.argv[1]).read("word/document.xml").decode()
+t = re.search(r"<w:tbl>.*?</w:tbl>", d, re.S)
+t = t.group(0) if t else ""
+rows = re.findall(r"<w:tr>.*?</w:tr>", t, re.S)
+print("rows", len(rows), "xyz", "xyz" in t)
+EOF
+[ "$(cat "$T/ins.out")" = "rows 2 xyz True" ] && pass "the reopened RTF's table saves as a table" || fail "reopened RTF table: $(cat "$T/ins.out")"
+quit
+
+# --- 6c. a Word 97-2003 document (made here by LibreOffice when it is installed) -------------------
+if command -v soffice >/dev/null 2>&1; then
+    ( cd "$C/t" && HOME="$T/lo" timeout 180 soffice --headless --convert-to 'doc:MS Word 97' in.docx >/dev/null 2>&1 )
+fi
+if [ -f "$C/t/in.doc" ]; then
+    start "$EXE" 'C:\t\in.doc'
+    wait_dump title "in.doc - WordPad" 20 || fail "in.doc did not open: '$(dv title)' $(dv message)"
+    sleep 2
+    shot doc
+    [ "$(dv format)" = doc ] && pass "a Word 97-2003 document opens (our own reader)" || fail ".doc format: $(dv format)"
+    [ "$(dv length)" -ge 150 ] 2>/dev/null && pass "its text is there ($(dv length) characters)" || fail ".doc text length $(dv length)"
+    xdotool key ctrl+s; sleep 1.5; xdotool type --delay 30 'c:\t\fromdoc.docx'; xdotool key Return; sleep 2
+    python3 - "$C/t/fromdoc.docx" > "$T/fromdoc.out" <<'EOF'
+import re, sys, zipfile
+d = zipfile.ZipFile(sys.argv[1]).read("word/document.xml").decode()
+def has(name, ok): print(name, "yes" if ok else "no")
+paras = re.findall(r"<w:p>.*?</w:p>", d)
+# (LibreOffice writes the heading's style away: the bold that is in the .doc is Cell B1's)
+has("the bold cell", re.search(r"<w:b/>(?:(?!</w:r>).)*Cell B1", d, re.S) is not None)
+has("18 pt", re.search(r'<w:sz w:val="36"/>(?:(?!</w:r>).)*Centred big', d, re.S) is not None)
+has("italic", re.search(r"<w:i/>.*?italic</w:t>", d) is not None)
+has("red", re.search(r'<w:color w:val="FF0000"/>.*?red</w:t>', d) is not None)
+has("centred", any("Centred big" in p and 'w:jc w:val="center"' in p for p in paras))
+has("the accent", "caf\u00e9" in d)
+t = re.search(r"<w:tbl>.*?</w:tbl>", d, re.S)
+rows = re.findall(r"<w:tr>.*?</w:tr>", t.group(0), re.S) if t else []
+has("the table", len(rows) == 2 and "Cell A1" in rows[0] and "Cell B1" in rows[0] and "Cell B2" in rows[1])
+w = [int(x) for x in re.findall(r'<w:gridCol w:w="(\d+)"/>', t.group(0))] if t else []
+has("its widths", len(w) == 2 and abs(w[0] - 2000) <= 60 and abs(w[1] - 3000) <= 60)
+EOF
+    for k in "the bold cell" "18 pt" "italic" "red" "centred" "the accent" "the table" "its widths"; do
+        grep -q "^$k yes" "$T/fromdoc.out" && pass "from the .doc: $k" || fail "from the .doc: $k missing"
+    done
+    [ "$(dv title)" = "fromdoc.docx - WordPad" ] && pass "Save on a .doc asks where to save it as .docx" || fail "after Save on a .doc: '$(dv title)'"
+    quit
+else echo "      (no LibreOffice: the .doc checks are skipped)"; fi
 
 # --- 7. printing: /p and print preview ------------------------------------------------------------
 python3 - "$C/t/long.rtf" <<'EOF'
@@ -365,6 +478,34 @@ EOF
         || fail "page 1: ink=$INK left=$LEFT top=$TOP bottom=$BOT"
     [ "$(sed -n 's/^ink3 //p' "$T/page.out")" -gt 1000 ] 2>/dev/null && pass "page 3 has the last lines" || fail "page 3 is empty"
 else fail "no printed pages"; fi
+# page numbers and a header (as Page Setup keeps them)
+OPT='HKCU\Software\Microsoft\Windows\CurrentVersion\Applets\Wordpad\Options'
+reg "$OPT" /v PrintPageNumbers /t REG_DWORD /d 1
+reg "$OPT" /v Header /d '&lLeft &f&rRight &p of &P'
+rm -f "$C/pr/"*
+SG_WORDPAD_PRINT_EMF='C:\pr' w "$EXE" /p 'C:\t\long.rtf' >/dev/null 2>&1
+python3 - "$C/pr" > "$T/hf.out" <<'EOF'
+import glob, os, struct, sys
+pages = sorted(glob.glob(os.path.join(sys.argv[1], "page*.emf")), key=lambda p: int(p.rsplit("page", 1)[1][:-4]))
+print("pages", len(pages))
+for n, p in enumerate(pages, 1):
+    d = open(p, "rb").read()
+    off = 0
+    while off + 8 <= len(d):
+        typ, size = struct.unpack_from("<II", d, off)
+        if size < 8: break
+        if typ == 84:
+            x, y, nch, offs = struct.unpack_from("<iiII", d, off + 36)
+            s = d[off + offs: off + offs + 2 * nch].decode("utf-16le", "replace")
+            if s.startswith(("Page", "Left", "Right")): print(n, x, y, s)
+        off += size
+EOF
+grep -q '^1 .* Page 1$' "$T/hf.out" && grep -q '^3 .* Page 3$' "$T/hf.out" && pass "Print page numbers: Page 1 .. Page 3 at the foot" || fail "page numbers: $(tr '\n' '|' < "$T/hf.out")"
+grep -q '^2 .* Left long.rtf$' "$T/hf.out" && grep -q '^2 .* Right 2 of 3$' "$T/hf.out" && pass "the header's &f, &p, &P on the left and the right" || fail "header: $(tr '\n' '|' < "$T/hf.out")"
+HY=$(awk '$1 == 1 && $4 == "Left" { print $3; exit }' "$T/hf.out"); FY=$(awk '$1 == 1 && $4 == "Page" { print $3; exit }' "$T/hf.out")
+[ -n "$HY" ] && [ -n "$FY" ] && [ "$HY" -lt 96 ] && [ "$FY" -gt 960 ] && pass "both are in the margins (header y=$HY, footer y=$FY)" || fail "header y=$HY footer y=$FY"
+reg "$OPT" /v PrintPageNumbers /t REG_DWORD /d 0
+reg "$OPT" /v Header /d ""
 start "$EXE" 'C:\t\long.rtf'
 wait_dump title "long.rtf - WordPad" 20
 sleep 1

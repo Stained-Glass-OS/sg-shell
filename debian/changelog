@@ -1,3 +1,20 @@
+sg-shell (0.1.0-47) unstable; urgency=medium
+
+  * WordPad: tables -- read and written in RTF, .docx (w:tbl, tblGrid,
+    tcW, gridSpan) and .odt (table:table, column widths); Insert > Table
+    (columns and rows). Needs wine-sg 10.0-60 (0240) for tables to survive
+    RTF and draw as one grid.
+  * WordPad: page numbers, a header and a footer when printing and in the
+    preview (Page Setup: Print page numbers, Header, Footer; &l &c &r &f
+    &p &P &d &t codes).
+  * WordPad: opens Word 97-2003 .doc files with its own reader (compound
+    file, piece table, fonts, styles, character and paragraph formatting,
+    tables); Save on a .doc saves a .docx. .doc is associated with it.
+  * Gate: test/wordpad-check.sh, 82 checks; mutants -DSG_MUTANT_NOTABLE,
+    -DSG_MUTANT_NOPAGENUM.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 17:54:25 -0700
+
 sg-shell (0.1.0-46) unstable; urgency=medium
 
   * On-Screen Keyboard: key labels follow the active keyboard layout

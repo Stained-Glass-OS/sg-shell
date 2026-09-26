@@ -4,6 +4,11 @@
 #define IDD_DATETIME    100
 #define IDD_PARAGRAPH   101
 #define IDD_TABS        102
+#define IDD_TABLE       103
+#define IDC_TA_COLS     1030
+#define IDC_TA_ROWS     1031
+#define IDC_TA_COLSPIN  1032
+#define IDC_TA_ROWSPIN  1033
 #define IDC_DT_LIST     1001
 #define IDC_PA_LEFT     1010
 #define IDC_PA_RIGHT    1011

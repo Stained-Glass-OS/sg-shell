@@ -92,6 +92,13 @@ void cp_default(CharProps *cp)
 
 void doc_init(Doc *d) { memset(d, 0, sizeof(*d)); }
 
+int doc_add_row(Doc *d, const Row *r)
+{
+    d->rows = realloc(d->rows, (d->nrows + 1) * sizeof(Row));
+    d->rows[d->nrows] = *r;
+    return ++d->nrows;
+}
+
 void doc_free(Doc *d)
 {
     for (int i = 0; i < d->n; i++)
@@ -101,6 +108,7 @@ void doc_free(Doc *d)
         free(p->runs);
     }
     free(d->p);
+    free(d->rows);
     memset(d, 0, sizeof(*d));
 }
 
@@ -177,6 +185,10 @@ typedef struct {
     UINT codepage;
     Doc *doc;
     Para cur;                   /* paragraph properties in force */
+    int intbl;                  /* \intbl in force */
+    Row rowdef;                 /* the row being defined (\trowd, \cellx) */
+    int cur_cell;               /* the cell being filled */
+    int row_first;              /* the row's first paragraph, or -1 */
     Buf fontname;
     int skip;                   /* bytes of \u fallback left to skip */
     /* the picture being read */
@@ -194,10 +206,11 @@ static Para *open_para(Rtf *r)
 static void apply_para_props(Rtf *r, Para *p)
 {
     Run *runs = p->runs;
-    int nruns = p->nruns, cap = p->cap;
+    int nruns = p->nruns, cap = p->cap, row = p->row, cell = p->cell, cell_end = p->cell_end;
     int ntabs = r->cur.ntabs;
     *p = r->cur;
     p->runs = runs; p->nruns = nruns; p->cap = cap;
+    p->row = row; p->cell = cell; p->cell_end = cell_end;
     p->ntabs = ntabs;
     memcpy(p->tabs, r->cur.tabs, sizeof(p->tabs));
 }
@@ -255,11 +268,42 @@ static void emit_byte(Rtf *r, BYTE b)
     emit(r, &w, 1);
 }
 
-static void end_para(Rtf *r)
+/* ends the paragraph being filled; in a table it belongs to the current
+ * cell (cell_end: the \cell that ends the cell) */
+static void end_para_ex(Rtf *r, BOOL cell_end)
 {
     Para *p = open_para(r);
     if (!p->nruns) apply_para_props(r, p);
+    if (r->intbl || cell_end)
+    {
+        if (r->row_first < 0) r->row_first = r->doc->n - 1;
+        p->cell = r->cur_cell;
+        p->cell_end = cell_end;
+        p->row = -1;                    /* the row's number comes with \row */
+    }
     doc_add_para(r->doc);
+    if (cell_end) r->cur_cell++;
+}
+
+static void end_para(Rtf *r) { end_para_ex(r, FALSE); }
+
+/* \row: the row's paragraphs get its definition */
+static void end_row(Rtf *r)
+{
+    int n, i;
+    Row def = r->rowdef;
+    if (r->row_first < 0) return;
+    if (!def.ncells)
+    {
+        /* no \cellx: equal cells over six and a half inches */
+        def.ncells = max(1, min(r->cur_cell, MAX_CELLS));
+        for (i = 0; i < def.ncells; i++) def.cellx[i] = 9360 * (i + 1) / def.ncells;
+    }
+    n = doc_add_row(r->doc, &def);
+    for (i = r->row_first; i < r->doc->n; i++)
+        if (r->doc->p[i].row == -1) r->doc->p[i].row = n;
+    r->row_first = -1;
+    r->cur_cell = 0;
 }
 
 static void pict_done(Rtf *r)
@@ -384,6 +428,12 @@ static void control(Rtf *r, const char *w, int has, int v, BOOL star)
         return;
     }
     if (!strcmp(w, "par") || !strcmp(w, "page") || !strcmp(w, "sect")) { r->skip = 0; end_para(r); return; }
+    if (!strcmp(w, "cell") || !strcmp(w, "nestcell")) { r->skip = 0; end_para_ex(r, TRUE); return; }
+    if (!strcmp(w, "row") || !strcmp(w, "nestrow")) { end_row(r); return; }
+    if (!strcmp(w, "intbl")) { r->intbl = 1; return; }
+    if (!strcmp(w, "trowd")) { memset(&r->rowdef, 0, sizeof(r->rowdef)); return; }
+    if (!strcmp(w, "trleft")) { r->rowdef.left = v; return; }
+    if (!strcmp(w, "cellx")) { if (r->rowdef.ncells < MAX_CELLS) r->rowdef.cellx[r->rowdef.ncells++] = v - r->rowdef.left; return; }
     if (!strcmp(w, "line")) { emit(r, L"\v", 1); return; }
     if (!strcmp(w, "tab")) { emit(r, L"\t", 1); return; }
     if (!strcmp(w, "emdash")) { emit(r, L"\x2014", 1); return; }
@@ -431,6 +481,7 @@ static void control(Rtf *r, const char *w, int has, int v, BOOL star)
     {
         memset(&r->cur, 0, sizeof(r->cur));
         r->cur.line = 240;
+        r->intbl = 0;
         return;
     }
     if (!strcmp(w, "ql")) { r->cur.align = AL_LEFT; return; }
@@ -472,6 +523,7 @@ BOOL doc_from_rtf(Doc *d, const char *rtf, size_t len)
     r->s = rtf; r->n = len; r->doc = d;
     r->codepage = 1252;
     r->cur.line = 240;
+    r->row_first = -1;
     cp_default(&r->st[0].cp);
     r->st[0].uc = 1;
     r->st[0].fontent = -1;
@@ -603,6 +655,7 @@ BOOL doc_from_rtf(Doc *d, const char *rtf, size_t len)
             }
         }
     }
+    if (r->row_first >= 0) end_row(r);
     /* a last paragraph with nothing in it is the end of the text */
     if (d->n && !d->p[d->n - 1].nruns && d->n > 1)
     {
@@ -675,7 +728,19 @@ char *doc_to_rtf(const Doc *d, size_t *len)
     for (int i = 0; i < d->n; i++)
     {
         const Para *p = &d->p[i];
-        buf_str(&body, "\\pard");
+        BOOL intbl = p->row > 0 && p->row <= d->nrows;
+        if (intbl && (i == 0 || d->p[i - 1].row != p->row))
+        {
+            /* a row's definition: its cells' right edges, single borders */
+            const Row *row = &d->rows[p->row - 1];
+            buf_str(&body, "\\trowd\\trgaph108");
+            if (row->left) buf_printf(&body, "\\trleft%d", row->left);
+            for (int c = 0; c < row->ncells; c++)
+                buf_printf(&body, "\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10"
+                                  "\\clbrdrr\\brdrs\\brdrw10\\cellx%d", row->left + row->cellx[c]);
+            buf_str(&body, "\n");
+        }
+        buf_str(&body, intbl ? "\\pard\\intbl" : "\\pard");
         if (p->align == AL_CENTER) buf_str(&body, "\\qc");
         else if (p->align == AL_RIGHT) buf_str(&body, "\\qr");
         else if (p->align == AL_JUSTIFY) buf_str(&body, "\\qj");
@@ -736,7 +801,23 @@ char *doc_to_rtf(const Doc *d, size_t *len)
             rtf_text(&body, r->text, r->len);
             buf_str(&body, "}");
         }
-        if (i < d->n - 1) buf_str(&body, "\\par\n");
+        if (intbl)
+        {
+            BOOL last = i == d->n - 1 || d->p[i + 1].row != p->row;
+            if (p->cell_end || last)
+            {
+                /* the row's missing cells, then the row's end */
+                buf_str(&body, "\\cell ");
+                if (last)
+                {
+                    const Row *row = &d->rows[p->row - 1];
+                    for (int c = p->cell + 1; c < row->ncells; c++) buf_str(&body, "\\pard\\intbl\\cell ");
+                    buf_str(&body, "\\row\n");
+                }
+            }
+            else buf_str(&body, "\\par\n");
+        }
+        else if (i < d->n - 1) buf_str(&body, "\\par\n");
     }
     buf_str(&out, "{\\rtf1\\ansi\\ansicpg1252\\deff0\\uc1{\\fonttbl");
     for (int i = 0; i < nf; i++)

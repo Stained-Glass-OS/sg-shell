@@ -101,6 +101,7 @@ typedef struct {
     XNode *stylesx, *numx, *relsx;
     CharProps base;             /* docDefaults */
     Para basepara;
+    int in_table;               /* a table inside a cell is read as the cell's paragraphs */
 } Reader;
 
 static const Style *find_style(Reader *r, const char *id)
@@ -388,6 +389,51 @@ static void read_inline(Reader *r, const XNode *x, Para *p, const CharProps *cp)
     }
 }
 
+static void read_block(Reader *r, const XNode *x, int depth);
+
+/* a w:tbl: its rows become Rows, each cell's paragraphs are marked with it */
+static void read_table(Reader *r, const XNode *tbl, int depth)
+{
+    const XNode *grid = xml_child(tbl, "tblGrid");
+    int gridw[MAX_CELLS], ngrid = 0;
+    for (int i = 0; grid && i < grid->nkids && ngrid < MAX_CELLS; i++)
+        if (grid->kids[i]->name && !strcmp(xml_local(grid->kids[i]->name), "gridCol"))
+            gridw[ngrid++] = ival(grid->kids[i], "w", 0);
+    r->in_table++;
+    for (int i = 0; i < tbl->nkids; i++)
+    {
+        const XNode *tr = tbl->kids[i];
+        Row row;
+        int x = 0, col = 0, first = r->d->n, cell = 0, n;
+        if (!tr->name || strcmp(xml_local(tr->name), "tr")) continue;
+        memset(&row, 0, sizeof(row));
+        for (int j = 0; j < tr->nkids && row.ncells < MAX_CELLS; j++)
+        {
+            const XNode *tc = tr->kids[j], *pr, *w, *span;
+            int width = 0, spans = 1, start = r->d->n;
+            if (!tc->name || strcmp(xml_local(tc->name), "tc")) continue;
+            pr = xml_child(tc, "tcPr");
+            if ((span = xml_child(pr, "gridSpan"))) spans = max(1, ival(span, "val", 1));
+            if ((w = xml_child(pr, "tcW")) && (!xml_attr(w, "type") || !strcmp(xml_attr(w, "type"), "dxa")))
+                width = ival(w, "w", 0);
+            if (width <= 0)
+                for (int k = 0; k < spans; k++) width += col + k < ngrid ? gridw[col + k] : 0;
+            if (width <= 0) width = 2000;
+            col += spans;
+            x += width;
+            row.cellx[row.ncells++] = x;
+            read_block(r, tc, depth + 1);
+            if (r->d->n == start) { Para *p = doc_add_para(r->d); *p = r->basepara; p->runs = NULL; p->nruns = p->cap = 0; }
+            for (int k = start; k < r->d->n; k++) { r->d->p[k].cell = cell; r->d->p[k].cell_end = k == r->d->n - 1; r->d->p[k].row = -1; }
+            cell++;
+        }
+        if (!row.ncells) continue;
+        n = doc_add_row(r->d, &row);
+        for (int k = first; k < r->d->n; k++) if (r->d->p[k].row == -1) r->d->p[k].row = n;
+    }
+    r->in_table--;
+}
+
 static void read_block(Reader *r, const XNode *x, int depth)
 {
     if (depth > 32) return;
@@ -415,6 +461,7 @@ static void read_block(Reader *r, const XNode *x, int depth)
             runs = p->runs; (void)runs;
             read_inline(r, k, p, &cp);
         }
+        else if (!strcmp(n, "tbl") && !r->in_table) read_table(r, k, depth + 1);
         else if (!strcmp(n, "tbl") || !strcmp(n, "tr") || !strcmp(n, "tc") || !strcmp(n, "sdt") ||
                  !strcmp(n, "sdtContent") || !strcmp(n, "customXml") || !strcmp(n, "ins"))
             read_block(r, k, depth + 1);
@@ -552,6 +599,33 @@ BOOL docx_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
     for (int i = 0; i < d->n; i++)
     {
         const Para *p = &d->p[i];
+#ifdef SG_MUTANT_NOTABLE
+        if (0)
+#else
+        if (p->row > 0 && p->row <= d->nrows)
+#endif
+        {
+            const Row *row = &d->rows[p->row - 1];
+            BOOL row_start = i == 0 || d->p[i - 1].row != p->row;
+            if (i == 0 || !(d->p[i - 1].row > 0))
+            {
+                buf_str(&doc, "<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders>"
+                              "<w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "<w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "<w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "<w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "<w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "<w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/>"
+                              "</w:tblBorders><w:tblLook w:val=\"04A0\"/></w:tblPr><w:tblGrid>");
+                for (int c = 0; c < row->ncells; c++)
+                    buf_printf(&doc, "<w:gridCol w:w=\"%d\"/>", row->cellx[c] - (c ? row->cellx[c - 1] : 0));
+                buf_str(&doc, "</w:tblGrid>");
+            }
+            if (row_start) buf_str(&doc, "<w:tr>");
+            if (row_start || d->p[i - 1].cell_end)
+                buf_printf(&doc, "<w:tc><w:tcPr><w:tcW w:w=\"%d\" w:type=\"dxa\"/></w:tcPr>",
+                           p->cell < row->ncells ? row->cellx[p->cell] - (p->cell ? row->cellx[p->cell - 1] : 0) : 2000);
+        }
         buf_str(&doc, "<w:p><w:pPr>");
         if (p->list) { used[p->list] = 1; buf_printf(&doc, "<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"%d\"/></w:numPr>", p->list); }
         if (p->ntabs)
@@ -603,7 +677,26 @@ BOOL docx_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
             buf_str(&doc, "</w:r>");
         }
         buf_str(&doc, "</w:p>");
+#ifdef SG_MUTANT_NOTABLE
+        if (0)
+#else
+        if (p->row > 0 && p->row <= d->nrows)
+#endif
+        {
+            const Row *row = &d->rows[p->row - 1];
+            BOOL last = i == d->n - 1 || d->p[i + 1].row != p->row;
+            if (p->cell_end || last) buf_str(&doc, "</w:tc>");
+            if (last)
+            {
+                for (int c = p->cell + 1; c < row->ncells; c++)
+                    buf_printf(&doc, "<w:tc><w:tcPr><w:tcW w:w=\"%d\" w:type=\"dxa\"/></w:tcPr><w:p/></w:tc>",
+                               row->cellx[c] - row->cellx[c - 1]);
+                buf_str(&doc, "</w:tr>");
+                if (i == d->n - 1 || !(d->p[i + 1].row > 0)) buf_str(&doc, "</w:tbl>");
+            }
+        }
     }
+    if (d->n && d->p[d->n - 1].row > 0) buf_str(&doc, "<w:p/>");     /* a document does not end in a table */
     buf_printf(&doc, "<w:sectPr><w:pgSz w:w=\"%d\" w:h=\"%d\"/><w:pgMar w:top=\"%ld\" w:right=\"%ld\" w:bottom=\"%ld\" "
                      "w:left=\"%ld\" w:header=\"720\" w:footer=\"720\" w:gutter=\"0\"/></w:sectPr></w:body></w:document>",
                g_pagew, g_pageh, g_margins.top, g_margins.right, g_margins.bottom, g_margins.left);

@@ -35,6 +35,8 @@ WCHAR g_path[MAX_PATH];
 int g_format = FMT_RTF;
 int g_pagew = 12240, g_pageh = 15840;             /* Letter, twips */
 RECT g_margins = { 1800, 1440, 1800, 1440 };      /* 1.25", 1", as WordPad */
+int g_page_numbers;
+WCHAR g_header[256], g_footer[256];
 
 const COLORREF g_pal[NPAL] = {
     RGB(0, 0, 0), RGB(127, 127, 127), RGB(136, 0, 21), RGB(237, 28, 36), RGB(255, 127, 39),
@@ -47,7 +49,7 @@ static WCHAR g_dump[MAX_PATH];
 static HACCEL g_accel;
 static WNDPROC g_edit_proc;
 static const WCHAR OPTS[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Applets\\Wordpad\\Options";
-static const WCHAR *FMT_NAMES[FMT_COUNT] = { L"rtf", L"docx", L"odt", L"txt", L"utxt" };
+static const WCHAR *FMT_NAMES[FMT_COUNT + 1] = { L"rtf", L"docx", L"odt", L"txt", L"utxt", L"doc" };
 static WCHAR g_msg[512];             /* the last message box's text, for the dump */
 
 int S(int v) { return MulDiv(v, g_dpi, 96); }
@@ -84,6 +86,16 @@ static void save_settings(void)
     opt_set(L"MarginTop", g_margins.top);
     opt_set(L"MarginRight", g_margins.right);
     opt_set(L"MarginBottom", g_margins.bottom);
+    opt_set(L"PrintPageNumbers", g_page_numbers);
+    {
+        HKEY k;
+        if (!RegCreateKeyExW(HKEY_CURRENT_USER, OPTS, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL))
+        {
+            RegSetValueExW(k, L"Header", 0, REG_SZ, (BYTE *)g_header, (lstrlenW(g_header) + 1) * sizeof(WCHAR));
+            RegSetValueExW(k, L"Footer", 0, REG_SZ, (BYTE *)g_footer, (lstrlenW(g_footer) + 1) * sizeof(WCHAR));
+            RegCloseKey(k);
+        }
+    }
     if (GetWindowPlacement(g_main, &wp) && wp.showCmd != SW_SHOWMINIMIZED)
     {
         HKEY k;
@@ -108,6 +120,13 @@ static void load_settings(void)
     g_margins.top = opt_get(L"MarginTop", 1440);
     g_margins.right = opt_get(L"MarginRight", 1800);
     g_margins.bottom = opt_get(L"MarginBottom", 1440);
+    g_page_numbers = opt_get(L"PrintPageNumbers", 0) != 0;
+    {
+        DWORD sz = sizeof(g_header);
+        if (RegGetValueW(HKEY_CURRENT_USER, OPTS, L"Header", RRF_RT_REG_SZ, NULL, g_header, &sz)) g_header[0] = 0;
+        sz = sizeof(g_footer);
+        if (RegGetValueW(HKEY_CURRENT_USER, OPTS, L"Footer", RRF_RT_REG_SZ, NULL, g_footer, &sz)) g_footer[0] = 0;
+    }
     if (g_pagew < 1440 || g_pagew > 44640) g_pagew = 12240;
     if (g_pageh < 1440 || g_pageh > 44640) g_pageh = 15840;
 }
@@ -485,6 +504,7 @@ static int detect_format(const WCHAR *path, const BYTE *p, size_t n)
 {
     const WCHAR *ext = wcsrchr(path, '.');
     if (n >= 5 && !memcmp(p, "{\\rtf", 5)) return FMT_RTF;
+    if (n >= 8 && !memcmp(p, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", 8)) return FMT_DOC;
     if (n >= 4 && !memcmp(p, "PK\3\4", 4))
     {
         if (ext && !lstrcmpiW(ext, L".odt")) return FMT_ODT;
@@ -563,11 +583,12 @@ BOOL open_file(const WCHAR *path)
         set_default_format(FALSE);
         stream_in(p, n, SF_RTF);
     }
-    else if (fmt == FMT_DOCX || fmt == FMT_ODT)
+    else if (fmt == FMT_DOCX || fmt == FMT_ODT || fmt == FMT_DOC)
     {
         Doc d;
         doc_init(&d);
-        ok = fmt == FMT_DOCX ? docx_read(path, &d, err, ARRAYSIZE(err)) : odt_read(path, &d, err, ARRAYSIZE(err));
+        ok = fmt == FMT_DOCX ? docx_read(path, &d, err, ARRAYSIZE(err)) :
+             fmt == FMT_ODT ? odt_read(path, &d, err, ARRAYSIZE(err)) : doc97_read(path, &d, err, ARRAYSIZE(err));
         if (ok) ok = load_doc(&d);
         doc_free(&d);
     }
@@ -716,6 +737,7 @@ static BOOL save_as(int fmt)
 static BOOL save(void)
 {
     if (!g_path[0]) return save_as(FMT_RTF);
+    if (g_format == FMT_DOC) return save_as(FMT_DOCX);      /* WordPad reads Word 97-2003 files, writes .docx */
     return save_to(g_path, g_format);
 }
 
@@ -749,9 +771,10 @@ static BOOL may_discard(void)
 static void open_dialog(void)
 {
     static const WCHAR filter[] =
-        L"All WordPad Documents (*.rtf, *.docx, *.odt, *.txt)\0*.rtf;*.docx;*.odt;*.txt\0"
+        L"All WordPad Documents (*.rtf, *.docx, *.doc, *.odt, *.txt)\0*.rtf;*.docx;*.doc;*.odt;*.txt\0"
         L"Rich Text Format (RTF) (*.rtf)\0*.rtf\0"
         L"Office Open XML Document (*.docx)\0*.docx\0"
+        L"Word 97-2003 Document (*.doc)\0*.doc\0"
         L"OpenDocument Text (*.odt)\0*.odt\0"
         L"Text Documents (*.txt)\0*.txt\0"
         L"All Documents (*.*)\0*.*\0";
@@ -1143,6 +1166,7 @@ void do_command(int cmd)
     case CMD_TABSDLG: dlg_tabs(); break;
     case CMD_PICTURE: insert_picture(); break;
     case CMD_DATETIME: dlg_datetime(); break;
+    case CMD_TABLE: dlg_table(); break;
     case CMD_ZOOMIN: g_zoom = g_zoom < 100 ? g_zoom + 10 : g_zoom + 50; apply_zoom(); break;
     case CMD_ZOOMOUT: g_zoom = g_zoom <= 100 ? g_zoom - 10 : g_zoom - 50; apply_zoom(); break;
     case CMD_ZOOM100: g_zoom = 100; apply_zoom(); break;

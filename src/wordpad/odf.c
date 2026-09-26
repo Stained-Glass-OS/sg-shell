@@ -76,6 +76,7 @@ typedef struct {
     Doc *d;
     OStyle *st; int nst;
     XNode *content, *styles;
+    int in_table;
 } OReader;
 
 static void collect(OReader *r, const XNode *x)
@@ -287,6 +288,75 @@ static void inline_content(OReader *r, const XNode *x, Para *p, const CharProps 
     }
 }
 
+static void blocks(OReader *r, const XNode *x, int list, int depth);
+
+/* a column's width from its style */
+static int column_width(OReader *r, const char *style)
+{
+    const OStyle *s = find(r, style, "table-column");
+    const XNode *p = s ? xml_child(s->node, "table-column-properties") : NULL;
+    const char *w = p ? xml_attr(p, "column-width") : NULL;
+    return w ? length_twips(w) : 0;
+}
+
+/* the rows of a table or of a row group (header rows, rows) */
+static void read_rows(OReader *r, const XNode *g, const int *widths, int nw, int depth)
+{
+    if (depth > 8) return;
+    for (int i = 0; i < g->nkids; i++)
+    {
+        const XNode *tr = g->kids[i];
+        const char *n = tr->name ? xml_local(tr->name) : NULL;
+        Row row;
+        int x = 0, col = 0, first = r->d->n, cell = 0, num;
+        if (!n) continue;
+        if (!strcmp(n, "table-header-rows") || !strcmp(n, "table-rows") || !strcmp(n, "table-row-group"))
+        {
+            read_rows(r, tr, widths, nw, depth + 1);
+            continue;
+        }
+        if (strcmp(n, "table-row")) continue;
+        memset(&row, 0, sizeof(row));
+        for (int j = 0; j < tr->nkids && row.ncells < MAX_CELLS; j++)
+        {
+            const XNode *tc = tr->kids[j];
+            const char *cn = tc->name ? xml_local(tc->name) : NULL;
+            int span = 1, width = 0, start = r->d->n;
+            if (!cn || strcmp(cn, "table-cell")) continue;
+            if (xml_attr(tc, "number-columns-spanned")) span = max(1, atoi(xml_attr(tc, "number-columns-spanned")));
+            for (int k = 0; k < span; k++) width += col + k < nw ? widths[col + k] : 0;
+            if (width <= 0) width = 2000 * span;
+            col += span;
+            x += width;
+            row.cellx[row.ncells++] = x;
+            blocks(r, tc, 0, depth + 1);
+            if (r->d->n == start) doc_add_para(r->d);
+            for (int k = start; k < r->d->n; k++) { r->d->p[k].cell = cell; r->d->p[k].cell_end = k == r->d->n - 1; r->d->p[k].row = -1; }
+            cell++;
+        }
+        if (!row.ncells) continue;
+        num = doc_add_row(r->d, &row);
+        for (int k = first; k < r->d->n; k++) if (r->d->p[k].row == -1) r->d->p[k].row = num;
+    }
+}
+
+/* table:table -- its rows become Rows, each cell's paragraphs are marked */
+static void read_table(OReader *r, const XNode *t, int depth)
+{
+    int widths[MAX_CELLS], nw = 0;
+    for (int i = 0; i < t->nkids && nw < MAX_CELLS; i++)
+    {
+        const XNode *k = t->kids[i];
+        if (k->name && !strcmp(xml_local(k->name), "table-column"))
+        {
+            int rep = xml_attr(k, "number-columns-repeated") ? atoi(xml_attr(k, "number-columns-repeated")) : 1;
+            int w = column_width(r, xml_attr(k, "style-name"));
+            for (int j = 0; j < rep && nw < MAX_CELLS; j++) widths[nw++] = w;
+        }
+    }
+    read_rows(r, t, widths, nw, depth);
+}
+
 static void blocks(OReader *r, const XNode *x, int list, int depth)
 {
     if (depth > 32) return;
@@ -314,6 +384,7 @@ static void blocks(OReader *r, const XNode *x, int list, int depth)
             const char *sn = xml_attr(k, "style-name");
             blocks(r, k, sn ? list_kind(r, sn) : (list ? list : LS_BULLET), depth + 1);
         }
+        else if (!strcmp(n, "table") && !r->in_table) { r->in_table++; read_table(r, k, depth + 1); r->in_table--; }
         else if (!strcmp(n, "list-item") || !strcmp(n, "list-header") || !strcmp(n, "section") || !strcmp(n, "table") ||
                  !strcmp(n, "table-row") || !strcmp(n, "table-cell") || !strcmp(n, "table-header-rows") ||
                  !strcmp(n, "table-rows") || !strcmp(n, "text") || !strcmp(n, "body") || !strcmp(n, "document-content"))
@@ -395,6 +466,7 @@ BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
     struct { BYTE *png; DWORD size; } *imgs = NULL;
     zwriter *w;
     static const char *numfmt[] = { "", "", "1", "a", "A", "i", "I" };
+    int ntables = 0;
 
     for (int i = 0; i < d->n; i++)
     {
@@ -402,6 +474,30 @@ BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
         int ps = -1;
         for (int j = 0; j < np; j++) if (para_same(pstyles[j], p)) { ps = j; break; }
         if (ps < 0) { ps = np; pstyles[np++] = p; }
+        if (p->row > 0 && p->row <= d->nrows)
+        {
+            const Row *row = &d->rows[p->row - 1];
+            BOOL row_start = i == 0 || d->p[i - 1].row != p->row;
+            if (i == 0 || !(d->p[i - 1].row > 0))
+            {
+                if (curlist) { buf_str(&body, "</text:list>"); curlist = 0; }
+                ntables++;
+                buf_printf(&body, "<table:table table:name=\"Table%d\" table:style-name=\"Tb%d\">", ntables, ntables);
+                buf_printf(&autos, "<style:style style:name=\"Tb%d\" style:family=\"table\"><style:table-properties", ntables);
+                len_in(&autos, "style:width", row->cellx[row->ncells - 1]);
+                buf_str(&autos, " table:align=\"left\"/></style:style>");
+                for (int c = 0; c < row->ncells; c++)
+                {
+                    buf_printf(&autos, "<style:style style:name=\"Tb%d.C%d\" style:family=\"table-column\"><style:table-column-properties", ntables, c + 1);
+                    len_in(&autos, "style:column-width", row->cellx[c] - (c ? row->cellx[c - 1] : 0));
+                    buf_str(&autos, "/></style:style>");
+                    buf_printf(&body, "<table:table-column table:style-name=\"Tb%d.C%d\"/>", ntables, c + 1);
+                }
+            }
+            if (row_start) buf_str(&body, "<table:table-row>");
+            if (row_start || d->p[i - 1].cell_end)
+                buf_str(&body, "<table:table-cell table:style-name=\"TbCell\" office:value-type=\"string\">");
+        }
         if (p->list != curlist)
         {
             if (curlist) buf_str(&body, "</text:list>");
@@ -437,6 +533,20 @@ BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
             buf_str(&body, "</text:span>");
         }
         buf_str(&body, "</text:p>");
+        if (p->row > 0 && p->row <= d->nrows)
+        {
+            const Row *row = &d->rows[p->row - 1];
+            BOOL last = i == d->n - 1 || d->p[i + 1].row != p->row;
+            if (curlist && (p->cell_end || last)) { buf_str(&body, "</text:list-item></text:list>"); curlist = 0; }
+            if (p->cell_end || last) buf_str(&body, "</table:table-cell>");
+            if (last)
+            {
+                for (int c = p->cell + 1; c < row->ncells; c++)
+                    buf_str(&body, "<table:table-cell table:style-name=\"TbCell\" office:value-type=\"string\"><text:p/></table:table-cell>");
+                buf_str(&body, "</table:table-row>");
+                if (i == d->n - 1 || !(d->p[i + 1].row > 0)) buf_str(&body, "</table:table>");
+            }
+        }
         if (curlist) buf_str(&body, "</text:list-item>");
     }
     if (curlist) buf_str(&body, "</text:list>");
@@ -481,6 +591,8 @@ BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
         if (cp->has_hl) buf_printf(&autos, " fo:background-color=\"#%02x%02x%02x\"", GetRValue(cp->hl), GetGValue(cp->hl), GetBValue(cp->hl));
         buf_str(&autos, "/></style:style>");
     }
+    buf_str(&autos, "<style:style style:name=\"TbCell\" style:family=\"table-cell\"><style:table-cell-properties "
+                    "fo:padding=\"0.04in\" fo:border=\"0.5pt solid #000000\"/></style:style>");
     for (int l = 1; l <= LS_UROMAN; l++)
     {
         if (l == LS_BULLET)
@@ -497,6 +609,7 @@ BOOL odt_write(const WCHAR *path, const Doc *d, WCHAR *err, int cch)
 
     buf_str(&c, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 "<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" "
+                "xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" "
                 "xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" "
                 "xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" "
                 "xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" "
