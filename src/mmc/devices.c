@@ -379,7 +379,7 @@ static INT_PTR CALLBACK details_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         {
             LVITEMW it = { LVIF_TEXT };
             it.iItem = row++;
-            it.pszText = (WCHAR *)L"Windows instance ID";
+            it.pszText = (WCHAR *)L"Device instance ID (programs)";
             SendMessageW(lv, LVM_INSERTITEMW, 0, (LPARAM)&it);
             it.iSubItem = 1;
             it.pszText = d->winid;
@@ -443,7 +443,7 @@ static void props(int i)
     D_VALUE(&r, R_LIC, 88, 76, 157);
     D_LABEL(&r, L"Driver file:", 7, 92, 76);
     D_EDITRO(&r, R_FILE, 88, 92, 157, 24, ES_MULTILINE);
-    D_LABEL(&r, L"Windows device:", 7, 122, 76);
+    D_LABEL(&r, L"Program view:", 7, 122, 76);
     D_EDITRO(&r, R_WIN, 88, 122, 157, 24, ES_MULTILINE);
     D_LABEL(&r, L"Drivers here are Linux kernel drivers. Third-party ones (NVIDIA, Broadcom Wi-Fi, ...) are "
                L"installed by an administrator through sg-drivers.", 7, 160, 238);

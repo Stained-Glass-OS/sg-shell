@@ -69,6 +69,20 @@ wine-sg or an X server.
 | `sg-browser` | **Get a web browser** -- we ship no browser (Edge is Microsoft's). Web links (`http`, `https`) and `.htm`/`.html` open it until the user has one: none installed -- it offers Firefox, Chrome and Brave, downloads the maker's installer as the winget community repository describes it, checks its SHA-256, installs it silently (or through winget when the user has it), makes it the default and opens the link; one installed -- the link opens there; several -- "How do you want to open this?". The user's choice (UserChoice, as Settings > Default apps writes it) is honoured on every link. Internet Explorer (Wine's, Gecko) is offered for simple pages. `defaults/81-sg-browser.reg`; sg-start lists it. See "Get a web browser" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
+## Trademark: we never call ourselves Windows
+
+"Windows" is Microsoft's trademark. **No user-visible text of ours may use it
+as our product's or a feature's name** -- "Stained Glass Settings", not
+"Windows Settings"; "Updates"; "the Start key", not "the Windows logo key".
+`make lint` (and CI) runs `tools/trademark-check.py`: every string literal in
+`src/` (C, .rc), `.reg` data, manifests, and the Python/shell tools' messages
+is scanned for "Windows" (capital W). Paths (`Software\Microsoft\Windows\...`,
+`C:\Windows`), dotted identifiers (`Microsoft.Windows.Common-Controls`) and
+comments pass by themselves; anything else must be in
+`tools/trademark-allow.txt` with a reason (describing compatibility -- "Windows
+programs" -- or naming Microsoft's own product, "Windows PowerShell"). The same
+checker is in sg-session and wine-sg (which scans the lines its patches add).
+
 ## What Wine gives us, and what it does not
 
 - **`SHAppBarMessage` is a real implementation** (`ABM_NEW`, `ABM_QUERYPOS`,

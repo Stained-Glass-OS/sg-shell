@@ -273,7 +273,7 @@ void build_speech(void)
     y += S(44);
     pg_icon(x, y, S(48), IC_SPEECH);
     i = pg_para(x + S(64), y, w - S(64), g_font_body, COL_TEXT,
-                 L"Dictate text anywhere you can type. Press the Windows logo key + H to start or stop, "
+                 L"Dictate text anywhere you can type. Press the Start key + H to start or stop, "
                  L"or select the microphone on the voice typing bar. Say \x201C" L"comma\x201D, \x201Cperiod\x201D, "
                  L"\x201Cquestion mark\x201D or \x201Cnew line\x201D for punctuation, and \x201C" L"delete that\x201D, "
                  L"\x201Cundo that\x201D or \x201Cstop listening\x201D to take something back or stop.");
@@ -315,7 +315,7 @@ void build_speech(void)
 
     y = section(x, y, w, L"Starting and stopping");
     pg_text(x + S(16), y, w - S(16), S(20), g_font_body, COL_TEXT,
-            L"Windows logo key + H starts voice typing, and stops it again.", DT_SINGLELINE | DT_END_ELLIPSIS);
+            L"The Start key + H starts voice typing, and stops it again.", DT_SINGLELINE | DT_END_ELLIPSIS);
     y += S(30);
     check(L"Hold a key to talk:", x + S(16), y, S(200), CMD_HOLD, setting(L"HoldToTalk", 0));
     c = pg_control(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, x + S(220), y - S(2), S(160), S(200), CMD_HOLDKEY);

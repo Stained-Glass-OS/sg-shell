@@ -117,7 +117,7 @@ wait_dump '^NODE Device Manager' 5 && wait_dump '^DEV ' 20 && pass "Device Manag
 click $(tree_xy 'Disk Management')
 wait_dump '^NODE Disk Management' 5 && wait_dump '^DISK ' 20 && pass "Disk Management lists disks" || fail "disks: $(d | grep -E '^(NODE|DISK)')"
 shot disks
-go 'Event Viewer (Local)'; go 'Windows Logs'
+go 'Event Viewer (Local)'; go 'System Logs'
 click $(tree_xy 'Application')
 wait_dump '^NODE Application' 5 && wait_dump '^LOG Application' 5 && pass "Event Viewer's Application log opens" || fail "event viewer: $(d | grep -E '^(NODE|LOG)')"
 
@@ -141,7 +141,7 @@ go 'Shared Folders'
 click $(tree_xy 'Shares')
 if wait_dump '^NODE Shares' 5 && wait_dump '	Public	' 10; then
     want=$(wine winepath -w "$T/srv/public" 2>/dev/null | tr -d '\r')
-    case "$(row Public)" in *"	$want	Windows	Everyone files	Read/Write, guests") pass "Shares: Public at $want, read/write, guests" ;;
+    case "$(row Public)" in *"	$want	Disk	Everyone files	Read/Write, guests") pass "Shares: Public at $want, read/write, guests" ;;
                            *) fail "Public: $(row Public) (want $want)" ;; esac
 else fail "shares: $(d | grep -E '^(NODE|ROWS|EMPTY)')"; fi
 shot shares

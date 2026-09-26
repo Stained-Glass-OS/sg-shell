@@ -569,9 +569,9 @@ static void do_command(int id)
     case IDM_HELP:
         MessageBoxW(g_bar,
             L"Magnifier makes part or all of the screen bigger.\n\n"
-            L"Windows logo key + Plus sign\tZoom in (starts Magnifier)\n"
-            L"Windows logo key + Minus sign\tZoom out\n"
-            L"Windows logo key + Esc\tClose Magnifier\n"
+            L"Start key + Plus sign\tZoom in (starts Magnifier)\n"
+            L"Start key + Minus sign\tZoom out\n"
+            L"Start key + Esc\tClose Magnifier\n"
             L"Ctrl + Alt + mouse wheel\tZoom in or out\n"
             L"Ctrl + Alt + F\tFull screen view\n"
             L"Ctrl + Alt + L\tLens view\n"

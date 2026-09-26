@@ -58,7 +58,7 @@ static void not_available(sys_reply_t *r)
 
 static void show_users(node_t *n)
 {
-    static const WCHAR *const cols[] = { L"Name", L"Full Name", L"Description", L"Windows", L"Administrator" };
+    static const WCHAR *const cols[] = { L"Name", L"Full Name", L"Description", L"Session", L"Administrator" };
     static const int widths[] = { 150, 180, 330, 80, 100 };
     int b;
     (void)n;
@@ -76,7 +76,7 @@ static void show_users(node_t *n)
         utf8_to_w(fld(&g_users, b, "FULL-NAME"), c[1], 256);
         if (*desc) utf8_to_w(desc, c[2], 256);
         else if (!strcmp(fld(&g_users, b, "WINDOWS"), "yes")) lstrcpyW(c[2], L"A Stained Glass account");
-        else lstrcpyW(c[2], L"A Linux account without a Windows session");
+        else lstrcpyW(c[2], L"A Linux account without a desktop session");
         if (!strcmp(fld(&g_users, b, "DISABLED"), "yes")) wcscat(c[2], L" (disabled)");
         lstrcpyW(c[3], !strcmp(fld(&g_users, b, "WINDOWS"), "yes") ? L"Yes" : L"No");
         lstrcpyW(c[4], !strcmp(fld(&g_users, b, "ADMIN"), "yes") ? L"Yes" : L"No");
@@ -193,7 +193,7 @@ static void show_shares(node_t *n)
         BOOL printer = !strcmp(fld(&g_shares, b, "PRINTABLE"), "yes");
         utf8_to_w(g_shares.lines[b] + 6, c[0], 512);
         dos_path(fld(&g_shares, b, "PATH"), c[1], 512);
-        lstrcpyW(c[2], printer ? L"Printer" : L"Windows");
+        lstrcpyW(c[2], printer ? L"Printer" : L"Disk");
         utf8_to_w(fld(&g_shares, b, "COMMENT"), c[3], 512);
         _snwprintf(c[4], 512, L"%ls%ls", !strcmp(fld(&g_shares, b, "READONLY"), "yes") ? L"Read" : L"Read/Write",
                    !strcmp(fld(&g_shares, b, "GUEST"), "yes") ? L", guests" : L"");

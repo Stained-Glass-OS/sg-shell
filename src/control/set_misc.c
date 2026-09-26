@@ -32,10 +32,10 @@ void set_build_eoa_display(void)
     st_slider(&y, L"Drag the slider until the sample text is easy to read", 100, 225,
               (int)reg_dword(HKEY_CURRENT_USER, ACCESS, L"TextScaleFactor", 100), CMD_TEXTSIZE);
     st_button(&y, L"Apply", CMD_APPLYTEXT);
-    y = st_head(y, L"Simplify and personalize Windows");
-    st_toggle(&y, L"Show animations in Windows", anim, CMD_ANIM);
-    st_toggle(&y, L"Show transparency in Windows", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSP);
-    st_toggle(&y, L"Automatically hide scroll bars in Windows",
+    y = st_head(y, L"Simplify and personalize Stained Glass");
+    st_toggle(&y, L"Show animations", anim, CMD_ANIM);
+    st_toggle(&y, L"Show transparency", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSP);
+    st_toggle(&y, L"Automatically hide scroll bars",
               reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Accessibility", L"DynamicScrollbars", 0) != 0, CMD_SCROLLBARS);
 }
 
@@ -98,7 +98,7 @@ void set_build_eoa_magnifier(void)
     y = st_para(y, L"Magnifier makes part or all of your screen bigger so you can see words and images better.");
     y = st_head(y, L"Use Magnifier");
     st_toggle(&y, L"Turn on Magnifier", magnifier_window() != NULL, CMD_MAG_ON);
-    y = st_para(y - S(6), L"Press the Windows logo key + Plus (+) to turn on Magnifier. Press the Windows logo key + Esc to turn it off.");
+    y = st_para(y - S(6), L"Press the Start key + Plus (+) to turn on Magnifier. Press the Start key + Esc to turn it off.");
     st_combo(&y, L"Change zoom level", zooms, ARRAYSIZE(MAG_ZOOMS), zsel, CMD_MAG_ZOOM);
     st_combo(&y, L"Change zoom increments", incs, ARRAYSIZE(MAG_INCS), isel, CMD_MAG_INC);
     st_toggle(&y, L"Start Magnifier after sign-in", run_value(L"Magnifier"), CMD_MAG_START);
@@ -176,7 +176,7 @@ void set_build_eoa_keyboard(void)
     SystemParametersInfoW(SPI_GETKEYBOARDCUES, 0, &cues, 0);
     y = st_head(y, L"Use the On-Screen Keyboard");
     st_toggle(&y, L"Turns on the On-Screen Keyboard", FindWindowW(L"OSKMainClass", NULL) != NULL, CMD_OSK);
-    y = st_para(y - S(6), L"Press the Windows logo key + Ctrl + O to turn the On-Screen Keyboard on or off.");
+    y = st_para(y - S(6), L"Press the Start key + Ctrl + O to turn the On-Screen Keyboard on or off.");
     y = st_head(y, L"Use Sticky Keys");
     st_toggle(&y, L"Press one key at a time for keyboard shortcuts", (sk.dwFlags & SKF_STICKYKEYSON) != 0, CMD_STICKY);
     y = st_head(y, L"Use Toggle Keys");
@@ -327,7 +327,7 @@ void set_build_priv_general(void)
               reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", L"Enabled", 0) != 0, CMD_ADID);
     st_toggle(&y, L"Let websites provide locally relevant content by accessing my language list",
               reg_dword(HKEY_CURRENT_USER, L"Control Panel\\International\\User Profile", L"HttpAcceptLanguageOptOut", 0) == 0, CMD_LANGLIST);
-    st_toggle(&y, L"Let Windows track app launches to improve Start and search results",
+    st_toggle(&y, L"Let Stained Glass track app launches to improve Start and search results",
               reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", L"Start_TrackProgs", 1) != 0, CMD_TRACK);
     st_toggle(&y, L"Show me suggested content in the Settings app",
               reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",

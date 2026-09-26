@@ -390,12 +390,12 @@ def op_font_install(args):
     try:
         dfd = os.open(FONTS_SRC, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except OSError:
-        raise Refused("The Windows fonts folder is missing.")
+        raise Refused("The system fonts folder is missing.")
     try:
         try:
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
         except OSError:
-            raise Refused("%s is not in the Windows fonts folder." % name)
+            raise Refused("%s is not in the system fonts folder." % name)
         try:
             st = os.fstat(fd)
             # SYSTEM's own regular file, not a link to something else

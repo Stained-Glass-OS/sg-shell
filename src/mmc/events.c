@@ -1041,8 +1041,8 @@ node_t *events_create(node_t *parent)
     node_t *root = node_add(parent, L"Event Viewer (Local)", IC_EVENTS, NULL, NULL), *w, *a, *want;
     int argc, i;
     WCHAR **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    lstrcpyW(root->desc, L"Windows logs and the Stained Glass system log");
-    w = node_add(root, L"Windows Logs", IC_FOLDER, &windows_logs_ops, NULL);
+    lstrcpyW(root->desc, L"The system's event logs and the Stained Glass system log");
+    w = node_add(root, L"System Logs", IC_FOLDER, &windows_logs_ops, NULL);
     lstrcpyW(w->desc, L"Application, Security and System");
     a = node_add(root, L"Applications and Services Logs", IC_FOLDER, &services_logs_ops, NULL);
     lstrcpyW(a->desc, L"Other logs, and Stained Glass: the journal of its system services");

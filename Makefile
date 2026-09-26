@@ -79,7 +79,7 @@ BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi3
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
-.PHONY: all build test clean test-appmode
+.PHONY: all build test clean test-appmode lint
 all: build
 
 build:
@@ -199,6 +199,12 @@ build:
 # SG_WINE=<wine> SG_WINESERVER=<wineserver> for a build tree).
 test-appmode: build
 	@sh test/appmode-check.sh
+
+# No user-visible "Windows" in our own text (Microsoft's trademark; we must
+# never present ourselves as Windows): string literals, .reg data, manifests.
+# Technical identifiers pass; anything else needs tools/trademark-allow.txt.
+lint:
+	@python3 tools/trademark-check.py --allow tools/trademark-allow.txt src defaults theme admin
 
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build

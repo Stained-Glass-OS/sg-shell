@@ -903,7 +903,7 @@ static void do_action(int action)
         MessageBoxW(g_wnd,
             L"Click a key to type it into the program you are using -- the On-Screen Keyboard never takes "
             L"the keyboard away from it.\n\n"
-            L"Shift, Ctrl, Alt and the Windows key stay down for the next key you click. Fn shows F1-F12 on "
+            L"Shift, Ctrl, Alt and the Start key stay down for the next key you click. Fn shows F1-F12 on "
             L"the number keys. Nav shows the navigation keys; Mv Up and Mv Dn move the keyboard to the top or "
             L"bottom of the screen; Dock fits it across the bottom; Fade lets you see through it when the "
             L"pointer is elsewhere.\n\nWindows logo key + Ctrl + O turns the On-Screen Keyboard on or off.",

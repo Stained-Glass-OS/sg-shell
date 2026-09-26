@@ -149,12 +149,12 @@ void set_build_colors(void)
     mode = st.apps_light && st.system_light ? 0 : !st.apps_light && !st.system_light ? 1 : 2;
     st_combo(&y, L"Choose your color", modes, 3, mode, CMD_MODE);
     if (mode == 2) {
-        st_combo(&y, L"Choose your default Windows mode", ld, 2, st.system_light ? 0 : 1, CMD_SYS_MODE);
+        st_combo(&y, L"Choose your default system mode", ld, 2, st.system_light ? 0 : 1, CMD_SYS_MODE);
         st_combo(&y, L"Choose your default app mode", ld, 2, st.apps_light ? 0 : 1, CMD_APPS_MODE);
     }
     st_toggle(&y, L"Transparency effects", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSPARENCY);
     y = st_head(y, L"Choose your accent color");
-    y = st_text(y, L"Windows colors");
+    y = st_text(y, L"Accent colors");
     for (i = 0; i < 20; i++) {
         HWND t = pg_control(L"SgCplTile", L"", WS_TABSTOP, st_x() + (i % 10) * S(48), y + (i / 10) * S(48), S(44), S(44), CMD_ACC_FIRST + i);
         WCHAR name[16];

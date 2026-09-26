@@ -65,7 +65,7 @@ void set_build_signin(void)
     if (!domain) st_button(&y, L"Change", CMD_PASSWORD);
     y = st_card(y, IC_G_ACCOUNTS, L"Sign-in PIN", L"Not available on this device");
     y = st_head(y, L"Require sign-in");
-    st_combo(&y, L"If you've been away, when should Windows require you to sign in again?", req, 2,
+    st_combo(&y, L"If you've been away, when should Stained Glass require you to sign in again?", req, 2,
              reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\SignIn", L"RequireOnWake", 1) ? 0 : 1, CMD_REQUIRE);
     y = st_head(y, L"Privacy");
     st_toggle(&y, L"Show account details such as my name on the sign-in screen",

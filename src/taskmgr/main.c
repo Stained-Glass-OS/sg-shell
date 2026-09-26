@@ -361,7 +361,7 @@ static void fill_processes(void)
     grid_t *g = &g_grids[TAB_PROCESSES];
     int counts[GRP_COUNT] = { 0 }, i;
     double disk = 0;
-    static const WCHAR *const group_names[GRP_COUNT] = { L"Apps", L"Background processes", L"Windows processes" };
+    static const WCHAR *const group_names[GRP_COUNT] = { L"Apps", L"Background processes", L"System processes" };
 
     grid_begin(g);
     for (i = 0; i < g_nprocs; i++)
@@ -925,7 +925,7 @@ static BOOL run_task(HWND owner, const WCHAR *text, BOOL admin)
     sei.nShow = SW_SHOWNORMAL;
     _snwprintf(g_last_action, 128, L"run %s%s", admin ? L"admin " : L"", file);
     if (ShellExecuteExW(&sei)) return TRUE;
-    _snwprintf(msg, ARRAYSIZE(msg), L"Windows cannot find '%s'. Make sure you typed the name correctly, and then try again.", file);
+    _snwprintf(msg, ARRAYSIZE(msg), L"Stained Glass cannot find '%s'. Make sure you typed the name correctly, and then try again.", file);
     MessageBoxW(owner, msg, L"Create new task", MB_ICONERROR | MB_OK);
     return FALSE;
 }
@@ -993,7 +993,7 @@ static void run_dialog(HWND owner)
     dlg_str(&d, L"Create new task");
     *d.p++ = 9;
     dlg_str(&d, L"Segoe UI");
-    dlg_item(&d, 0x82, L"Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.",
+    dlg_item(&d, 0x82, L"Type the name of a program, folder, document, or Internet resource, and Stained Glass will open it for you.",
              0xFFFF, SS_LEFT, 10, 10, 230, 20);
     dlg_item(&d, 0x82, L"&Open:", 0xFFFF, SS_LEFT, 10, 38, 26, 10);
     dlg_item(&d, 0x81, L"", ID_RUN_EDIT, WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 40, 36, 200, 13);

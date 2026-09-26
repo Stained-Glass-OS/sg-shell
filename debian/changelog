@@ -1,3 +1,13 @@
+sg-shell (0.1.0-48) unstable; urgency=medium
+
+  * Trademark hygiene: no user-visible "Windows" as our name. Settings'
+    heading is "Stained Glass Settings"; "Windows ..." in pages, dialogs,
+    consoles, Task Manager, key hints ("the Start key") and messages is now
+    "Stained Glass ..." or neutral. tools/trademark-check.py (make lint, in
+    CI) fails on any user-visible "Windows" not in tools/trademark-allow.txt.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Fri, 25 Sep 2026 19:44:54 -0700
+
 sg-shell (0.1.0-47) unstable; urgency=medium
 
   * WordPad: tables -- read and written in RTF, .docx (w:tbl, tblGrid,

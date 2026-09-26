@@ -1305,7 +1305,7 @@ static void ed_paint(HDC hdc)
     {
         RECT t = { S(24), S(48) + S(14), c.right - S(24), c.bottom - S(8) };
         text(mem, g_font, COL_DIM, L"Choose a mode, then select New to snip part of your screen.\n"
-                                    L"Press Windows logo key + Shift + S to start a snip from anywhere.", &t, DT_LEFT | DT_WORDBREAK);
+                                    L"Press the Start key + Shift + S to start a snip from anywhere.", &t, DT_LEFT | DT_WORDBREAK);
     }
     BitBlt(hdc, 0, 0, c.right, c.bottom, mem, 0, 0, SRCCOPY);
     DeleteDC(mem); DeleteObject(back);

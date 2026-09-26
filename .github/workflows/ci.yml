@@ -25,6 +25,9 @@ jobs:
           apt-get install -y --no-install-recommends build-essential devscripts debhelper equivs make ca-certificates
           apt-get build-dep -y --no-install-recommends ./
 
+      - name: Lint (no user-visible "Windows")
+        run: make lint
+
       - name: Build package
         run: dpkg-buildpackage -us -uc -b
 

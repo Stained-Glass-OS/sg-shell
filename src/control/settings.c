@@ -460,7 +460,7 @@ void set_build_home(void)
 {
     int w = pg_width(), tw = S(290), th = S(84), cols, x0, y = S(28), i;
     HWND e;
-    pg_text(0, y, w, S(44), g_font_big, COL_TEXT, L"Settings", DT_SINGLELINE | DT_CENTER);
+    pg_text(0, y, w, S(44), g_font_big, COL_TEXT, L"Stained Glass Settings", DT_SINGLELINE | DT_CENTER);
     y += S(64);
     e = make_search(g_page, (w - S(420)) / 2, y, S(420), CMD_HOMESEARCH);
     (void)e;

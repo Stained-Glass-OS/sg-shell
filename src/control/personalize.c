@@ -483,7 +483,7 @@ void build_personalize(void)
             else SendMessageW(t, TILE_SETCOLOR, RGB(0xDD, 0xDD, 0xDD), 0);
             SendMessageW(t, TILE_SETSEL, !lstrcmpiW(g_pics[i], g_state.source), 0);
         }
-        if (!g_npics) pg_text(x, y, w, S(20), g_font_body, COL_SUBTLE, L"No pictures were found in the Windows wallpaper folder.", DT_SINGLELINE);
+        if (!g_npics) pg_text(x, y, w, S(20), g_font_body, COL_SUBTLE, L"No pictures were found in the system wallpaper folder.", DT_SINGLELINE);
         y += g_npics ? ((g_npics + cols - 1) / cols) * (th + S(10)) : S(24);
         pg_button(L"Browse...", x, y + S(4), S(110), CMD_BROWSE);
         y += S(48);
@@ -520,7 +520,7 @@ void build_personalize(void)
     c = pg_control(L"BUTTON", L"Dark", WS_TABSTOP | BS_AUTORADIOBUTTON, x + S(130), y, S(120), S(24), CMD_APPS_DARK);
     SendMessageW(c, BM_SETCHECK, g_state.apps_light ? BST_UNCHECKED : BST_CHECKED, 0);
     y += S(44);
-    y = heading(x, y, w, L"Choose your default Windows mode");
+    y = heading(x, y, w, L"Choose your default system mode");
     c = pg_control(L"BUTTON", L"Light", WS_TABSTOP | WS_GROUP | BS_AUTORADIOBUTTON, x, y, S(120), S(24), CMD_SYS_LIGHT);
     SendMessageW(c, BM_SETCHECK, g_state.system_light ? BST_CHECKED : BST_UNCHECKED, 0);
     c = pg_control(L"BUTTON", L"Dark", WS_TABSTOP | BS_AUTORADIOBUTTON, x + S(130), y, S(120), S(24), CMD_SYS_DARK);

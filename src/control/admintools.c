@@ -18,10 +18,10 @@ static const struct { const WCHAR *name, *file, *desc; } TOOLS[] = {
     { L"Device Manager",      L"devmgmt.msc",  L"View the hardware in this computer and the drivers it uses." },
     { L"Disk Cleanup",        L"cleanmgr.exe", L"Free disk space by removing files you do not need." },
     { L"Disk Management",     L"diskmgmt.msc", L"View and manage disks, partitions and drive letters." },
-    { L"Event Viewer",        L"eventvwr.exe", L"View Windows logs and the Stained Glass system log." },
-    { L"Registry Editor",     L"regedit.exe",  L"View and change the Windows registry." },
+    { L"Event Viewer",        L"eventvwr.exe", L"View the event logs and the Stained Glass system log." },
+    { L"Registry Editor",     L"regedit.exe",  L"View and change the registry." },
     { L"Resource Monitor",    L"resmon.exe",   L"See how programs use the processor, memory, disk and network." },
-    { L"Services",            L"services.msc", L"Start, stop and configure Windows services." },
+    { L"Services",            L"services.msc", L"Start, stop and configure services." },
     { L"System Information",  L"msinfo32.exe", L"View this computer's hardware and software." },
 };
 
@@ -50,7 +50,7 @@ BOOL cmd_admintools(int id, int code, HWND ctl)
         if ((INT_PTR)ShellExecuteW(g_main, NULL, TOOLS[id - CMD_TOOL].file, NULL, NULL, SW_SHOWNORMAL) <= 32)
         {
             WCHAR msg[300];
-            _snwprintf(msg, ARRAYSIZE(msg), L"Windows cannot find '%ls'.", TOOLS[id - CMD_TOOL].file);
+            _snwprintf(msg, ARRAYSIZE(msg), L"Stained Glass cannot find '%ls'.", TOOLS[id - CMD_TOOL].file);
             msg[ARRAYSIZE(msg) - 1] = 0;
             MessageBoxW(g_main, msg, TOOLS[id - CMD_TOOL].name, MB_OK | MB_ICONERROR);
         }

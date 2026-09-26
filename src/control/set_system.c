@@ -385,7 +385,7 @@ void set_build_notify(void)
                 reg_dword(HKEY_CURRENT_USER, NOTIFY, L"NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK", 1) != 0, CMD_LOCKTOASTS);
     st_checkbox(&y, L"Allow notifications to play sounds",
                 reg_dword(HKEY_CURRENT_USER, NOTIFY, L"NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND", 1) != 0, CMD_SOUNDS);
-    st_checkbox(&y, L"Get tips, tricks, and suggestions as you use Windows",
+    st_checkbox(&y, L"Get tips, tricks, and suggestions as you use Stained Glass",
                 reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
                           L"SubscribedContent-338389Enabled", 0) != 0, CMD_TIPS);
     y += S(8);
@@ -655,7 +655,7 @@ void set_build_about(void)
     y += S(8);
     st_button(&y, L"Copy", CMD_COPY);
     st_button(&y, L"Rename this PC", CMD_RENAME);
-    y = st_head(y, L"Windows specifications");
+    y = st_head(y, L"Stained Glass specifications");
     y = st_row(y, L"Edition", f.edition);
     y = st_row(y, L"Version", f.os_build);
     if (wine_version) { _snwprintf(line, ARRAYSIZE(line), L"Wine %S (wine-sg)", wine_version()); y = st_row(y, L"Compatibility", line); }

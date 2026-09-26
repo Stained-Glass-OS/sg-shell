@@ -58,7 +58,7 @@ static void summary(void (*add)(const WCHAR *, const WCHAR *))
     _snwprintf(v, 512, L"%lu.%lu.%lu Build %lu", os.dwMajorVersion, os.dwMinorVersion, os.dwBuildNumber, os.dwBuildNumber);
     add(L"Version", v);
     add(L"OS Manufacturer", L"Stained Glass OS");
-    if (wine_version) { utf8_to_w(wine_version(), a, 256); _snwprintf(v, 512, L"Wine %ls", a); add(L"Windows Compatibility", v); }
+    if (wine_version) { utf8_to_w(wine_version(), a, 256); _snwprintf(v, 512, L"Wine %ls", a); add(L"Compatibility Layer", v); }
     sysv("KERNEL", v, 512);
     add(L"Kernel", v);
     n = 256; GetComputerNameW(a, &n);
@@ -82,7 +82,7 @@ static void summary(void (*add)(const WCHAR *, const WCHAR *))
     sysv("BOARD-VERSION", v, 512); add(L"BaseBoard Version", v);
     sysv("SECURE-BOOT", a, 256);
     add(L"Secure Boot State", !wcscmp(a, L"on") ? L"On" : !wcscmp(a, L"off") ? L"Off" : L"Unsupported");
-    GetWindowsDirectoryW(v, 512); add(L"Windows Directory", v);
+    GetWindowsDirectoryW(v, 512); add(L"System Root Directory", v);
     GetSystemDirectoryW(v, 512); add(L"System Directory", v);
     sysv("BOOT-DEVICE", v, 512); add(L"Boot Device", v);
     sysv("LOCALE", v, 512); add(L"Locale", v);
@@ -150,7 +150,7 @@ static void display(void (*add)(const WCHAR *, const WCHAR *))
     {
         if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)) continue;
         add(L"", L"");
-        add(L"Windows Adapter", dd.DeviceString);
+        add(L"Program-Side Adapter", dd.DeviceString);
         dm.dmSize = sizeof(dm);
         if (EnumDisplaySettingsW(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
         {
@@ -177,7 +177,7 @@ static void network(void (*add)(const WCHAR *, const WCHAR *))
             ULONG k;
             if (a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
             add(L"", L"");
-            add(L"Windows Adapter", a->Description);
+            add(L"Program-Side Adapter", a->Description);
             for (k = 0; k < a->PhysicalAddressLength && k < 8; k++)
                 _snwprintf(mac + wcslen(mac), 4, k ? L":%02X" : L"%02X", a->PhysicalAddress[k]);
             if (mac[0]) add(L"MAC Address", mac);

@@ -1,0 +1,3 @@
+# trademark-check allowlist: PATH-GLOB<TAB>PHRASE-REGEX<TAB>reason (one line each)
+*	Windows programs	describes what the system runs (compatibility), not a name for our product
+src/terminal/main.c	^Windows PowerShell$	names Microsoft's own program, which the user installs; the profile says what it runs

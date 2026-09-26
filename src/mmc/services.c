@@ -272,7 +272,7 @@ static void progress_open(const WCHAR *what, const svc_t *s)
     g_progress = CreateWindowExW(WS_EX_DLGMODALFRAME, L"#32770", L"Service Control",
                                  WS_POPUP | WS_CAPTION | WS_VISIBLE, (rc.left + rc.right) / 2 - S(200),
                                  (rc.top + rc.bottom) / 2 - S(70), S(400), S(140), g_main, NULL, g_inst, NULL);
-    _snwprintf(text, ARRAY_SIZE(text), L"Windows is attempting to %ls the following service on Local Computer...", what);
+    _snwprintf(text, ARRAY_SIZE(text), L"Stained Glass is attempting to %ls the following service on Local Computer...", what);
     lbl = CreateWindowExW(0, L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, S(16), S(12), S(360), S(34),
                           g_progress, NULL, g_inst, NULL);
     name = CreateWindowExW(0, L"STATIC", s->display, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, S(16), S(46), S(360), S(18),
@@ -330,12 +330,12 @@ static void report_failure(const WCHAR *verb, const svc_t *s, DWORD err)
     error_text(err, msg, 256);
     if (err == ERROR_ACCESS_DENIED && !is_admin())
         frame_message(MB_OK | MB_ICONERROR, L"Services",
-                      L"Windows could not %ls the %ls service on Local Computer.\n\nError %lu: %ls\n\n"
+                      L"Stained Glass could not %ls the %ls service on Local Computer.\n\nError %lu: %ls\n\n"
                       L"Only an administrator can %ls services. Run Services as an administrator.",
                       verb, s->display, err, msg, verb);
     else
         frame_message(MB_OK | MB_ICONERROR, L"Services",
-                      L"Windows could not %ls the %ls service on Local Computer.\n\nError %lu: %ls",
+                      L"Stained Glass could not %ls the %ls service on Local Computer.\n\nError %lu: %ls",
                       verb, s->display, err, msg);
 }
 
@@ -926,8 +926,8 @@ static void show_units(node_t *n)
         frame_status(L"%ls", m);
     }
     else frame_status(L"The Linux (systemd) services Stained Glass runs on, read-only");
-    frame_banner(L"These are the Linux services under Windows. They are shown read-only: Windows programs manage "
-                 L"Windows services, the system manages these.");
+    frame_banner(L"These are the Linux services beneath the system. They are shown read-only: programs manage "
+                 L"their services, the system manages these.");
 }
 
 static void unit_open(node_t *n, LPARAM key)
@@ -959,7 +959,7 @@ node_t *services_create(node_t *parent)
 {
     node_t *n = node_add(parent, L"Services (Local)", IC_SERVICES, &services_ops, NULL);
     node_t *u;
-    lstrcpyW(n->desc, L"Start, stop and configure Windows services");
+    lstrcpyW(n->desc, L"Start, stop and configure services");
     u = node_add(parent, L"Stained Glass System Services", IC_SGLOGO, &units_ops, NULL);
     lstrcpyW(u->desc, L"The Linux services Stained Glass runs on (read-only)");
     return n;

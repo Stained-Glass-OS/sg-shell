@@ -96,7 +96,7 @@ void build_system(void)
     pg_title(x, y, L"View basic information about your computer");
     y += S(48);
 
-    y = section(x, y, w, L"Windows edition");
+    y = section(x, y, w, L"Stained Glass edition");
     pg_icon(x + w - S(96), y - S(6), S(80), IC_SYSTEM);
     y = row(x, y, w - S(110), L"Edition", f.edition);
     y = row(x, y, w - S(110), L"Version", f.os_build);

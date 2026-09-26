@@ -1127,7 +1127,7 @@ static int run_browser(const WCHAR *zip)
     if ((r = zip_open(&b.z, b.zip)))
     {
         WCHAR msg[MAX_PATH + 128];
-        _snwprintf(msg, MAX_PATH + 127, L"Windows cannot open the folder.\n\nThe Compressed (zipped) Folder '%ls' is invalid.", b.zip);
+        _snwprintf(msg, MAX_PATH + 127, L"Stained Glass cannot open the folder.\n\nThe Compressed (zipped) Folder '%ls' is invalid.", b.zip);
         msg[MAX_PATH + 127] = 0;
         dumpf(TRUE, L"WINDOW error");
         MessageBoxW(NULL, msg, L"Compressed (zipped) Folders Error", MB_OK | MB_ICONERROR);

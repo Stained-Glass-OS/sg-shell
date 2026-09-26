@@ -963,7 +963,7 @@ static void disk_properties(int dsk)
     utf8_to_w(f(g_disks[dsk].line, "MODEL") ? f(g_disks[dsk].line, "MODEL") : "", v, 256);
     _snwprintf(text, ARRAY_SIZE(text), L"Disk %d\n%ls\n%ls, %ls\n\nDevice status: %ls\n", dsk, v, size,
                g_disks[dsk].removable ? L"Removable" : L"Basic",
-               !strcmp(h, "failing") ? L"Windows detected a hard disk problem: the disk reports (SMART) that it is "
+               !strcmp(h, "failing") ? L"Stained Glass detected a hard disk problem: the disk reports (SMART) that it is "
                                        L"failing. Back up your files now to prevent information loss."
                : !strcmp(h, "ok") ? L"This device is working properly (SMART: healthy)."
                : !strcmp(h, "unsupported") ? L"This device is working properly (it does not report its health)."

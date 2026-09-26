@@ -162,9 +162,9 @@ void set_build_region(void)
     for (i = 0; i < g_nlocales; i++) { litems[i] = g_locale_names[i]; if (!lstrcmpiW(g_locales[i], cur)) lsel = i; }
     for (i = 0; i < g_ngeos; i++) { gitems[i] = g_geo_names[i]; if (g_geos[i] == geo) gsel = i; }
     y = st_head(y, L"Country or region");
-    st_combo(&y, L"Windows and apps might use your country or region to give you local content", gitems, g_ngeos, gsel, CMD_COUNTRY);
+    st_combo(&y, L"Stained Glass and apps might use your country or region to give you local content", gitems, g_ngeos, gsel, CMD_COUNTRY);
     y = st_head(y, L"Regional format");
-    st_combo(&y, L"Windows formats dates and times based on your language and regional preferences.", litems, g_nlocales, lsel, CMD_FORMAT);
+    st_combo(&y, L"Stained Glass formats dates and times based on your language and regional preferences.", litems, g_nlocales, lsel, CMD_FORMAT);
     y = st_head(y, L"Regional format data");
     GetLocalTime(&now);
     if (GetDateFormatEx(cur, DATE_SHORTDATE, &now, NULL, buf, ARRAYSIZE(buf), NULL)) { y = st_row(y, L"Short date", buf); }
