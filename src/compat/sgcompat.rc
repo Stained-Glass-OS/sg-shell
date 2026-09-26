@@ -1,0 +1,37 @@
+/* Stained Glass OS -- the Compatibility tab of a program's Properties.
+ * SPDX-License-Identifier: AGPL-3.0-or-later */
+#include <windows.h>
+#include "resource.h"
+
+IDD_COMPAT DIALOGEX 0, 0, 227, 215
+STYLE DS_SHELLFONT | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Compatibility"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_EXE_NAME, 7, 5, 213, 9, SS_PATHELLIPSIS
+    LTEXT           "These settings apply wherever this program starts from: a shortcut, a launcher such as Steam, or another program.", -1, 7, 15, 213, 18
+
+    GROUPBOX        "Compatibility mode", -1, 7, 34, 213, 27
+    AUTOCHECKBOX    "Run as if on:", IDC_VER_CHECK, 14, 45, 60, 10
+    COMBOBOX        IDC_VER_COMBO, 78, 43, 135, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    GROUPBOX        "Settings", -1, 7, 63, 213, 51
+    AUTOCHECKBOX    "Run this program as an administrator", IDC_ADMIN, 14, 73, 199, 10
+    AUTOCHECKBOX    "Run in a window of its own, size:", IDC_DESKTOP, 14, 86, 130, 10
+    EDITTEXT        IDC_DESKTOP_SIZE, 153, 84, 60, 12, ES_AUTOHSCROLL
+    LTEXT           "Graphics:", -1, 14, 100, 36, 9
+    COMBOBOX        IDC_GFX_COMBO, 52, 98, 161, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    GROUPBOX        "Launch options", -1, 7, 116, 213, 76
+    LTEXT           "Environment variables (NAME=value):", -1, 14, 126, 199, 9
+    LISTBOX         IDC_ENV_LIST, 14, 136, 150, 25, LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Remove", IDC_ENV_REMOVE, 168, 136, 45, 13
+    EDITTEXT        IDC_ENV_EDIT, 14, 163, 150, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "Add", IDC_ENV_ADD, 168, 162, 45, 13
+    LTEXT           "Arguments:", -1, 14, 179, 40, 9
+    EDITTEXT        IDC_ARGS, 56, 177, 157, 12, ES_AUTOHSCROLL
+
+    LTEXT           "", IDC_PRESET_TEXT, 7, 196, 160, 18
+    PUSHBUTTON      "Recommended", IDC_PRESET_APPLY, 170, 197, 50, 14
+END
+

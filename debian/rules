@@ -26,6 +26,7 @@ override_dh_auto_install:
 	    build/sg-wordpad64.exe \
 	    build/sg-fontview64.exe \
 	    build/sg-pdf64.exe \
+	    build/sgcompat64.dll \
 	    build/sg-magnify64.exe build/sg-osk64.exe \
 	    build/sg-browser64.exe \
 	    build/sg-mmc64.exe build/sg-eventvwr64.exe build/sg-msinfo3264.exe build/sg-cleanmgr64.exe build/sg-resmon64.exe \
@@ -44,3 +45,5 @@ override_dh_auto_install:
 	python3 theme/wallpapers/gen-wallpaper.py --night debian/sg-shell/usr/share/stained-glass/wallpapers/stained-glass-night.jpg
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
+	# Recommended per-program settings for the Compatibility tab (src/compat).
+	install -D -m0644 data/compat-presets.ini debian/sg-shell/usr/share/stained-glass/compat-presets.ini

@@ -1,3 +1,4 @@
 # trademark-check allowlist: PATH-GLOB<TAB>PHRASE-REGEX<TAB>reason (one line each)
 *	Windows programs	describes what the system runs (compatibility), not a name for our product
 src/terminal/main.c	^Windows PowerShell$	names Microsoft's own program, which the user installs; the profile says what it runs
+src/compat/sgcompat.c	^Windows (11|10|8\.1|8|7|Vista \(SP2\)|XP \(Service Pack 3\))$	the Compatibility tab's version list: which version a program is told it runs on (like winecfg), not a name for our product

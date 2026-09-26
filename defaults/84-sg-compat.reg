@@ -1,0 +1,20 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the Compatibility tab of a program's Properties
+; (right-click an .exe or its shortcut > Properties > Compatibility):
+; sgcompat64.dll, a property sheet extension for exefile and lnkfile.
+;
+; The path is the package's install location reached through Z:.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{5C9B1F3E-7A2D-4E8B-9C61-3A7F2E4D8B10}]
+@="Stained Glass Compatibility"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{5C9B1F3E-7A2D-4E8B-9C61-3A7F2E4D8B10}\InprocServer32]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sgcompat64.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\exefile\shellex\PropertySheetHandlers\StainedGlassCompatibility]
+@="{5C9B1F3E-7A2D-4E8B-9C61-3A7F2E4D8B10}"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shellex\PropertySheetHandlers\StainedGlassCompatibility]
+@="{5C9B1F3E-7A2D-4E8B-9C61-3A7F2E4D8B10}"

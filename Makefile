@@ -182,6 +182,12 @@ build:
 	@$(WINDRES64) -I src/pdf -I $(BUILD) src/pdf/pdf.rc -O coff -o $(BUILD)/sg-pdf-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-pdf64.exe $(PDF_SRC) \
 	    $(BUILD)/sg-pdf-res64.o $(PDF_LIBS) && echo "built sg-pdf (64-bit)"
+	@# The Compatibility tab of a program's Properties: a shell extension DLL
+	@# (src/compat), loaded by the Properties dialog for .exe files and shortcuts.
+	@$(WINDRES64) -I src/compat src/compat/sgcompat.rc -O coff -o $(BUILD)/sgcompat-res64.o
+	@$(MINGW64) -O2 -municode -shared -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
+	    -o $(BUILD)/sgcompat64.dll src/compat/sgcompat.c $(BUILD)/sgcompat-res64.o src/compat/sgcompat.def \
+	    -lole32 -luuid -lshell32 -lshlwapi -lcomctl32 -ladvapi32 -luser32 && echo "built sgcompat (64-bit)"
 	@python3 src/fontview/gen-icon.py $(BUILD)/sg-fontview.ico $(BUILD)/sg-fonts.ico
 	@$(WINDRES64) -I src/fontview -I $(BUILD) src/fontview/fontview.rc -O coff -o $(BUILD)/sg-fontview-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $(FONTVIEW_SRC) \
@@ -235,6 +241,7 @@ test: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/compat-check.sh
 	@sh test/wordpad-check.sh
 	@sh test/fontview-check.sh
 	@sh test/magnify-check.sh

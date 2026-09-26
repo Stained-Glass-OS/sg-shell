@@ -1,3 +1,17 @@
+sg-shell (0.1.0-53) unstable; urgency=medium
+
+  * Properties of a program (.exe or a shortcut to one) has a Compatibility
+    tab (sgcompat64.dll, a property sheet handler): run as if on an older
+    version, run as administrator, a window of its own at a set size, the
+    graphics path (Vulkan/DXVK or OpenGL/WineD3D), environment variables
+    and launch arguments -- the tweaks ProtonDB reports suggest -- plus
+    recommended settings for a program from compat-presets.ini. Stored in
+    Wine's AppDefaults and AppCompatFlags\Layers, where wine-sg 10.0-81
+    (0420) applies them however the program starts. Gate:
+    test/compat-check.sh.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Sat, 26 Sep 2026 09:01:05 -0700
+
 sg-shell (0.1.0-52) unstable; urgency=medium
 
   * Terminal: Alt+F4 closes the window (QA B18); it went to the shell as
