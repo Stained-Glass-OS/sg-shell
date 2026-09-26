@@ -107,7 +107,9 @@ def py_strings(text):
                     k + 1 < len(toks) and toks[k + 1].type in (tokenize.NEWLINE, tokenize.ENDMARKER):
                 prev = t.type
                 continue
-            out.append((t.start[0], t.string))
+            body = t.string.lstrip("rRbBuUfF")
+            q = body[:3] if body[:3] in ('"""', "'''") else body[:1]
+            out.append((t.start[0], body[len(q):len(body) - len(q)] if body.endswith(q) else body))
         if t.type not in (tokenize.COMMENT, tokenize.NL):
             prev = t.type
     return out
