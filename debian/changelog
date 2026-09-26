@@ -1,3 +1,11 @@
+sg-shell (0.1.0-50) unstable; urgency=medium
+
+  * Settings in dark mode: links, status text and line glyphs use a lighter
+    shade of the accent (QA B23); fills keep the accent. settings-check
+    checks the link colour in both modes.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Fri, 25 Sep 2026 23:57:46 -0700
+
 sg-shell (0.1.0-49) unstable; urgency=medium
 
   * Settings > Date & time: the time zone box was empty on a machine in UTC

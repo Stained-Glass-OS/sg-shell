@@ -176,6 +176,16 @@ static enum page_id page_for(const WCHAR *arg, BOOL *known)
 
 /* ---- the controls of a page ---------------------------------------------------------------- */
 COLORREF st_accent(void) { return g_accent; }
+
+/* The accent as text and glyphs: on a dark page a lighter shade of it, as
+ * Windows' dark Settings uses, or dark purple on #202020 is hard to read
+ * (QA B23). Fills (switches, the selection bar) keep the accent itself. */
+static COLORREF accent_text(COLORREF a, BOOL dark)
+{
+    if (!dark) return a;
+    return RGB((GetRValue(a) * 45 + 255 * 55) / 100, (GetGValue(a) * 45 + 255 * 55) / 100,
+               (GetBValue(a) * 45 + 255 * 55) / 100);
+}
 int st_x(void) { return S(28); }
 int st_w(void)
 {
@@ -189,7 +199,7 @@ int st_title(const WCHAR *title)
     pg_text(st_x(), y, pg_width() - st_x() - S(16), S(44), g_font_title, COL_TEXT, title, DT_SINGLELINE | DT_END_ELLIPSIS);
     y += S(56);
     if (g_status[0] && g_status_page == current_page()) {
-        y += pg_para(st_x(), y, st_w(), g_font_body, g_accent, g_status) + S(12);
+        y += pg_para(st_x(), y, st_w(), g_font_body, g_col_link, g_status) + S(12);
     }
     return y;
 }
@@ -734,6 +744,7 @@ static void write_dump(void)
         fwprintf(f, L"window %ls\nrect %ld %ld %ld %ld\npage %ls\ncategory %ls\nnav %ls\n", title, wr.left, wr.top, wr.right, wr.bottom,
                  g_pages[current_page()].title, c >= 0 ? CATS[c].name : L"", IsWindowVisible(g_nav) ? L"shown" : L"hidden");
         fwprintf(f, L"accent %02X%02X%02X\n", GetRValue(g_accent), GetGValue(g_accent), GetBValue(g_accent));
+        fwprintf(f, L"link %02X%02X%02X\n", GetRValue(g_col_link), GetGValue(g_col_link), GetBValue(g_col_link));
         if (IsWindowVisible(g_nav) && g_nav_focus > 0) {
             /* the selected page's accent bar, on screen */
             POINT pt = { S(2), S(NAV_LIST_Y) + (g_nav_focus - 1) * S(NAV_ITEM_H) + S(NAV_ITEM_H) / 2 };
@@ -787,13 +798,12 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         /* the accent changed (here or elsewhere): the switches and links follow */
         if (lp && !lstrcmpW((const WCHAR *)lp, L"ImmersiveColorSet")) {
             DWORD a = reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFC03070);
-            g_accent = g_glyph_color = g_col_link = a & 0xFFFFFF;
-            g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
+            BOOL dark = sg_apps_dark();
+            g_accent = a & 0xFFFFFF;
+            g_glyph_color = g_col_link = accent_text(g_accent, dark);
+            g_col_link_hot = dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
             /* the app mode: the palette, the title bar, the page */
-            if (sg_apps_dark() != g_dark) {
-                pal_apply(hwnd);
-                g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
-            }
+            if (dark != g_dark) pal_apply(hwnd);
             InvalidateRect(hwnd, NULL, TRUE);
             RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
@@ -876,8 +886,8 @@ int settings_main(int argc, WCHAR **argv, int show)
     g_font_body  = font(100, FW_NORMAL);
     g_font_small = font(85, FW_NORMAL);
     a = reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFC03070);
-    g_accent = g_glyph_color = a & 0xFFFFFF;
-    g_col_link = g_accent;
+    g_accent = a & 0xFFFFFF;
+    g_glyph_color = g_col_link = accent_text(g_accent, g_dark);
     g_col_link_hot = g_dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
 
     register_page_classes();

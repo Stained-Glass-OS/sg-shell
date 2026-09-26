@@ -235,6 +235,18 @@ if [ $# -eq 2 ]; then
     shot colors
 else fail "no #107C41 accent tile"; fi
 
+# --- Dark app mode: accent text is a lighter shade, readable on #202020 (QA B23) ---------------
+[ "$(D link)" = 107C41 ] && pass "light mode: links are the accent itself" || fail "light-mode link colour $(D link)"
+wine "$T/sg-settings64.exe" --set mode apps dark >/dev/null 2>&1
+i=0; while [ "$(D link)" = 107C41 ] && [ $i -lt 30 ]; do sleep 0.3; i=$((i + 1)); done
+l=$(D link); lum=$(printf '%d %d %d' "0x${l%????}" "0x$(echo "$l" | cut -c3-4)" "0x${l#????}" | awk '{ print int(0.299*$1 + 0.587*$2 + 0.114*$3) }')
+[ "${lum:-0}" -ge 140 ] && pass "dark mode: links and accent text are a light shade of the accent ($l, luminance $lum)" \
+    || fail "dark mode: link colour $l (luminance $lum) is too dark for #202020"
+[ "$(D accent)" = 107C41 ] && pass "and the accent itself (fills) is unchanged" || fail "dark mode changed the accent to $(D accent)"
+shot colors-dark
+wine "$T/sg-settings64.exe" --set mode apps light >/dev/null 2>&1
+i=0; while [ "$(D link)" != 107C41 ] && [ $i -lt 30 ]; do sleep 0.3; i=$((i + 1)); done
+
 # --- Sound, through sg-settingsctl ----------------------------------------------------------------
 wine start ms-settings:sound >/dev/null 2>&1
 page_is Sound "ms-settings:sound"
