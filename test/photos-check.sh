@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Photos (sg-photos), the image viewer. On a shell desktop under Xvfb,
 # with defaults/73-sg-photos.reg imported (pointing at this build):
 #

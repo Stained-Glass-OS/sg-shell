@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Terminal's split panes and search (sg-terminal, wt.exe), on a shell
 # desktop under Xvfb, driven on the X keyboard and read back from the dump
 # (SG_TERMINAL_DUMP: every pane's place, size and shown rows) and screenshots:

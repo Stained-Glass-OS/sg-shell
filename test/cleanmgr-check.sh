@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for Disk Cleanup (cleanmgr.exe, sg-cleanmgr64.exe), under Xvfb on a shell
 # desktop, reading the dialog from SG_MMC_DUMP and checking what is deleted:

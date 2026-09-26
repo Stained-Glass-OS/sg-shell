@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Terminal (sg-terminal, wt.exe): its screen's unit test (native),
 # then the program on a shell desktop under Xvfb, driven on the X keyboard and
 # mouse and read back from its dump (SG_TERMINAL_DUMP) and screenshots:

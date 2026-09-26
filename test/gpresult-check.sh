@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for the Group Policy result tool (sg-gpresult): it reports the machine
 # and user policy that is actually in force, read from the live registry. To
 # prove it reads real policy rather than printing a canned report, the gate

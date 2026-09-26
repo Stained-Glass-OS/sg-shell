@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Task Manager (sg-taskmgr), under Xvfb on a shell desktop with the
 # X keyboard and mouse, reading back what it shows from SG_TASKMGR_DUMP:
 #

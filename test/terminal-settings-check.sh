@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Terminal's settings.json, user profiles and dragging pane dividers
 # (sg-terminal, wt.exe), on a shell desktop under Xvfb, driven with the X
 # mouse and keyboard and read back from the dump (SG_TERMINAL_DUMP), the file

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Compressed (zipped) Folders (sg-zip): our own inflate, deflate and
 # ZIP container against Python's zipfile (and Info-ZIP's unzip when present),
 # the zip-slip refusals, a damaged entry caught by its CRC, and the windows --

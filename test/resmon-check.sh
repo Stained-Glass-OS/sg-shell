@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for Resource Monitor (resmon.exe, sg-resmon64.exe), under Xvfb on a shell
 # desktop, reading its tabs from SG_MMC_DUMP while test processes of the

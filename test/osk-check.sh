@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for the On-Screen Keyboard (sg-osk, osk.exe): Notepad has the focus,
 # Win+Ctrl+O on the X keyboard opens the keyboard (through explorer and
 # system32's osk.exe, wine-sg 0181/0182), and the X mouse clicks its keys

@@ -203,7 +203,12 @@ test-appmode: build
 # No user-visible "Windows" in our own text (Microsoft's trademark; we must
 # never present ourselves as Windows): string literals, .reg data, manifests.
 # Technical identifiers pass; anything else needs tools/trademark-allow.txt.
+# Every test that runs Wine sources test/scratch-home.sh first (a HOME of its
+# own: a prefix links its Desktop, Documents... into HOME).
 lint:
+	@for f in $$(grep -l WINEPREFIX test/*.sh); do \
+	    sed -n 2p "$$f" | grep -q '^\. "$$(dirname "$$0")/scratch-home.sh"$$' || \
+	    { echo "$$f: line 2 must be: . \"\$$(dirname \"\$$0\")/scratch-home.sh\""; exit 1; }; done
 	@python3 tools/trademark-check.py --allow tools/trademark-allow.txt src defaults theme admin
 
 # The gate renders each panel headlessly and checks it docks and paints.

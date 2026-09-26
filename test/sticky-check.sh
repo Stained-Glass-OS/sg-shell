@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Sticky Notes (sg-sticky): started through App Paths (stikynot.exe)
 # on a shell desktop, a first note appears; text typed on the X keyboard lands
 # in it, Ctrl+B makes it bold, the ... menu turns it green, dragging its strip

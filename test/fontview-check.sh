@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2086
 # Gate for the font viewer and the Fonts folder (sg-fontview; fontview.exe,
 # control fonts), under Xvfb on a shell desktop of a SHARED prefix -- this

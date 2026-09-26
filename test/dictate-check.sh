@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for voice typing's toolbar (sg-dictate): Notepad has the focus,
 # `sg-dictate.exe /toggle` (found through App Paths, as explorer's Win+H finds
 # it) opens the bar, which re-launches itself through its engine's bridge; an

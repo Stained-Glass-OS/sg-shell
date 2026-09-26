@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Alarms & Clock (sg-clock) on a shell desktop under Xvfb, driven by
 # the X mouse and keyboard and read back from its dump (SG_CLOCK_DUMP), the
 # registry and screenshots:

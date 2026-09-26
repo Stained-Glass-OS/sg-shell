@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate: the On-Screen Keyboard's labels are the keyboard layout's, and a key
 # types what its label shows. Under Xvfb the layout is the X server's keymap,
 # switched with setxkbmap while Notepad (in front) and the keyboard run:

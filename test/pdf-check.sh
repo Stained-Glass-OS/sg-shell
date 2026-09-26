@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for the PDF Viewer (sg-pdf64.exe) and its Linux half (sg-session's
 # sg-pdf, poppler). On a shell desktop under Xvfb, with defaults/80-sg-pdf.reg
 # imported (pointing at this build), and a four-page PDF made at test time

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for WordPad (sg-wordpad, wordpad.exe/write.exe): on a shell desktop
 # under Xvfb, with the X mouse and keyboard.
 #

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Paint (sg-paint, mspaint.exe): on a shell desktop under Xvfb,
 # `mspaint.exe` (found through App Paths, as ShellExecute and the Run box
 # find it) opens "Untitled - Paint"; the gate draws with the X mouse -- a

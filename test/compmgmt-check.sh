@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for Computer Management (compmgmt.msc, sg-mmc), under Xvfb on a shell
 # desktop, reading what it shows from SG_MMC_DUMP:

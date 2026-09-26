@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Render sg-taskbar in a headless X server and check that it docks as an AppBar
 # and paints -- i.e. a real bar at the bottom edge, not a blank or missing one.
 set -u

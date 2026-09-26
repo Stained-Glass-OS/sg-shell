@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for the Control Panel (sg-control). Each applet's --dump is checked
 # against the machine it runs on -- the account database, the clock's zone,
 # apt's history, the network interfaces -- and what the applets change is read

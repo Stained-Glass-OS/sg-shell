@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for the network programs (sg-ncpa: Network Connections and its IPv4
 # dialog; sg-netflyout: the taskbar's network icon and flyout).
 #

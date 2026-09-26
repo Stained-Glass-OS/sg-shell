@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # The Start menu (sg-start), under a headless shell session.
 #
 # Shortcuts are planted in the user's and the common Start Menu (one nested

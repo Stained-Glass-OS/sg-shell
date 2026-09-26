@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Calculator (sg-calc): calc.exe through App Paths on a shell desktop,
 # driven on the X keyboard and mouse (xdotool), read back from the program's
 # own dump (SG_CALC_DUMP, written after every paint) and from screenshots.

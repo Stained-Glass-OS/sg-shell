@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for sg-mstsc, Remote Desktop Connection.
 #
 # Two halves:

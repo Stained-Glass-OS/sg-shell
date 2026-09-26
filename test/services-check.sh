@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for Services (services.msc, sg-mmc), under Xvfb on a shell desktop with
 # the X mouse and keyboard, reading what the console shows from SG_MMC_DUMP and

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Magnifier (sg-magnify, magnify.exe): on a shell desktop with a
 # window of coloured 8-pixel blocks (test/sg-a11y-probe.c "pattern"), every
 # view must show exactly the screen's pixels magnified -- each sampled pixel of

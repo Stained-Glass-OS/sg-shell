@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for System Information (msinfo32.exe, sg-msinfo3264.exe), under Xvfb on a
 # shell desktop, reading what it shows from SG_MMC_DUMP and checking it against

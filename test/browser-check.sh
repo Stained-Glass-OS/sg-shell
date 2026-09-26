@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Get a web browser (sg-browser64.exe) and web links out of the box.
 # On a shell desktop under Xvfb, with defaults/81-sg-browser.reg imported
 # (pointing at this build), a winget-pkgs-shaped source served from this

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # shellcheck disable=SC2046,SC2155,SC2086
 # Gate for Event Viewer (eventvwr.exe / eventvwr.msc, sg-mmc), under Xvfb on a
 # shell desktop of a SHARED prefix -- this user owns it (SYSTEM there) and the

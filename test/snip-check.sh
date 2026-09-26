@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Snipping Tool (sg-snip). A window of four known colours
 # (test/sg-snip-target.c) sits on a shell desktop; `snippingtool.exe /clip`
 # (through App Paths, as explorer's Win+Shift+S runs it) freezes the screen and

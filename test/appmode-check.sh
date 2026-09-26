@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate: our own apps follow the app mode (Settings > Personalization > Colors,
 # AppsUseLightTheme), live. Each app is opened in light mode on a shell
 # desktop, then the mode goes dark exactly as Settings does it

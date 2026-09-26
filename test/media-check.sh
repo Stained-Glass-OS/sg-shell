@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Media Player (sg-media): real playback through Wine's DirectShow and
 # GStreamer, driven like a person drives it.
 #

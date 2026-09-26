@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Character Map (sg-charmap), driven like a person on the X keyboard
 # and mouse, on a shell desktop under Xvfb:
 #

@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for Settings (sg-settings): the Windows 10 Settings window on a shell
 # desktop, opened through ms-settings: URIs and SystemSettings.exe (App Paths,
 # defaults/65-sg-settings.reg), driven on the X mouse and keyboard (xdotool)
