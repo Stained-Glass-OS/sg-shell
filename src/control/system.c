@@ -21,6 +21,60 @@ static int count_values(HKEY root, const WCHAR *sub)
     return (int)values;
 }
 
+/* a value of an os-release style file (KEY=value, KEY="value") */
+static BOOL release_value(const char *text, const char *key, WCHAR *out, int cch)
+{
+    const char *p = text;
+    size_t n = strlen(key);
+    while (p && *p) {
+        if (!strncmp(p, key, n) && p[n] == '=') {
+            const char *v = p + n + 1, *e;
+            char buf[128];
+            int len;
+            if (*v == '"') v++;
+            e = v; while (*e && *e != '\n' && *e != '"') e++;
+            len = (int)(e - v); if (len > (int)sizeof(buf) - 1) len = sizeof(buf) - 1;
+            memcpy(buf, v, len); buf[len] = 0;
+            return MultiByteToWideChar(CP_UTF8, 0, buf, -1, out, cch) > 1;
+        }
+        p = strchr(p, '\n'); if (p) p++;
+    }
+    return FALSE;
+}
+
+void os_version(WCHAR *out, int cch)
+{
+    char relpath[MAX_PATH] = "/etc/os-release";   /* SG_OS_RELEASE: a gate's own */
+    char *rel;
+    GetEnvironmentVariableA("SG_OS_RELEASE", relpath, sizeof(relpath));
+    rel = read_unix_file(relpath, NULL);
+    WCHAR id[64] = L"", ver[64] = L"", img[64] = L"";
+    if (rel) {
+        release_value(rel, "ID", id, ARRAYSIZE(id));
+        release_value(rel, "VERSION_ID", ver, ARRAYSIZE(ver));
+        release_value(rel, "IMAGE_VERSION", img, ARRAYSIZE(img));
+        free(rel);
+    }
+    if (!lstrcmpW(id, L"stained-glass") && ver[0]) {
+        if (img[0]) _snwprintf(out, cch, L"%ls (build %ls)", ver, img);
+        else lstrcpynW(out, ver, cch);
+        return;
+    }
+    /* not our os-release (an image before it had one): the core package */
+    {
+        char *st = read_unix_file("/var/lib/dpkg/status", NULL), *p;
+        if (!st) return;
+        if ((p = strstr(st, "\nPackage: sg-session\n")) && (p = strstr(p, "\nVersion: "))) {
+            WCHAR v[64];
+            char *e = strchr(p + 10, '\n');
+            if (e) *e = 0;
+            MultiByteToWideChar(CP_UTF8, 0, p + 10, -1, v, ARRAYSIZE(v));
+            _snwprintf(out, cch, L"%ls", v);
+        }
+        free(st);
+    }
+}
+
 void sys_gather(struct sysfacts *f)
 {
     DWORD n;
@@ -49,14 +103,11 @@ void sys_gather(struct sysfacts *f)
         count_values(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer") +
         count_values(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System") +
         count_values(HKEY_LOCAL_MACHINE, L"Software\\Policies");
+    /* Our version, not the Windows version Wine reports to programs (that
+     * said "22H2 (build 19045)"): the image's os-release when it is ours
+     * (VERSION_ID, IMAGE_VERSION), else the installed sg-session package's */
     lstrcpyW(f->os_build, L"(unknown)");
-    {
-        WCHAR disp[32] = L"", build[32] = L"";
-        reg_sz(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", L"DisplayVersion", disp, ARRAYSIZE(disp));
-        reg_sz(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", L"CurrentBuild", build, ARRAYSIZE(build));
-        if (disp[0] && build[0]) _snwprintf(f->os_build, ARRAYSIZE(f->os_build), L"%ls (build %ls)", disp, build);
-        else if (build[0]) _snwprintf(f->os_build, ARRAYSIZE(f->os_build), L"build %ls", build);
-    }
+    os_version(f->os_build, ARRAYSIZE(f->os_build));
     lstrcpyW(f->cpu, L"(unknown)");
     reg_sz(HKEY_LOCAL_MACHINE, L"Hardware\\Description\\System\\CentralProcessor\\0", L"ProcessorNameString", f->cpu, ARRAYSIZE(f->cpu));
     {

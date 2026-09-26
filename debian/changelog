@@ -1,3 +1,12 @@
+sg-shell (0.1.0-51) unstable; urgency=medium
+
+  * Settings > About shows Stained Glass's version (os-release VERSION_ID and
+    IMAGE_VERSION, else the installed sg-session's), not the Windows version
+    Wine reports ("22H2 (build 19045)") (QA T2). SG_OS_RELEASE for gates.
+  * trademark-check also flags Microsoft's feature names.
+
+ -- Stained Glass OS <dev@stained-glass.example>  Sat, 26 Sep 2026 01:02:27 -0700
+
 sg-shell (0.1.0-50) unstable; urgency=medium
 
   * Settings in dark mode: links, status text and line glyphs use a lighter

@@ -52,6 +52,9 @@ export PATH="$WINE_DIR/bin:$PATH"
 # the machine's zone as Debian's installer leaves UTC: /etc/localtime -> zoneinfo/UTC, itself a link to Etc/UTC
 ln -s /usr/share/zoneinfo/UTC "$T/localtime"
 export SG_SETTINGS_LOCALTIME="$T/localtime"
+# Stained Glass's own version (os-release), not the Windows version Wine reports
+printf 'NAME="Stained Glass OS"\nID=stained-glass\nID_LIKE=debian\nVERSION_ID=0.9\nIMAGE_VERSION=20260926-abc1234\n' > "$T/os-release"
+export SG_OS_RELEASE="$T/os-release"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 cp "$EXE" "$T/sg-settings64.exe"
 winexe=$(wine winepath -w "$T/sg-settings64.exe" 2>/dev/null | tr -d '\r')
@@ -156,6 +159,9 @@ i=0; while [ "$(pgrep -fc "^[A-Za-z]:.*${T##*/}.sg-settings64.exe" 2>/dev/null)"
 [ "$(pgrep -fc "^[A-Za-z]:.*${T##*/}.sg-settings64.exe" 2>/dev/null)" -le 1 ] && pass "the second start handed over and left: one Settings process" || fail "more than one Settings process"
 host=$(wine hostname 2>/dev/null | tr -d '\r')
 if tr -d '\r' < "$DUMP" | grep -qix "text $host"; then pass "About shows the device name ($host)"; else fail "About does not show '$host'"; fi
+if tr -d '\r' < "$DUMP" | grep -qx "text 0.9 (build 20260926-abc1234)"; then pass "About's version is Stained Glass's (os-release), not Windows'"
+else fail "About's version: $(tr -d '\r' < "$DUMP" | grep -A1 '^text Version$' | tail -1)"; fi
+tr -d '\r' < "$DUMP" | grep -q '22H2\|19045' && fail "About still shows Windows' version" || pass "no Windows version on About"
 has "text Device name" && has "text Processor" && pass "About lists the device specifications" || fail "About's specifications"
 has ": Rename this PC" && pass "About offers Rename this PC" || fail "no Rename this PC button"
 sleep 0.5; shot about

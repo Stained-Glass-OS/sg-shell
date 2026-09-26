@@ -17,6 +17,7 @@
 #include <commctrl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ---- pages ---------------------------------------------------------------- */
 enum page_id {
@@ -253,6 +254,7 @@ struct sysfacts {
     int policy_count, program_count;
 };
 void sys_gather(struct sysfacts *f);
+void os_version(WCHAR *out, int cch);   /* Stained Glass OS's version (os-release, else sg-session's) */
 struct zone_facts { WCHAR key[128], display[256], iana[128], offset[32], dst[256]; BOOL ntp; };
 void zone_get(struct zone_facts *z);
 struct ufacts {
