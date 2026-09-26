@@ -23,6 +23,22 @@
  * keyboard's toggle state (GetKeyState), so a physical Caps Lock shows too.
  * Labels follow Shift and Caps (and Fn).
  *
+ * THE LABELS ARE THE KEYBOARD LAYOUT'S. The character keys are physical
+ * positions (scan codes); what each types is asked of the layout of the
+ * program in front -- GetKeyboardLayout of the foreground window's thread,
+ * MapVirtualKeyEx (scan code to virtual key) and ToUnicodeEx with the
+ * latched modifiers and Caps Lock -- so a German layout shows QWERTZ, ß, ü,
+ * ö, ä and, with AltGr, @ on Q; French shows AZERTY. A key is sent as that
+ * layout's virtual key with its own scan code, so the program's layout
+ * decides the character, as with a physical keyboard. On a layout with AltGr
+ * characters the right Alt is AltGr (sent as left Ctrl + right Alt, as
+ * Windows' AltGr is), and an ISO layout gets the key between Shift and Z.
+ * The labels are re-read on WM_INPUTLANGCHANGE, when the foreground window
+ * changes and every 700 ms (a layout switched on the X server reaches Wine
+ * only as a new keymap; Wine's HKL stays the locale's), and redrawn when
+ * they differ. Wine: wine-sg 0250 (the national keys' scan codes) and 0251
+ * (Ctrl+Alt is AltGr in ToUnicodeEx).
+ *
  * Settings: HKCU\Software\Microsoft\Osk -- WindowLeft/Top/Width/Height,
  * ShowNavigationKeys, ShowNumPad, ClickSound, Mode (0 click, 1 hover),
  * HoverPeriod (ms), Dock, Fade.
@@ -44,6 +60,7 @@
 #include <windowsx.h>
 #include <shellapi.h>
 #include <mmsystem.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
@@ -60,7 +77,7 @@ enum {
     F_ACT = 16,         /* our own action, not a key */
     F_LETTER = 32,
 };
-enum { M_SHIFT = 1, M_CTRL = 2, M_ALT = 4, M_WIN = 8 };
+enum { M_SHIFT = 1, M_CTRL = 2, M_ALT = 4, M_WIN = 8, M_ALTGR = 16 };
 enum { A_NONE, A_FN, A_NAV, A_UP, A_DOWN, A_DOCK, A_FADE, A_OPTIONS, A_HELP };
 
 struct key {
@@ -73,6 +90,7 @@ struct key {
     WORD fnvk;
     RECT rc;                    /* laid out, client coordinates */
     BOOL shown;
+    WORD sc;                    /* a character key's scan code (set at start) */
 };
 
 #define NAVX 15.25f
@@ -127,6 +145,7 @@ static struct key keys[] = {
     { L"enter", L"Enter", NULL, VK_RETURN, 12.75f, 2, 2.25f, 1 },
     /* row 3 */
     { L"shift", L"Shift", NULL, VK_LSHIFT, 0, 3, 2.25f, 1, F_MOD, M_SHIFT },
+    { L"oem102", L"\\", L"|", VK_OEM_102, 1.25f, 3, 1, 1 },
     { L"z", L"z", NULL, 'Z', 2.25f, 3, 1, 1, F_LETTER },
     { L"x", L"x", NULL, 'X', 3.25f, 3, 1, 1, F_LETTER },
     { L"c", L"c", NULL, 'C', 4.25f, 3, 1, 1, F_LETTER },
@@ -206,6 +225,22 @@ static RECT g_undocked;
 static int g_title_h = 30;
 static RECT g_btn_min, g_btn_close;
 
+/* the keyboard layout (see the header) */
+static HKL g_hkl;
+static BOOL g_has_altgr, g_iso;
+static WCHAR g_layout_sig[512];
+static const struct { const WCHAR *name; WORD sc; } key_scans[] = {
+    { L"grave", 0x29 }, { L"1", 0x02 }, { L"2", 0x03 }, { L"3", 0x04 }, { L"4", 0x05 }, { L"5", 0x06 },
+    { L"6", 0x07 }, { L"7", 0x08 }, { L"8", 0x09 }, { L"9", 0x0a }, { L"0", 0x0b }, { L"minus", 0x0c },
+    { L"equals", 0x0d }, { L"q", 0x10 }, { L"w", 0x11 }, { L"e", 0x12 }, { L"r", 0x13 }, { L"t", 0x14 },
+    { L"y", 0x15 }, { L"u", 0x16 }, { L"i", 0x17 }, { L"o", 0x18 }, { L"p", 0x19 }, { L"lbracket", 0x1a },
+    { L"rbracket", 0x1b }, { L"backslash", 0x2b }, { L"a", 0x1e }, { L"s", 0x1f }, { L"d", 0x20 },
+    { L"f", 0x21 }, { L"g", 0x22 }, { L"h", 0x23 }, { L"j", 0x24 }, { L"k", 0x25 }, { L"l", 0x26 },
+    { L"semicolon", 0x27 }, { L"quote", 0x28 }, { L"oem102", 0x56 }, { L"z", 0x2c }, { L"x", 0x2d },
+    { L"c", 0x2e }, { L"v", 0x2f }, { L"b", 0x30 }, { L"n", 0x31 }, { L"m", 0x32 }, { L"comma", 0x33 },
+    { L"period", 0x34 }, { L"slash", 0x35 },
+};
+
 #define TIMER_STATE 1
 #define TIMER_HOVER 2
 
@@ -261,6 +296,7 @@ static BOOL caps_on(void) { return (GetKeyState(VK_CAPITAL) & 1) != 0; }
 
 static BOOL key_lit(const struct key *k)
 {
+    if (k->vk == VK_RMENU && g_has_altgr) return (g_latched & M_ALTGR) != 0;
     if (k->flags & F_MOD) return (g_latched & k->mod) != 0;
     if (k->vk == VK_CAPITAL) return caps_on();
     if (k->vk == VK_NUMLOCK) return (GetKeyState(VK_NUMLOCK) & 1) != 0;
@@ -275,10 +311,43 @@ static BOOL key_lit(const struct key *k)
     return FALSE;
 }
 
+/* what a character key types in the layout with these modifiers: 1 a
+ * character, -1 a dead key (its accent in out), 0 nothing */
+static int layout_char(const struct key *k, BOOL shift, BOOL altgr, BOOL caps, WCHAR *out)
+{
+    BYTE state[256];
+    WCHAR b[8];
+    UINT vk;
+    int r;
+    out[0] = 0;
+    if (!k->sc) return 0;
+#ifdef SG_MUTANT_USLABELS
+    return 0;
+#endif
+    vk = MapVirtualKeyExW(k->sc, MAPVK_VSC_TO_VK_EX, g_hkl);
+    if (!vk) return 0;
+    memset(state, 0, sizeof(state));
+    if (shift) state[VK_SHIFT] = state[VK_LSHIFT] = 0x80;
+    if (caps) state[VK_CAPITAL] = 0x01;
+    if (altgr) state[VK_CONTROL] = state[VK_LCONTROL] = state[VK_MENU] = state[VK_RMENU] = 0x80;
+    /* flag 4: the kernel's dead-key state is left alone (Windows 10 1607+) */
+    r = ToUnicodeEx(vk, k->sc, state, b, ARRAYSIZE(b), 4, g_hkl);
+    if (r == 0 || b[0] < 0x20 || b[0] == 0x7f) return 0;
+    out[0] = b[0]; out[1] = 0;
+    return r < 0 ? -1 : 1;
+}
+
 static const WCHAR *key_label(const struct key *k, WCHAR *buf)
 {
     BOOL shift = (g_latched & M_SHIFT) != 0;
     if (g_fn && k->fnlabel) return k->fnlabel;
+    if (k->vk == VK_RMENU && g_has_altgr) return L"AltGr";
+    if (k->sc)
+    {
+        BOOL altgr = (g_latched & M_ALTGR) || ((g_latched & (M_CTRL | M_ALT)) == (M_CTRL | M_ALT));
+        if (layout_char(k, shift, altgr, caps_on(), buf)) return buf;
+        if (altgr) { buf[0] = 0; return buf; }
+    }
     if (k->flags & F_LETTER)
     {
         buf[0] = k->label[0]; buf[1] = 0;
@@ -290,6 +359,21 @@ static const WCHAR *key_label(const struct key *k, WCHAR *buf)
 }
 
 /* ---- the dump ----------------------------------------------------------------------------- */
+/* a line of the dump, in UTF-8 (the labels are any character) */
+static void dumpf(FILE *f, const WCHAR *fmt, ...)
+{
+    WCHAR w[1024];
+    char u[3072];
+    int n;
+    va_list ap;
+    va_start(ap, fmt);
+    _vsnwprintf(w, ARRAYSIZE(w) - 1, fmt, ap);
+    va_end(ap);
+    w[ARRAYSIZE(w) - 1] = 0;
+    n = WideCharToMultiByte(CP_UTF8, 0, w, -1, u, sizeof(u), NULL, NULL);
+    if (n > 1) fwrite(u, 1, n - 1, f);
+}
+
 static void write_dump(void)
 {
     FILE *f;
@@ -301,31 +385,79 @@ static void write_dump(void)
     _snwprintf(tmp, ARRAYSIZE(tmp), L"%ls.tmp", g_dump);
     tmp[ARRAYSIZE(tmp) - 1] = 0;
     /* written whole, then renamed into place: a reader never sees half of it */
-    if (!(f = _wfopen(tmp, L"w"))) return;
+    if (!(f = _wfopen(tmp, L"wb"))) return;
     GetWindowRect(g_wnd, &wr);
-    fwprintf(f, L"WINDOW %ld %ld %ld %ld\nEXSTYLE %08lx\nVISIBLE %d\n", wr.left, wr.top, wr.right, wr.bottom,
+    dumpf(f, L"WINDOW %ld %ld %ld %ld\nEXSTYLE %08lx\nVISIBLE %d\n", wr.left, wr.top, wr.right, wr.bottom,
              (unsigned long)GetWindowLongW(g_wnd, GWL_EXSTYLE), IsWindowVisible(g_wnd) != 0);
-    fwprintf(f, L"LATCHED %d\nCAPS %d\nFN %d\nNAV %d\nNUMPAD %d\nDOCK %d\nFADE %d\nALPHA %d\nHOVER %d %lu\nCLICKSOUND %d\nSENT %lu\n",
+    dumpf(f, L"LATCHED %d\nCAPS %d\nFN %d\nNAV %d\nNUMPAD %d\nDOCK %d\nFADE %d\nALPHA %d\nHOVER %d %lu\nCLICKSOUND %d\nSENT %lu\n",
              g_latched, caps_on(), g_fn, g_nav, g_numpad, g_docked, g_fade, g_alpha, g_hover,
              (unsigned long)g_hover_ms, g_click_sound, (unsigned long)g_sent);
+    dumpf(f, L"LAYOUT %p ALTGR %d ISO %d\n", g_hkl, g_has_altgr, g_iso);
     for (i = 0; i < NKEYS; i++)
     {
         POINT c;
         if (!keys[i].shown) continue;
         c.x = (keys[i].rc.left + keys[i].rc.right) / 2; c.y = (keys[i].rc.top + keys[i].rc.bottom) / 2;
         ClientToScreen(g_wnd, &c);
-        fwprintf(f, L"KEY %ls %ld %ld %d %ls\n", keys[i].name, c.x, c.y, key_lit(&keys[i]), key_label(&keys[i], buf));
+        dumpf(f, L"KEY %ls %ld %ld %d %ls\n", keys[i].name, c.x, c.y, key_lit(&keys[i]), key_label(&keys[i], buf));
     }
     {
         POINT a = { (g_btn_close.left + g_btn_close.right) / 2, (g_btn_close.top + g_btn_close.bottom) / 2 };
         POINT b = { (g_btn_min.left + g_btn_min.right) / 2, (g_btn_min.top + g_btn_min.bottom) / 2 };
         POINT t = { 60, g_title_h / 2 };
         ClientToScreen(g_wnd, &a); ClientToScreen(g_wnd, &b); ClientToScreen(g_wnd, &t);
-        fwprintf(f, L"CLOSE %ld %ld\nMINIMIZE %ld %ld\nTITLE %ld %ld\n", a.x, a.y, b.x, b.y, t.x, t.y);
+        dumpf(f, L"CLOSE %ld %ld\nMINIMIZE %ld %ld\nTITLE %ld %ld\n", a.x, a.y, b.x, b.y, t.x, t.y);
     }
-    fwprintf(f, L"END\n");
+    dumpf(f, L"END\n");
     fclose(f);
     MoveFileExW(tmp, g_dump, MOVEFILE_REPLACE_EXISTING);
+}
+
+/* ---- the keyboard layout ------------------------------------------------------------------ */
+/* Re-read the layout of the program in front; TRUE when the labels changed. */
+static BOOL refresh_layout(void)
+{
+    WCHAR sig[ARRAYSIZE(g_layout_sig)], c[4];
+    int i, n = 0;
+    HWND fg = GetForegroundWindow();
+    BOOL altgr = FALSE, iso;
+    struct key *bs = NULL, *iso_key = NULL;
+
+    g_hkl = GetKeyboardLayout(fg ? GetWindowThreadProcessId(fg, NULL) : 0);
+    n = _snwprintf(sig, ARRAYSIZE(sig), L"%p:", g_hkl);
+    for (i = 0; i < NKEYS && n < (int)ARRAYSIZE(sig) - 8; i++)
+    {
+        struct key *k = &keys[i];
+        if (!k->sc) continue;
+        if (k->sc == 0x2b) bs = k;
+        if (k->sc == 0x56) iso_key = k;
+        if (layout_char(k, FALSE, FALSE, FALSE, c)) sig[n++] = c[0]; else sig[n++] = ' ';
+        if (layout_char(k, TRUE, FALSE, FALSE, c)) sig[n++] = c[0]; else sig[n++] = ' ';
+        if (layout_char(k, FALSE, TRUE, FALSE, c) && k->sc != 0x56) { altgr = TRUE; sig[n++] = c[0]; }
+    }
+    sig[n] = 0;
+    /* the key between Shift and Z: ISO layouts (with AltGr, or not a US
+     * backslash where the US has it -- British) */
+    iso = FALSE;
+    if (iso_key && layout_char(iso_key, FALSE, FALSE, FALSE, c))
+    {
+        WCHAR b[4];
+        iso = altgr || !(bs && layout_char(bs, FALSE, FALSE, FALSE, b) && b[0] == '\\');
+    }
+    if (!wcscmp(sig, g_layout_sig) && altgr == g_has_altgr && iso == g_iso) return FALSE;
+    lstrcpynW(g_layout_sig, sig, ARRAYSIZE(g_layout_sig));
+    g_has_altgr = altgr;
+    if (!altgr) g_latched &= ~M_ALTGR;
+    g_iso = iso;
+    return TRUE;
+}
+
+static void layout(void);
+static void redraw(void);
+static void layout_changed(void)
+{
+    if (!refresh_layout()) return;
+    if (g_wnd) { layout(); redraw(); }
 }
 
 /* ---- layout ------------------------------------------------------------------------------- */
@@ -350,6 +482,8 @@ static void layout(void)
     {
         struct key *k = &keys[i];
         k->shown = !((k->flags & F_NAV) && !g_nav) && !((k->flags & F_PAD) && !g_numpad);
+        if (k->vk == VK_OEM_102) k->shown = g_iso;
+        if (k->vk == VK_LSHIFT) k->w = g_iso ? 1.25f : 2.25f;
         k->rc.left = pad + (int)(k->x * uw + 0.5f);
         k->rc.top = g_title_h + pad + (int)(k->y * uh + 0.5f);
         k->rc.right = pad + (int)((k->x + k->w) * uw + 0.5f) - gap;
@@ -504,14 +638,19 @@ static void redraw(void)
 }
 
 /* ---- sending keys ------------------------------------------------------------------------- */
-static void add_input(INPUT *in, int *n, WORD vk, BOOL up, BOOL ext)
+static void add_input_sc(INPUT *in, int *n, WORD vk, WORD sc, BOOL up, BOOL ext)
 {
     INPUT *i = &in[(*n)++];
     memset(i, 0, sizeof(*i));
     i->type = INPUT_KEYBOARD;
     i->ki.wVk = vk;
-    i->ki.wScan = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+    i->ki.wScan = sc ? sc : (WORD)MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, g_hkl);
     i->ki.dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (ext ? KEYEVENTF_EXTENDEDKEY : 0);
+}
+
+static void add_input(INPUT *in, int *n, WORD vk, BOOL up, BOOL ext)
+{
+    add_input_sc(in, n, vk, 0, up, ext);
 }
 
 static void click_sound(void)
@@ -542,24 +681,39 @@ static void press_key(int idx)
     struct key *k = &keys[idx];
     INPUT in[16];
     int n = 0;
-    WORD vk = (g_fn && k->fnvk) ? k->fnvk : k->vk;
+    WORD vk = (g_fn && k->fnvk) ? k->fnvk : k->vk, sc = 0;
     BOOL ext = (k->flags & F_EXT) != 0;
 
     click_sound();
+    if (k->vk == VK_RMENU && g_has_altgr)
+    {
+        g_latched ^= M_ALTGR;
+        redraw();
+        return;
+    }
     if (k->flags & F_MOD)
     {
         g_latched ^= k->mod;
         redraw();
         return;
     }
+    if (k->sc && !(g_fn && k->fnvk))
+    {
+        /* the layout's key at this position, with its own scan code */
+        UINT lvk = MapVirtualKeyExW(k->sc, MAPVK_VSC_TO_VK_EX, g_hkl);
+        if (lvk) vk = (WORD)lvk;
+        sc = k->sc;
+    }
     /* the latched modifiers held round the key */
     if (g_latched & M_CTRL) add_input(in, &n, VK_LCONTROL, FALSE, FALSE);
     if (g_latched & M_ALT) add_input(in, &n, VK_LMENU, FALSE, FALSE);
     if (g_latched & M_WIN) add_input(in, &n, VK_LWIN, FALSE, TRUE);
+    if (g_latched & M_ALTGR) { add_input(in, &n, VK_LCONTROL, FALSE, FALSE); add_input(in, &n, VK_RMENU, FALSE, TRUE); }
     if (g_latched & M_SHIFT) add_input(in, &n, VK_LSHIFT, FALSE, FALSE);
-    add_input(in, &n, vk, FALSE, ext);
-    add_input(in, &n, vk, TRUE, ext);
+    add_input_sc(in, &n, vk, sc, FALSE, ext);
+    add_input_sc(in, &n, vk, sc, TRUE, ext);
     if (g_latched & M_SHIFT) add_input(in, &n, VK_LSHIFT, TRUE, FALSE);
+    if (g_latched & M_ALTGR) { add_input(in, &n, VK_RMENU, TRUE, TRUE); add_input(in, &n, VK_LCONTROL, TRUE, FALSE); }
     if (g_latched & M_WIN) add_input(in, &n, VK_LWIN, TRUE, TRUE);
     if (g_latched & M_ALT) add_input(in, &n, VK_LMENU, TRUE, FALSE);
     if (g_latched & M_CTRL) add_input(in, &n, VK_LCONTROL, TRUE, FALSE);
@@ -772,6 +926,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
     case WM_CREATE:
         g_wnd = hwnd;
+        refresh_layout();
         layout();
         SetTimer(hwnd, TIMER_STATE, 250, NULL);
         return 0;
@@ -901,7 +1056,15 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             static int last_caps = -1;
             int c = caps_on();
             SetTimer(hwnd, TIMER_STATE, 250, NULL);
+            static DWORD last_check;
+            static HWND last_fg;
             if (c != last_caps) { last_caps = c; redraw(); }
+            if (GetForegroundWindow() != last_fg || GetTickCount() - last_check >= 700)
+            {
+                last_fg = GetForegroundWindow();
+                last_check = GetTickCount();
+                layout_changed();
+            }
             if (g_fade)
             {
                 POINT pt; RECT wr;
@@ -913,6 +1076,9 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_APPBAR:
         return 0;
+    case WM_INPUTLANGCHANGE:
+        layout_changed();
+        break;
     case WM_CLOSE:
         save_placement();
         DestroyWindow(hwnd);
@@ -941,6 +1107,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     HANDLE mutex;
     MSG msg;
     RECT work;
+    int ki, si;
+
+    for (ki = 0; ki < NKEYS; ki++)
+        for (si = 0; si < (int)ARRAYSIZE(key_scans); si++)
+            if (!wcscmp(keys[ki].name, key_scans[si].name)) keys[ki].sc = key_scans[si].sc;
     int x, y, w, h;
     DWORD n;
     LONG ex = WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_APPWINDOW;

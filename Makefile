@@ -228,6 +228,7 @@ test: build
 	@sh test/fontview-check.sh
 	@sh test/magnify-check.sh
 	@sh test/osk-check.sh
+	@sh test/osk-layout-check.sh
 	@sh test/services-check.sh
 	@sh test/eventvwr-check.sh
 	@sh test/devmgmt-check.sh

@@ -1156,6 +1156,25 @@ Win+Ctrl+O look for). One instance (`Local\StainedGlassOnScreenKeyboard`).
   `-DSG_MUTANT_ACTIVATE` (no NOACTIVATE: Notepad loses the focus, nothing is
   typed) and `-DSG_MUTANT_STICKY` (Shift never lets go: "HELLO< world!")
   (`SG_OSK_EXE=`) turn it red. Screenshots `build/osk-*.png`.
+- **The labels are the keyboard layout's** (the foreground thread's HKL):
+  every character key has its PC scan code (`key_scans[]`); its label is
+  `ToUnicodeEx` of `MapVirtualKeyEx(VSC_TO_VK_EX)` with Shift/Caps/AltGr in
+  the key state (flag 4, so dead keys show without being latched). The
+  right Alt reads AltGr when the layout has AltGr characters; AltGr latches
+  and is sent as LCtrl + RAlt. The ISO key (`oem102`, between a short Shift
+  and Z) shows on ISO layouts. A key is typed as the layout's vk for its
+  scan code, so the target's layout decides what it types. Relabelled on
+  `WM_INPUTLANGCHANGE`, when the foreground window changes, and every
+  700 ms (a signature of every label; X layout switches send no message).
+  Under Wine this needs wine-sg 0250/0251 (national keys' scan codes,
+  tables following a setxkbmap, Ctrl+Alt as AltGr in ToUnicodeEx). The
+  dump is UTF-8 and has `LAYOUT <hkl> ALTGR <0/1> ISO <0/1>`.
+- **Gate: `test/osk-layout-check.sh`** (display :174, setxkbmap): US labels;
+  `setxkbmap de` relabels by itself (QWERTZ, ß ü ö ä, `<`, AltGr, `"` `§`
+  shifted, AltGr's `@` `|`) and clicking types `zü"@|` into Notepad; French
+  AZERTY, é, typing `aé#`; back to US; Notepad keeps the focus. 13 checks.
+  Mutant `-DSG_MUTANT_USLABELS` (no layout lookups) fails 10; the Wine
+  without 0250/0251 fails 6. Screenshots `build/osk-layout-*.png`.
 
 ## Fonts (sg-fontview)
 

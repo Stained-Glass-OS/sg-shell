@@ -1,3 +1,14 @@
+sg-shell (0.1.0-46) unstable; urgency=medium
+
+  * On-Screen Keyboard: key labels follow the active keyboard layout
+    (ToUnicodeEx per scan code: shifted, AltGr and dead-key labels; the ISO
+    key on ISO layouts; right Alt is AltGr where the layout has one),
+    relabelled on a layout change or a new foreground window; keys are sent
+    by scan code so the target's layout decides. Needs wine-sg 10.0-58.
+  * Gate: test/osk-layout-check.sh (US, German, French).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 17:25:56 -0700
+
 sg-shell (0.1.0-45) unstable; urgency=medium
 
   * Terminal: settings.json as Windows Terminal keeps it
