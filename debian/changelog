@@ -1,3 +1,17 @@
+sg-shell (0.1.0-45) unstable; urgency=medium
+
+  * Terminal: settings.json as Windows Terminal keeps it
+    (%LOCALAPPDATA%\Microsoft\Windows Terminal, or the packaged Windows
+    Terminal's taken over; the old registry settings migrated): the user's
+    own profiles (commandline, startingDirectory, icon, colorScheme, font,
+    hidden) in the + menu and for wt -p, colour schemes, and actions/key
+    bindings in both of Windows Terminal's forms; unknown keys kept on
+    rewrite; re-read when the file changes; Settings saves into it and opens
+    it. Pane dividers are dragged with the mouse.
+  * Gate: test/terminal-settings-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 25 Sep 2026 17:13:09 -0700
+
 sg-shell (0.1.0-44) unstable; urgency=medium
 
   * No "Windows" as our product's name: Settings' heading is "Settings";

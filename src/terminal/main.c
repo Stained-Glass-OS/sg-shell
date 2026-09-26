@@ -7,8 +7,11 @@
  * draws with a fixed-pitch font. A tab is a tree of panes: a leaf is a pane,
  * a split puts two subtrees side by side or one above the other. Keys go to
  * the focused pane as the VT sequences conhost understands. Profiles are
- * found on the machine: PowerShell 7, Command Prompt, Git Bash, Windows
- * PowerShell. wt.exe's command line: -p PROFILE, -d DIR, --title T, a command
+ * found on the machine (PowerShell 7, Command Prompt, Git Bash, Windows
+ * PowerShell) and merged with settings.json's -- the user's own profiles,
+ * colour schemes, fonts and keys, as Windows Terminal keeps them
+ * (wtsettings.c), re-read when the file changes. A pane divider is dragged
+ * with the mouse. wt.exe's command line: -p PROFILE, -d DIR, --title T, a command
  * line, and new-tab (nt), split-pane (sp; -H, -V, -s), move-focus (mf) and
  * focus-tab (ft -t) subcommands separated by ';'.
  *
@@ -44,24 +47,22 @@
 #include <wctype.h>
 #include <limits.h>
 #include "vt.h"
+#include "wtsettings.h"
 
 #define MAX_TABS 32
 #define MAX_PANES 64
 #define MAX_NODES 128
-#define MAX_PROFILES 8
+#define MAX_PROFILES TS_MAX_PROFILES
+#define TIMER_SETTINGS 3
 #define WM_PTY_OUTPUT (WM_APP + 1)
 #define WM_PTY_EXIT   (WM_APP + 2)
 #define TIMER_BLINK 1
 #define TIMER_DUMP  2
 #define SCROLLBACK 9001
-#define REG_KEY L"Software\\Stained Glass\\Terminal"
 
 /* ---- look: our own colour scheme, "Stained Glass Night" --------------------------------- */
-static const uint32_t SCHEME[16] = {
-    0x2A2635, 0xE0556A, 0x4FC98E, 0xE7C564, 0x5A8DF0, 0xB27CF0, 0x45C6D1, 0xD4CFDF,
-    0x6E6880, 0xFF7A8C, 0x72E6AB, 0xFFE08A, 0x82ABFF, 0xCFA0FF, 0x6FE3EC, 0xFFFFFF,
-};
-#define SCHEME_BG     0x1D1A26
+/* the colour schemes are wtsettings.c's (Stained Glass Night is the default) */
+#define SCHEME_BG     0x1D1A26   /* the find box's chrome */
 #define SCHEME_FG     0xE8E4F0
 #define SCHEME_CURSOR 0xC9A7FF
 #define SCHEME_SEL    0x55427E
@@ -75,18 +76,23 @@ static const uint32_t SCHEME[16] = {
 
 static COLORREF rgb_of(uint32_t v) { return RGB((v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff); }
 
-/* ---- profiles ------------------------------------------------------------------------------- */
-struct profile { WCHAR name[64], cmd[MAX_PATH + 64], letter; COLORREF colour; };
-static struct profile g_profiles[MAX_PROFILES];
-static int g_nprofiles, g_default_profile;
+/* ---- profiles: found on the machine, then merged with settings.json (wtsettings.c) ------------ */
+static struct ts_profile g_profiles[MAX_PROFILES], g_found[8];
+static int g_nprofiles, g_nfound, g_default_profile;
+static struct ts_settings g_set;
+static HICON g_icons[MAX_PROFILES];
+static ULONGLONG g_set_stamp;
 
 static BOOL exists(const WCHAR *p) { return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES; }
 
-static void add_profile(const WCHAR *name, const WCHAR *cmd, WCHAR letter, COLORREF colour)
+/* the GUIDs Windows Terminal gives the same profiles (Git Bash: Git for Windows' own) */
+static void add_found(const WCHAR *guid, const WCHAR *name, const WCHAR *cmd, WCHAR letter, COLORREF colour)
 {
-    struct profile *p;
-    if (g_nprofiles >= MAX_PROFILES) return;
-    p = &g_profiles[g_nprofiles++];
+    struct ts_profile *p;
+    if (g_nfound >= (int)ARRAYSIZE(g_found)) return;
+    p = &g_found[g_nfound++];
+    memset(p, 0, sizeof(*p));
+    lstrcpynW(p->guid, guid, ARRAYSIZE(p->guid));
     lstrcpynW(p->name, name, ARRAYSIZE(p->name));
     lstrcpynW(p->cmd, cmd, ARRAYSIZE(p->cmd));
     p->letter = letter;
@@ -105,32 +111,64 @@ static BOOL find_pwsh(WCHAR *out)
     return FALSE;
 }
 
+static HICON load_icon(const WCHAR *spec)
+{
+    WCHAR path[MAX_PATH], *comma;
+    int index = 0;
+    HICON icon = NULL;
+    if (!spec[0]) return NULL;
+    ExpandEnvironmentStringsW(spec, path, MAX_PATH);
+    if ((comma = wcsrchr(path, L',')) && comma > wcsrchr(path, L'\\')) { index = _wtoi(comma + 1); *comma = 0; }
+    if (wcslen(path) > 4 && !_wcsicmp(path + wcslen(path) - 4, L".ico"))
+        return LoadImageW(NULL, path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+    if (ExtractIconExW(path, index, NULL, &icon, 1) == 1) return icon;
+    return NULL;
+}
+
 static void load_profiles(void)
 {
-    WCHAR path[MAX_PATH], cmd[MAX_PATH + 64], def[64] = L"";
-    DWORD cb = sizeof(def);
+    WCHAR path[MAX_PATH], cmd[MAX_PATH + 64];
     int i;
-    g_nprofiles = 0;
-    if (find_pwsh(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path); add_profile(L"PowerShell", cmd, L'P', RGB(0x2F, 0x6F, 0xD0)); }
+    g_nfound = 0;
+    if (find_pwsh(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path); add_found(L"{574e775e-4f2a-5b96-ac1e-a2962a402336}", L"PowerShell", cmd, L'P', RGB(0x2F, 0x6F, 0xD0)); }
     if (!GetEnvironmentVariableW(L"ComSpec", path, MAX_PATH) || !exists(path)) lstrcpyW(path, L"cmd.exe");
     _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path);
-    add_profile(L"Command Prompt", cmd, L'C', RGB(0x4A, 0x4A, 0x4A));
+    add_found(L"{0caa0dad-35be-5f56-a8ff-afceeeaa6101}", L"Command Prompt", cmd, L'C', RGB(0x4A, 0x4A, 0x4A));
     ExpandEnvironmentStringsW(L"%ProgramFiles%\\Git\\bin\\bash.exe", path, MAX_PATH);
-    if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --login -i", path); add_profile(L"Git Bash", cmd, L'G', RGB(0xE0, 0x5A, 0x2B)); }
+    if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --login -i", path); add_found(L"{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}", L"Git Bash", cmd, L'G', RGB(0xE0, 0x5A, 0x2B)); }
     ExpandEnvironmentStringsW(L"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", path, MAX_PATH);
-    if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path); add_profile(L"Windows PowerShell", cmd, L'W', RGB(0x1B, 0x4F, 0x9A)); }
+    if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path); add_found(L"{61c54bbd-c2c6-5271-96e7-009a87ff44bf}", L"Windows PowerShell", cmd, L'W', RGB(0x1B, 0x4F, 0x9A)); }
+    ts_load(&g_set, g_found, g_nfound);
+    g_set_stamp = ts_file_stamp(&g_set);
+    for (i = 0; i < g_nprofiles; i++) if (g_icons[i]) { DestroyIcon(g_icons[i]); g_icons[i] = NULL; }
+    g_nprofiles = 0;
+    for (i = 0; i < g_set.np && g_nprofiles < MAX_PROFILES; i++) {
+        g_profiles[g_nprofiles] = g_set.p[i];
+        g_icons[g_nprofiles] = load_icon(g_set.p[i].icon);
+        g_nprofiles++;
+    }
+    if (!g_nprofiles) { g_profiles[0] = g_found[g_nfound ? g_nfound - 1 : 0]; g_nprofiles = 1; }   /* never none */
     g_default_profile = 0;
-    RegGetValueW(HKEY_CURRENT_USER, REG_KEY, L"DefaultProfile", RRF_RT_REG_SZ, NULL, def, &cb);
-    for (i = 0; i < g_nprofiles; i++) if (!lstrcmpiW(g_profiles[i].name, def)) g_default_profile = i;
+    for (i = 0; i < g_nprofiles; i++)
+        if (!lstrcmpiW(g_profiles[i].guid, g_set.def) || !lstrcmpiW(g_profiles[i].name, g_set.def)) { g_default_profile = i; break; }
+    if (i == g_nprofiles) for (i = 0; i < g_nprofiles; i++) if (!g_profiles[i].hidden) { g_default_profile = i; break; }
 }
 
 static int profile_by_name(const WCHAR *name)
 {
     int i;
-    for (i = 0; i < g_nprofiles; i++) if (!lstrcmpiW(g_profiles[i].name, name)) return i;
+    for (i = 0; i < g_nprofiles; i++) if (!lstrcmpiW(g_profiles[i].name, name) || !lstrcmpiW(g_profiles[i].guid, name)) return i;
     /* Windows Terminal's names for them */
     if (!lstrcmpiW(name, L"cmd")) return profile_by_name(L"Command Prompt");
     if (!lstrcmpiW(name, L"pwsh") || !lstrcmpiW(name, L"PowerShell 7")) return profile_by_name(L"PowerShell");
+    return -1;
+}
+
+/* the n-th profile shown in the menu (hidden ones are not), or -1 */
+static int visible_profile(int n)
+{
+    int i;
+    for (i = 0; i < g_nprofiles; i++) if (!g_profiles[i].hidden && !n--) return i;
     return -1;
 }
 
@@ -145,7 +183,9 @@ static int profile_for_command(const WCHAR *cmd)
         base = wcsrchr(first, L'\\') ? wcsrchr(first, L'\\') + 1 : first;
         if ((dot = wcsrchr(base, L'.')) && !_wcsicmp(dot, L".exe")) *dot = 0;
         for (i = 0; i < g_nprofiles && profile < 0; i++) {
-            WCHAR **b = CommandLineToArgvW(g_profiles[i].cmd, &argc2);
+            WCHAR **b;
+            if (!g_profiles[i].detected) continue;
+            b = CommandLineToArgvW(g_profiles[i].cmd, &argc2);
             if (b && argc2) {
                 WCHAR *pb = wcsrchr(b[0], L'\\') ? wcsrchr(b[0], L'\\') + 1 : b[0], *pd;
                 if ((pd = wcsrchr(pb, L'.')) && !_wcsicmp(pd, L".exe")) *pd = 0;
@@ -159,8 +199,11 @@ static int profile_for_command(const WCHAR *cmd)
 }
 
 /* ---- panes, the tree of a tab, tabs --------------------------------------------------------------- */
+struct tfont { WCHAR face[LF_FACESIZE]; int pt; HFONT f, fb; int cw, ch; };
+
 struct pane {
     int used, id, profile, tab;     /* tab: the owning tab's slot */
+    WCHAR guid[40];                 /* the profile's, which survives a reload of the settings */
     struct vt vt;
     HPCON pc;
     HANDLE in_w, out_r, process, reader;
@@ -180,7 +223,8 @@ struct pane {
 };
 
 enum { NODE_LEAF, SPLIT_V /* side by side */, SPLIT_H /* one above the other */ };
-struct node { int used, kind, pane, a, b, parent, ratio; /* ratio: the first child's share, per mille */ };
+struct node { int used, kind, pane, a, b, parent, ratio; /* ratio: the first child's share, per mille */
+              RECT box, gap; /* a split's rectangle and the divider between its halves, client coordinates */ };
 
 struct tab { int used, id, root, focus; WCHAR fixed_title[160]; };
 
@@ -193,7 +237,9 @@ static HWND g_wnd;
 static HINSTANCE g_inst;
 static HFONT g_font, g_font_bold, g_ui_font, g_ui_small;
 static WCHAR g_face[LF_FACESIZE] = L"Consolas";
-static int g_font_pt = 12, g_dpi = 96, g_cw = 8, g_ch = 16, g_cols = 120, g_rows = 30;
+static int g_font_pt = 12, g_dpi = 96, g_cw = 8, g_ch = 16, g_cols = 120, g_rows = 30, g_zoom;
+static struct tfont g_fonts[16];
+static int g_nfonts, g_drag = -1;       /* g_drag: the split node whose divider is being dragged */
 static int g_tab_h = 40;
 static BOOL g_cursor_on = TRUE, g_fullscreen;
 static WINDOWPLACEMENT g_saved_place = { sizeof(g_saved_place) };
@@ -344,7 +390,7 @@ static BOOL spawn(struct pane *p)
     _snwprintf(session, ARRAYSIZE(session), L"{%08lx-%04x-4000-8000-%012llx}", GetCurrentProcessId(), p->id & 0xffff,
                (unsigned long long)GetTickCount64());
     SetEnvironmentVariableW(L"WT_SESSION", session);
-    SetEnvironmentVariableW(L"WT_PROFILE_ID", g_profiles[p->profile].name);
+    SetEnvironmentVariableW(L"WT_PROFILE_ID", g_profiles[p->profile].guid);
     lstrcpynW(cmd, p->cmd, ARRAYSIZE(cmd));
     if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, NULL,
                         p->dir[0] ? p->dir : NULL, &si.StartupInfo, &pi)) {
@@ -395,7 +441,17 @@ static int new_pane(int tab, int profile, const WCHAR *cmd, const WCHAR *dir)
     p->cur_line = -1;
     if (!vt_init(&p->vt, p->cols, p->rows, SCROLLBACK)) { p->used = 0; return -1; }
     lstrcpynW(p->cmd, cmd && cmd[0] ? cmd : g_profiles[profile].cmd, ARRAYSIZE(p->cmd));
+    lstrcpynW(p->guid, g_profiles[profile].guid, ARRAYSIZE(p->guid));
     if (dir && dir[0]) lstrcpynW(p->dir, dir, MAX_PATH);
+    else if (g_profiles[profile].dir[0]) {
+        /* the profile's startingDirectory: environment variables, and ~ for the user's folder */
+        WCHAR raw[MAX_PATH];
+        if (g_profiles[profile].dir[0] == L'~') {
+            SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, raw);
+            wcsncat(raw, g_profiles[profile].dir + 1, MAX_PATH - wcslen(raw) - 1);
+        } else lstrcpynW(raw, g_profiles[profile].dir, MAX_PATH);
+        ExpandEnvironmentStringsW(raw, p->dir, MAX_PATH);
+    }
     else SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, p->dir);       /* Windows Terminal starts in %USERPROFILE% */
     lstrcpynW(p->title, g_profiles[profile].name, ARRAYSIZE(p->title));
     p->view = CreateWindowExW(0, L"SgTerminalView", L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 0, 0, g_wnd, NULL, g_inst, NULL);
@@ -630,40 +686,76 @@ static BOOL have_font(const WCHAR *face)
     return found;
 }
 
-static void make_fonts(void)
+/* a face that exists: the one asked for, else the first installed fixed-pitch one we like */
+static void pick_face(const WCHAR *want, WCHAR *out)
 {
     static const WCHAR *const faces[] = { L"Cascadia Mono", L"Cascadia Code", L"Consolas", L"DejaVu Sans Mono",
                                           L"Liberation Mono", L"Courier New" };
-    WCHAR want[LF_FACESIZE] = L"";
-    DWORD cb = sizeof(want), pt = 0;
+    size_t i;
+    if (want && want[0] && have_font(want)) { lstrcpynW(out, want, LF_FACESIZE); return; }
+    for (i = 0; i < ARRAYSIZE(faces); i++) if (have_font(faces[i])) { lstrcpyW(out, faces[i]); return; }
+    lstrcpyW(out, L"Courier New");
+}
+
+/* a font of a face and size (points, before the zoom), made once */
+static struct tfont *font_for(const WCHAR *want, int pt)
+{
+    WCHAR face[LF_FACESIZE];
+    struct tfont *f;
     HDC dc;
     TEXTMETRICW tm;
-    size_t i;
-    if (g_font) DeleteObject(g_font);
-    if (g_font_bold) DeleteObject(g_font_bold);
-    if (!g_face[0] || !lstrcmpW(g_face, L"Consolas")) {
-        if (!RegGetValueW(HKEY_CURRENT_USER, REG_KEY, L"FontFace", RRF_RT_REG_SZ, NULL, want, &cb) && want[0] && have_font(want))
-            lstrcpyW(g_face, want);
-        else for (i = 0; i < ARRAYSIZE(faces); i++) if (have_font(faces[i])) { lstrcpyW(g_face, faces[i]); break; }
-    }
-    cb = sizeof(pt);
-    if (!g_font_pt && !RegGetValueW(HKEY_CURRENT_USER, REG_KEY, L"FontSize", RRF_RT_REG_DWORD, NULL, &pt, &cb) && pt >= 6 && pt <= 72)
-        g_font_pt = pt;
-    if (!g_font_pt) g_font_pt = 12;
-    g_font = CreateFontW(-MulDiv(g_font_pt, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, g_face);
-    g_font_bold = CreateFontW(-MulDiv(g_font_pt, g_dpi, 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, g_face);
+    SIZE sz;
+    int i;
+    pick_face(want, face);
+    if (pt < 4) pt = 12;
+    pt += g_zoom;
+    if (pt < 6) pt = 6;
+    if (pt > 72) pt = 72;
+    for (i = 0; i < g_nfonts; i++) if (g_fonts[i].pt == pt && !lstrcmpiW(g_fonts[i].face, face)) return &g_fonts[i];
+    if (g_nfonts == ARRAYSIZE(g_fonts)) return &g_fonts[0];
+    f = &g_fonts[g_nfonts++];
+    lstrcpyW(f->face, face);
+    f->pt = pt;
+    f->f = CreateFontW(-MulDiv(pt, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                       CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, face);
+    f->fb = CreateFontW(-MulDiv(pt, g_dpi, 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, face);
     dc = GetDC(NULL);
-    SelectObject(dc, g_font);
+    SelectObject(dc, f->f);
     GetTextMetricsW(dc, &tm);
-    {
-        SIZE sz;
-        GetTextExtentPoint32W(dc, L"M", 1, &sz);
-        g_cw = sz.cx > 0 ? sz.cx : tm.tmAveCharWidth;
-    }
-    g_ch = tm.tmHeight + tm.tmExternalLeading;
+    GetTextExtentPoint32W(dc, L"M", 1, &sz);
+    f->cw = sz.cx > 0 ? sz.cx : tm.tmAveCharWidth;
+    f->ch = tm.tmHeight + tm.tmExternalLeading;
     ReleaseDC(NULL, dc);
+    return f;
+}
+
+/* a profile's font: its own face and size, else the settings' defaults */
+static struct tfont *profile_font(int profile)
+{
+    const struct ts_profile *p = profile >= 0 && profile < g_nprofiles ? &g_profiles[profile] : NULL;
+    return font_for(p && p->face[0] ? p->face : g_set.face, p && p->size ? p->size : g_set.size ? g_set.size : 12);
+}
+
+static struct tfont *pane_font(const struct pane *p) { return profile_font(p->profile); }
+
+static const struct ts_scheme *pane_scheme(const struct pane *p)
+{
+    return ts_scheme(&g_set, p && p->profile >= 0 && p->profile < g_nprofiles ? g_profiles[p->profile].scheme : NULL);
+}
+
+/* after a change of settings or zoom: the fonts made again; the default profile's is the window's */
+static void make_fonts(void)
+{
+    int i;
+    struct tfont *f;
+    for (i = 0; i < g_nfonts; i++) { DeleteObject(g_fonts[i].f); DeleteObject(g_fonts[i].fb); }
+    g_nfonts = 0;
+    f = profile_font(g_default_profile);
+    lstrcpyW(g_face, f->face);
+    g_font_pt = f->pt;
+    g_font = f->f; g_font_bold = f->fb;
+    g_cw = f->cw; g_ch = f->ch;
 }
 
 /* the grid a pane's window holds; its screen and pseudo console follow */
@@ -671,10 +763,11 @@ static void pane_grid(struct pane *p, BOOL force)
 {
     RECT r;
     int cols, rows;
+    struct tfont *f = pane_font(p);
     GetClientRect(p->view, &r);
     if (r.right <= 0 || r.bottom <= 0) return;
-    cols = (r.right - 2 * S(PAD)) / g_cw;
-    rows = (r.bottom - 2 * S(PAD)) / g_ch;
+    cols = (r.right - 2 * S(PAD)) / f->cw;
+    rows = (r.bottom - 2 * S(PAD)) / f->ch;
     if (cols < 10) cols = 10;
     if (rows < 2) rows = 2;
     if (!force && cols == p->cols && rows == p->rows && cols == p->vt.cols && rows == p->vt.rows) return;
@@ -721,17 +814,56 @@ static void layout_node(int n, RECT r)
         place_find(p);
         return;
     }
+    nd->box = r;
+    nd->gap = r;
     if (nd->kind == SPLIT_V) {
         int w = r.right - r.left - S(GAP);
         a.right = r.left + w * nd->ratio / 1000;
         b.left = a.right + S(GAP);
+        nd->gap.left = a.right; nd->gap.right = b.left;
     } else {
         int h = r.bottom - r.top - S(GAP);
         a.bottom = r.top + h * nd->ratio / 1000;
         b.top = a.bottom + S(GAP);
+        nd->gap.top = a.bottom; nd->gap.bottom = b.top;
     }
     layout_node(nd->a, a);
     layout_node(nd->b, b);
+}
+
+static int divider_at(int n, POINT pt)
+{
+    struct node *nd = &g_nodes[n];
+    RECT g;
+    int r;
+    if (nd->kind == NODE_LEAF) return -1;
+    g = nd->gap;
+    /* a little wider than the gap, for a comfortable grab */
+    if (nd->kind == SPLIT_V) InflateRect(&g, S(2), 0); else InflateRect(&g, 0, S(2));
+    if (PtInRect(&g, pt)) return n;
+    if ((r = divider_at(nd->a, pt)) >= 0) return r;
+    return divider_at(nd->b, pt);
+}
+
+/* the divider of split n dragged to x (or y): its first half's share follows */
+static void drag_divider(int n, POINT pt)
+{
+    struct node *nd = &g_nodes[n];
+    int span, pos, r;
+#ifdef SG_MUTANT_NODRAG
+    return;
+#endif
+    if (nd->kind == SPLIT_V) { span = nd->box.right - nd->box.left - S(GAP); pos = pt.x - nd->box.left - S(GAP) / 2; }
+    else { span = nd->box.bottom - nd->box.top - S(GAP); pos = pt.y - nd->box.top - S(GAP) / 2; }
+    if (span <= 0) return;
+    r = (int)((long long)pos * 1000 / span);
+    if (r < 50) r = 50;
+    if (r > 950) r = 950;
+    if (r == nd->ratio) return;
+    nd->ratio = r;
+    layout_panes();
+    InvalidateRect(g_wnd, NULL, FALSE);
+    write_dump(TRUE);
 }
 
 static void layout_panes(void)
@@ -796,7 +928,7 @@ static void paint_strip(HDC dc, RECT *client)
         RECT r = g_tab_rects[i], txt, ic;
         BOOL act = i == g_active, hot = i == g_hot_tab;
         if (act || hot) {
-            b = CreateSolidBrush(act ? rgb_of(SCHEME_BG) : STRIP_HOT);
+            b = CreateSolidBrush(act ? rgb_of(pane_scheme(p)->bg) : STRIP_HOT);
             FillRect(dc, &r, b); DeleteObject(b);
         }
         if (act) {
@@ -805,11 +937,14 @@ static void paint_strip(HDC dc, RECT *client)
         }
         /* the focused pane's profile's badge: a letter on its colour */
         SetRect(&ic, r.left + S(10), (r.top + r.bottom) / 2 - S(8), r.left + S(26), (r.top + r.bottom) / 2 + S(8));
-        b = CreateSolidBrush(g_profiles[p->profile].colour); FillRect(dc, &ic, b); DeleteObject(b);
-        SetTextColor(dc, RGB(0xFF, 0xFF, 0xFF));
-        SelectObject(dc, g_ui_small);
-        DrawTextW(dc, &g_profiles[p->profile].letter, 1, &ic, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(dc, g_ui_font);
+        if (g_icons[p->profile]) DrawIconEx(dc, ic.left, ic.top, g_icons[p->profile], S(16), S(16), 0, NULL, DI_NORMAL);
+        else {
+            b = CreateSolidBrush(g_profiles[p->profile].colour); FillRect(dc, &ic, b); DeleteObject(b);
+            SetTextColor(dc, RGB(0xFF, 0xFF, 0xFF));
+            SelectObject(dc, g_ui_small);
+            DrawTextW(dc, &g_profiles[p->profile].letter, 1, &ic, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(dc, g_ui_font);
+        }
         SetRect(&txt, r.left + S(34), r.top, r.right - S(32), r.bottom);
         SetTextColor(dc, act ? RGB(0xFF, 0xFF, 0xFF) : RGB(0xB8, 0xB2, 0xC4));
         DrawTextW(dc, tab_title(t), -1, &txt, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
@@ -1106,13 +1241,13 @@ static void find_close(struct pane *p)
 }
 
 /* ---- the terminal view ------------------------------------------------------------------------------ */
-static uint32_t colour(uint32_t c, BOOL fg, uint8_t flags)
+static uint32_t colour(const struct ts_scheme *sc, uint32_t c, BOOL fg, uint8_t flags)
 {
-    if (c == VT_DEFAULT) return fg ? SCHEME_FG : SCHEME_BG;
+    if (c == VT_DEFAULT) return fg ? sc->fg : sc->bg;
     if (VT_IS_RGB(c)) return c & 0xffffff;
     /* bold text in the first eight colours shows bright, as Windows Terminal does by default */
     if (fg && (flags & VT_BOLD) && c < 8) c += 8;
-    return vt_palette_rgb(SCHEME, (int)(c & 0xff));
+    return vt_palette_rgb(sc->table, (int)(c & 0xff));
 }
 
 static BOOL in_selection(const struct pane *t, int x, int y)
@@ -1139,8 +1274,10 @@ static void row_highlights(const struct pane *p, int y, const struct vt_line *l,
 
 static void paint_view(struct pane *t, HDC dc, RECT *client)
 {
-    HBRUSH b = CreateSolidBrush(rgb_of(SCHEME_BG));
-    int y, x;
+    const struct ts_scheme *sc = pane_scheme(t);
+    struct tfont *F = t ? pane_font(t) : NULL;
+    HBRUSH b = CreateSolidBrush(rgb_of(sc->bg));
+    int y, x, g_cw = F ? F->cw : 8, g_ch = F ? F->ch : 16;
     static uint8_t hl[2048];
     FillRect(dc, client, b); DeleteObject(b);
     if (!t) return;
@@ -1173,14 +1310,14 @@ static void paint_view(struct pane *t, HDC dc, RECT *client)
                 } else { text[n] = c->ch ? (WCHAR)c->ch : L' '; dx[n++] = g_cw; }
                 x++;
             }
-            fg = colour(c0->fg, TRUE, c0->flags);
-            bg = colour(c0->bg, FALSE, c0->flags);
+            fg = colour(sc, c0->fg, TRUE, c0->flags);
+            bg = colour(sc, c0->bg, FALSE, c0->flags);
             if (c0->flags & VT_REVERSE) { uint32_t s = fg; fg = bg; bg = s; }
             if (h0 == 1) { bg = SCHEME_MATCH; fg = 0xFFFFFF; }
             if (h0 == 2) { bg = SCHEME_CURMATCH; fg = 0x1D1A26; }
-            if (sel0) { bg = SCHEME_SEL; fg = 0xFFFFFF; }
+            if (sel0) { bg = sc->sel; fg = 0xFFFFFF; }
             if (c0->flags & VT_DIM) fg = ((fg >> 1) & 0x7f7f7f) + ((bg >> 1) & 0x7f7f7f);
-            SelectObject(dc, (c0->flags & VT_BOLD) ? g_font_bold : g_font);
+            SelectObject(dc, (c0->flags & VT_BOLD) ? F->fb : F->f);
             SetTextColor(dc, rgb_of(fg));
             SetBkColor(dc, rgb_of(bg));
             SetRect(&rc, S(PAD) + x0 * g_cw, py, S(PAD) + x * g_cw, py + g_ch);
@@ -1198,7 +1335,7 @@ static void paint_view(struct pane *t, HDC dc, RECT *client)
     if (t->vt.cursor_visible && !t->scroll && t->alive) {
         RECT c;
         int cx = S(PAD) + t->vt.cx * g_cw, cy = S(PAD) + t->vt.cy * g_ch;
-        HBRUSH cb = CreateSolidBrush(rgb_of(SCHEME_CURSOR));
+        HBRUSH cb = CreateSolidBrush(rgb_of(sc->cursor));
         if (GetFocus() == t->view) {
             if (g_cursor_on) { SetRect(&c, cx, cy, cx + (S(2) > 1 ? S(2) : 2), cy + g_ch); FillRect(dc, &c, cb); }
         } else { SetRect(&c, cx, cy, cx + g_cw, cy + g_ch); FrameRect(dc, &c, cb); }
@@ -1299,8 +1436,9 @@ static void paste(struct pane *t)
 
 static void cell_at(struct pane *t, int px, int py, int *x, int *y)
 {
-    *x = (px - S(PAD)) / g_cw;
-    *y = (py - S(PAD)) / g_ch;
+    struct tfont *f = t ? pane_font(t) : NULL;
+    *x = (px - S(PAD)) / (f ? f->cw : g_cw);
+    *y = (py - S(PAD)) / (f ? f->ch : g_ch);
     if (*x < 0) *x = 0;
     if (*y < 0) *y = 0;
     if (t && *x >= t->vt.cols) *x = t->vt.cols - 1;
@@ -1357,10 +1495,10 @@ static void regrid_all(void)
 
 static void zoom(int delta)
 {
-    if (delta == 0) g_font_pt = 12;
-    else g_font_pt += delta;
-    if (g_font_pt < 6) g_font_pt = 6;
-    if (g_font_pt > 48) g_font_pt = 48;
+    if (delta == 0) g_zoom = 0;
+    else g_zoom += delta;
+    if (g_zoom < -20) g_zoom = -20;
+    if (g_zoom > 36) g_zoom = 36;
     make_fonts();
     regrid_all();
 }
@@ -1393,10 +1531,52 @@ static void duplicate_pane(void)
 }
 
 /* shortcuts that are the terminal's, not the shell's */
+/* a settings.json action; FALSE leaves the key to the shell */
+static BOOL run_action(const struct ts_action *a)
+{
+    struct pane *t = active_pane();
+    int prof = a->profile[0] ? profile_by_name(a->profile) : a->index >= 0 ? visible_profile(a->index) : -1;
+    switch (a->action) {
+    case A_UNBOUND: return FALSE;
+    case A_NEWTAB: new_tab(prof >= 0 ? prof : g_default_profile, NULL, NULL, NULL); return TRUE;
+    case A_CLOSEPANE: if (t) close_pane(t); return TRUE;
+    case A_CLOSETAB: if (g_active >= 0) close_tab(g_active); return TRUE;
+    case A_NEXTTAB: if (g_ntabs) activate((g_active + 1) % g_ntabs); return TRUE;
+    case A_PREVTAB: if (g_ntabs) activate((g_active + g_ntabs - 1) % g_ntabs); return TRUE;
+    case A_SWITCHTAB: activate(a->index); return TRUE;
+    case A_SPLIT: {
+        RECT r = { 0 };
+        int kind = a->split == 1 ? SPLIT_V : SPLIT_H;
+        if (!a->split && t) { GetClientRect(t->view, &r); kind = r.right >= r.bottom ? SPLIT_V : SPLIT_H; }
+        split_pane(kind, prof >= 0 ? prof : g_default_profile, NULL, NULL, 0);
+        return TRUE;
+    }
+    case A_DUPLICATE: duplicate_pane(); return TRUE;
+    case A_MOVEFOCUS: return move_focus(a->dx, a->dy);
+    case A_RESIZE: return resize_pane(a->dx, a->dy);
+    case A_FIND: find_open(t); return TRUE;
+    case A_COPY: if (t) copy_selection(t); return TRUE;
+    case A_PASTE: paste(t); return TRUE;
+    case A_SETTINGS: show_settings(); return TRUE;
+    case A_FULLSCREEN: toggle_fullscreen(); return TRUE;
+    case A_FONTUP: zoom(a->dx ? a->dx : 1); return TRUE;
+    case A_FONTDOWN: zoom(a->dx ? a->dx : -1); return TRUE;
+    case A_FONTRESET: zoom(0); return TRUE;
+    case A_MENU: show_menu(); return TRUE;
+    case A_SCROLLUP: if (t) scroll_view(t, 1); return TRUE;
+    case A_SCROLLDOWN: if (t) scroll_view(t, -1); return TRUE;
+    }
+    return FALSE;
+}
+
 static BOOL shortcut(WPARAM vk)
 {
     BOOL ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0, alt = GetKeyState(VK_MENU) < 0;
     struct pane *t = active_pane();
+    int i, mods = (ctrl ? TS_CTRL : 0) | (shift ? TS_SHIFT : 0) | (alt ? TS_ALT : 0);
+    /* the user's keys (settings.json) first; "unbound" gives a key back to the shell */
+    for (i = 0; i < g_set.nactions; i++)
+        if (g_set.actions[i].vk == vk && g_set.actions[i].mods == mods) return run_action(&g_set.actions[i]);
     if (ctrl && shift && !alt) {
         if (vk == 'T') { new_tab(g_default_profile, NULL, NULL, NULL); return TRUE; }
         if (vk == 'W') { if (t) close_pane(t); return TRUE; }
@@ -1405,7 +1585,7 @@ static BOOL shortcut(WPARAM vk)
         if (vk == 'F') { find_open(t); return TRUE; }
         if (vk == VK_TAB) { activate((g_active + g_ntabs - 1) % g_ntabs); return TRUE; }
         if (vk == VK_SPACE) { show_menu(); return TRUE; }
-        if (vk >= '1' && vk <= '9') { if ((int)(vk - '1') < g_nprofiles) new_tab(vk - '1', NULL, NULL, NULL); return TRUE; }
+        if (vk >= '1' && vk <= '9') { if (visible_profile(vk - '1') >= 0) new_tab(visible_profile(vk - '1'), NULL, NULL, NULL); return TRUE; }
     }
     if (alt && shift && !ctrl) {
         if (vk == VK_OEM_PLUS || vk == VK_ADD) { split_pane(SPLIT_V, g_default_profile, NULL, NULL, 0); return TRUE; }
@@ -1592,16 +1772,25 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 /* ---- the drop-down menu and settings ------------------------------------------------------------------- */
 enum { M_PROFILE = 100, M_SETTINGS = 200, M_ABOUT, M_SPLIT_RIGHT, M_SPLIT_DOWN, M_DUPLICATE, M_FIND, M_CLOSE_PANE };
 
+static int g_menu_items[MAX_PROFILES], g_nmenu;
+static BOOL g_menu_open;
+
 static void show_menu(void)
 {
     HMENU m = CreatePopupMenu();
     POINT pt = { g_menu_rect.left, g_menu_rect.bottom };
     int i, cmd;
+    g_nmenu = 0;
     for (i = 0; i < g_nprofiles; i++) {
         WCHAR label[96];
-        _snwprintf(label, ARRAYSIZE(label), L"%ls\tCtrl+Shift+%d", g_profiles[i].name, i + 1);
+        if (g_profiles[i].hidden) continue;
+        if (g_nmenu < 9) _snwprintf(label, ARRAYSIZE(label), L"%ls\tCtrl+Shift+%d", g_profiles[i].name, g_nmenu + 1);
+        else lstrcpynW(label, g_profiles[i].name, ARRAYSIZE(label));
         AppendMenuW(m, MF_STRING, M_PROFILE + i, label);
+        g_menu_items[g_nmenu++] = i;
     }
+    g_menu_open = TRUE;
+    write_dump(TRUE);
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, M_SPLIT_RIGHT, L"Split pane right\tAlt+Shift+Plus");
     AppendMenuW(m, MF_STRING, M_SPLIT_DOWN, L"Split pane down\tAlt+Shift+Minus");
@@ -1614,7 +1803,9 @@ static void show_menu(void)
     ClientToScreen(g_wnd, &pt);
     cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, g_wnd, NULL);
     DestroyMenu(m);
+    g_menu_open = FALSE;
     if (cmd >= M_PROFILE && cmd < M_PROFILE + g_nprofiles) new_tab(cmd - M_PROFILE, NULL, NULL, NULL);
+    else if (0) ;
     else if (cmd == M_SPLIT_RIGHT) split_pane(SPLIT_V, g_default_profile, NULL, NULL, 0);
     else if (cmd == M_SPLIT_DOWN) split_pane(SPLIT_H, g_default_profile, NULL, NULL, 0);
     else if (cmd == M_DUPLICATE) duplicate_pane();
@@ -1626,8 +1817,26 @@ static void show_menu(void)
                     L"Free software under the AGPL.", L"About", MB_OK | MB_ICONINFORMATION);
 }
 
-/* Settings: the default profile, the font and its size -- kept in HKCU\Software\Stained Glass\Terminal */
+/* Settings: the default profile, the font and its size -- kept in settings.json (wtsettings.c) */
 static HWND g_set_dlg;
+
+/* the settings (re)read: profiles, schemes, keys, fonts; panes keep their profiles by GUID */
+static void apply_settings(void)
+{
+    int i, j;
+    load_profiles();
+    for (i = 0; i < MAX_PANES; i++) {
+        struct pane *p = &g_panes[i];
+        if (!p->used) continue;
+        for (j = 0; j < g_nprofiles && lstrcmpiW(g_profiles[j].guid, p->guid); j++) ;
+        p->profile = j < g_nprofiles ? j : g_default_profile;
+    }
+    make_fonts();
+    regrid_all();
+    for (i = 0; i < MAX_PANES; i++) if (g_panes[i].used) InvalidateRect(g_panes[i].view, NULL, FALSE);
+    InvalidateRect(g_wnd, NULL, FALSE);
+    write_dump(TRUE);
+}
 static LRESULT CALLBACK settings_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
@@ -1638,26 +1847,23 @@ static LRESULT CALLBACK settings_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             GetDlgItemTextW(hwnd, 11, face, LF_FACESIZE);
             GetDlgItemTextW(hwnd, 12, size, 8);
             pt = _wtoi(size);
-            if (p >= 0 && p < g_nprofiles) {
-                HKEY k;
-                if (!RegCreateKeyExW(HKEY_CURRENT_USER, REG_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) {
-                    DWORD d = pt;
-                    RegSetValueExW(k, L"DefaultProfile", 0, REG_SZ, (BYTE *)g_profiles[p].name, (lstrlenW(g_profiles[p].name) + 1) * sizeof(WCHAR));
-                    RegSetValueExW(k, L"FontFace", 0, REG_SZ, (BYTE *)face, (lstrlenW(face) + 1) * sizeof(WCHAR));
-                    if (pt >= 6 && pt <= 72) RegSetValueExW(k, L"FontSize", 0, REG_DWORD, (BYTE *)&d, sizeof(d));
-                    RegCloseKey(k);
-                }
-                g_default_profile = p;
-            }
-            if (face[0] && have_font(face)) lstrcpynW(g_face, face, LF_FACESIZE);
-            if (pt >= 6 && pt <= 72) g_font_pt = pt;
-            make_fonts();
-            regrid_all();
+            /* into settings.json, keeping everything else there; then applied as any edit of it is */
+            if (!ts_save_prefs(&g_set, p >= 0 && p < g_nprofiles ? g_profiles[p].guid : NULL, face, pt))
+                MessageBoxW(hwnd, g_set.error[0] ? g_set.error : L"The settings file could not be written.", L"Settings", MB_OK | MB_ICONWARNING);
+            apply_settings();
             EnableWindow(g_wnd, TRUE);      /* before it goes, or another program's window is activated */
             DestroyWindow(hwnd);
             return 0;
         }
         if (LOWORD(wp) == IDCANCEL) { EnableWindow(g_wnd, TRUE); DestroyWindow(hwnd); return 0; }
+        if (LOWORD(wp) == 13) {
+            /* the JSON file itself, in the editor for .json (Notepad) */
+            WCHAR cmd[MAX_PATH + 4];
+            _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", g_set.path);
+            if ((INT_PTR)ShellExecuteW(hwnd, L"open", L"notepad.exe", cmd, NULL, SW_SHOWNORMAL) <= 32)
+                ShellExecuteW(hwnd, L"open", g_set.path, NULL, NULL, SW_SHOWNORMAL);
+            return 0;
+        }
         break;
     case WM_CLOSE: EnableWindow(g_wnd, TRUE); DestroyWindow(hwnd); return 0;
     case WM_DESTROY: g_set_dlg = NULL; EnableWindow(g_wnd, TRUE); SetForegroundWindow(g_wnd); return 0;
@@ -1676,7 +1882,7 @@ static void show_settings(void)
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     RegisterClassW(&wc);
     g_set_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT, L"SgTerminalSettings", L"Settings",
-                                WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, S(400), S(290), g_wnd, NULL, g_inst, NULL);
+                                WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, S(400), S(330), g_wnd, NULL, g_inst, NULL);
 #define ADD(cls, txt, style, X, Y, W, H, id) do { c = CreateWindowExW(0, cls, txt, WS_CHILD | WS_VISIBLE | (style), X, Y, W, H, g_set_dlg, (HMENU)(INT_PTR)(id), g_inst, NULL); \
         SendMessageW(c, WM_SETFONT, (WPARAM)g_ui_font, TRUE); } while (0)
     ADD(L"STATIC", L"Default profile", 0, x, y, w, S(20), -1); y += S(22);
@@ -1686,13 +1892,16 @@ static void show_settings(void)
     ADD(L"STATIC", L"Font face", 0, x, y, w, S(20), -1); y += S(22);
     ADD(L"EDIT", g_face, WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, x, y, w, S(26), 11); y += S(36);
     ADD(L"STATIC", L"Font size", 0, x, y, w, S(20), -1); y += S(22);
-    _snwprintf(size, ARRAYSIZE(size), L"%d", g_font_pt);
-    ADD(L"EDIT", size, WS_TABSTOP | WS_BORDER | ES_NUMBER, x, y, S(80), S(26), 12); y += S(44);
+    _snwprintf(size, ARRAYSIZE(size), L"%d", g_set.size ? g_set.size : 12);
+    ADD(L"EDIT", size, WS_TABSTOP | WS_BORDER | ES_NUMBER, x, y, S(80), S(26), 12); y += S(34);
+    ADD(L"STATIC", g_set.error[0] ? g_set.error : g_set.path, SS_PATHELLIPSIS, x, y, w, S(20), -1); y += S(30);
+    ADD(L"BUTTON", L"Open JSON file", WS_TABSTOP, x, y, S(130), S(30), 13);
     ADD(L"BUTTON", L"Save", WS_TABSTOP | BS_DEFPUSHBUTTON, x + w - S(200), y, S(96), S(30), IDOK);
     ADD(L"BUTTON", L"Cancel", WS_TABSTOP, x + w - S(96), y, S(96), S(30), IDCANCEL);
 #undef ADD
     EnableWindow(g_wnd, FALSE);
     ShowWindow(g_set_dlg, SW_SHOW);
+    write_dump(TRUE);
 }
 
 /* ---- the dump, for the gate ------------------------------------------------------------------------------- */
@@ -1736,9 +1945,36 @@ static void write_dump(BOOL force)
         WideCharToMultiByte(CP_UTF8, 0, g_face, -1, line, sizeof(line), NULL, NULL);
         fprintf(f, "font %d %d %d %s\n", g_font_pt, g_cw, g_ch, line);
     }
+    WideCharToMultiByte(CP_UTF8, 0, g_set.path, -1, line, sizeof(line), NULL, NULL);
+    fprintf(f, "settings %s\n", line);
+    WideCharToMultiByte(CP_UTF8, 0, g_set.error, -1, line, sizeof(line), NULL, NULL);
+    fprintf(f, "settingserror %s\n", line);
+    fprintf(f, "actions %d\n", g_set.nactions);
     for (i = 0; i < g_nprofiles; i++) {
+        char guid[64], dir[MAX_PATH * 3], sch[128];
         WideCharToMultiByte(CP_UTF8, 0, g_profiles[i].name, -1, line, sizeof(line), NULL, NULL);
+        WideCharToMultiByte(CP_UTF8, 0, g_profiles[i].guid, -1, guid, sizeof(guid), NULL, NULL);
+        WideCharToMultiByte(CP_UTF8, 0, g_profiles[i].dir, -1, dir, sizeof(dir), NULL, NULL);
+        WideCharToMultiByte(CP_UTF8, 0, ts_scheme(&g_set, g_profiles[i].scheme)->name, -1, sch, sizeof(sch), NULL, NULL);
         fprintf(f, "profile %d %s%s\n", i + 1, line, i == g_default_profile ? " (default)" : "");
+        fprintf(f, "profileinfo %d guid=%s hidden=%d user=%d icon=%d scheme=%s font=%s,%d dir=%s\n", i + 1, guid,
+                g_profiles[i].hidden, g_profiles[i].user, g_icons[i] != NULL, sch, "", profile_font(i)->pt, dir);
+    }
+    if (g_set_dlg) {
+        static const int ids[] = { 10, 11, 12, 13, IDOK, IDCANCEL };
+        size_t k;
+        for (k = 0; k < ARRAYSIZE(ids); k++) {
+            HWND c = GetDlgItem(g_set_dlg, ids[k]);
+            RECT cr;
+            if (!c) continue;
+            GetWindowRect(c, &cr);
+            fprintf(f, "setctl %d %ld %ld\n", ids[k], (cr.left + cr.right) / 2, (cr.top + cr.bottom) / 2);
+        }
+    }
+    fprintf(f, "menuopen %d\n", g_menu_open);
+    for (i = 0; i < g_nmenu && g_menu_open; i++) {
+        WideCharToMultiByte(CP_UTF8, 0, g_profiles[g_menu_items[i]].name, -1, line, sizeof(line), NULL, NULL);
+        fprintf(f, "menuitem %d %s\n", i + 1, line);
     }
     fprintf(f, "tabs %d active %d\n", g_ntabs, g_active + 1);
     for (i = 0; i < g_ntabs; i++) {
@@ -1771,9 +2007,22 @@ static void write_dump(BOOL force)
         GetWindowRect(p->view, &r);
         WideCharToMultiByte(CP_UTF8, 0, p->title, -1, title, sizeof(title), NULL, NULL);
         WideCharToMultiByte(CP_UTF8, 0, g_profiles[p->profile].name, -1, prof, sizeof(prof), NULL, NULL);
-        fprintf(f, "pane %d id=%d at=%ld,%ld rect=%ld,%ld,%ld,%ld size=%dx%d profile=%s alive=%d focus=%d: %s\n", i + 1, p->id,
+        fprintf(f, "pane %d id=%d at=%ld,%ld rect=%ld,%ld,%ld,%ld size=%dx%d profile=%s alive=%d focus=%d bg=%06x font=%d: %s\n", i + 1, p->id,
                 (r.left + r.right) / 2, (r.top + r.bottom) / 2, r.left, r.top, r.right, r.bottom, p->vt.cols, p->vt.rows, prof,
-                p->alive, p == t, title);
+                p->alive, p == t, pane_scheme(p)->bg, pane_font(p)->pt, title);
+    }
+    /* the dividers of the active tab's splits, on the screen */
+    for (i = 0; tb && i < MAX_NODES; i++) {
+        struct node *nd = &g_nodes[i];
+        POINT c;
+        int k, r2 = tb->root, up;
+        if (!nd->used || nd->kind == NODE_LEAF) continue;
+        for (up = i; up >= 0 && up != r2; up = g_nodes[up].parent) ;
+        if (up != r2) continue;
+        c.x = (nd->gap.left + nd->gap.right) / 2; c.y = (nd->gap.top + nd->gap.bottom) / 2;
+        ClientToScreen(g_wnd, &c);
+        k = nd->kind == SPLIT_V;
+        fprintf(f, "divider %d %s %ld %ld ratio=%d\n", i, k ? "v" : "h", c.x, c.y, nd->ratio);
     }
     for (i = 0; i < np; i++) {
         struct pane *p = &g_panes[all[i]];
@@ -1864,9 +2113,29 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         EndPaint(hwnd, &ps);
         return 0;
     }
+    case WM_SETCURSOR:
+        if (LOWORD(lp) == HTCLIENT && active_tab()) {
+            POINT pt;
+            int n;
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+            if (g_drag >= 0 || (n = divider_at(active_tab()->root, pt)) >= 0) {
+                n = g_drag >= 0 ? g_drag : n;
+                SetCursor(LoadCursorW(NULL, (LPCWSTR)(g_nodes[n].kind == SPLIT_V ? IDC_SIZEWE : IDC_SIZENS)));
+                return TRUE;
+            }
+        }
+        break;
+    case WM_LBUTTONDOWN: {
+        POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (active_tab() && (g_drag = divider_at(active_tab()->root, pt)) >= 0) SetCapture(hwnd);
+        return 0;
+    }
+    case WM_CAPTURECHANGED: g_drag = -1; return 0;
     case WM_MOUSEMOVE: {
         BOOL on_close;
         POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        if (g_drag >= 0) { drag_divider(g_drag, pt); return 0; }
         int t = tab_at(pt.x, pt.y, &on_close), btn = PtInRect(&g_plus_rect, pt) ? 1 : PtInRect(&g_menu_rect, pt) ? 2 : 0;
         if (t != g_hot_tab || (on_close ? t : -1) != g_hot_close || btn != g_hot_btn) {
             TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
@@ -1881,6 +2150,13 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         BOOL on_close;
         POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         int t = tab_at(pt.x, pt.y, &on_close);
+        if (g_drag >= 0) {
+            g_drag = -1;
+            ReleaseCapture();
+            if (active_pane()) SetFocus(active_pane()->view);
+            write_dump(TRUE);
+            return 0;
+        }
         if (t >= 0) { if (on_close) close_tab(t); else activate(t); }
         else if (PtInRect(&g_plus_rect, pt)) new_tab(g_default_profile, NULL, NULL, NULL);
         else if (PtInRect(&g_menu_rect, pt)) show_menu();
@@ -1953,6 +2229,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_TIMER:
         if (wp == TIMER_BLINK) { g_cursor_on = !g_cursor_on; if (active_pane()) InvalidateRect(active_pane()->view, NULL, FALSE); }
         else if (wp == TIMER_DUMP) write_dump(FALSE);
+        else if (wp == TIMER_SETTINGS && ts_file_stamp(&g_set) != g_set_stamp) apply_settings();     /* the file was edited */
         return 0;
     case WM_SYSCOMMAND:
         /* Alt pressed and released on its own would enter the window menu and eat the next keys */
@@ -2097,7 +2374,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     ReleaseDC(NULL, dc);
     if (g_dpi < 96) g_dpi = 96;
     g_tab_h = S(40);
-    g_font_pt = 0;
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);     /* CoCreateGuid, ShellExecute */
     load_profiles();
     make_fonts();
     g_ui_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
@@ -2137,6 +2414,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     if (active_pane()) SetFocus(active_pane()->view);
     SetTimer(g_wnd, TIMER_BLINK, GetCaretBlinkTime() != INFINITE ? GetCaretBlinkTime() : 530, NULL);
     SetTimer(g_wnd, TIMER_DUMP, 200, NULL);
+    SetTimer(g_wnd, TIMER_SETTINGS, 1000, NULL);
 
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
         if (g_set_dlg && IsDialogMessageW(g_set_dlg, &msg)) continue;

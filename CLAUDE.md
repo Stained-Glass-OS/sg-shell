@@ -372,13 +372,14 @@ drawn by `gen-icon.py` at build time.
   Backspace as DEL, Alt+key as ESC+key; the terminal's own shortcuts (see the
   header of `main.c`) never reach the shell -- their queued `WM_CHAR` is
   removed.
-- **Profiles** are found, not configured: PowerShell 7 (App Paths `pwsh.exe`,
+- **Profiles** are found on the machine -- PowerShell 7 (App Paths `pwsh.exe`,
   the PATH, `%ProgramFiles%\PowerShell\7`), Command Prompt (`%ComSpec%`),
   Git Bash (`%ProgramFiles%\Git\bin\bash.exe --login -i`), Windows
-  PowerShell. The default is PowerShell when present; Settings (Ctrl+,) keeps
-  the default profile, font and size in `HKCU\Software\Stained Glass\Terminal`.
-  A command line given without `-p` takes the profile that runs the same
-  program. A shell starts in `%USERPROFILE%`, with `WT_SESSION` set.
+  PowerShell -- and merged with the user's own from settings.json (below).
+  The default is PowerShell when present, until settings.json names another.
+  A command line given without `-p` takes the found profile that runs the
+  same program. A shell starts in its profile's startingDirectory, else
+  `%USERPROFILE%`, with `WT_SESSION` set.
 - **Look**: our own colour scheme ("Stained Glass Night"), the first of
   Cascadia Mono / Cascadia Code (Debian's fonts-cascadia-code, in the image)
   / Consolas / DejaVu Sans Mono, a bar cursor, bold drawn bright as Windows
@@ -427,9 +428,63 @@ drawn by `gen-icon.py` at build time.
   `build/terminal-panes-*.png`. Mutants `-DSG_MUTANT_PANEINPUT` (keys to the
   tab's first pane), `-DSG_MUTANT_NOSEARCH` (the screen only) and
   `-DSG_MUTANT_NORESIZE` turn it red.
-- **Not yet:** a settings.json of Windows Terminal's
-  own, profiles of the user's own, custom title bar tabs (the tabs are under
-  a normal caption), bracketed paste, mouse reporting to programs, Unicode
+- **settings.json** (`wtsettings.c` over `json.c`, a JSONC document model
+  that keeps every key in order): `%LOCALAPPDATA%\Microsoft\Windows
+  Terminal\settings.json`, Windows Terminal's unpackaged place
+  (`SG_TERMINAL_SETTINGS` names another); with none, the packaged Windows
+  Terminal's (`Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState`)
+  is taken over; with neither, one is made -- from the old
+  `HKCU\Software\Stained Glass\Terminal` DefaultProfile/FontFace/FontSize
+  when they exist (the registry is no longer written). Read: defaultProfile
+  (GUID or name), profiles.defaults and profiles.list (or a plain list):
+  guid, name, commandline, startingDirectory (`%VAR%`, `~`), icon (.ico, or
+  an exe/dll with `,index`: drawn in the tab), colorScheme (a name or
+  {dark,light}), font.face/font.size (or fontFace/fontSize), hidden; schemes
+  (the 16 colours, background, foreground, cursorColor, selectionBackground;
+  Stained Glass Night, our default, and Campbell are built in); actions and
+  keybindings in both of Windows Terminal's forms (command+keys, or actions
+  with ids and keybindings naming them), `unbound`/null taking a key away --
+  newTab (profile, index), closePane, closeTab, next/prevTab, switchToTab,
+  splitPane (split, profile, splitMode duplicate), duplicateTab, moveFocus,
+  resizePane, find, copy, paste, openSettings, toggleFullscreen,
+  adjustFontSize, resetFontSize, openNewTabDropdown, scrollUp/Down. The user's
+  keys are looked up before the built-in ones.
+- **The machine's profiles are dynamic profiles**: fixed GUIDs (Windows
+  Terminal's for PowerShell, Command Prompt and Windows PowerShell, Git for
+  Windows' for Git Bash), written into the list as `guid/hidden/name/source:
+  "Stained Glass"` and run with the command line found (a `commandline` in
+  the file wins). A dynamic profile of a generator we lack (Azure, WSL...)
+  is left out. The file is rewritten only when something is added (those
+  entries, a missing GUID) or Settings saves -- everything else in it stays,
+  known or not, but comments are lost then. An invalid file is never
+  overwritten: the built-in settings are used and Settings shows why.
+- **Each pane has its profile's scheme and font** (a font cache per face and
+  size; the zoom shifts all of them); the default profile's font sizes the
+  window. `WT_PROFILE_ID` is the profile's GUID. Hidden profiles are not in
+  the + menu nor Ctrl+Shift+N, but `wt -p NAME` opens them. The file is
+  re-read within a second of a change (panes keep their profiles by GUID);
+  Settings (Ctrl+,) writes defaultProfile and profiles.defaults.font and has
+  "Open JSON file".
+- **Dividers are dragged with the mouse** (the gap between panes belongs to
+  the main window: `divider_at`, a size cursor, capture); both panes'
+  pseudo consoles are resized as the divider moves.
+- **Gate: `test/terminal-settings-check.sh`** (display :143,
+  `SG_TERMINAL_SETTINGS_DPY`; `SG_WINE_DIR`): the registry migration; a JSONC
+  file with a user profile (commandline, startingDirectory, scheme -- the
+  pane's pixel --, font), a hidden one, a foreign dynamic one, unknown keys
+  and a GUID-less profile (GUID written back, unknown keys kept); the menu;
+  ctrl+alt+g as newTab of a profile, ctrl+shift+t unbound; Settings' font
+  size saved into the file with the rest kept, the defaults' pane taking it
+  and the profile with its own size keeping its own; an edit of the file
+  picked up; `wt -p` of the hidden profile; a vertical and a horizontal
+  X
+  Mutants `-DSG_MUTANT_NOUNKNOWN` (drops keys on save),
+  `-DSG_MUTANT_NODRAG` and `-DSG_MUTANT_NOUSERPROFILE` turn it red.
+- **Not yet:** per-profile settings beyond those above (padding, cursor
+  shape, opacity, backgroundImage...), `profiles.defaults` colorScheme only
+  as a default name, PNG icons, a Settings UI for profiles (edit the JSON),
+  comments kept on rewrite, custom title bar tabs (the tabs are under a
+  normal caption), bracketed paste, mouse reporting to programs, Unicode
   combining marks.
 
 ## Alarms & Clock (sg-clock)

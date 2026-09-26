@@ -210,6 +210,7 @@ test: build
 	@sh test/settings-check.sh
 	@sh test/terminal-check.sh
 	@sh test/terminal-panes-check.sh
+	@sh test/terminal-settings-check.sh
 	@sh test/clock-check.sh
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
