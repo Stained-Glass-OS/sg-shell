@@ -1660,6 +1660,11 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_KEYDOWN: case WM_SYSKEYDOWN: {
         char buf[32];
         const char *seq;
+        /* Alt+F4 closes the window, as everywhere: DefWindowProc turns it into
+         * SC_CLOSE (it was sent to the shell as the F4 key's sequence) */
+#ifndef SG_MUTANT_ALTF4
+        if (msg == WM_SYSKEYDOWN && wp == VK_F4) break;
+#endif
         if (shortcut(wp)) {
             /* the key was the terminal's: its character must not reach the shell too */
             MSG m;

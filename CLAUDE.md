@@ -385,7 +385,8 @@ drawn by `gen-icon.py` at build time.
   with xterm's modifier parameters (conhost's input parser reads them),
   Backspace as DEL, Alt+key as ESC+key; the terminal's own shortcuts (see the
   header of `main.c`) never reach the shell -- their queued `WM_CHAR` is
-  removed.
+  removed. Alt+F4 is not F4 with Alt: it goes to DefWindowProc (SC_CLOSE,
+  so it closes the window; QA B18).
 - **Profiles** are found on the machine -- PowerShell 7 (App Paths `pwsh.exe`,
   the PATH, `%ProgramFiles%\PowerShell\7`), Command Prompt (`%ComSpec%`),
   Git Bash (`%ProgramFiles%\Git\bin\bash.exe --login -i`), Windows
@@ -423,9 +424,10 @@ drawn by `gen-icon.py` at build time.
   the tab named PowerShell), switching tabs by clicking, a mouse selection
   copied with Ctrl+Shift+C and Ctrl+V pasting (xclip), F11 resizing the
   pseudo console (the program sees the new size), `exit` closing its tab,
-  `wt CMD ; nt -p ... --title ...`, and `wt.exe` typed in cmd (system32's
-  launcher). Screenshots `build/terminal-*.png`. Mutants `-DSG_MUTANT_NOSGR`
-  (no colours) and `-DSG_MUTANT_NORESIZE` (`SG_TERMINAL_EXE=`) turn it red,
+  `wt CMD ; nt -p ... --title ...`, `wt.exe` typed in cmd (system32's
+  launcher), and Alt+F4 closing the window. Screenshots
+  `build/terminal-*.png`. Mutants `-DSG_MUTANT_NOSGR` (no colours),
+  `-DSG_MUTANT_NORESIZE` and `-DSG_MUTANT_ALTF4` (`SG_TERMINAL_EXE=`) turn it red,
   and stock wine-sg shows no prompt at all.
 - **Gate: `test/terminal-panes-check.sh`** (display :141, `SG_TERMINAL_PANES_DPY`; `SG_WINE_DIR`):
   Alt+Shift+Plus gives a second Command Prompt of its own; typed text and

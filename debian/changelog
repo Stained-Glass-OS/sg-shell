@@ -1,3 +1,10 @@
+sg-shell (0.1.0-52) unstable; urgency=medium
+
+  * Terminal: Alt+F4 closes the window (QA B18); it went to the shell as
+    the F4 key. terminal-check checks it (mutant -DSG_MUTANT_ALTF4).
+
+ -- Stained Glass OS <dev@stained-glass.example>  Sat, 26 Sep 2026 03:01:47 -0700
+
 sg-shell (0.1.0-51) unstable; urgency=medium
 
   * Settings > About shows Stained Glass's version (os-release VERSION_ID and

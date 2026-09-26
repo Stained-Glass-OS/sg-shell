@@ -14,6 +14,7 @@
 #     new width
 #   - `exit` closes its tab; wt.exe's command line (a command, ';', nt -p)
 #     opens the tabs it names
+#   - Alt+F4 closes the window
 #
 # Needs a wine-sg whose pseudo consoles give programs their handles, resize
 # and interpret VT (0131, 0132): SG_WINE_DIR. PowerShell 7 from
@@ -197,6 +198,15 @@ if [ -f "$T/pfx/drive_c/windows/system32/wt.exe" ]; then
     focus_view; typ "wt.exe --title fromcmd"; key Return
     wait_grep '^tab 1 .*: fromcmd$' 20 && pass "wt.exe typed in cmd (system32's launcher) opens Terminal" || fail "wt.exe from cmd: $(grep '^tab' "$DUMP")"
 else fail "no wt.exe in system32 (a wine-sg without 0133)"; fi
+
+# --- Alt+F4 closes the window (it was sent to the shell as F4's sequence) ------------------------------
+nterm() { n_=$(pgrep -fc 'sg-terminal64[.]exe' 2>/dev/null); echo "${n_:-0}"; }
+n=$(nterm)
+if [ "$n" -ge 1 ]; then
+    focus_view; key alt+F4
+    i=0; while [ "$(nterm)" -ge "$n" ] && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+    [ "$(nterm)" -lt "$n" ] && pass "Alt+F4 closes the Terminal window" || { shot altf4; fail "Alt+F4 left $(nterm) of $n Terminal windows open"; }
+else fail "no Terminal running before Alt+F4"; fi
 
 [ $RC = 0 ] && echo "terminal-check: PASS" || echo "terminal-check: FAIL"
 exit $RC
