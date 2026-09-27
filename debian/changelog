@@ -1,3 +1,21 @@
+sg-shell (0.1.0-55) unstable; urgency=medium
+
+  * defaults/85-sg-namespace.reg: prefixes made before wine-sg 0443 drop "/"
+    from the Desktop's shell namespace (a file dialog's "Desktop").
+  * Our programs use the accent colour Settings > Personalization > Colors
+    chose (sg_accent(), DWM AccentColor), not a fixed purple: Calculator's =
+    key, Start, the taskbar, Clock, Snip, Paint, WordPad, Photos, Media,
+    Task Manager, Sticky Notes, the PDF reader, Font viewer, Terminal and the
+    network flyout. Gate: make test-calc (a green accent makes = green; -53
+    kept it purple).
+  * sg-battery: the taskbar's battery icon -- the outline filled to the
+    charge, a bolt while plugged in -- with Windows' tooltips ("3 hr 09 min
+    (63%) remaining", "63% available (plugged in, charging)", "Fully charged
+    (100%)") and a flyout (the charge, Battery settings). No battery, no
+    icon. sg-session starts it with the shell. Gate: make test-battery.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 13:35:00 -0700
+
 sg-shell (0.1.0-54) unstable; urgency=medium
 
   * Get a web browser offers Microsoft Edge too (Microsoft.Edge from the
@@ -15,19 +33,6 @@ sg-shell (0.1.0-54) unstable; urgency=medium
     networks..."): a real adapter's first scans can come back empty.
     Gate: make test-net-ui (new Wi-Fi-only, nothing-in-range, radio-off
     checks; fail on -53).
-  * defaults/85-sg-namespace.reg: prefixes made before wine-sg 0443 drop "/"
-    from the Desktop's shell namespace (a file dialog's "Desktop").
-  * Our programs use the accent colour Settings > Personalization > Colors
-    chose (sg_accent(), DWM AccentColor), not a fixed purple: Calculator's =
-    key, Start, the taskbar, Clock, Snip, Paint, WordPad, Photos, Media,
-    Task Manager, Sticky Notes, the PDF reader, Font viewer, Terminal and the
-    network flyout. Gate: make test-calc (a green accent makes = green; -53
-    kept it purple).
-  * sg-battery: the taskbar's battery icon -- the outline filled to the
-    charge, a bolt while plugged in -- with Windows' tooltips ("3 hr 09 min
-    (63%) remaining", "63% available (plugged in, charging)", "Fully charged
-    (100%)") and a flyout (the charge, Battery settings). No battery, no
-    icon. sg-session starts it with the shell. Gate: make test-battery.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 
