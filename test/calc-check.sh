@@ -186,9 +186,13 @@ sleep 0.5
 set -- $(btn eq)
 if [ $# -ge 4 ]; then
     px=$(import -window root -crop 1x1+$(( $1 + 4 ))+$(( $2 + 4 )) txt:- 2>/dev/null | sed -n '2p')
-    case "$px" in *"(112,48,192)"*|*"#7030C0"*) pass "the = key is painted in the accent colour";;
+    case "$px" in *"(123,47,190)"*|*"#7B2FBE"*) pass "the = key is painted in the accent colour (the default)";;
                   *) fail "the = key's pixel is $px";; esac
 fi
+
+# the accent Settings > Personalization > Colors chose: green (as in David's
+# field report, where = stayed purple)
+wine reg add 'HKCU\Software\Microsoft\Windows\DWM' /v AccentColor /t REG_DWORD /d 0xff3e8910 /f >/dev/null 2>&1
 
 # --- the calculator: URI --------------------------------------------------------------------
 DUMP2="$T/calc2.dump"
@@ -197,6 +201,12 @@ i=0; while [ ! -s "$DUMP2" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
 if grep -q '^MODE Scientific' "$DUMP2" 2>/dev/null; then pass "calculator:scientific opens it in Scientific"
 else fail "calculator: URI did not open Scientific ($(sed -n 's/^MODE //p' "$DUMP2" 2>/dev/null))"; fi
 sleep 1; shot uri
+set -- $(sed -n "s/^BTN eq //p" "$DUMP2" | head -1)
+if [ $# -ge 4 ]; then
+    px=$(import -window root -crop 1x1+$(( $1 + 4 ))+$(( $2 + 4 )) txt:- 2>/dev/null | sed -n '2p')
+    case "$px" in *"(16,137,62)"*|*"#10893E"*) pass "with a green accent chosen, the = key is green";;
+                  *) fail "the = key does not follow the accent: $px";; esac
+else fail "no = key in the second calculator's dump"; fi
 
 echo "calc-check: $([ $RC = 0 ] && echo PASS || echo FAIL)"
 exit $RC

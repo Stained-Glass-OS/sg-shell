@@ -23,6 +23,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <windows.h>
+#include "../sg-mode.h"
 #include <windowsx.h>
 #include <richedit.h>
 #include <commctrl.h>
@@ -49,7 +50,7 @@ static const struct { const WCHAR *name, *label; COLORREF body, strip, text, but
     { L"charcoal", L"Charcoal", RGB(0x5B, 0x5B, 0x5E), RGB(0x46, 0x46, 0x49), RGB(0xF4, 0xF4, 0xF4), RGB(0x6C, 0x6C, 0x70) },
 };
 #define NCOLORS ((int)(sizeof(COLORS) / sizeof(COLORS[0])))
-static const COLORREF ACCENT = RGB(112, 48, 192);
+#define ACCENT (sg_accent())
 
 enum { BTN_NONE, BTN_NEW, BTN_MORE, BTN_CLOSE, BTN_BOLD, BTN_ITALIC, BTN_UNDER, BTN_STRIKE, BTN_BULLET, BTN_COUNT };
 enum { MI_LIST = 100, MI_DELETE };

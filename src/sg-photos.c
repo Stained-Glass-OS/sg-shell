@@ -60,7 +60,7 @@ void sgm_follow(HWND hwnd)
 #define C_SUBTEXT (sgm_dark ? RGB(0xA8,0xA8,0xA8) : RGB(0x60, 0x60, 0x60))
 #define C_HOVER (sgm_dark ? RGB(0x33,0x33,0x33) : RGB(0xEB, 0xEB, 0xEB))
 #define C_PRESS (sgm_dark ? RGB(0x44,0x44,0x44) : RGB(0xDD, 0xDD, 0xDD))
-#define C_ACCENT   RGB(112, 48, 192)
+#define C_ACCENT   (sg_accent())
 #define C_ACTIVE (sgm_dark ? RGB(0x3B,0x2E,0x4F) : RGB(0xEE, 0xE6, 0xF8))   /* a toggled button: the accent, faint */
 
 enum { B_OPEN, B_ZOOMIN, B_ZOOMOUT, B_ACTUAL, B_ROTATE, B_DELETE, B_EDIT, B_SLIDESHOW, B_INFO,

@@ -8,6 +8,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../sg-mode.h"
 #include <commctrl.h>
 #include <stdio.h>
 #include "fontinfo.h"
@@ -16,7 +17,7 @@
 #define COL_TEXT    RGB(0x1A, 0x1A, 0x1A)
 #define COL_SUBTLE  RGB(0x60, 0x60, 0x60)
 #define COL_RULE    RGB(0xDD, 0xDD, 0xDD)
-#define COL_ACCENT  RGB(0x70, 0x30, 0xC0)
+#define COL_ACCENT  (sg_accent())
 #define COL_SELECT  RGB(0xE8, 0xDD, 0xF7)
 #define COL_HOT     RGB(0xF3, 0xEE, 0xFB)
 #define COL_BAR     RGB(0xF5, 0xF6, 0xF8)

@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define _WIN32_WINNT 0x0A00
 #include <windows.h>
+#include "../sg-mode.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <stdio.h>
@@ -28,7 +29,7 @@
 #define C_SUBTEXT  RGB(0x60, 0x60, 0x60)
 #define C_HOVER    RGB(0xEB, 0xEB, 0xEB)
 #define C_PRESS    RGB(0xDD, 0xDD, 0xDD)
-#define C_ACCENT   RGB(112, 48, 192)
+#define C_ACCENT   (sg_accent())
 #define C_ACTIVE   RGB(0xEE, 0xE6, 0xF8)
 #define C_SHADOW   RGB(0xC8, 0xC8, 0xCC)
 /* highlights are multiplied into the page (DPa), so the text stays black */

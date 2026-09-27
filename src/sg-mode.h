@@ -51,4 +51,38 @@ static inline void sg_mode_title(HWND hwnd, BOOL dark)
     if (set) set(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &on, sizeof(on));
 }
 
+/* The accent colour Settings > Personalization > Colors chose, as Windows keeps
+ * it: HKCU\Software\Microsoft\Windows\DWM AccentColor, 0xAABBGGRR -- its low
+ * three bytes are a COLORREF. Read at most once a second (it is asked for
+ * while painting); a change is announced with "ImmersiveColorSet", as the
+ * modes are (sg_mode_changed). */
+static inline COLORREF sg_accent(void)
+{
+    static COLORREF cached = RGB(0x7B, 0x2F, 0xBE);
+    static DWORD when;
+    static BOOL have;
+    DWORD now = GetTickCount(), v, size = sizeof(v);
+    if (!have || now - when > 1000) {
+        if (!RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor",
+                          RRF_RT_REG_DWORD, NULL, &v, &size))
+            cached = v & 0xFFFFFF;
+        else
+            cached = RGB(0x7B, 0x2F, 0xBE);
+        when = now;
+        have = TRUE;
+    }
+    return cached;
+}
+
+/* c mixed towards to by pct percent: the accent's lighter (hover) and darker
+ * (pressed) shades */
+static inline COLORREF sg_mix(COLORREF c, COLORREF to, int pct)
+{
+    return RGB(GetRValue(c) + (GetRValue(to) - GetRValue(c)) * pct / 100,
+               GetGValue(c) + (GetGValue(to) - GetGValue(c)) * pct / 100,
+               GetBValue(c) + (GetBValue(to) - GetBValue(c)) * pct / 100);
+}
+#define sg_accent_light(pct) sg_mix(sg_accent(), RGB(0xFF, 0xFF, 0xFF), (pct))
+#define sg_accent_dark(pct)  sg_mix(sg_accent(), RGB(0, 0, 0), (pct))
+
 #endif

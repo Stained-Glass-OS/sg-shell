@@ -18,6 +18,7 @@
  */
 #define COBJMACROS
 #include <windows.h>
+#include "sg-mode.h"
 #include <shellapi.h>
 #include <stdio.h>
 #include <time.h>
@@ -27,7 +28,7 @@
 #define TASKBAR_HEIGHT   40
 #define COL_BAR          RGB(0x1F, 0x1F, 0x1F)
 #define COL_BAR_HOVER    RGB(0x3A, 0x3A, 0x3A)
-#define COL_ACCENT       RGB(0x00, 0x78, 0xD7)  /* the default Win10 accent blue */
+#define COL_ACCENT       (sg_accent())  /* Settings > Personalization > Colors */
 #define COL_TEXT         RGB(0xFF, 0xFF, 0xFF)
 #define START_WIDTH      48
 #define CLOCK_WIDTH      88

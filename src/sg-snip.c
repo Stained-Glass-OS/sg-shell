@@ -51,8 +51,8 @@ void sgm_follow(HWND hwnd)
     RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
 }
 
-#define ACCENT      RGB(112, 48, 192)
-#define ACCENT_DARK RGB(90, 36, 160)
+#define ACCENT      (sg_accent())
+#define ACCENT_DARK (sg_accent_dark(20))
 #define ACCENT_SOFT (sgm_dark ? RGB(62,46,86) : RGB(236, 226, 248))
 #define SURFACE (sgm_dark ? RGB(32,32,32) : RGB(243, 243, 243))
 #define BAR (sgm_dark ? RGB(43,43,43) : RGB(249, 249, 249))
@@ -1055,7 +1055,7 @@ static const WCHAR *const BTN_TIPS[B_COUNT] = { L"New snip (Ctrl+N)", L"Snipping
                                                 L"Highlighter", L"Eraser", L"Image crop", L"Undo (Ctrl+Z)",
                                                 L"Redo (Ctrl+Y)", L"Save as (Ctrl+S)", L"Copy (Ctrl+C)", L"Apply", L"Cancel" };
 
-static const COLORREF PEN_COLORS[] = { RGB(0, 0, 0), RGB(232, 17, 35), RGB(0, 120, 215), RGB(16, 124, 16), ACCENT, RGB(255, 255, 255) };
+static const COLORREF PEN_COLORS[] = { RGB(0, 0, 0), RGB(232, 17, 35), RGB(0, 120, 215), RGB(16, 124, 16), RGB(112, 48, 192), RGB(255, 255, 255) };
 static const WCHAR *const PEN_COLOR_NAMES[] = { L"Black", L"Red", L"Blue", L"Green", L"Purple", L"White" };
 static const COLORREF HL_COLORS[] = { RGB(255, 240, 0), RGB(80, 230, 80), RGB(255, 120, 200), RGB(80, 200, 255) };
 static const WCHAR *const HL_COLOR_NAMES[] = { L"Yellow", L"Green", L"Pink", L"Aqua" };

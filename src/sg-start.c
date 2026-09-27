@@ -80,9 +80,9 @@ static const struct start_palette *g_pal = &dark_palette;
 #define COL_PRESS    (g_pal->press)
 #define COL_TEXT     (g_pal->text)
 #define COL_SUBTLE   (g_pal->subtle)
-#define COL_ACCENT   RGB(0x7B, 0x2F, 0xBE)
-#define COL_ACCENT_HI RGB(0x8A, 0x3F, 0xCE)
-#define COL_ACCENT_BR RGB(0x8A, 0x2B, 0xE2)
+#define COL_ACCENT   (sg_accent())
+#define COL_ACCENT_HI (sg_accent_light(10))
+#define COL_ACCENT_BR (sg_accent_light(12))
 #define COL_ON_ACCENT RGB(0xFF, 0xFF, 0xFF)   /* text and glyphs on the accent, either mode */
 #define COL_FIELD    (g_pal->field)
 #define COL_DIM      (g_pal->dim)

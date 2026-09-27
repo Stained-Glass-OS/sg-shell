@@ -48,8 +48,8 @@ void sgm_follow(HWND hwnd)
 #define C_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1A, 0x1A, 0x1A))
 #define C_TEXT2 (sgm_dark ? RGB(0xA8,0xA8,0xB0) : RGB(0x60, 0x60, 0x68))
 #define C_DIM (sgm_dark ? RGB(0x6E,0x6C,0x74) : RGB(0xA8, 0xA6, 0xAE))
-#define C_ACCENT   RGB(0x70, 0x30, 0xC0)
-#define C_ACCENT_HOT RGB(0x86, 0x4E, 0xD0)
+#define C_ACCENT   (sg_accent())
+#define C_ACCENT_HOT (sg_accent_light(15))
 #define REG_KEY L"Software\\Stained Glass\\Clock"
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"Stained Glass Clock"

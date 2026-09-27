@@ -17,6 +17,12 @@ sg-shell (0.1.0-54) unstable; urgency=medium
     checks; fail on -53).
   * defaults/85-sg-namespace.reg: prefixes made before wine-sg 0443 drop "/"
     from the Desktop's shell namespace (a file dialog's "Desktop").
+  * Our programs use the accent colour Settings > Personalization > Colors
+    chose (sg_accent(), DWM AccentColor), not a fixed purple: Calculator's =
+    key, Start, the taskbar, Clock, Snip, Paint, WordPad, Photos, Media,
+    Task Manager, Sticky Notes, the PDF reader, Font viewer, Terminal and the
+    network flyout. Gate: make test-calc (a green accent makes = green; -53
+    kept it purple).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 

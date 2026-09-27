@@ -11,6 +11,7 @@
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../sg-mode.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <commdlg.h>
@@ -24,7 +25,7 @@
 #include <string.h>
 #include <limits.h>
 
-#define ACCENT      RGB(112, 48, 192)
+#define ACCENT      (sg_accent())
 #define ACCENT_HOT  RGB(240, 234, 250)
 #define ACCENT_DOWN RGB(226, 212, 246)
 #define ACCENT_EDGE RGB(196, 172, 234)

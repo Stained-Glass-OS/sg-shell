@@ -37,6 +37,7 @@
  */
 #define _WIN32_WINNT 0x0601
 #include <windows.h>
+#include "sg-mode.h"
 #include <shellapi.h>
 #include <math.h>
 #include <stdarg.h>
@@ -63,7 +64,7 @@
 #define COL_EDGE    RGB(0x3A, 0x3A, 0x3A)
 #define COL_TEXT    RGB(0xFF, 0xFF, 0xFF)
 #define COL_SUBTLE  RGB(0xA8, 0xA8, 0xA8)
-#define COL_ACCENT  RGB(0x7B, 0x2F, 0xBE)
+#define COL_ACCENT  (sg_accent())
 #define COL_RING    RGB(0xB9, 0x8C, 0xF0)
 #define COL_IDLE    RGB(0x44, 0x44, 0x44)
 #define COL_HOVER   RGB(0x33, 0x33, 0x33)

@@ -38,6 +38,7 @@
 #define NTDDI_VERSION 0x0A000006
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../sg-mode.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -70,7 +71,7 @@
 #define SCHEME_CURMATCH 0xE7C564    /* the current one */
 #define STRIP_BG      RGB(0x12, 0x10, 0x18)
 #define STRIP_HOT     RGB(0x2A, 0x26, 0x35)
-#define ACCENT        RGB(0x9B, 0x6C, 0xF0)
+#define ACCENT        (sg_accent_light(30))
 #define PAD 6
 #define GAP 4                       /* between panes; the focused pane's frame is drawn in it */
 

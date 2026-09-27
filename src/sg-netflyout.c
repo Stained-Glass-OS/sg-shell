@@ -58,7 +58,7 @@ static void load_mode(void) { g_pal = sg_system_dark() ? &fly_dark : &fly_light;
 #define COL_OPEN    (g_pal->open)
 #define COL_TEXT    (g_pal->text)
 #define COL_SUBTLE  (g_pal->subtle)
-#define COL_ACCENT  RGB(0x7B, 0x2F, 0xBE)
+#define COL_ACCENT  (sg_accent())
 #define COL_LINK    (g_pal->link)
 #define COL_BUTTON  (g_pal->button)
 #define COL_ERROR   (g_pal->error)
