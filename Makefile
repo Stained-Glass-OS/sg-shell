@@ -97,7 +97,8 @@ build:
 	@$(WINDRES64) -I src/settings -I $(BUILD) src/settings/settings.rc -O coff -o $(BUILD)/sg-settings-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-settings64.exe $(CONTROL_SRC) $(BUILD)/sg-settings-res64.o $(CONTROL_LIBS) \
 	    && echo "built sg-settings (64-bit)"
-	@$(WINDRES64) -I src src/sg-net.rc -O coff -o $(BUILD)/sg-net-res64.o
+	@python3 src/sg-net-icon.py $(BUILD)/sg-net.ico
+	@$(WINDRES64) -I src -I $(BUILD) src/sg-net.rc -O coff -o $(BUILD)/sg-net-res64.o
 	@for p in $(NET_PANELS); do \
 	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
 	        && echo "built $$p (64-bit)"; \

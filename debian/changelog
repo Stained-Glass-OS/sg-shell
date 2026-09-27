@@ -3,6 +3,9 @@ sg-shell (0.1.0-54) unstable; urgency=medium
   * Get a web browser offers Microsoft Edge too (Microsoft.Edge from the
     winget repository: Microsoft's own MSI, checked against its SHA-256 and
     installed silently; never redistributed). Gate: make test-browser.
+  * Network Connections and the network flyout have an icon of their own (a
+    monitor with a globe, drawn by src/sg-net-icon.py): the window showed
+    the default icon, Wine's glass.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 

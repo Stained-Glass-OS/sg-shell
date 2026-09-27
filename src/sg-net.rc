@@ -1,2 +1,4 @@
-/* Resources shared by sg-ncpa and sg-netflyout: the common-controls 6 manifest. */
+/* Resources shared by sg-ncpa and sg-netflyout: the common-controls 6 manifest
+ * and their icon (drawn by sg-net-icon.py at build time). */
 1 24 "sg-net.manifest"
+1 ICON "sg-net.ico"
