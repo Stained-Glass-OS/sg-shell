@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: the Desktop's shell namespace -- a file dialog's "Desktop"
+; -- lists no "/" (Wine's view of the Unix file system; wine-sg 0443 stops
+; registering it, this drops it from prefixes made before). The Unix root
+; stays a drive under This PC.
+
+[-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\Namespace\{9D20AAE8-0625-44B0-9CA7-71889C2254D9}]

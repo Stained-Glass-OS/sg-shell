@@ -15,6 +15,8 @@ sg-shell (0.1.0-54) unstable; urgency=medium
     networks..."): a real adapter's first scans can come back empty.
     Gate: make test-net-ui (new Wi-Fi-only, nothing-in-range, radio-off
     checks; fail on -53).
+  * defaults/85-sg-namespace.reg: prefixes made before wine-sg 0443 drop "/"
+    from the Desktop's shell namespace (a file dialog's "Desktop").
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 
