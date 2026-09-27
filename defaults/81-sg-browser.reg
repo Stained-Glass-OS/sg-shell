@@ -58,3 +58,10 @@ Windows Registry Editor Version 5.00
 "Publisher"="Brave Software"
 "Description"="Blocks ads and trackers by default."
 "Colour"=dword:00fb542b
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\04]
+"Id"="Microsoft.Edge"
+"Name"="Microsoft Edge"
+"Publisher"="Microsoft"
+"Description"="Microsoft's browser, downloaded from Microsoft."
+"Colour"=dword:000078d4

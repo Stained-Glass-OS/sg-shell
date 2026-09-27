@@ -92,6 +92,27 @@ static const char BRAVE[] =
     "    ElevationRequirement: elevationRequired\n"
     "ManifestType: installer\n";
 
+/* Microsoft Edge: root scope and type, machine-wide MSIs only, three architectures */
+static const char EDGE[] =
+    "PackageIdentifier: Microsoft.Edge\n"
+    "PackageVersion: 154.0.4258.37\n"
+    "InstallerLocale: en-US\n"
+    "InstallerType: msi\n"
+    "Scope: machine\n"
+    "AppsAndFeaturesEntries:\n"
+    "- UpgradeCode: '{883C2625-37F7-357F-A0F4-DFAF391B2B9C}'\n"
+    "Installers:\n"
+    "  - Architecture: x64\n"
+    "    InstallerUrl: https://example.org/MicrosoftEdgeEnterpriseX64.msi\n"
+    "    InstallerSha256: 4D8D922C8B2470084A380142CDFD51B2B28A83AF7982D8F023CB8FACBF258246\n"
+    "  - Architecture: x86\n"
+    "    InstallerUrl: https://example.org/MicrosoftEdgeEnterpriseX86.msi\n"
+    "    InstallerSha256: 6894C735A3669499A7E4E5BA6239E3FD38DF6E4F9BB5873687F5C72E31A78F4A\n"
+    "  - Architecture: arm64\n"
+    "    InstallerUrl: https://example.org/MicrosoftEdgeEnterpriseARM64.msi\n"
+    "    InstallerSha256: DB9F7AAB8F4AC22A447DF7BCFF23D76DC6AA9BFFD4B8880028C5DE857EFFE633\n"
+    "ManifestType: installer\n";
+
 static const char LISTING[] =
     "[{\"name\": \"1.9.0\", \"type\": \"dir\"}, {\"name\": \"ESR\", \"type\": \"dir\"},"
     " {\"name\": \"1.10.0\", \"type\": \"dir\"}, {\"name\":\"1.10.0-beta\",\"type\":\"dir\"},"
@@ -138,6 +159,17 @@ int main(void)
     CHECK(!strcmp(list[1].silent, "/silent /install") && !strcmp(list[1].scope, "machine"), "Brave: the machine installer's own switches (%s)", list[1].silent);
     CHECK(mf_pick(list, n, "en-US", 0, 1) == 0, "Brave: a standard user gets the per-user installer");
     CHECK(mf_pick(list, n, "en-US", 1, 1) == 1, "Brave: an administrator gets the machine-wide one");
+
+    strcpy(buf, EDGE);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 3, "Edge: 3 installers (%d)", n);
+    CHECK(!strcmp(list[0].type, "msi") && !strcmp(list[0].scope, "machine"), "Edge: msi and machine scope, from the root");
+    k = mf_pick(list, n, "en-US", 1, 1);
+    CHECK(k == 0 && strstr(list[k].url, "X64.msi"), "Edge: a 64-bit PC gets the x64 MSI (%d)", k);
+    CHECK(mf_pick(list, n, "en-US", 1, 0) == 1, "Edge: a 32-bit one gets x86, never arm64");
+    mf_newest_version("[{\"name\": \"153.0.4234.48\"}, {\"name\": \"154.0.4258.37\"}, {\"name\": \"Beta\"},"
+                      " {\"name\": \"Canary\"}, {\"name\": \"Dev\"}]", v, sizeof(v));
+    CHECK(!strcmp(v, "154.0.4258.37"), "Edge: the newest stable version, not Beta, Canary or Dev (%s)", v);
 
     CHECK(!mf_sha256("abc", sha), "a short SHA-256 is refused");
     CHECK(!mf_sha256("ZZ5D9B99F9C5B6AF88BA68E1063D576E889E218723ADCAEC687D147675BDD13", sha), "a SHA-256 with non-hex digits is refused");

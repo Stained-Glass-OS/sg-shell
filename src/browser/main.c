@@ -11,7 +11,7 @@
  *                               one installed
  *   sg-browser64.exe            Get a web browser (the Start menu's entry)
  *
- * Get a web browser offers Firefox, Chrome and Brave (the list is
+ * Get a web browser offers Firefox, Chrome, Brave and Microsoft Edge (the list is
  * HKLM\Software\Stained Glass\Web Browsers\Offers, so an organisation can
  * change it). Install downloads the maker's own installer as the winget
  * community repository describes it, checks its SHA-256, and runs it silently
@@ -142,6 +142,7 @@ static void load_offers(void)
         { L"Mozilla.Firefox", L"Mozilla Firefox", L"Mozilla", L"Free and open source, from a non-profit.", RGB(0xE6, 0x60, 0x00) },
         { L"Google.Chrome", L"Google Chrome", L"Google", L"The most used browser, from Google.", RGB(0x1A, 0x73, 0xE8) },
         { L"Brave.Brave", L"Brave", L"Brave Software", L"Blocks ads and trackers by default.", RGB(0xFB, 0x54, 0x2B) },
+        { L"Microsoft.Edge", L"Microsoft Edge", L"Microsoft", L"Microsoft's browser, downloaded from Microsoft.", RGB(0x00, 0x78, 0xD4) },
     };
     HKEY key;
     WCHAR sub[64];
