@@ -103,6 +103,8 @@ build:
 	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
 	        && echo "built $$p (64-bit)"; \
 	done
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe src/sg-battery.c \
+	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-battery (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
 	    && echo "built sg-dictate (64-bit)"
 	@python3 src/zip/gen-icon.py $(BUILD)/sg-zip.ico
@@ -232,6 +234,11 @@ test: build
 	@sh test/clock-check.sh
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
+
+# The taskbar's battery icon (sg-battery). Needs sudo -n (a mount namespace for fake batteries).
+.PHONY: test-battery
+test-battery: build
+	@sh test/battery-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 	@sh test/dictate-check.sh
 	@sh test/zip-check.sh
 	@sh test/media-check.sh

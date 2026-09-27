@@ -23,6 +23,11 @@ sg-shell (0.1.0-54) unstable; urgency=medium
     Task Manager, Sticky Notes, the PDF reader, Font viewer, Terminal and the
     network flyout. Gate: make test-calc (a green accent makes = green; -53
     kept it purple).
+  * sg-battery: the taskbar's battery icon -- the outline filled to the
+    charge, a bolt while plugged in -- with Windows' tooltips ("3 hr 09 min
+    (63%) remaining", "63% available (plugged in, charging)", "Fully charged
+    (100%)") and a flyout (the charge, Battery settings). No battery, no
+    icon. sg-session starts it with the shell. Gate: make test-battery.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 
