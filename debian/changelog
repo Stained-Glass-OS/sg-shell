@@ -6,6 +6,15 @@ sg-shell (0.1.0-54) unstable; urgency=medium
   * Network Connections and the network flyout have an icon of their own (a
     monitor with a globe, drawn by src/sg-net-icon.py): the window showed
     the default icon, Wine's glass.
+  * The network icon, as Windows draws it: the Wi-Fi fan lit to the signal
+    when connected, faded with an asterisk when networks are in range, with
+    a cross when none are or the radio is off; drawn at 4x and scaled down
+    (at 16 px the fan was an unreadable smudge). Its tooltip no longer says
+    "No connections are available" while networks are in range. While the
+    flyout is open and empty it keeps looking ("Looking for Wi-Fi
+    networks..."): a real adapter's first scans can come back empty.
+    Gate: make test-net-ui (new Wi-Fi-only, nothing-in-range, radio-off
+    checks; fail on -53).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 11:10:59 -0700
 

@@ -65,12 +65,13 @@ if a[:2] == ["--wait", "45"]: a = a[2:]
 if a[:1] == ["-f"]: a = a[2:]
 o = sys.stdout.write
 if a[:2] == ["device", "status"]:
-    o("eth0:ethernet:connected:u-eth\nwlan0:wifi:disconnected:--\n")
+    o("eth0:ethernet:%s\nwlan0:wifi:disconnected:--\n" % ("disconnected:--" if st.get("unplugged") else "connected:u-eth"))
 elif a[:2] == ["device", "show"] and a[2] == "eth0":
-    o("GENERAL.DEVICE:eth0\nGENERAL.STATE:100 (connected)\nGENERAL.HWADDR:52\\:54\\:00\\:12\\:34\\:56\nGENERAL.MTU:1500\n"
+    o("GENERAL.DEVICE:eth0\nGENERAL.STATE:%s\nGENERAL.HWADDR:52\\:54\\:00\\:12\\:34\\:56\nGENERAL.MTU:1500\n"
       "GENERAL.CONNECTION:Wired connection 1\nIP4.ADDRESS[1]:10.0.2.15/24\nIP4.GATEWAY:10.0.2.2\nIP4.DNS[1]:10.0.2.3\n"
       "IP4.DOMAIN[1]:sgtest.lan\nIP6.ADDRESS[1]:fe80\\:\\:5054\\:ff\\:fe12\\:3456/64\n"
-      "DHCP4.OPTION[1]:dhcp_lease_time = 86400\nDHCP4.OPTION[2]:expiry = 1800086400\nDHCP4.OPTION[3]:dhcp_server_identifier = 10.0.2.2\n")
+      "DHCP4.OPTION[1]:dhcp_lease_time = 86400\nDHCP4.OPTION[2]:expiry = 1800086400\nDHCP4.OPTION[3]:dhcp_server_identifier = 10.0.2.2\n"
+      % ("30 (disconnected)" if st.get("unplugged") else "100 (connected)"))
 elif a[:2] == ["device", "show"]:
     o("GENERAL.DEVICE:wlan0\nGENERAL.STATE:30 (disconnected)\nGENERAL.HWADDR:02\\:00\\:00\\:00\\:00\\:00\nGENERAL.MTU:1500\nGENERAL.CONNECTION:--\n")
 elif a[:2] == ["connection", "show"] and len(a) == 2:
@@ -85,7 +86,7 @@ elif a[:2] == ["connection", "up"] and st.get("up_fails"):
                      "Hint: use 'journalctl -xe NM_CONNECTION=x + NM_DEVICE=wlan0' to get more details.\n")
     sys.exit(4)
 elif a[:2] == ["radio", "wifi"]:
-    o("enabled\n")
+    o("disabled\n" if st.get("radio_off") else "enabled\n")
 EOF
 printf '#!/bin/sh\nexit 1\n' > "$T/fakebin/busctl"
 chmod 755 "$T/fakebin/nmcli" "$T/fakebin/busctl"
@@ -159,6 +160,21 @@ CAFE=$(printf 'Cafe Net' | od -An -tx1 | tr -d ' \n')
 echo "$out" | grep -q "^NET $CAFE|Cafe Net|82|wpa-psk|Secured|new" && echo "$out" | grep -q '|Library|55|open|Open|' \
     && pass "the flyout lists the networks with signal and security" || fail "flyout nets: $out"
 echo "$out" | grep -q '^TIP Network/Internet access' && pass "the icon's tooltip says how it is connected" || fail "tip: $(echo "$out" | grep TIP)"
+echo "$out" | grep -q '^ICON wired$' && pass "with a cable the icon is the monitor" || fail "icon: $(echo "$out" | grep ICON)"
+# a laptop on Wi-Fi alone: its fan, never "no connections" while networks are in range
+state "{$SCAN, \"unplugged\": true}"
+out=$(bridged "$FLY" --bridged --dump)
+echo "$out" | grep -q '^TIP Not connected - Connections are available$' && echo "$out" | grep -q '^ICON wifi-available$' \
+    && pass "Wi-Fi alone, networks in range: \"Connections are available\" and the fan with its asterisk" \
+    || fail "wifi only: $(echo "$out" | grep -E '^(TIP|ICON)')"
+state '{"scan": [], "unplugged": true}'
+out=$(bridged "$FLY" --bridged --dump)
+echo "$out" | grep -q '^TIP Not connected - No connections are available$' && echo "$out" | grep -q '^ICON wifi-none$' \
+    && pass "nothing in range: \"No connections are available\" and the fan with a cross" || fail "none: $(echo "$out" | grep -E '^(TIP|ICON)')"
+state "{$SCAN, \"unplugged\": true, \"radio_off\": true}"
+out=$(bridged "$FLY" --bridged --dump)
+echo "$out" | grep -q '^TIP Wi-Fi is turned off$' && pass "the radio off: \"Wi-Fi is turned off\"" || fail "radio off: $(echo "$out" | grep TIP)"
+state "{$SCAN}"
 printf 'a-good-key-123\n' > "$T/key"
 out=$(bridged "$FLY" --bridged --connect "$CAFE" --password-file "Z:$T/key")
 f=$(ls "$T/nm"/sg-wifi-*.nmconnection 2>/dev/null | head -1)

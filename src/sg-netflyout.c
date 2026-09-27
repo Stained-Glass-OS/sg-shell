@@ -197,66 +197,124 @@ static int do_connect(const char *hex, const char *key, BOOL autoconnect, WCHAR 
 
 /* --- the tray icon, drawn here --------------------------------------------------------- */
 
+/* What the tray icon shows (also what --dump reports) */
+enum icon_kind { ICON_WIFI, ICON_WIFI_AVAILABLE, ICON_WIFI_NONE, ICON_WIRED, ICON_WIRED_NONE };
+
+static enum icon_kind icon_kind(void)
+{
+    int cn = connected_net();
+    BOOL wifi_up = g_has_wifi && g_radio_on && cn >= 0, wired_up = any_wired();
+    if (wifi_up) return ICON_WIFI;
+    if (!wired_up && g_has_wifi) return g_radio_on && g_nnets > 0 ? ICON_WIFI_AVAILABLE : ICON_WIFI_NONE;
+    return wired_up ? ICON_WIRED : ICON_WIRED_NONE;
+}
+
+/* The tray icon, as Windows 10 draws it: the Wi-Fi fan lit to the signal when
+ * connected; faded with an asterisk when networks are in range; faded with a
+ * cross when the radio is off or nothing is in range; a monitor for a wired
+ * connection (with a cross when there is none, and no Wi-Fi adapter). Drawn
+ * at four times the size and scaled down, so it is legible at 16 px. */
 static HICON make_icon(int size)
 {
-    BITMAPINFO bi = { { sizeof(BITMAPINFOHEADER), size, -size, 1, 32, BI_RGB } };
-    DWORD *px;
+    enum { K = 4 };
+    int S = size * K;
+    BITMAPINFO bi = { { sizeof(BITMAPINFOHEADER), S, -S, 1, 32, BI_RGB } };
+    BITMAPINFO bo = { { sizeof(BITMAPINFOHEADER), size, -size, 1, 32, BI_RGB } };
+    DWORD *big, *px;
     HDC dc = CreateCompatibleDC(NULL);
-    HBITMAP color = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, (void **)&px, NULL, 0), mask, old;
+    HBITMAP canvas = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, (void **)&big, NULL, 0), color, mask, old;
     ICONINFO ii = { TRUE };
     HICON icon;
-    int i, s = size, cn = connected_net(), bars = cn >= 0 ? (g_nets[cn].signal + 12) / 25 : 0;
-    BOOL wifi_up = g_has_wifi && g_radio_on && cn >= 0, wired_up = any_wired();
-    old = SelectObject(dc, color);
-    memset(px, 0, size * size * 4);
-    SetBkMode(dc, TRANSPARENT);
-    if (wifi_up || (!wired_up && g_has_wifi))
+    int i, x, y, cn = connected_net(), bars = cn >= 0 ? (g_nets[cn].signal + 12) / 25 : 0;
+    enum icon_kind kind = icon_kind();
+    BOOL wifi_up = kind == ICON_WIFI, wired_up = kind == ICON_WIRED;
+    BOOL fan = kind == ICON_WIFI || kind == ICON_WIFI_AVAILABLE || kind == ICON_WIFI_NONE;
+    enum { BADGE_NONE, BADGE_CROSS, BADGE_STAR } badge = BADGE_NONE;
+
+    old = SelectObject(dc, canvas);
+    memset(big, 0, S * S * 4);
+    if (fan)
     {
-        /* the Wi-Fi fan: bands lit to the signal strength */
-        for (i = 3; i >= 0; i--)
+        /* four bands around a dot at the bottom centre; the lit ones white,
+         * the rest dim (their intensity is the icon's alpha) */
+        int cx = S / 2, cy = S - S / 8, w = S / 9;
+        for (i = 0; i < 4; i++)
         {
-            int rad = s * (i + 1) / 4 - 1;
-            BYTE v = wifi_up && i < (bars < 1 ? 1 : bars) ? 0xFF : 0x55;
-            HBRUSH b = CreateSolidBrush(RGB(v, v, v)), ob = SelectObject(dc, b);
-            HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-            Pie(dc, s / 2 - rad, s - 2 - rad, s / 2 + rad + 1, s - 2 + rad + 1, s / 2 + rad, s - 2 - rad, s / 2 - rad, s - 2 - rad);
-            SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
-            if (i > 0)
+            BYTE v = wifi_up && i < (bars < 1 ? 1 : bars) ? 0xFF : 0x60;
+            if (i == 0)
             {
-                HBRUSH k = CreateSolidBrush(RGB(0, 0, 0)), ok = SelectObject(dc, k);
-                int in = rad - (s >= 32 ? 3 : 1);
-                op = SelectObject(dc, GetStockObject(NULL_PEN));
-                Pie(dc, s / 2 - in, s - 2 - in, s / 2 + in + 1, s - 2 + in + 1, s / 2 + in, s - 2 - in, s / 2 - in, s - 2 - in);
-                SelectObject(dc, ok); SelectObject(dc, op); DeleteObject(k);
+                HBRUSH b = CreateSolidBrush(RGB(v, v, v)), ob = SelectObject(dc, b);
+                HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
+                Ellipse(dc, cx - w, cy - w, cx + w, cy + w);
+                SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
+            }
+            else
+            {
+                int rad = w + i * (S - S / 8 - w) / 3 - w / 2;
+                LOGBRUSH lb = { BS_SOLID, RGB(v, v, v), 0 };
+                HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT, w * 12 / 10, &lb, 0, NULL);
+                HPEN op = SelectObject(dc, pen);
+                /* a quarter circle each side of straight up: 45 to 135 degrees */
+                Arc(dc, cx - rad, cy - rad, cx + rad, cy + rad,
+                    cx + rad * 707 / 1000, cy - rad * 707 / 1000, cx - rad * 707 / 1000, cy - rad * 707 / 1000);
+                SelectObject(dc, op); DeleteObject(pen);
             }
         }
+        if (!wifi_up) badge = kind == ICON_WIFI_AVAILABLE ? BADGE_STAR : BADGE_CROSS;
     }
     else
     {
-        /* a monitor with its cable: the wired connection */
-        BYTE v = wired_up ? 0xFF : 0x80;
-        HPEN pen = CreatePen(PS_SOLID, s >= 32 ? 2 : 1, RGB(v, v, v)), op = SelectObject(dc, pen);
+        /* a monitor on its stand */
+        BYTE v = wired_up ? 0xFF : 0x90;
+        HPEN pen = CreatePen(PS_SOLID, S / 12, RGB(v, v, v)), op = SelectObject(dc, pen);
         HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Rectangle(dc, s / 8, s / 8, s - s / 8, s * 5 / 8);
-        MoveToEx(dc, s / 2, s * 5 / 8, NULL); LineTo(dc, s / 2, s * 13 / 16);
-        MoveToEx(dc, s / 4, s * 13 / 16, NULL); LineTo(dc, s * 3 / 4, s * 13 / 16);
+        Rectangle(dc, S / 8, S / 8, S - S / 8, S * 5 / 8);
+        MoveToEx(dc, S / 2, S * 5 / 8, NULL); LineTo(dc, S / 2, S * 13 / 16);
+        MoveToEx(dc, S / 4, S * 13 / 16, NULL); LineTo(dc, S * 3 / 4, S * 13 / 16);
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
+        if (!wired_up) badge = BADGE_CROSS;
     }
-    if (!wifi_up && !wired_up)
+    if (badge != BADGE_NONE)
     {
-        /* not connected: a small cross */
-        HPEN pen = CreatePen(PS_SOLID, s >= 32 ? 3 : 2, RGB(0xFF, 0xFF, 0xFF)), op = SelectObject(dc, pen);
-        MoveToEx(dc, s * 10 / 16, s * 10 / 16, NULL); LineTo(dc, s - 1, s - 1);
-        MoveToEx(dc, s - 1, s * 10 / 16, NULL); LineTo(dc, s * 10 / 16, s - 1);
+        /* the badge in the bottom right corner, on a cleared square */
+        int b0 = S * 9 / 16, bc = (b0 + S) / 2, br = (S - b0) / 2 - S / 32;
+        HBRUSH clear = CreateSolidBrush(RGB(0, 0, 0));
+        RECT sq = { b0 - S / 16, b0 - S / 16, S, S };
+        HPEN pen = CreatePen(PS_SOLID, S / 10, RGB(0xFF, 0xFF, 0xFF)), op;
+        FillRect(dc, &sq, clear);
+        DeleteObject(clear);
+        op = SelectObject(dc, pen);
+        if (badge == BADGE_CROSS)
+        {
+            MoveToEx(dc, bc - br, bc - br, NULL); LineTo(dc, bc + br, bc + br);
+            MoveToEx(dc, bc + br, bc - br, NULL); LineTo(dc, bc - br, bc + br);
+        }
+        else
+        {
+            for (i = 0; i < 3; i++)   /* an asterisk: three strokes */
+            {
+                static const int dx[3] = { 0, 866, 866 }, dy[3] = { 1000, 500, -500 };
+                MoveToEx(dc, bc - br * dx[i] / 1000, bc - br * dy[i] / 1000, NULL);
+                LineTo(dc, bc + br * dx[i] / 1000, bc + br * dy[i] / 1000);
+            }
+        }
         SelectObject(dc, op); DeleteObject(pen);
     }
     GdiFlush();
-    for (i = 0; i < size * size; i++)
-    {
-        BYTE a = (BYTE)(px[i] & 0xFF);
-        px[i] = a ? ((DWORD)a << 24) | (g_pal->glyph ? 0x00FFFFFF : 0) : 0;
-    }
+
+    color = CreateDIBSection(dc, &bo, DIB_RGB_COLORS, (void **)&px, NULL, 0);
+    for (y = 0; y < size; y++)
+        for (x = 0; x < size; x++)
+        {
+            int sum = 0, u, v;
+            BYTE a;
+            for (v = 0; v < K; v++) for (u = 0; u < K; u++) sum += big[(y * K + v) * S + x * K + u] & 0xFF;
+            a = (BYTE)(sum / (K * K));
+            /* white (or black, in the light mode); the drawing is the alpha */
+            px[y * size + x] = a ? ((DWORD)a << 24) | (g_pal->glyph ? 0x00FFFFFF : 0) : 0;
+        }
     SelectObject(dc, old);
+    DeleteObject(canvas);
     mask = CreateBitmap(size, size, 1, 1, NULL);
     ii.hbmColor = color;
     ii.hbmMask = mask;
@@ -277,6 +335,8 @@ static void tray_update(BOOL add)
     g_nid.hIcon = make_icon(GetSystemMetrics(SM_CXSMICON));
     if (cn >= 0) _snwprintf(g_nid.szTip, 128, L"%ls\nInternet access", g_nets[cn].name);
     else if (any_wired()) _snwprintf(g_nid.szTip, 128, L"Network\nInternet access");
+    else if (g_has_wifi && !g_radio_on) _snwprintf(g_nid.szTip, 128, L"Wi-Fi is turned off");
+    else if (g_nnets > 0) _snwprintf(g_nid.szTip, 128, L"Not connected - Connections are available");
     else _snwprintf(g_nid.szTip, 128, L"Not connected - No connections are available");
     g_nid.szTip[127] = 0;
     Shell_NotifyIconW(add ? NIM_ADD : NIM_MODIFY, &g_nid);
@@ -461,7 +521,8 @@ static void on_paint(HWND hwnd)
         DrawTextW(dc, g_has_wifi && !g_radio_on ? L"Wi-Fi is turned off" : L"Not connected", -1, &t, DT_SINGLELINE);
         OffsetRect(&t, 0, 20);
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
-        DrawTextW(dc, L"No connections are available", -1, &t, DT_SINGLELINE);
+        DrawTextW(dc, g_has_wifi && g_radio_on ? L"Looking for Wi-Fi networks..." : L"No connections are available", -1, &t,
+                  DT_SINGLELINE);
     }
     for (i = 0; i < g_nnets; i++)
     {
@@ -727,6 +788,9 @@ static void show_flyout(void)
         tray_update(FALSE);
         relayout();
     }
+    /* and keep looking while it is open: a real adapter's first scans can
+     * come back empty (it was busy, or had only just come up) */
+    SetTimer(g_tray_wnd, 2, 5000, NULL);
 }
 
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -839,6 +903,20 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     case WM_TIMER:
+        if (wp == 2)
+        {
+            if (!IsWindowVisible(g_fly)) { KillTimer(hwnd, 2); return 0; }
+            /* not while a network is opened (Connect, the key prompt) */
+            if (!g_busy && g_exp < 0 && g_has_wifi && g_radio_on)
+            {
+                g_busy = TRUE;
+                refresh(TRUE, g_nnets == 0);
+                g_busy = FALSE;
+                tray_update(FALSE);
+                relayout();
+            }
+            return 0;
+        }
         if (!g_busy && !IsWindowVisible(g_fly))
         {
             g_busy = TRUE;
@@ -882,7 +960,9 @@ static int dump(void)
     {
         char *tip = w_to_utf8(g_nid.szTip);
         for (i = 0; tip && tip[i]; i++) if (tip[i] == '\n') tip[i] = '/';
+        static const char *const kinds[] = { "wifi", "wifi-available", "wifi-none", "wired", "wired-none" };
         net_report("TIP %s\n", tip ? tip : "");
+        net_report("ICON %s\n", kinds[icon_kind()]);
         free(tip);
     }
     (void)cn;
