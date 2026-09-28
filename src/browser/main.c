@@ -709,6 +709,30 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* one offer, found, downloaded, checked and installed silently; 0 when it is
+ * installed. Only what Get a web browser offers. */
+static int install_quietly(const WCHAR *id)
+{
+    WCHAR msg[512] = L"", winget[MAX_PATH];
+    package_t pkg;
+    BOOL ok = FALSE;
+    int k;
+
+    load_offers();
+    for (k = 0; k < g_noffers; k++) if (!_wcsicmp(g_offers[k].id, id)) break;
+    if (k == g_noffers) { fwprintf(stderr, L"sg-browser: %ls is not offered\n", id); return 2; }
+    memset(&pkg, 0, sizeof(pkg));
+    lstrcpynW(pkg.id, g_offers[k].id, 128);
+    if (winget_path(winget, MAX_PATH)) ok = winget_install(winget, &pkg, msg, 512);
+    else {
+        if (pkg_resolve(g_offers[k].id, &pkg, msg, 512) && pkg_download(&pkg, NULL, NULL, &g_cancel, msg, 512))
+            ok = pkg_install(&pkg, msg, 512);
+        pkg_cleanup(&pkg);
+    }
+    fwprintf(stderr, L"sg-browser: %ls: %ls%ls\n", g_offers[k].id, ok ? L"installed" : L"failed: ", ok ? L"" : msg);
+    return ok ? 0 : 1;
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
 {
     typedef BOOL (WINAPI *ctx_fn)(HANDLE);
@@ -720,6 +744,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     HDC screen;
     (void)prev; (void)cmdline; (void)show;
     g_hinst = inst;
+    /* /install ID: that offer, with no window -- the first-run setup's browser
+     * (sg-session's sg-oobe-browser runs it as the SYSTEM account) */
+    for (i = 1; argv && i + 1 < argc; i++)
+        if (!_wcsicmp(argv[i], L"/install")) {
+            int rc = install_quietly(argv[i + 1]);
+            LocalFree(argv);
+            return rc;
+        }
     for (i = 1; argv && i < argc; i++) if (argv[i][0] && argv[i][0] != '/') { lstrcpynW(g_target, argv[i], 4096); break; }
     LocalFree(argv);
     GetEnvironmentVariableW(L"SG_BROWSER_DUMP", g_dump, MAX_PATH);

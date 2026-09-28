@@ -4,6 +4,9 @@ sg-shell (0.1.0-57) unstable; urgency=medium
     on Windows: it asks sg-settingsctl (sg-session 0.1.0-53), which starts
     the update check for the person at the PC; an administrator is asked
     only where that is refused.
+  * sg-browser /install ID: an offered browser installed with no window
+    (found, downloaded, checked, installed silently; exit 0 when installed)
+    -- the first-run setup's browser (sg-session).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 20:30:00 -0700
 
