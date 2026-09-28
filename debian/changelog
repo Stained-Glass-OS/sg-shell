@@ -11,6 +11,11 @@ sg-shell (0.1.0-57) unstable; urgency=medium
     things ready" and "This might take a minute." on the theme's purple
     (theme/gen-backdrop.py -> /usr/share/stained-glass/backdrop.sgbd). The
     first session after setup was a black screen for a minute.
+  * The network flyout keeps opening however it is clicked: a click on the
+    tray icon while a request to the network service is in flight (its wait
+    pumps messages) hid the flyout or refreshed it inside the refresh, and
+    after a few quick clicks it stopped opening. Such a click brings it
+    forward now.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 20:30:00 -0700
 

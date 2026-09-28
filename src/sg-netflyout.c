@@ -774,7 +774,9 @@ static void show_flyout(void)
     g_exp_state = EXP_IDLE;
     g_scroll = 0;
     end_key_prompt();
+    g_busy = TRUE;
     refresh(TRUE, FALSE);
+    g_busy = FALSE;
     place_flyout();
     ShowWindow(g_fly, SW_SHOW);
     SetForegroundWindow(g_fly);
@@ -886,6 +888,15 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_TRAY:
         if (lp == WM_LBUTTONUP)
         {
+            /* A request to the network service is in flight, and its wait
+             * pumps messages: a click now would hide the flyout or refresh it
+             * inside the refresh -- clicked a few times in a row, the flyout
+             * stopped opening. It comes forward instead. */
+            if (g_busy)
+            {
+                if (IsWindowVisible(g_fly)) SetForegroundWindow(g_fly);
+                return 0;
+            }
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
             else show_flyout();
         }
