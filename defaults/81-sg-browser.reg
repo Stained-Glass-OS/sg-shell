@@ -52,12 +52,9 @@ Windows Registry Editor Version 5.00
 "Description"="The most used browser, from Google."
 "Colour"=dword:001a73e8
 
-[HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\03]
-"Id"="Brave.Brave"
-"Name"="Brave"
-"Publisher"="Brave Software"
-"Description"="Blocks ads and trackers by default."
-"Colour"=dword:00fb542b
+; Brave is no longer offered (its installer depends on an updater service
+; that does not run here); machines set up before lose the offer too.
+[-HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\03]
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\04]
 "Id"="Microsoft.Edge"

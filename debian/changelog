@@ -1,3 +1,11 @@
+sg-shell (0.1.0-58) unstable; urgency=medium
+
+  * Get a web browser no longer offers Brave (its installer depends on an
+    updater service that does not run here); machines set up before lose
+    the offer too (defaults/81-sg-browser.reg deletes Offers\03).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 21:30:00 -0700
+
 sg-shell (0.1.0-57) unstable; urgency=medium
 
   * "Check for updates" (Settings, Control Panel) needs no administrator, as
