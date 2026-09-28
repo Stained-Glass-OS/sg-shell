@@ -12,6 +12,9 @@ sg-shell (0.1.0-56) unstable; urgency=medium
   * Start's search finds apps by what they open, as Windows' does: "txt"
     finds Notepad, "rtf" WordPad, "screenshot" Snipping Tool, "cmd" the
     terminals... Gate: make test-start.
+  * Get a web browser runs an MSI (Edge, Chrome) as an administrator from
+    the start: Windows' Installer service elevates such a package itself,
+    and without one msiexec stopped with 1627 as the user.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 18:10:00 -0700
 

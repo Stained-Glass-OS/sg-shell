@@ -257,11 +257,11 @@ void pkg_cleanup(package_t *p)
 
 /* ---- running an installer ----------------------------------------------------------------------- */
 
-static BOOL run_wait(const WCHAR *file, const WCHAR *args, DWORD *code, WCHAR *err, int cch)
+static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, WCHAR *err, int cch)
 {
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     int attempt;
-    for (attempt = 0; attempt < 2; attempt++) {
+    for (attempt = admin ? 1 : 0; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
         sei.lpFile = file;
@@ -294,7 +294,10 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     else if (!_wcsicmp(t, L"exe")) lstrcpynW(args, p->silent, 1024);
     else { seterr(err, cch, L"%ls installers (%ls) can't be run here yet.", t, p->id); return FALSE; }
     lstrcpynW(p->command, args, 1024);
-    if (!run_wait(file, args, &code, err, cch)) return FALSE;
+    /* An MSI for all users (Edge's, Chrome's) needs an administrator: on
+     * Windows the Installer service elevates it itself, here there is no such
+     * service, and as the user msiexec stopped with 1627. Ask first. */
+    if (!run_wait(file, args, file == msi, &code, err, cch)) return FALSE;
     p->exit_code = code;
     if (code != 0 && code != 3010 && code != 1641) {
         seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
