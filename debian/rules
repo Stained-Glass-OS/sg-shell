@@ -44,6 +44,8 @@ override_dh_auto_install:
 	python3 theme/wallpapers/gen-wallpaper.py debian/sg-shell/usr/share/stained-glass/wallpapers/stained-glass.jpg
 	python3 theme/wallpapers/gen-wallpaper.py --night debian/sg-shell/usr/share/stained-glass/wallpapers/stained-glass-night.jpg
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
+	# what sg-compositor shows where no window is (its backdrop.c)
+	python3 theme/gen-backdrop.py debian/sg-shell/usr/share/stained-glass/backdrop.sgbd
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
 	# The shell's icon font (caption buttons of Windows 10/11-era programs):
 	# drawn by src/sg-icons-font.py; theme/52-sg-fonts.reg maps names to it.
