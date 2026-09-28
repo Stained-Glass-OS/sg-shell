@@ -130,6 +130,9 @@ xdotool key Escape; sleep 1
 [ "$(val search)" = "" ] && [ "$(val visible)" = 1 ] && pass "Escape clears the search, and Start stays open" || fail "Escape: visible $(val visible) search '$(val search)'"
 xdotool type --delay 80 uninstall; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = "Apps & features" ] && pass "settings are found too: 'uninstall' -> Apps & features" || fail "settings search: $(d | grep '^best')"
+xdotool key Escape; sleep 1
+xdotool type --delay 80 txt; sleep 1.5
+[ "$(d | sed -n 's/^best //p')" = Notepad ] && pass "apps are found by what they open: 'txt' -> Notepad" || fail "keyword search: $(d | grep '^best')"
 xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
 [ "$(val visible)" = 0 ] && pass "a second Escape closes Start" || fail "still open"
 

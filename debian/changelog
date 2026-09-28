@@ -9,6 +9,9 @@ sg-shell (0.1.0-56) unstable; urgency=medium
   * defaults/86-sg-no-menubuilder.reg: winemenubuilder is off for every
     user. Installers' shortcuts became Linux .desktop files, written into
     the Windows Desktop ("Firefox.desktop" beside the Firefox shortcut).
+  * Start's search finds apps by what they open, as Windows' does: "txt"
+    finds Notepad, "rtf" WordPad, "screenshot" Snipping Tool, "cmd" the
+    terminals... Gate: make test-start.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 18:10:00 -0700
 

@@ -254,6 +254,30 @@ static int app_cmp(const void *a, const void *b)
     return lstrcmpiW(((const struct entry *)a)->name, ((const struct entry *)b)->name);
 }
 
+/* more words to find an app by, as Windows' search finds Notepad for "txt" */
+static const struct { const WCHAR *name, *words; } app_keywords[] = {
+    { L"Notepad", L"txt text editor notes log ini" },
+    { L"WordPad", L"rtf doc docx document word writer text" },
+    { L"Paint", L"draw drawing picture image bmp png mspaint" },
+    { L"Photos", L"picture pictures image images photo jpg jpeg png gif viewer" },
+    { L"Media Player", L"music video movie audio mp3 mp4 mkv player" },
+    { L"Calculator", L"calc math sums" },
+    { L"Command Prompt", L"cmd console dos shell terminal" },
+    { L"Terminal", L"console shell cmd powershell prompt" },
+    { L"PowerShell 7", L"pwsh ps shell console terminal" },
+    { L"Task Manager", L"taskmgr processes performance end task kill" },
+    { L"Snipping Tool", L"screenshot screen capture snip print screen" },
+    { L"PDF Viewer", L"pdf document reader acrobat" },
+    { L"File Explorer", L"files folders explorer documents downloads" },
+    { L"Alarms & Clock", L"alarm timer stopwatch clock world" },
+    { L"Sticky Notes", L"notes note memo" },
+    { L"Character Map", L"symbols characters unicode charmap emoji" },
+    { L"Magnifier", L"zoom magnify accessibility" },
+    { L"On-Screen Keyboard", L"osk keyboard accessibility touch" },
+    { L"Get a web browser", L"browser internet firefox chrome edge brave" },
+    { L"Remote Desktop Connection", L"rdp mstsc remote" },
+};
+
 static void add_app(const WCHAR *name, const WCHAR *path, const FILETIME *created)
 {
     int i;
@@ -270,6 +294,8 @@ static void add_app(const WCHAR *name, const WCHAR *path, const FILETIME *create
     lstrcpynW(g_apps[g_napps].name, name, 128);
     lstrcpynW(g_apps[g_napps].path, path, MAX_PATH);
     if (created) g_apps[g_napps].created = *created;
+    for (i = 0; i < (int)ARRAYSIZE(app_keywords); i++)
+        if (!lstrcmpiW(app_keywords[i].name, name)) lstrcpynW(g_apps[g_napps].keywords, app_keywords[i].words, 160);
     g_apps[g_napps].kind = K_APP;
     g_napps++;
 }
