@@ -1,3 +1,11 @@
+sg-shell (0.1.0-59) unstable; urgency=medium
+
+  * Remote Desktop Connection has an icon of its own (two screens and an
+    arrow, src/sg-mstsc-icon.py): its Start entry and pinned tile showed
+    the generic program icon.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 17:10:00 -0700
+
 sg-shell (0.1.0-58) unstable; urgency=medium
 
   * Get a web browser no longer offers Brave (its installer depends on an

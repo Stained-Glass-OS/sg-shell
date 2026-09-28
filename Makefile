@@ -10,7 +10,7 @@ SG_CON_CFLAGS := -O2 -municode -mconsole -Wall -Wextra
 LIBS     = -lshell32 -lgdi32 -luser32 -lole32 -luuid
 BUILD    = build
 
-PANELS = sg-taskbar sg-start sg-mstsc
+PANELS = sg-taskbar sg-start
 # The Control Panel is several files (src/control/) and needs more of Windows.
 CONTROL_SRC  = $(wildcard src/control/*.c)
 CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
@@ -18,6 +18,7 @@ CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphl
 # The network programs: sg-netclient.h and a common-controls 6 manifest.
 NET_PANELS = sg-ncpa sg-netflyout
 WINDRES64 ?= x86_64-w64-mingw32-windres
+WINDRES32 ?= i686-w64-mingw32-windres
 NET_LIBS = -lcomctl32 -luxtheme $(LIBS)
 # Voice typing's toolbar (sg-dictate): its engine is sg-session's sg-dictate.
 DICTATE_LIBS = -lshell32 -lgdi32 -luser32
@@ -89,6 +90,12 @@ build:
 	    $(MINGW64) $(SG_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit)"; \
 	    $(MINGW32) $(SG_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit)"; \
 	done
+	@# Remote Desktop Connection: a panel with its own icon (src/sg-mstsc-icon.py)
+	@python3 src/sg-mstsc-icon.py $(BUILD)/sg-mstsc.ico
+	@$(WINDRES64) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res64.o
+	@$(WINDRES32) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res32.o
+	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) && echo "built sg-mstsc (64-bit)"
+	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) && echo "built sg-mstsc (32-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
 	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
 	@# Settings (SystemSettings, ms-settings:) is the Control Panel's program in its own frame

@@ -1,0 +1,2 @@
+/* Remote Desktop Connection's resources: its icon, drawn at build time by sg-mstsc-icon.py. */
+1 ICON "sg-mstsc.ico"
