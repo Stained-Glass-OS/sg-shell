@@ -11,6 +11,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "settings.h"   /* ctl_run */
 
 enum { CMD_CHECK = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_HISTORY = CMD_PAGE_FIRST + 3 };
 
@@ -173,11 +174,30 @@ void build_update(void)
     if (!nh) pg_text(x + S(16), y, w, S(20), g_font_body, COL_SUBTLE, L"No updates have been installed yet.", DT_SINGLELINE);
 }
 
+/* "Check for updates": anyone signed in may (sg-settingsctl updates check,
+ * which polkit allows for the person at the PC); an administrator's route
+ * only if that is refused -- by a machine that forbids it, or an older
+ * sg-session. */
+void update_check_now(void)
+{
+    WCHAR err[256] = L"";
+    BOOL ok = FALSE;
+    char *ans = ctl_run(L"updates check", &ok, err, ARRAYSIZE(err), 30000);
+    free(ans);
+    if (ok) {
+        message(g_main, L"Updates", L"Checking for updates. Updates that are found are downloaded now and "
+                L"installed the next time you restart your computer.", FALSE);
+        refresh_page();
+        return;
+    }
+    if (run_elevated(L"/admin update-check")) refresh_when_back();
+}
+
 BOOL cmd_update(int id, int code, HWND ctl)
 {
     (void)code; (void)ctl;
     switch (id) {
-    case CMD_CHECK: if (run_elevated(L"/admin update-check")) refresh_when_back(); return TRUE;
+    case CMD_CHECK: update_check_now(); return TRUE;
     case CMD_RESTART:
         if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)

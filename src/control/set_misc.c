@@ -421,7 +421,7 @@ BOOL set_cmd_update(int id, int code, HWND ctl)
 {
     (void)code; (void)ctl;
     switch (id) {
-    case CMD_CHECK: if (run_elevated(L"/admin update-check")) refresh_when_back(); return TRUE;
+    case CMD_CHECK: update_check_now(); return TRUE;
     case CMD_RESTART:
         if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)

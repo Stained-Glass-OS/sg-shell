@@ -179,6 +179,7 @@ void format_size(ULONGLONG bytes, WCHAR *out, int cch);
 /* Run this program elevated (ShellExecute "runas": the broker's consent
  * prompt), with the given arguments. Returns FALSE if it did not start. */
 BOOL run_elevated(const WCHAR *args);
+void update_check_now(void);   /* Updates' "Check for updates" (update.c) */
 #define WM_ELEVATED_DONE (WM_APP + 40)   /* run_elevated's program ended */
 /* File a request with sg-admind and wait for the answer. fields: the verb,
  * then its arguments (a password last). Returns TRUE for OK; msg gets the
