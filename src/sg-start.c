@@ -263,6 +263,7 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"Media Player", L"music video movie audio mp3 mp4 mkv player" },
     { L"Calculator", L"calc math sums" },
     { L"Linux Terminal (Administrator)", L"linux terminal root bash shell sudo console driver" },
+    { L"Report a problem", L"bug report feedback debug log crash tester issue help" },
     { L"Command Prompt", L"cmd console dos shell terminal" },
     { L"Terminal", L"console shell cmd powershell prompt" },
     { L"PowerShell 7", L"pwsh ps shell console terminal" },
@@ -442,6 +443,7 @@ static void build_list(void)
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");
     add_beside(L"Linux Terminal (Administrator)", L"sg-rootterm64.exe");
+    add_beside(L"Report a problem", L"sg-bugreport64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
     {

@@ -149,6 +149,11 @@ build:
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
 	    && echo "built sg-snip (64-bit)"
 	@python3 src/charmap/gen-names.py $(UNICODE_DATA) $(BUILD)/charmap-names.c
+	@# Report a problem: testers' reports, a program run with debug logging (src/bugreport)
+	@python3 src/bugreport/gen-icon.py $(BUILD)/sg-bugreport.ico
+	@$(WINDRES64) -I src/bugreport -I $(BUILD) src/bugreport/sg-bugreport.rc -O coff -o $(BUILD)/sg-bugreport-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-bugreport64.exe src/bugreport/sg-bugreport.c \
+	    $(BUILD)/sg-bugreport-res64.o -lcomdlg32 -lshlwapi -lversion $(LIBS) && echo "built sg-bugreport (64-bit)"
 	@# Linux Terminal (Administrator): a root shell after the user's password (src/rootterm)
 	@python3 src/rootterm/gen-icon.py $(BUILD)/sg-rootterm.ico
 	@$(WINDRES64) -I src/rootterm -I $(BUILD) src/rootterm/sg-rootterm.rc -O coff -o $(BUILD)/sg-rootterm-res64.o
@@ -240,6 +245,7 @@ test: build
 	@sh test/start-check.sh
 	@sh test/mstsc-check.sh
 	@sh test/rootterm-check.sh
+	@sh test/bugreport-check.sh
 	@sh test/admind-check.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh

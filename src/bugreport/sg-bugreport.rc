@@ -1,0 +1,2 @@
+/* Report a problem: its icon, drawn at build time by gen-icon.py. */
+1 ICON "sg-bugreport.ico"

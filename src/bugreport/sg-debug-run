@@ -1,0 +1,77 @@
+#!/bin/sh
+# sg-debug-run DIR [--cd FOLDER] PROGRAM [ARGUMENT...] -- runs a Windows
+# program with Wine's debug logging for Report a problem (sg-bugreport.exe),
+# in FOLDER (a Unix path), and waits for it.
+# sg-debug-run --summarize DIR -- the highlights of the log so far, for a
+# report made while the program still runs.
+#
+# DIR gets: log (Wine's debug output, cut to its last 64 MB), exit (the exit
+# status), seconds (how long it ran), and highlights (what a developer reads
+# first: crashes, errors, the DLLs that did not load, the end of the log).
+# Programs this one starts inherit the logging and write to the same log.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David Hamner and the Stained Glass OS contributors
+set -u
+[ $# -ge 2 ] || { echo "usage: sg-debug-run DIR [--cd FOLDER] PROGRAM [ARGUMENT...]" >&2; exit 2; }
+
+summarize() {
+    dir=$1
+    {
+        n=$(grep -c 'Unhandled exception\|Unhandled page fault\|Unhandled illegal\|Unhandled privileged' "$dir/log")
+        if [ "$n" -gt 0 ]; then
+            echo "Crashes ($n):"
+            grep -m5 -A3 'Unhandled exception\|Unhandled page fault\|Unhandled illegal\|Unhandled privileged' "$dir/log" | cut -c1-300
+            grep -m8 'seh:dispatch_exception.*code=\|seh:.*EXCEPTION' "$dir/log" | cut -c1-300
+            echo
+        fi
+        echo "Errors (err:, most frequent first):"
+        grep ':err:' "$dir/log" | sed 's/^[0-9]*\.[0-9]*://; s/^[0-9a-f]*:[0-9a-f]*://' | cut -c1-220 \
+            | sort | uniq -c | sort -rn | head -25
+        echo
+        echo "Missing pieces (fixme:, most frequent first):"
+        grep ':fixme:' "$dir/log" | sed 's/^[0-9]*\.[0-9]*://; s/^[0-9a-f]*:[0-9a-f]*://' | cut -c1-160 \
+            | sed 's/(.*//' | sort | uniq -c | sort -rn | head -20
+        echo
+        nf=$(grep -c 'loaddll:.*not found\|err:module:import_dll' "$dir/log")
+        if [ "$nf" -gt 0 ]; then
+            echo "DLLs that did not load:"
+            grep 'loaddll:.*not found\|err:module:import_dll' "$dir/log" | cut -c1-220 | sort -u | head -15
+            echo
+        fi
+        echo "Native (not built-in) programs and DLLs loaded:"
+        grep 'loaddll:.*: native' "$dir/log" | sed 's/.*Loaded L"//; s/" at.*//' | sort -u | head -40 | sed 's/^/  /'
+        echo
+        echo "The log's last 60 lines:"
+        tail -n 60 "$dir/log" | cut -c1-300
+    } >"$dir/highlights" 2>/dev/null
+}
+
+if [ "$1" = --summarize ]; then
+    summarize "$2"
+    exit 0
+fi
+
+dir=$1; shift
+mkdir -p "$dir" || exit 2
+if [ "$1" = --cd ]; then
+    cd "$2" 2>/dev/null || true
+    shift 2
+fi
+WINEDEBUG=${SG_DEBUG_CHANNELS:-+pid,+timestamp,+seh,+loaddll,err+all,fixme+all}
+export WINEDEBUG
+wine=${WINELOADER:-/opt/wine-sg/bin/wine}
+[ -x "$wine" ] || wine=wine
+
+start=$(date +%s)
+"$wine" "$@" 2>"$dir/log" >/dev/null </dev/null
+rc=$?
+echo "$rc" >"$dir/exit"
+echo $(( $(date +%s) - start )) >"$dir/seconds"
+
+# a runaway log: keep its end, which is where a failure is
+if [ "$(stat -c %s "$dir/log" 2>/dev/null || echo 0)" -gt 67108864 ]; then
+    tail -c 67108864 "$dir/log" >"$dir/log.cut" && mv "$dir/log.cut" "$dir/log"
+fi
+summarize "$dir"
+exit "$rc"

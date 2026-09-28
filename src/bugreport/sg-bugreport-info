@@ -1,0 +1,48 @@
+#!/bin/sh
+# sg-bugreport-info [FILE]: the "System" part of a Report a problem report --
+# what a tester's machine is, in plain text, for sg-bugreport.exe. Nothing is
+# sent anywhere: the tester sees all of it in the report window first.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David Hamner and the Stained Glass OS contributors
+LC_ALL=C; export LC_ALL
+# sg-bugreport-info [FILE]: to FILE instead of standard output
+[ $# -ge 1 ] && exec >"$1"
+
+line() { printf '%-14s %s\n' "$1:" "$2"; }
+first() { head -n1 "$1" 2>/dev/null | tr -d '\n'; }
+# firmware's placeholders say nothing
+dmi() { v=$(first "/sys/class/dmi/id/$1"); case "$v" in "Default string"|"To be filled by O.E.M."|"System Product Name"|"Not Specified"|"None") v= ;; esac; printf %s "$v"; }
+
+# shellcheck disable=SC1091  # the running system's, read where it is
+. /etc/os-release 2>/dev/null
+line "System" "${PRETTY_NAME:-unknown}${IMAGE_VERSION:+ (image $IMAGE_VERSION)}"
+[ -r /etc/stained-glass/build-id ] && line "Build" "$(first /etc/stained-glass/build-id)"
+if grep -qs 'boot=live\|sg.live' /proc/cmdline || [ -d /run/live ]; then line "Running" "live medium"; else line "Running" "installed"; fi
+line "Kernel" "$(uname -r) $(uname -m)"
+vendor=$(dmi sys_vendor); product=$(dmi product_name); version=$(dmi product_version)
+[ -n "$product" ] || product=$(dmi board_name)
+line "Machine" "$vendor $product${version:+ ($version)}"
+line "CPU" "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//') x$(grep -c '^processor' /proc/cpuinfo)"
+line "Memory" "$(awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} END {printf "%.1f GB, %.1f GB free", t/1048576, a/1048576}' /proc/meminfo)"
+line "Disk" "$(df -h / 2>/dev/null | awk 'NR==2 {print $4 " free of " $2}')"
+if command -v lspci >/dev/null 2>&1; then
+    lspci -nn 2>/dev/null | grep -Ei 'vga|3d controller|display controller' | cut -d' ' -f2- | while read -r g; do line "Graphics" "$g"; done
+    lspci -nn 2>/dev/null | grep -Ei 'audio' | cut -d' ' -f2- | head -2 | while read -r g; do line "Audio" "$g"; done
+    lspci -nn 2>/dev/null | grep -Ei 'network|ethernet' | cut -d' ' -f2- | head -3 | while read -r g; do line "Network" "$g"; done
+fi
+for c in /sys/class/drm/card*-*/status; do
+    [ "$(cat "$c" 2>/dev/null)" = connected ] || continue
+    d=${c%/status}; line "Display" "${d##*/card?-} $(head -n1 "$d/modes" 2>/dev/null) preferred"
+done
+if command -v wlr-randr >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    wlr-randr 2>/dev/null | awk '/^[^ ]/ {o=$1} /current/ {print o " " $1 " @ " $3 " Hz (current)"}' | while read -r m; do line "Mode" "$m"; done
+fi
+line "Session" "${SG_DISPLAY_PATH:-${XDG_SESSION_TYPE:-unknown}} display, user $(id -un)$(id -Gn | grep -qw sudo && echo " (administrator)")"
+line "Language" "${LANG:-unset}"
+echo
+echo "Packages:"
+dpkg-query -W -f '  ${Package} ${Version}\n' wine-sg sg-shell sg-session sg-compositor sg-image \
+    'sg-wordpad' 'sg-notepad' mesa-vulkan-drivers libgl1-mesa-dri firmware-sof-signed linux-image-amd64 2>/dev/null | sort -u
+command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary 2>/dev/null | grep -m3 'deviceName\|driverInfo' | sed 's/^ */  vulkan: /'
+exit 0

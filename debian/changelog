@@ -9,6 +9,16 @@ sg-shell (0.1.0-60) unstable; urgency=medium
     runtime directory -- never on a command line. The RDP client's own
     sign-in and certificate dialogs no longer appear. Test:
     test/mstsc-check.sh.
+  * Report a problem, for testers: right-click a program or its shortcut >
+    "Run with a problem report" runs it with Wine's debug logging
+    (sg-debug-run) and, when it ends (or on "Report now"), shows a report --
+    the tester's notes, the program and its version, the machine
+    (sg-bugreport-info: versions, hardware, display), the log's crashes,
+    errors, missing pieces and last lines. Copy report, Save, and Email
+    report (the tester's own mail program via mailto:, addressed to the
+    project, the full report on the clipboard and saved beside the log;
+    nothing is sent by the tool). Also in Start. Test:
+    test/bugreport-check.sh.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 21:30:00 -0700
 
