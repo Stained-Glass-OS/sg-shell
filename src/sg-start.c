@@ -262,6 +262,7 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"Photos", L"picture pictures image images photo jpg jpeg png gif viewer" },
     { L"Media Player", L"music video movie audio mp3 mp4 mkv player" },
     { L"Calculator", L"calc math sums" },
+    { L"Linux Terminal (Administrator)", L"linux terminal root bash shell sudo console driver" },
     { L"Command Prompt", L"cmd console dos shell terminal" },
     { L"Terminal", L"console shell cmd powershell prompt" },
     { L"PowerShell 7", L"pwsh ps shell console terminal" },
@@ -440,6 +441,7 @@ static void build_list(void)
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");
+    add_beside(L"Linux Terminal (Administrator)", L"sg-rootterm64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
     {

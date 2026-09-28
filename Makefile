@@ -149,6 +149,11 @@ build:
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
 	    && echo "built sg-snip (64-bit)"
 	@python3 src/charmap/gen-names.py $(UNICODE_DATA) $(BUILD)/charmap-names.c
+	@# Linux Terminal (Administrator): a root shell after the user's password (src/rootterm)
+	@python3 src/rootterm/gen-icon.py $(BUILD)/sg-rootterm.ico
+	@$(WINDRES64) -I src/rootterm -I $(BUILD) src/rootterm/sg-rootterm.rc -O coff -o $(BUILD)/sg-rootterm-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -municode -mwindows -o $(BUILD)/sg-rootterm64.exe src/rootterm/sg-rootterm.c \
+	    $(BUILD)/sg-rootterm-res64.o -luser32 && echo "built sg-rootterm (64-bit)"
 	@python3 src/charmap/gen-icon.py $(BUILD)/sg-charmap.ico
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
@@ -234,6 +239,7 @@ test: build
 	@sh test/render-check.sh
 	@sh test/start-check.sh
 	@sh test/mstsc-check.sh
+	@sh test/rootterm-check.sh
 	@sh test/admind-check.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh

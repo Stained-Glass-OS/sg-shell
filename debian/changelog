@@ -3,6 +3,12 @@ sg-shell (0.1.0-59) unstable; urgency=medium
   * Remote Desktop Connection has an icon of its own (two screens and an
     arrow, src/sg-mstsc-icon.py): its Start entry and pinned tile showed
     the generic program icon.
+  * Linux Terminal (Administrator), in the Start menu: a root shell for what
+    only Linux itself can do (drivers, kernel modules, Debian packages). It
+    asks for the user's own password (sudo -i); only an administrator gets
+    in. A terminal window (xterm, now a dependency) in Cascadia Mono; the
+    compositor (0.2.0+sg10) sizes and centres it. Test:
+    test/rootterm-check.sh.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 17:10:00 -0700
 
