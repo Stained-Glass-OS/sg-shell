@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: no winemenubuilder. It turns every shortcut an installer
+; makes into a Linux .desktop file -- and where the Desktop is not a Linux
+; one, it writes that file into the Windows Desktop itself: Firefox's
+; installer left "Firefox.desktop" beside the Firefox shortcut. Start and the
+; desktop show the shortcuts; there is no Linux menu to feed. Disabled for
+; every user (wine-sg reads HKLM's DllOverrides).
+
+[HKEY_LOCAL_MACHINE\Software\Wine\DllOverrides]
+"winemenubuilder.exe"=""
