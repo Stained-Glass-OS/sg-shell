@@ -1,3 +1,14 @@
+sg-shell (0.1.0-56) unstable; urgency=medium
+
+  * sg-volume: the taskbar's volume icon -- a speaker with one to three
+    waves, a cross when muted, "Speakers: 40%" -- and its flyout: the output
+    device (click to choose another), a mute button and a volume slider;
+    the right button opens Sound settings. It speaks to PipeWire through
+    sg-settingsctl, as Settings' Sound page does, on a worker thread.
+    sg-session starts it with the shell. Gate: make test-volume.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 18:10:00 -0700
+
 sg-shell (0.1.0-55) unstable; urgency=medium
 
   * defaults/85-sg-namespace.reg: prefixes made before wine-sg 0443 drop "/"

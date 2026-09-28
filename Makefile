@@ -105,6 +105,8 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe src/sg-battery.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-battery (64-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe src/sg-volume.c \
+	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-volume (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
 	    && echo "built sg-dictate (64-bit)"
 	@python3 src/zip/gen-icon.py $(BUILD)/sg-zip.ico
@@ -239,6 +241,11 @@ test: build
 .PHONY: test-battery
 test-battery: build
 	@sh test/battery-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
+# The taskbar's volume icon (sg-volume), against a stand-in sg-settingsctl.
+.PHONY: test-volume
+test-volume: build
+	@sh test/volume-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 	@sh test/dictate-check.sh
 	@sh test/zip-check.sh
 	@sh test/media-check.sh
