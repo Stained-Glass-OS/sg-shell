@@ -364,7 +364,9 @@ BOOL set_cmd_privacy(int id, int code, HWND ctl)
 }
 
 /* ---- Windows Update ------------------------------------------------------------------------------ */
-enum { CMD_CHECK = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_REFRESH = CMD_PAGE_FIRST + 3 };
+/* Check for updates needs no administrator (sg-settingsctl updates check); changing the sources does */
+enum { CMD_CHECK = CMD_PAGE_FIRST + 1, CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_REFRESH = CMD_PAGE_FIRST + 3,
+       CMD_SOURCES = SHIELD_ID(CMD_PAGE_FIRST + 4) };
 
 void set_build_update(void)
 {
@@ -390,6 +392,7 @@ void set_build_update(void)
     y += S(4);
     if (staged) st_button(&y, L"Restart now", CMD_RESTART);
     st_button(&y, L"Check for updates", CMD_CHECK);
+    st_button(&y, L"Advanced options", CMD_SOURCES);
     if (n) {
         y = st_head(y, L"Available updates");
         pos = NULL;
@@ -422,6 +425,7 @@ BOOL set_cmd_update(int id, int code, HWND ctl)
     (void)code; (void)ctl;
     switch (id) {
     case CMD_CHECK: update_check_now(); return TRUE;
+    case CMD_SOURCES: if (run_elevated(L"/admin update-sources")) refresh_when_back(); return TRUE;
     case CMD_RESTART:
         if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)

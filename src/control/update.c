@@ -13,7 +13,8 @@
 #include "control.h"
 #include "settings.h"   /* ctl_run */
 
-enum { CMD_CHECK = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_HISTORY = CMD_PAGE_FIRST + 3 };
+enum { CMD_CHECK = CMD_PAGE_FIRST + 1, CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_HISTORY = CMD_PAGE_FIRST + 3,
+       CMD_SOURCES = SHIELD_ID(CMD_PAGE_FIRST + 4) };
 
 
 static BOOL unix_mtime(const char *path, SYSTEMTIME *st)
@@ -145,7 +146,7 @@ void build_update(void)
     else lstrcpyW(line, L"This computer has not checked for updates yet. It checks every day.");
     pg_text(x + S(96), y + S(50), w - S(116), S(20), g_font_body, COL_SUBTLE, line, DT_SINGLELINE | DT_END_ELLIPSIS);
     if (u.pending) pg_button(L"Restart now", x + S(96), y + S(78), S(130), CMD_RESTART);
-    else pg_link(x + S(94), y + S(80), L"Check for updates", CMD_CHECK, LINK_SHIELD);
+    else pg_link(x + S(94), y + S(80), L"Check for updates", CMD_CHECK, 0);
     y += S(140);
 
     pg_para(x, y, w, g_font_body, COL_TEXT,
@@ -159,7 +160,8 @@ void build_update(void)
         y += S(22);
     }
     if (!u.nsources) { pg_text(x + S(16), y, w, S(20), g_font_body, COL_SUBTLE, L"(no update sources are configured)", DT_SINGLELINE); y += S(22); }
-    y += S(20);
+    pg_link(x + S(16), y + S(4), L"Change where updates come from", CMD_SOURCES, LINK_SHIELD);
+    y += S(44);
 
     pg_text(x, y, w, S(24), g_font_cat, COL_TITLE, L"Update history", DT_SINGLELINE);
     pg_rule(x, y + S(26), w);
@@ -198,6 +200,7 @@ BOOL cmd_update(int id, int code, HWND ctl)
     (void)code; (void)ctl;
     switch (id) {
     case CMD_CHECK: update_check_now(); return TRUE;
+    case CMD_SOURCES: if (run_elevated(L"/admin update-sources")) refresh_when_back(); return TRUE;
     case CMD_RESTART:
         if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",
                         MB_OKCANCEL | MB_ICONQUESTION) == IDOK)

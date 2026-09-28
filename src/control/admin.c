@@ -706,6 +706,114 @@ static int do_timezone(void)
     return 0;
 }
 
+/* ---- where updates come from (Updates > Advanced options) --------------------------- */
+struct source { WCHAR file[128], label[300], name[48]; BOOL enabled, ours; };
+
+static int read_update_sources(struct source *src, int max)
+{
+    WCHAR pattern[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    int n = 0;
+
+    unix_to_dos("/etc/apt/sources.list.d", pattern, MAX_PATH);
+    lstrcatW(pattern, L"\\*.sources");
+    if ((h = FindFirstFileW(pattern, &fd)) == INVALID_HANDLE_VALUE) return 0;
+    do {
+        char path[512], name[260], uri[200] = "", suites[100] = "", *text, *line, *next;
+        BOOL enabled = TRUE;
+        WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, name, sizeof(name), NULL, NULL);
+        _snprintf(path, sizeof(path), "/etc/apt/sources.list.d/%s", name);
+        path[sizeof(path) - 1] = 0;
+        if (!(text = read_unix_file(path, NULL))) continue;
+        for (line = text; line && *line; line = next) {
+            char *v;
+            next = strchr(line, '\n');
+            if (next) *next++ = 0;
+            if (!(v = strchr(line, ':'))) continue;
+            for (v++; *v == ' '; v++) ;
+            if (!_strnicmp(line, "URIs:", 5) && !uri[0]) lstrcpynA(uri, v, sizeof(uri));
+            else if (!_strnicmp(line, "Suites:", 7) && !suites[0]) lstrcpynA(suites, v, sizeof(suites));
+            else if (!_strnicmp(line, "Enabled:", 8)) enabled = _strnicmp(v, "no", 2) != 0;
+        }
+        free(text);
+        lstrcpynW(src[n].file, fd.cFileName, ARRAYSIZE(src[n].file));
+        src[n].enabled = enabled;
+        src[n].ours = !wcsncmp(fd.cFileName, L"sg-user-", 8);
+        src[n].name[0] = 0;
+        if (src[n].ours) {
+            lstrcpynW(src[n].name, fd.cFileName + 8, ARRAYSIZE(src[n].name));
+            if (wcsrchr(src[n].name, '.')) *wcsrchr(src[n].name, '.') = 0;
+        }
+        _snwprintf(src[n].label, ARRAYSIZE(src[n].label), L"%S %S", uri, suites);
+        src[n].label[ARRAYSIZE(src[n].label) - 1] = 0;
+        n++;
+    } while (n < max && FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
+
+/* Settings > Updates > Advanced options: the sources, and what may be done
+ * with them -- turn one off or on, remove one added here, add one. Each is an
+ * administrator's act, filed with sg-admind. */
+static int do_update_sources(void)
+{
+    WCHAR err[256] = L"", msg[512];
+    for (;;) {
+        struct source src[12];
+        struct form_field f[1 + 2 * ARRAYSIZE(src)];
+        WCHAR labels[1 + 2 * ARRAYSIZE(src)][360], vals[1 + 2 * ARRAYSIZE(src)][2];
+        int kind[1 + 2 * ARRAYSIZE(src)], which[1 + 2 * ARRAYSIZE(src)];
+        int n = read_update_sources(src, ARRAYSIZE(src)), nf = 0, i, pick = -1;
+
+        /* 0: add; 1: on/off; 2: remove */
+        lstrcpyW(labels[nf], L"Add a source...");
+        kind[nf] = 0; which[nf] = -1; nf++;
+        for (i = 0; i < n; i++) {
+            _snwprintf(labels[nf], ARRAYSIZE(labels[0]), L"%ls: %ls", src[i].enabled ? L"Turn off" : L"Turn on", src[i].label);
+            kind[nf] = 1; which[nf] = i; nf++;
+            if (src[i].ours) {
+                _snwprintf(labels[nf], ARRAYSIZE(labels[0]), L"Remove: %ls", src[i].label);
+                kind[nf] = 2; which[nf] = i; nf++;
+            }
+        }
+        for (i = 0; i < nf; i++) {
+            lstrcpyW(vals[i], i ? L"0" : L"1");
+            memset(&f[i], 0, sizeof(f[i]));
+            f[i].label = labels[i]; f[i].value = vals[i]; f[i].cch = 2; f[i].kind = i ? FF_RADIO : FF_RADIO_FIRST;
+        }
+        if (!run_form(NULL, L"Where updates come from", err[0] ? err :
+                      L"Stained Glass OS gets its updates from these sources. Changing them needs an administrator.",
+                      f, nf, L"Continue", TRUE))
+            return 0;
+        err[0] = 0;
+        for (i = 0; i < nf; i++) if (vals[i][0] == L'1') pick = i;
+        if (pick < 0) continue;
+        if (kind[pick] == 0) {
+            WCHAR name[41] = L"", uri[200] = L"", suites[100] = L"", comps[100] = L"main";
+            struct form_field a[] = {
+                { L"Name (lower-case letters, numbers and -):", name, ARRAYSIZE(name), FF_TEXT },
+                { L"Address (https://...):", uri, ARRAYSIZE(uri), FF_TEXT },
+                { L"Suites (for example: stable):", suites, ARRAYSIZE(suites), FF_TEXT },
+                { L"Components (for example: main):", comps, ARRAYSIZE(comps), FF_TEXT },
+            };
+            if (!run_form(NULL, L"Add a source", L"The source's packages must be signed with a key this computer trusts.",
+                          a, ARRAYSIZE(a), L"Add", TRUE))
+                continue;
+            {
+                const WCHAR *req[] = { L"source-add", name, uri, suites, comps };
+                if (!admin_request(req, 5, msg, ARRAYSIZE(msg), 60000)) lstrcpynW(err, msg, ARRAYSIZE(err));
+            }
+        } else if (kind[pick] == 1) {
+            const WCHAR *req[] = { L"source-enable", src[which[pick]].file, src[which[pick]].enabled ? L"no" : L"yes" };
+            if (!admin_request(req, 3, msg, ARRAYSIZE(msg), 60000)) lstrcpynW(err, msg, ARRAYSIZE(err));
+        } else {
+            const WCHAR *req[] = { L"source-remove", src[which[pick]].name };
+            if (!admin_request(req, 2, msg, ARRAYSIZE(msg), 60000)) lstrcpynW(err, msg, ARRAYSIZE(err));
+        }
+    }
+}
+
 static int do_update_check(void)
 {
     WCHAR msg[512];
@@ -766,6 +874,7 @@ int admin_main(int argc, WCHAR **argv)
     if (!lstrcmpW(argv[0], L"user-remove") && argc > 1) return do_user_remove(argv[1]);
     if (!lstrcmpW(argv[0], L"timezone")) return do_timezone();
     if (!lstrcmpW(argv[0], L"update-check")) return do_update_check();
+    if (!lstrcmpW(argv[0], L"update-sources")) return do_update_sources();
     if (!lstrcmpW(argv[0], L"set-zone") && argc > 1) {
         const WCHAR *req[] = { L"timezone", argv[1] };
         return do_one(L"Time zone", req, 2);

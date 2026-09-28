@@ -39,6 +39,9 @@
 #   ntp on|off
 #   time YYYY-MM-DD HH:MM:SS                 (only with synchronisation off)
 #   update-check
+#   source-add NAME URI SUITES COMPONENTS   where updates come from: a deb822
+#   source-remove NAME                     /etc/apt/sources.list.d/sg-user-NAME.sources
+#   source-enable FILE yes|no              any .sources file there: Enabled:
 #   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
@@ -361,6 +364,85 @@ def op_update_check(args):
     return []
 
 
+APT_SOURCES = os.environ.get("SG_APT_SOURCES", "/etc/apt/sources.list.d")
+SOURCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+SOURCE_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.sources$")
+URI_RE = re.compile(r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/+-]*)?$")
+WORD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+-]{0,63}$")
+
+
+def source_words(text, what):
+    words = text.split()
+    if not words or len(words) > 8 or not all(WORD_RE.fullmatch(w) and ".." not in w for w in words):
+        raise Refused("'%s' is not a list of %s." % (text, what))
+    return " ".join(words)
+
+
+def write_file(path, text):
+    """whole or not at all, and never through a link"""
+    tmp = path + ".sg-new"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.rename(tmp, path)
+
+
+def op_source_add(args):
+    name, uri, suites, comps = args
+    if not SOURCE_NAME_RE.fullmatch(name):
+        raise Refused("A source's name uses lower-case letters, numbers and -.")
+    if not URI_RE.fullmatch(uri):
+        raise Refused("'%s' is not a web address of a package repository." % uri)
+    path = os.path.join(APT_SOURCES, "sg-user-%s.sources" % name)
+    if os.path.lexists(path):
+        raise Refused("There is a source called %s already." % name)
+    write_file(path, "# added in Settings > Updates > Advanced options\nTypes: deb\nURIs: %s\nSuites: %s\n"
+               "Components: %s\nEnabled: yes\n" % (uri, source_words(suites, "suites"), source_words(comps, "components")))
+    return []
+
+
+def op_source_remove(args):
+    (name,) = args
+    if not SOURCE_NAME_RE.fullmatch(name):
+        raise Refused("'%s' is not a source added here." % name)
+    path = os.path.join(APT_SOURCES, "sg-user-%s.sources" % name)
+    st = os.lstat(path) if os.path.lexists(path) else None
+    if not st or not stat.S_ISREG(st.st_mode):
+        raise Refused("There is no source called %s." % name)
+    os.unlink(path)
+    return []
+
+
+def op_source_enable(args):
+    fname, on = args
+    if on not in ("yes", "no") or not SOURCE_FILE_RE.fullmatch(fname):
+        raise Refused("Nothing to change.")
+    path = os.path.join(APT_SOURCES, fname)
+    st = os.lstat(path) if os.path.lexists(path) else None
+    if not st or not stat.S_ISREG(st.st_mode):
+        raise Refused("There is no source %s." % fname)
+    with open(path) as f:
+        lines = f.read().splitlines()
+    out, seen = [], False
+    for line in lines:
+        if re.match(r"^Enabled:", line, re.IGNORECASE):
+            line, seen = "Enabled: %s" % on, True
+        out.append(line)
+    if not seen:
+        # every stanza of the file (a blank line ends one)
+        out2, in_stanza = [], False
+        for line in out + [""]:
+            if not line.strip() and in_stanza:
+                out2.append("Enabled: %s" % on)
+                in_stanza = False
+            elif line.strip() and not line.startswith("#"):
+                in_stanza = True
+            out2.append(line)
+        out = out2[:-1]
+    write_file(path, "\n".join(out) + "\n")
+    return []
+
+
 FONT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,120}\.(ttf|otf|ttc|fon|fnt)$", re.IGNORECASE)
 FONT_MAGIC = (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf", b"MZ")
 
@@ -447,6 +529,9 @@ OPS = {
     "ntp": (op_ntp, 1),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
+    "source-add": (op_source_add, 4),
+    "source-remove": (op_source_remove, 1),
+    "source-enable": (op_source_enable, 2),
     "font-install": (op_font_install, 1),
     "font-remove": (op_font_remove, 1),
 }

@@ -16,6 +16,13 @@ sg-shell (0.1.0-57) unstable; urgency=medium
     pumps messages) hid the flyout or refreshed it inside the refresh, and
     after a few quick clicks it stopped opening. Such a click brings it
     forward now.
+  * Updates > Advanced options (Settings; Control Panel: "Change where
+    updates come from"): the update sources, to turn off or on, remove (the
+    ones added here) or add -- as an administrator, through sg-admind's new
+    source-add / source-remove / source-enable, which write deb822 files in
+    /etc/apt/sources.list.d and take only exact names, web addresses and
+    word lists. "Check for updates" no longer shows the shield.
+    Tests: make test-admind, test-control, test-settings.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 20:30:00 -0700
 

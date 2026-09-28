@@ -166,6 +166,29 @@ grep -q '^sg-domain-join --domain sgtest.lan --user administrator --password-std
 r=$(ask join-domain 'not a domain' administrator '' pw); case "$(first "$r")" in "FAILED "*) pass "refuses a malformed domain";; *) fail "join accepted a bad realm";; esac
 r=$(ask update-check); grep -q '^systemctl start --no-block sg-update-prepare.service' "$CALLS" && pass "starts the update check" || fail "update: $r"
 
+# --- where updates come from ---
+A="$T/sources.list.d"; mkdir -p "$A"; export SG_APT_SOURCES="$A"
+printf 'Types: deb\nURIs: https://deb.debian.org/debian\nSuites: trixie\nComponents: main\n' > "$A/debian.sources"
+r=$(ask source-add extras https://repo.example.org/debian "stable" "main contrib")
+f="$A/sg-user-extras.sources"
+{ [ "$(first "$r")" = OK ] && grep -qx 'URIs: https://repo.example.org/debian' "$f" && grep -qx 'Components: main contrib' "$f" \
+    && grep -qx 'Enabled: yes' "$f"; } && pass "adds a source (deb822, sg-user-NAME.sources)" || fail "source-add: $r $(cat "$f" 2>/dev/null)"
+r=$(ask source-add extras https://other.example.org/ stable main); case "$(first "$r")" in "FAILED "*) pass "not twice under one name";; *) fail "source-add twice: $r";; esac
+r=$(ask source-add ../evil https://a.example/ stable main); case "$(first "$r")" in "FAILED "*) pass "refuses a name that is a path";; *) fail "bad name: $r";; esac
+r=$(ask source-add x 'file:///etc/shadow' stable main); case "$(first "$r")" in "FAILED "*) pass "refuses an address that is not the web";; *) fail "bad uri: $r";; esac
+r=$(ask source-add y 'https://a.example/ x' stable main); case "$(first "$r")" in "FAILED "*) pass "refuses an address with a space (a second field)";; *) fail "uri with space: $r";; esac
+r=$(ask source-add z https://a.example/ 'stable
+Signed-By: /x' main); case "$(first "$r")" in "FAILED "*) pass "refuses a field smuggled into a list";; *) fail "smuggled field: $r";; esac
+r=$(ask source-enable debian.sources no)
+{ [ "$(first "$r")" = OK ] && grep -qx 'Enabled: no' "$A/debian.sources" && grep -qx 'Suites: trixie' "$A/debian.sources"; } \
+    && pass "turns a source off, the rest of it kept" || fail "source-enable: $r $(cat "$A/debian.sources")"
+r=$(ask source-enable debian.sources yes); grep -qx 'Enabled: yes' "$A/debian.sources" && ! grep -qx 'Enabled: no' "$A/debian.sources" \
+    && pass "and on again" || fail "source-enable yes: $(cat "$A/debian.sources")"
+r=$(ask source-enable ../../etc/passwd no); case "$(first "$r")" in "FAILED "*) pass "only files in the sources folder";; *) fail "enable path: $r";; esac
+r=$(ask source-remove extras); { [ "$(first "$r")" = OK ] && [ ! -e "$f" ]; } && pass "removes a source added here" || fail "source-remove: $r"
+r=$(ask source-remove debian); case "$(first "$r")" in "FAILED "*) pass "and only those";; *) fail "removed a system source: $r";; esac
+[ -f "$A/debian.sources" ] || fail "debian.sources is gone"
+
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac
 r=$(ask hostname a b); case "$(first "$r")" in "FAILED Malformed"*) pass "refuses the wrong number of fields";; *) fail "arity: $r";; esac
