@@ -243,6 +243,11 @@ test-battery: build
 	@sh test/battery-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
 # The taskbar's volume icon (sg-volume), against a stand-in sg-settingsctl.
+# The shell's icon font (caption buttons of Windows 10/11-era programs).
+.PHONY: test-icons-font
+test-icons-font:
+	@sh test/icons-font-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
 .PHONY: test-volume
 test-volume: build
 	@sh test/volume-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc

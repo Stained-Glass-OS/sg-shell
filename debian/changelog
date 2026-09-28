@@ -15,6 +15,11 @@ sg-shell (0.1.0-56) unstable; urgency=medium
   * Get a web browser runs an MSI (Edge, Chrome) as an administrator from
     the start: Windows' Installer service elevates such a package itself,
     and without one msiexec stopped with 1627 as the user.
+  * Stained Glass Icons, the shell's own icon font (src/sg-icons-font.py):
+    the characters Windows 10/11-era programs draw caption buttons and a few
+    controls with -- Firefox's minimize, maximize, restore and close were
+    empty boxes. "Segoe MDL2 Assets" and "Segoe Fluent Icons" map to it.
+    Gate: make test-icons-font.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 18:10:00 -0700
 

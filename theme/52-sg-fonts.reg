@@ -41,8 +41,15 @@ Windows Registry Editor Version 5.00
 "Tahoma"="Inter"
 "MS Sans Serif"="Inter"
 "Microsoft Sans Serif"="Inter"
+; The icon font programs draw caption buttons with (Firefox's minimize,
+; maximize, restore, close are U+E921-E923 and U+E8BB): Stained Glass Icons,
+; the shell's own (sg-icons-font.py). Without it those buttons were boxes.
+"Segoe MDL2 Assets"="Stained Glass Icons"
+"Segoe Fluent Icons"="Stained Glass Icons"
 
 [HKEY_CURRENT_USER\Software\Wine\Fonts\Replacements]
+"Segoe MDL2 Assets"="Stained Glass Icons"
+"Segoe Fluent Icons"="Stained Glass Icons"
 "Arial"="Liberation Sans"
 "Helvetica"="Liberation Sans"
 "Times New Roman"="Liberation Serif"
