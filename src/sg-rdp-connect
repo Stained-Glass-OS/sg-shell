@@ -1,0 +1,22 @@
+#!/bin/sh
+# sg-rdp-connect PASSWORDFILE CLIENT ARG...
+#
+# Remote Desktop Connection (sg-mstsc) starts the RDP client through this: it
+# has asked for the password in its own dialog and written it to
+# PASSWORDFILE, in the user's private runtime directory. The password is read,
+# the file removed, and the client is given the password on its standard input
+# (/from-stdin:force) -- never on a command line, which every account on the
+# machine can read. Its own sign-in dialog does not appear.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -u
+pwfile=${1:?usage: sg-rdp-connect PASSWORDFILE CLIENT ARG...}
+shift
+[ $# -ge 1 ] || { echo "usage: sg-rdp-connect PASSWORDFILE CLIENT ARG..." >&2; exit 2; }
+case "$pwfile" in
+"${XDG_RUNTIME_DIR:-/nonexistent}"/sg-rdp-*) ;;
+*) echo "sg-rdp-connect: the password file must be in XDG_RUNTIME_DIR" >&2; exit 2 ;;
+esac
+pw=$(cat "$pwfile" 2>/dev/null)
+rm -f "$pwfile"
+printf '%s\n' "$pw" | "$@" /from-stdin:force

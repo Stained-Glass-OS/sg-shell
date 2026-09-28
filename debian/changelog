@@ -1,3 +1,17 @@
+sg-shell (0.1.0-60) unstable; urgency=medium
+
+  * Remote Desktop Connection, as Windows 10's: a white banner with its
+    picture and name over the fields; "Enter your credentials" asked in its
+    own dialog; before the first connection to a computer, the question
+    whether to trust a certificate it cannot verify (then remembered,
+    FreeRDP's /cert:tofu). The password reaches the client through
+    sg-rdp-connect, on its standard input from a file in the user's private
+    runtime directory -- never on a command line. The RDP client's own
+    sign-in and certificate dialogs no longer appear. Test:
+    test/mstsc-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 21:30:00 -0700
+
 sg-shell (0.1.0-59) unstable; urgency=medium
 
   * Remote Desktop Connection has an icon of its own (two screens and an

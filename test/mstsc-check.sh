@@ -89,7 +89,7 @@ d=$(dirname "$0")
 for a in "$@"; do printf '%s\n' "$a"; done > "$d/argv.tmp" && mv "$d/argv.tmp" "$d/argv.txt"
 EOF
 chmod +x "$T/Remote Tools/fake client"
-SG_RDP_CLIENT="\\\\?\\unix$(printf '%s' "$T/Remote Tools/fake client" | tr / '\\\\')" \
+SG_MSTSC_TEST=1 SG_RDP_CLIENT="\\\\?\\unix$(printf '%s' "$T/Remote Tools/fake client" | tr / '\\\\')" \
     wine "$EXE" /v:server.sgtest.lan:3390 /f >/dev/null 2>&1 || true
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$T/Remote Tools/argv.txt" ] && break; sleep 1; done
 want=$(printf '%s\n' /v:server.sgtest.lan:3390 /f +clipboard)

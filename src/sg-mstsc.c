@@ -15,7 +15,12 @@
  *   - device and drive redirection settings in .rdp files are ignored: this
  *     client redirects the clipboard (mstsc's default) and nothing else;
  *   - the password never appears on a command line, where any local user could
- *     read it from /proc. FreeRDP asks for it in its own dialog.
+ *     read it from /proc. This program asks for it ("Enter your credentials")
+ *     and sg-rdp-connect hands it to the client on its standard input, from a
+ *     file in the user's private runtime directory that it removes at once;
+ *   - the first connection to a computer asks whether to trust it, as mstsc
+ *     does for a certificate it cannot verify; the certificate is then
+ *     remembered (FreeRDP's /cert:tofu) and a changed one is refused.
  *
  * `/sg-dry-run` prints the client command line instead of starting it, which
  * is what the gate uses.
@@ -235,6 +240,8 @@ static void append_opt(WCHAR *cmd, size_t cap, const WCHAR *opt, const WCHAR *va
 }
 
 /* Returns FALSE, with a reason, when the connection cannot be made safely. */
+static BOOL g_first_use;   /* no certificate remembered for this computer yet: trust on first use */
+
 static BOOL build_command(const struct conn *c, const WCHAR *client, WCHAR *cmd, size_t cap,
                           const WCHAR **why)
 {
@@ -264,6 +271,7 @@ static BOOL build_command(const struct conn *c, const WCHAR *client, WCHAR *cmd,
     }
     else append_arg(cmd, cap, L"/dynamic-resolution");
     append_arg(cmd, cap, L"+clipboard");
+    if (g_first_use) append_arg(cmd, cap, L"/cert:tofu");
     return TRUE;
 }
 
@@ -289,6 +297,70 @@ static void save_last(const WCHAR *computer, const WCHAR *user)
 }
 
 /* --- starting the client --------------------------------------------------------- */
+
+static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run);
+
+static const WCHAR CONNECT_HELPER[] = L"\\\\?\\unix\\usr\\libexec\\stained-glass\\shell\\sg-rdp-connect";
+
+/* A \\?\unix\ path back to its Unix spelling */
+static void unix_spelling(const WCHAR *path, WCHAR *out, size_t cap)
+{
+    WCHAR *p;
+    lstrcpynW(out, !wcsncmp(path, L"\\\\?\\unix", 8) ? path + 8 : path, (int)cap);
+    for (p = out; *p; p++) if (*p == '\\') *p = '/';
+}
+
+/* The password, for sg-rdp-connect: a new file in the user's private runtime
+ * directory (0700), which it reads and removes. Returns the file's Unix path. */
+static BOOL write_password(const WCHAR *password, WCHAR *unix_path, size_t cap)
+{
+    WCHAR dir[MAX_PATH], path[MAX_PATH + 64];
+    char utf8[4 * MAX_FIELD];
+    DWORD n, written;
+    HANDLE f;
+    int len;
+
+    if (!GetEnvironmentVariableW(L"XDG_RUNTIME_DIR", dir, ARRAYSIZE(dir)) || dir[0] != '/') return FALSE;
+    swprintf(unix_path, cap, L"%ls/sg-rdp-%lu-%lu", dir, GetCurrentProcessId(), GetTickCount());
+    swprintf(path, ARRAYSIZE(path), L"\\\\?\\unix%ls", unix_path);
+    for (n = 8; path[n]; n++) if (path[n] == '/') path[n] = '\\';
+    len = WideCharToMultiByte(CP_UTF8, 0, password, -1, utf8, sizeof(utf8), NULL, NULL);
+    f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY, NULL);
+    if (f == INVALID_HANDLE_VALUE || len <= 0) { SecureZeroMemory(utf8, sizeof(utf8)); return FALSE; }
+    WriteFile(f, utf8, len - 1, &written, NULL);
+    CloseHandle(f);
+    SecureZeroMemory(utf8, sizeof(utf8));
+    return TRUE;
+}
+
+static BOOL launch_with(const struct conn *c, const WCHAR *client, BOOL dry_run, const WCHAR *password)
+{
+    static WCHAR cmd[4096], args[4096];
+    WCHAR unix_client[MAX_PATH], pwfile[MAX_PATH + 64];
+    const WCHAR *why = NULL;
+    STARTUPINFOW si = { .cb = sizeof(si) };
+    PROCESS_INFORMATION pi;
+
+    if (!dry_run && password && password[0] && GetFileAttributesW(CONNECT_HELPER) != INVALID_FILE_ATTRIBUTES)
+    {
+        unix_spelling(client, unix_client, ARRAYSIZE(unix_client));
+        if (build_command(c, unix_client, args, ARRAYSIZE(args), &why) &&
+            write_password(password, pwfile, ARRAYSIZE(pwfile)))
+        {
+            cmd[0] = 0;
+            append_arg(cmd, ARRAYSIZE(cmd), CONNECT_HELPER);
+            append_arg(cmd, ARRAYSIZE(cmd), pwfile);
+            if (wcslen(cmd) + 1 + wcslen(args) < ARRAYSIZE(cmd)) { wcscat(cmd, L" "); wcscat(cmd, args); }
+            if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+            {
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+                return TRUE;
+            }
+        }
+    }
+    return launch(c, client, dry_run);
+}
 
 static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
 {
@@ -336,14 +408,21 @@ static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
     return TRUE;
 }
 
-/* --- the dialog ------------------------------------------------------------------ */
+/* --- the dialogs ------------------------------------------------------------------ */
 
-enum { ID_COMPUTER = 100, ID_USER, ID_FULL, ID_CONNECT = IDOK, ID_CANCEL = IDCANCEL };
+/* Windows 10's mstsc: a white banner with the program's picture and name over
+ * the fields, and the fields on the dialog colour; the credentials asked in a
+ * dialog of their own, the certificate question before the first connection. */
+
+enum { ID_COMPUTER = 100, ID_USER, ID_FULL, ID_PASSWORD, ID_CONNECT = IDOK, ID_CANCEL = IDCANCEL };
+
+#define BANNER_H 76
 
 static struct conn g_conn;
 static const WCHAR *g_client;
 static HWND g_computer, g_user, g_full;
-static HFONT g_font;
+static HFONT g_font, g_font_title, g_font_title_light, g_font_heading;
+static HICON g_icon;
 
 static HWND add(HWND parent, const WCHAR *cls, const WCHAR *text, DWORD style,
                 int x, int y, int w, int h, int id)
@@ -355,21 +434,222 @@ static HWND add(HWND parent, const WCHAR *cls, const WCHAR *text, DWORD style,
     return c;
 }
 
+static HFONT make_font(int points, int weight)
+{
+    NONCLIENTMETRICSW ncm = { .cbSize = sizeof(ncm) };
+    HDC dc = GetDC(NULL);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    ncm.lfMessageFont.lfHeight = -MulDiv(points, GetDeviceCaps(dc, LOGPIXELSY), 72);
+    ncm.lfMessageFont.lfWeight = weight;
+    ReleaseDC(NULL, dc);
+    return CreateFontIndirectW(&ncm.lfMessageFont);
+}
+
+static void paint_banner(HWND hwnd, const WCHAR *line1, const WCHAR *line2)
+{
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(hwnd, &ps);
+    RECT rc, band;
+    HBRUSH white = CreateSolidBrush(RGB(255, 255, 255)), rule = CreateSolidBrush(RGB(0xE5, 0xE5, 0xE5));
+
+    GetClientRect(hwnd, &rc);
+    band = rc; band.bottom = BANNER_H;
+    FillRect(dc, &band, white);
+    band.top = BANNER_H; band.bottom = BANNER_H + 1;
+    FillRect(dc, &band, rule);
+    DeleteObject(white); DeleteObject(rule);
+    if (g_icon) DrawIconEx(dc, 18, (BANNER_H - 48) / 2, g_icon, 48, 48, 0, NULL, DI_NORMAL);
+    SetBkMode(dc, TRANSPARENT);
+    SelectObject(dc, g_font_title_light);
+    SetTextColor(dc, RGB(0x44, 0x44, 0x44));
+    TextOutW(dc, 80, 12, line1, lstrlenW(line1));
+    SelectObject(dc, g_font_title);
+    SetTextColor(dc, RGB(0x1F, 0x1F, 0x1F));
+    TextOutW(dc, 80, 32, line2, lstrlenW(line2));
+    EndPaint(hwnd, &ps);
+}
+
+/* Is a certificate remembered for this computer? FreeRDP keeps the ones it
+ * trusted in $XDG_CONFIG_HOME/freerdp/server/<host>_<port>.pem. */
+static BOOL certificate_known(const struct conn *c)
+{
+    WCHAR base[MAX_PATH], path[MAX_PATH * 2], host[MAX_FIELD], *p;
+
+    /* XDG_CONFIG_HOME if set, else the home directory Wine names in
+     * WINEHOMEDIR (an NT path, \??\...) plus .config; unknown: ask */
+    if (GetEnvironmentVariableW(L"XDG_CONFIG_HOME", base, ARRAYSIZE(base)) && base[0] == '/')
+    {
+        swprintf(path, ARRAYSIZE(path), L"\\\\?\\unix%ls", base);
+        for (p = path + 8; *p; p++) if (*p == '/') *p = '\\';
+    }
+    else if (GetEnvironmentVariableW(L"WINEHOMEDIR", base, ARRAYSIZE(base)) && !wcsncmp(base, L"\\??\\", 4))
+        swprintf(path, ARRAYSIZE(path), L"\\\\?\\%ls\\.config", base + 4);
+    else return FALSE;
+    lstrcpynW(host, c->host, ARRAYSIZE(host));
+    CharLowerW(host);
+    swprintf(path + wcslen(path), ARRAYSIZE(path) - wcslen(path), L"\\freerdp\\server\\%ls_%d.pem",
+             host, c->port ? c->port : 3389);
+    return GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* The first connection to a computer: mstsc's warning about a certificate it
+ * cannot verify. Yes remembers the certificate (/cert:tofu). */
+static BOOL confirm_first_use(HWND owner, const struct conn *c)
+{
+    WCHAR text[1024];
+
+    if (certificate_known(c)) return TRUE;
+    swprintf(text, ARRAYSIZE(text),
+             L"The identity of the remote computer cannot be verified. Do you want to connect anyway?\n\n"
+             L"This is the first connection to %ls from this computer, and its certificate is not "
+             L"from an authority this computer trusts. If you connect, the certificate is remembered, "
+             L"and you will be warned if it ever changes.", c->host);
+    if (MessageBoxW(owner, text, L"Remote Desktop Connection", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
+        return FALSE;
+    g_first_use = TRUE;
+    return TRUE;
+}
+
+/* "Enter your credentials": the password, and the user name to change it. */
+struct cred_dialog { HWND user, password; WCHAR host[MAX_FIELD]; WCHAR user_text[MAX_FIELD * 2]; WCHAR pw[MAX_FIELD]; BOOL ok, done; };
+
+static LRESULT CALLBACK cred_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    struct cred_dialog *d = (struct cred_dialog *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg)
+    {
+    case WM_CREATE:
+    {
+        WCHAR line[MAX_FIELD + 80];
+        HWND h;
+        d = (struct cred_dialog *)((CREATESTRUCTW *)lp)->lpCreateParams;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)d);
+        h = add(hwnd, L"STATIC", L"Enter your credentials", 0, 24, 18, 360, 30, -1);
+        SendMessageW(h, WM_SETFONT, (WPARAM)g_font_heading, TRUE);
+        swprintf(line, ARRAYSIZE(line), L"These credentials will be used to connect to %ls.", d->host);
+        add(hwnd, L"STATIC", line, SS_LEFT, 24, 54, 360, 36, -1);
+        add(hwnd, L"STATIC", L"User name", 0, 24, 98, 360, 18, -1);
+        d->user = add(hwnd, L"EDIT", d->user_text, WS_TABSTOP | ES_AUTOHSCROLL, 24, 118, 352, 28, ID_USER);
+        add(hwnd, L"STATIC", L"Password", 0, 24, 156, 360, 18, -1);
+        d->password = add(hwnd, L"EDIT", L"", WS_TABSTOP | ES_AUTOHSCROLL | ES_PASSWORD, 24, 176, 352, 28, ID_PASSWORD);
+        add(hwnd, L"BUTTON", L"OK", WS_TABSTOP | BS_DEFPUSHBUTTON, 176, 228, 96, 30, IDOK);
+        add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 280, 228, 96, 30, IDCANCEL);
+        SetFocus(d->user_text[0] ? d->password : d->user);
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC:
+        SetBkColor((HDC)wp, RGB(255, 255, 255));
+        return (LRESULT)GetStockObject(WHITE_BRUSH);
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK)
+        {
+            GetWindowTextW(d->user, d->user_text, ARRAYSIZE(d->user_text));
+            GetWindowTextW(d->password, d->pw, ARRAYSIZE(d->pw));
+            SetWindowTextW(d->password, L"");
+            d->ok = TRUE;
+            DestroyWindow(hwnd);
+        }
+        else if (LOWORD(wp) == IDCANCEL) DestroyWindow(hwnd);
+        return 0;
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY:
+        d->done = TRUE;
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/* Asks for the password (and lets the user name change). The connection's
+ * user and domain are updated; the password goes to pw. */
+static BOOL ask_credentials(HWND owner, struct conn *c, WCHAR *pw, size_t cap)
+{
+    static struct cred_dialog d;
+    WNDCLASSEXW wc = { .cbSize = sizeof(wc) };
+    RECT r = { 0, 0, 400, 276 }, o;
+    HWND hwnd;
+    MSG msg;
+    int x, y;
+
+    memset(&d, 0, sizeof(d));
+    lstrcpynW(d.host, c->host, ARRAYSIZE(d.host));
+    if (c->domain[0]) swprintf(d.user_text, ARRAYSIZE(d.user_text), L"%ls\\%ls", c->domain, c->user);
+    else lstrcpynW(d.user_text, c->user, ARRAYSIZE(d.user_text));
+
+    wc.lpfnWndProc = cred_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+    wc.hbrBackground = GetStockObject(WHITE_BRUSH);
+    wc.lpszClassName = L"SgRemoteDesktopCredentials";
+    RegisterClassExW(&wc);
+    AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, FALSE);
+    if (owner) GetWindowRect(owner, &o);
+    else SetRect(&o, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+    x = (o.left + o.right - (r.right - r.left)) / 2;
+    y = (o.top + o.bottom - (r.bottom - r.top)) / 2;
+    hwnd = CreateWindowExW(WS_EX_DLGMODALFRAME, wc.lpszClassName, L"Remote Desktop Connection",
+                           WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, x, y,
+                           r.right - r.left, r.bottom - r.top, owner, NULL, wc.hInstance, &d);
+    if (!hwnd) return FALSE;
+    if (owner) EnableWindow(owner, FALSE);
+    ShowWindow(hwnd, SW_SHOW);
+    while (!d.done && GetMessageW(&msg, NULL, 0, 0))
+    {
+        if (IsDialogMessageW(hwnd, &msg)) continue;
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    if (owner) { EnableWindow(owner, TRUE); SetForegroundWindow(owner); }
+    if (!d.ok) return FALSE;
+    c->user[0] = c->domain[0] = 0;
+    if (d.user_text[0]) set_user(c, d.user_text);
+    lstrcpynW(pw, d.pw, (int)cap);
+    SecureZeroMemory(d.pw, sizeof(d.pw));
+    return TRUE;
+}
+
+/* The certificate question, the credentials, then the client. */
+static BOOL connect_to(HWND owner, struct conn *c)
+{
+    WCHAR pw[MAX_FIELD];
+    BOOL ret;
+
+    if (!valid_host(c->host))
+    {
+        MessageBoxW(owner, L"The computer name is not valid.", L"Remote Desktop Connection", MB_ICONERROR);
+        return FALSE;
+    }
+    /* the gate (SG_MSTSC_TEST=1) checks the command line, not the dialogs */
+    if (GetEnvironmentVariableW(L"SG_MSTSC_TEST", pw, ARRAYSIZE(pw)) && !lstrcmpW(pw, L"1"))
+        return launch(c, g_client, FALSE);
+    if (!confirm_first_use(owner, c)) return FALSE;
+    if (!ask_credentials(owner, c, pw, ARRAYSIZE(pw))) return FALSE;
+    ret = launch_with(c, g_client, FALSE, pw);
+    SecureZeroMemory(pw, sizeof(pw));
+    return ret;
+}
+
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
     case WM_CREATE:
-        add(hwnd, L"STATIC", L"Computer:", 0, 16, 22, 90, 20, -1);
-        g_computer = add(hwnd, L"EDIT", g_conn.host, WS_TABSTOP | ES_AUTOHSCROLL, 110, 18, 250, 24, ID_COMPUTER);
-        add(hwnd, L"STATIC", L"User name:", 0, 16, 58, 90, 20, -1);
-        g_user = add(hwnd, L"EDIT", g_conn.user, WS_TABSTOP | ES_AUTOHSCROLL, 110, 54, 250, 24, ID_USER);
-        g_full = add(hwnd, L"BUTTON", L"Full screen", WS_TABSTOP | BS_AUTOCHECKBOX, 110, 88, 200, 22, ID_FULL);
-        add(hwnd, L"STATIC", L"You will be asked for your password when you connect.",
-            0, 16, 118, 344, 20, -1);
-        add(hwnd, L"BUTTON", L"Connect", WS_TABSTOP | BS_DEFPUSHBUTTON, 188, 150, 84, 28, ID_CONNECT);
-        add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 278, 150, 84, 28, ID_CANCEL);
+        add(hwnd, L"STATIC", L"Computer:", 0, 24, BANNER_H + 24, 90, 20, -1);
+        g_computer = add(hwnd, L"EDIT", g_conn.host, WS_TABSTOP | ES_AUTOHSCROLL, 120, BANNER_H + 20, 276, 28, ID_COMPUTER);
+        add(hwnd, L"STATIC", L"User name:", 0, 24, BANNER_H + 62, 90, 20, -1);
+        g_user = add(hwnd, L"EDIT", g_conn.user, WS_TABSTOP | ES_AUTOHSCROLL, 120, BANNER_H + 58, 276, 28, ID_USER);
+        add(hwnd, L"STATIC", L"You will be asked for credentials when you connect.",
+            0, 120, BANNER_H + 92, 276, 36, -1);
+        g_full = add(hwnd, L"BUTTON", L"Full screen", WS_TABSTOP | BS_AUTOCHECKBOX, 120, BANNER_H + 130, 200, 22, ID_FULL);
+        add(hwnd, L"BUTTON", L"Connect", WS_TABSTOP | BS_DEFPUSHBUTTON, 196, BANNER_H + 172, 96, 30, ID_CONNECT);
+        add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 300, BANNER_H + 172, 96, 30, ID_CANCEL);
         SetFocus(g_conn.host[0] ? g_user : g_computer);
+        return 0;
+
+    case WM_PAINT:
+        paint_banner(hwnd, L"Remote Desktop", L"Connection");
         return 0;
 
     case WM_COMMAND:
@@ -384,9 +664,12 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             set_address(&c, computer);
             if (user[0]) set_user(&c, user);
             c.fullscreen = SendMessageW(g_full, BM_GETCHECK, 0, 0) == BST_CHECKED;
-            if (launch(&c, g_client, FALSE))
+            if (connect_to(hwnd, &c))
             {
-                save_last(computer, user);
+                WCHAR saved[MAX_FIELD * 2];
+                if (c.domain[0]) swprintf(saved, ARRAYSIZE(saved), L"%ls\\%ls", c.domain, c.user);
+                else lstrcpynW(saved, c.user, ARRAYSIZE(saved));
+                save_last(computer, saved);
                 DestroyWindow(hwnd);
             }
         }
@@ -404,27 +687,33 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+static void init_look(HINSTANCE inst)
+{
+    g_font = make_font(9, FW_NORMAL);
+    g_font_heading = make_font(15, FW_NORMAL);
+    g_font_title_light = make_font(12, FW_LIGHT);
+    g_font_title = make_font(18, FW_SEMIBOLD);
+    g_icon = LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, 48, 48, 0);
+}
+
 static int run_dialog(HINSTANCE inst)
 {
     WNDCLASSEXW wc = { .cbSize = sizeof(wc) };
-    NONCLIENTMETRICSW ncm = { .cbSize = sizeof(ncm) };
-    RECT r = { 0, 0, 378, 196 };
+    RECT r = { 0, 0, 420, BANNER_H + 218 };
     HWND hwnd;
     MSG msg;
-
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    g_font = CreateFontIndirectW(&ncm.lfMessageFont);
 
     wc.lpfnWndProc = wndproc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+    wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
     wc.lpszClassName = L"SgRemoteDesktop";
     RegisterClassExW(&wc);
 
-    AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, FALSE);
+    AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
     hwnd = CreateWindowW(wc.lpszClassName, L"Remote Desktop Connection",
-                         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
                          CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
                          NULL, NULL, inst, NULL);
     ShowWindow(hwnd, SW_SHOW);
@@ -513,9 +802,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
          * accepted and ignored */
     }
 
-    /* Like mstsc: with a target on the command line, connect straight away. */
-    if (have_target || dry_run)
-        return launch(&g_conn, g_client, dry_run) ? 0 : 1;
+    /* Like mstsc: with a target on the command line, connect straight away
+     * (after the certificate question and the credentials). */
+    if (dry_run) return launch(&g_conn, g_client, TRUE) ? 0 : 1;
+    init_look(inst);
+    if (have_target) return connect_to(NULL, &g_conn) ? 0 : 1;
 
     return run_dialog(inst);
 }
