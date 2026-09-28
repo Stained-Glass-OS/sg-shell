@@ -15,18 +15,37 @@
 #include <shellapi.h>
 
 /* ---- elevation ----------------------------------------------------------------- */
+/* When the elevated copy ends, the page shows what it changed: an elevated
+ * program runs on a display of its own, so this window is never deactivated
+ * and reactivated for WM_ACTIVATE to refresh it (a new user did not appear
+ * in User Accounts until Refresh). */
+static DWORD WINAPI wait_elevated(void *arg)
+{
+    HANDLE process = arg;
+    WaitForSingleObject(process, INFINITE);
+    CloseHandle(process);
+    PostMessageW(g_main, WM_ELEVATED_DONE, 0, 0);
+    return 0;
+}
+
 BOOL run_elevated(const WCHAR *args)
 {
     WCHAR self[MAX_PATH];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    HANDLE thread;
     GetModuleFileNameW(NULL, self, MAX_PATH);
-    sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS;
     sei.hwnd = g_main;
     sei.lpVerb = L"runas";
     sei.lpFile = self;
     sei.lpParameters = args;
     sei.nShow = SW_SHOWNORMAL;
-    return ShellExecuteExW(&sei);
+    if (!ShellExecuteExW(&sei)) return FALSE;
+    if (sei.hProcess) {
+        if ((thread = CreateThread(NULL, 0, wait_elevated, sei.hProcess, 0, NULL))) CloseHandle(thread);
+        else CloseHandle(sei.hProcess);
+    }
+    return TRUE;
 }
 
 BOOL is_elevated(void)

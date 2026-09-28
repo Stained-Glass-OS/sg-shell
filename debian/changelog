@@ -20,6 +20,11 @@ sg-shell (0.1.0-56) unstable; urgency=medium
     controls with -- Firefox's minimize, maximize, restore and close were
     empty boxes. "Segoe MDL2 Assets" and "Segoe Fluent Icons" map to it.
     Gate: make test-icons-font.
+  * Control Panel shows what an administrator's change did as soon as the
+    elevated copy ends (it waits on it; wine-sg 0448 gives it a handle): a
+    new user appeared in User Accounts only after Refresh -- the elevated
+    program runs on a display of its own, so the window was never
+    reactivated to refresh itself.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 27 Sep 2026 18:10:00 -0700
 

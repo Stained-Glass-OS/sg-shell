@@ -754,6 +754,12 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         mm->ptMinTrackSize.x = S(820); mm->ptMinTrackSize.y = S(520);
         return 0;
     }
+    case WM_ELEVATED_DONE:
+        if (g_refresh_on_activate) {
+            g_refresh_on_activate = FALSE;
+            refresh_page();
+        }
+        return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) != WA_INACTIVE && g_refresh_on_activate) {
             g_refresh_on_activate = FALSE;
