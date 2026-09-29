@@ -1,3 +1,11 @@
+sg-shell (0.1.0-70) unstable; urgency=medium
+
+  * SG Store is a default app: it appears in Start's app list and search
+    and is pinned on the taskbar-Start on a new profile, beside File
+    Explorer, Control Panel and Notepad. Gate: make test (start-check).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 15:45:00 -0700
+
 sg-shell (0.1.0-69) unstable; urgency=medium
 
   * Start layout: switching Tiles -> Centered -> Tiles loads the layout

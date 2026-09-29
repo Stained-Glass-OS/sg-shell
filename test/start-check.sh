@@ -100,7 +100,7 @@ has "item Zeta Test App" && pass "apps come from the Start Menu, three folders d
 has "header Z" && has "header F" && pass "grouped under letter headers" || fail "no letter headers"
 d | grep -q '(no icon)' && fail "some apps have no icon: $(d | grep '(no icon)' | head -3)" || pass "every app has its icon"
 d | sed -n '/^header Recently added$/{n;p;}' | grep -qxF "item Brand New App" && pass "a new app is under Recently added" || fail "Recently added: $(d | head -12 | tr '\n' '|')"
-has "tile File Explorer" && has "tile Notepad" && has "tile Control Panel" && pass "pinned by default: File Explorer, Control Panel, Notepad" || fail "tiles: $(d | grep '^tile')"
+has "tile File Explorer" && has "tile Notepad" && has "tile Control Panel" && has "tile SG Store" && pass "pinned by default: File Explorer, Control Panel, Notepad, SG Store" || fail "tiles: $(d | grep '^tile')"
 shot open
 colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
 [ "${colors:-1}" -ge 8 ] && pass "it paints icons, tiles and text ($colors colours)" || fail "flat panel ($colors colours)"

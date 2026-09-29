@@ -302,6 +302,7 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"Magnifier", L"zoom magnify accessibility" },
     { L"On-Screen Keyboard", L"osk keyboard accessibility touch" },
     { L"Get a web browser", L"browser internet firefox chrome edge brave" },
+    { L"SG Store", L"store apps install download update programs software browser office" },
     { L"Remote Desktop Connection", L"rdp mstsc remote" },
     { L"SG Office Documents", L"office word docx doc odt document writer letter text" },
     { L"SG Office Spreadsheets", L"office excel xlsx xls ods csv spreadsheet sheet calc table" },
@@ -474,6 +475,7 @@ static void build_list(void)
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");
+    add_beside(L"SG Store", L"sg-store64.exe");
     add_beside(L"Linux Terminal (Administrator)", L"sg-rootterm64.exe");
     add_beside(L"Report a problem", L"sg-bugreport64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
@@ -545,7 +547,7 @@ static void load_pins(void)
     /* first time: the everyday things */
     {
         static const WCHAR *const defaults[] = { L"File Explorer", L"Control Panel", L"Notepad",
-                                                 L"PowerShell", L"Remote Desktop Connection" };
+                                                 L"PowerShell", L"Remote Desktop Connection", L"SG Store" };
         for (i = 0; i < (int)ARRAYSIZE(defaults); i++)
         {
             int a = find_app(defaults[i]), j;
