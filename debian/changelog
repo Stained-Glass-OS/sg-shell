@@ -1,3 +1,11 @@
+sg-shell (0.1.0-64) unstable; urgency=medium
+
+  * The flyouts (volume, network, battery), the clock's toasts and the
+    tiles' Start ask for round corners (sg-round.h: DWMWCP_ROUND), which
+    the Rounded style gives them (wine-sg 0497). test/round-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 00:50:00 -0700
+
 sg-shell (0.1.0-63) unstable; urgency=medium
 
   * Start: a second layout, "Centered: Pinned and Recommended" (Settings >

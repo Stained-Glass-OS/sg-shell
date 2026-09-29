@@ -29,6 +29,7 @@
 #include <math.h>
 #include <wchar.h>
 #include "../sg-mode.h"
+#include "../sg-round.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -397,6 +398,7 @@ static void notify(int kind, int index, const WCHAR *title, const WCHAR *body, c
     /* owned by the (maybe hidden) main window: no taskbar button, never takes the focus */
     t->hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"SgClockToast", title, WS_POPUP,
                               0, 0, S(TOAST_W), S(TOAST_H), owner, NULL, g_inst, NULL);
+    sg_round_corners(t->hwnd);
     g_ntoasts++;
     place_toasts();
     chime(TRUE);

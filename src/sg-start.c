@@ -35,6 +35,7 @@
 #include <string.h>
 #include <wctype.h>
 #include "sg-mode.h"
+#include "sg-round.h"
 
 #define SG_START_TOGGLE (WM_USER + 10)
 
@@ -2089,6 +2090,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     CreateWindowW(LISTENER_CLASS, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, inst, NULL);
     g_panel = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, PANEL_CLASS, L"Start",
                               WS_POPUP, 0, 0, S(PANEL_W), S(PANEL_H), NULL, NULL, inst, NULL);
+    sg_round_corners(g_panel);   /* the tiles' Start, in the Rounded style (the centred one has its own) */
     /* warm the list and its icons, so the first opening is quick */
     build_list();
     first_run();

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "sg-netclient.h"
 #include "sg-mode.h"
+#include "sg-round.h"
 
 #define FLY_W 360
 #define ROW_H 60
@@ -1058,6 +1059,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     /* Owned by the (never shown) tray window: no taskbar button of its own. */
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Network", WS_POPUP,
                             0, 0, FLY_W, 300, g_tray_wnd, NULL, inst, NULL);
+    sg_round_corners(g_fly);
     g_key = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_PASSWORD | ES_AUTOHSCROLL, 60, 0, FLY_W - 76, 22,
                             g_fly, (HMENU)(INT_PTR)ID_KEY, inst, NULL);
     SendMessageW(g_key, WM_SETFONT, (WPARAM)g_font, TRUE);

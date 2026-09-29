@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "sg-mode.h"
+#include "sg-round.h"
 
 #define FLY_W 360
 #define FLY_H 112
@@ -604,6 +605,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     /* owned by the (never shown) tray window: no taskbar button of its own */
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Volume", WS_POPUP,
                             0, 0, FLY_W, FLY_H, g_tray, NULL, inst, NULL);
+    sg_round_corners(g_fly);
     tray_update(TRUE);
     CloseHandle(CreateThread(NULL, 0, worker, NULL, 0, NULL));
     while (GetMessageW(&msg, NULL, 0, 0))

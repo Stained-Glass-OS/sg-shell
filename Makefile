@@ -243,6 +243,7 @@ lint:
 test: build
 	@sh test/render-check.sh
 	@sh test/start-check.sh
+	@sh test/round-check.sh
 	@sh test/mstsc-check.sh
 	@sh test/rootterm-check.sh
 	@sh test/bugreport-check.sh
