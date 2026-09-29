@@ -417,7 +417,7 @@ void set_build_taskbar(void)
     static const WCHAR *const where[] = { L"Left", L"Top", L"Right", L"Bottom" };
     static const WCHAR *const combine[] = { L"Always, hide labels", L"When taskbar is full", L"Never" };
     static const WCHAR *const search[] = { L"Hidden", L"Show search icon", L"Show search box" };
-    static const WCHAR *const colors[] = { L"Follow the Windows mode", L"Dark", L"Light", L"Light blue", L"Accent color" };
+    static const WCHAR *const colors[] = { L"Follow the system mode", L"Dark", L"Light", L"Light blue", L"Accent color" };
     DWORD color;
     DWORD pos = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", 3), glom = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", 2);
     DWORD box = reg_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", 0);
