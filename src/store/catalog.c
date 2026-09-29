@@ -305,7 +305,7 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
         /* A Windows program has no pipe to native apt; the sg-session apt
-         * bridge is a tracked follow-up (ADR 0015). For now the card explains
+         * bridge is a tracked follow-up (ADR 0017). For now the card explains
          * the app is installed from Settings. */
         lstrcpynW(err, L"Install this from Settings > Apps (it is a system package).", cch);
         return 1;

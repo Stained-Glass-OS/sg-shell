@@ -11,7 +11,7 @@ Windows Registry Editor Version 5.00
 ; installer at the user's request and runs it only if it is exactly the file
 ; the maker published -- a pinned SHA-256, or the winget community repository's,
 ; the same engine as "Get a web browser". Our own suites run their own setup
-; program (which does its own pinned-hash download). See ADR 0015.
+; program (which does its own pinned-hash download). See ADR 0017.
 ;
 ; OS updates are NOT handled here: they keep their own path (Settings >
 ; Update & Security). SG Store never touches the system upgrade.
