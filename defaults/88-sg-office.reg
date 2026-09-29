@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- Microsoft Office (which users install themselves).
+;
+; Office draws its windows (the ribbon, the page, dialogs) into Direct3D 11
+; textures shared between devices and guarded by keyed mutexes. The Vulkan
+; translation layer cannot share textures that way under Wine yet
+; (VK_KHR_external_memory_win32, KeyedMutex::AcquireSync unsupported), so
+; every Office window stayed empty but for its lines. With hardware
+; acceleration off Office draws in software, which works: Word's ribbon and
+; page appear (QA VM, 2026-09-29). Office's own setting (File > Options >
+; Advanced > Display) turns it back on for anyone who wants to try.
+; HKCU values here reach every new user through the Default User profile.
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\Graphics]
+"DisableHardwareAcceleration"=dword:00000001
