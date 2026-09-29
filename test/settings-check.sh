@@ -379,7 +379,7 @@ PINDIR="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Internet E
 wine start ms-settings:themes >/dev/null 2>&1
 page_is Themes "ms-settings:themes (look)"
 sleep 0.5
-has ": Rounded: round corners, a centered taskbar and Start" && pass "Themes shows the Rounded look" || fail "Themes look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+has ": Rounded" && ! has "a centered taskbar an" && pass "Themes shows the Rounded look (a short name that fits)" || fail "Themes look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 wine start ms-settings:colors >/dev/null 2>&1
 page_is Colors "ms-settings:colors (style)"
 sleep 0.5

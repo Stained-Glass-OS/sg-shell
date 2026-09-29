@@ -1,3 +1,12 @@
+sg-shell (0.1.0-72) unstable; urgency=medium
+
+  * Settings > Themes > Choose a look: the options are Classic, Rounded and
+    Mixed -- the long descriptions were cut off in the box ("Classic: square
+    windows, the taskbar and st"); what each look does is said below it.
+    Gate: make test (settings-check).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 16:55:00 -0700
+
 sg-shell (0.1.0-71) unstable; urgency=medium
 
   * Taskbar flyouts (volume, network): a second click on the tray icon

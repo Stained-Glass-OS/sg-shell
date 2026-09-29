@@ -323,15 +323,17 @@ void set_build_themes(void)
     y = st_para(y, L"A theme is a desktop picture, an accent color and light or dark mode together.");
     y = st_head(y, L"Look");
     {
-        static const WCHAR *const looks[] = { L"Classic: square windows, the taskbar and Start at the left",
-                                              L"Rounded: round corners, a centered taskbar and Start", L"Mixed" };
+        /* short names: the descriptions did not fit the box (David 2026-09-29) */
+        static const WCHAR *const looks[] = { L"Classic", L"Rounded", L"Mixed" };
         BOOL r = look_rounded(), centred = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1,
              cstart = reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Start", L"Centered", 0) != 0;
         int look = !r && !centred && !cstart ? 0 : r && centred && cstart ? 1 : 2;
         st_combo(&y, L"Choose a look", looks, look == 2 ? 3 : 2, look, CMD_LOOK);
     }
+    y = st_para(y, L"Classic: square windows, with the taskbar's buttons and Start at the left. "
+                   L"Rounded: round corners, with the taskbar's buttons and Start in the middle.");
     y = st_para(y, L"A look sets the window style, the taskbar and Start together. Each can still be changed on its own "
-                   L"under Colors, Taskbar and Start, to mix them.");
+                   L"under Colors, Taskbar and Start, to mix them (Mixed).");
 }
 
 BOOL set_cmd_themes(int id, int code, HWND ctl)
