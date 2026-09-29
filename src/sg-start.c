@@ -54,6 +54,22 @@
 #define SEARCH_H    32
 #define TASKBAR_H   40
 
+/* the centred layout (g_centered) */
+#define C_W        640
+#define C_H        624
+#define C_SEARCH_Y 20
+#define C_SEARCH_H 36
+#define C_HEAD_Y   68
+#define C_BODY_Y   104
+#define C_CELL_W   96
+#define C_CELL_H   84
+#define C_COLS     6
+#define C_ROWS     3
+#define C_REC_H    52
+#define C_BAR_H    64
+enum { C_SEARCH = 1, C_MORE, C_USER, C_POWER, C_PIN = 100, C_REC = 200 };
+
+
 /* Start follows the Windows mode (SystemUsesLightTheme, sg-mode.h), as
  * Windows 10's does: dark unless the shell is set to light */
 struct start_palette {
@@ -102,6 +118,14 @@ static BOOL g_app_list = TRUE;      /* "Show app list in Start menu" */
 static BOOL g_show_list = TRUE;     /* the list column is shown now (the app list, or search, or All apps) */
 static BOOL g_fullscreen;           /* "Use Start full screen" */
 static int g_tile_cols = 3;         /* "Show more tiles on Start": 4 */
+/* "Start layout: Centered" (Settings > Personalization > Start): a panel in
+ * the middle, over the centred taskbar -- a search box, a grid of the pinned
+ * apps, the most used ones as "Recommended", the user and power at the
+ * bottom; search and All apps show the list in it. The tiles are the
+ * default. */
+static BOOL g_centered;
+static int g_hot_c = -1;           /* the centred layout's part under the pointer */
+static int g_rec[6], g_nrec;       /* its Recommended: the most used apps */
 
 static DWORD reg_value(const WCHAR *key, const WCHAR *name, DWORD def)
 {
@@ -600,7 +624,7 @@ static void build_rows(void)
 {
     int i;
     g_nrows = 0;
-    g_content_h = S(TOP_PAD);
+    g_content_h = g_centered ? S(C_BODY_Y) : S(TOP_PAD);
 
     if (g_search[0])
     {
@@ -610,7 +634,7 @@ static void build_rows(void)
 
         for (i = 0; g_search[i]; i++) q[i] = towlower(g_search[i]);
         q[i] = 0;
-        g_content_h += S(SEARCH_H) + S(8);
+        if (!g_centered) g_content_h += S(SEARCH_H) + S(8);   /* the centred layout's box is above the list */
         for (i = 0; i < g_napps && n < 1000; i++)
             if ((hits[n].score = score(&g_apps[i], q))) { hits[n].id = i; n++; }
         for (i = 0; i < NSETTINGS && n < 1024; i++)
@@ -712,10 +736,10 @@ static WCHAR g_launched[160];
 enum { RAIL_MENU, RAIL_USER, RAIL_DOCS, RAIL_PICS, RAIL_SETTINGS, RAIL_POWER, RAIL_COUNT };
 static const WCHAR *const rail_labels[RAIL_COUNT] = { L"Start", L"", L"Documents", L"Pictures", L"Settings", L"Power" };
 
-static int list_left(void) { return S(RAIL_W); }
-static int list_top(void) { return 0; }
-static int list_bottom(void) { return g_panel_h; }
-static int list_w(void) { return g_show_list ? S(LIST_W) : 0; }
+static int list_left(void) { return g_centered ? S(24) : S(RAIL_W); }
+static int list_top(void) { return g_centered ? S(C_BODY_Y) : 0; }
+static int list_bottom(void) { return g_centered ? g_panel_h - S(C_BAR_H) : g_panel_h; }
+static int list_w(void) { return !g_show_list ? 0 : g_centered ? g_panel_w - S(48) : S(LIST_W); }
 static int tiles_left(void) { return S(RAIL_W) + list_w() + S(GAP); }
 static int tiles_top(void) { return S(TOP_PAD) + S(32); }
 
@@ -774,6 +798,7 @@ static void dump(void)
     }
     dprint(f, L"mode=%ls\n", g_pal == &dark_palette ? L"dark" : L"light");
     dprint(f, L"list=%d tile_cols=%d fullscreen=%d\n", g_show_list, g_tile_cols, g_fullscreen);
+    dprint(f, L"centered=%d\n", g_centered);
     dprint(f, L"search=%ls\n", g_search);
     dprint(f, L"rail_open=%d\n", g_rail_open);
     dprint(f, L"open_ms=%d\n", (int)g_open_ms);
@@ -792,6 +817,7 @@ static void dump(void)
     if (g_sel_row >= 0 && g_sel_row < g_nrows && entry_of(g_rows[g_sel_row].id))
         dprint(f, L"selected %ls\n", entry_of(g_rows[g_sel_row].id)->name);
     if (g_sel_tile >= 0 && tile_app(g_sel_tile) >= 0) dprint(f, L"selected-tile %ls\n", g_pins[g_sel_tile]);
+    if (g_centered) for (i = 0; i < g_nrec; i++) dprint(f, L"rec %ls\n", g_apps[g_rec[i]].name);
     fclose(f);
 }
 
@@ -1249,7 +1275,7 @@ static void draw_list(HDC dc)
     rgn = CreateRectRgnIndirect(&clip);
 
     SelectClipRgn(dc, rgn);
-    if (g_search[0])
+    if (g_search[0] && !g_centered)
     {
         /* the search field, where the typing goes */
         RECT field = { list_left() + S(12), S(TOP_PAD), list_left() + list_w() - S(12), S(TOP_PAD) + S(SEARCH_H) }, t;
@@ -1269,8 +1295,8 @@ static void draw_list(HDC dc)
         int y = rw->y - g_scroll;
         RECT r = { list_left() + S(4), y, list_left() + list_w() - S(8), y + rw->h }, t;
 
-        if (r.bottom < 0 || r.top > g_panel_h) continue;
-        if (g_search[0] && r.top < S(TOP_PAD) + S(SEARCH_H)) continue;
+        if (r.bottom < list_top() || r.top > list_bottom()) continue;
+        if (g_search[0] && !g_centered && r.top < S(TOP_PAD) + S(SEARCH_H)) continue;
         if (rw->type == R_HEADER)
         {
             t = r; t.left += S(12);
@@ -1358,6 +1384,159 @@ static void draw_tiles(HDC dc)
     }
 }
 
+/* ---- the centred layout ---------------------------------------------------------- */
+
+static RECT c_search_rect(void) { RECT r = { S(32), S(C_SEARCH_Y), g_panel_w - S(32), S(C_SEARCH_Y + C_SEARCH_H) }; return r; }
+static RECT c_more_rect(void) { RECT r = { g_panel_w - S(150), S(C_HEAD_Y), g_panel_w - S(32), S(C_HEAD_Y) + S(28) }; return r; }
+static int c_grid_left(void) { return (g_panel_w - C_COLS * S(C_CELL_W)) / 2; }
+static RECT c_pin_rect(int i)
+{
+    RECT r;
+    int col = i % C_COLS, row = i / C_COLS;
+    SetRect(&r, c_grid_left() + col * S(C_CELL_W), S(C_BODY_Y) + row * S(C_CELL_H),
+            c_grid_left() + (col + 1) * S(C_CELL_W), S(C_BODY_Y) + (row + 1) * S(C_CELL_H));
+    return r;
+}
+static int c_rec_top(void) { return S(C_BODY_Y) + C_ROWS * S(C_CELL_H) + S(44); }
+static RECT c_rec_rect(int i)
+{
+    RECT r;
+    int w = (g_panel_w - S(64)) / 2, col = i % 2, row = i / 2;
+    SetRect(&r, S(32) + col * w, c_rec_top() + row * S(C_REC_H), S(32) + (col + 1) * w, c_rec_top() + (row + 1) * S(C_REC_H));
+    return r;
+}
+static RECT c_bar_rect(void) { RECT r = { 0, g_panel_h - S(C_BAR_H), g_panel_w, g_panel_h }; return r; }
+static RECT c_user_rect(void) { RECT b = c_bar_rect(), r = { S(24), b.top + S(12), S(280), b.bottom - S(12) }; return r; }
+static RECT c_power_rect(void) { RECT b = c_bar_rect(), r = { g_panel_w - S(72), b.top + S(12), g_panel_w - S(24), b.bottom - S(12) }; return r; }
+
+/* the most used apps (Start's own count of launches), not already pinned */
+static void c_recommend(void)
+{
+    int i, j, k;
+    DWORD best[6];
+    g_nrec = 0;
+    if (!track_progs()) return;
+    for (i = 0; i < g_napps; i++)
+    {
+        DWORD u = usage_of(g_apps[i].name);
+        if (!u || pin_index(g_apps[i].name) >= 0) continue;
+        for (j = 0; j < g_nrec && best[j] >= u; j++);
+        if (j >= 6) continue;
+        for (k = min(g_nrec, 5); k > j; k--) { best[k] = best[k - 1]; g_rec[k] = g_rec[k - 1]; }
+        best[j] = u; g_rec[j] = i;
+        if (g_nrec < 6) g_nrec++;
+    }
+}
+
+static int c_hit(POINT pt)
+{
+    RECT r = c_search_rect();
+    int i;
+    if (PtInRect(&r, pt)) return C_SEARCH;
+    r = c_user_rect(); if (PtInRect(&r, pt)) return C_USER;
+    r = c_power_rect(); if (PtInRect(&r, pt)) return C_POWER;
+    if (g_show_list) return -1;
+    r = c_more_rect(); if (PtInRect(&r, pt)) return C_MORE;
+    for (i = 0; i < min(g_npins, C_COLS * C_ROWS); i++)
+    {
+        r = c_pin_rect(i);
+        if (tile_app(i) >= 0 && PtInRect(&r, pt)) return C_PIN + i;
+    }
+    for (i = 0; i < g_nrec; i++)
+    {
+        r = c_rec_rect(i);
+        if (PtInRect(&r, pt)) return C_REC + i;
+    }
+    return -1;
+}
+
+static void draw_entry_icon(HDC dc, const struct entry *e, int x, int y, int size)
+{
+    if (e->kind == K_SETTING || !e->icon || is_control_panel(e)) draw_badge(dc, x, y + size / 2, size);
+    else DrawIconEx(dc, x, y, e->icon, size, size, 0, NULL, DI_NORMAL);
+}
+
+static void draw_centered(HDC dc)
+{
+    RECT r = c_search_rect(), t, bar = c_bar_rect();
+    int i;
+
+    /* the search box: always there, as the newer Start's is */
+    fill(dc, &r, COL_FIELD);
+    frame(dc, &r, g_search[0] ? COL_ACCENT_BR : g_pal->edge, S(1));
+    t = r; t.left += S(14);
+    if (g_search[0])
+    {
+        SIZE sz;
+        text(dc, g_search, t, g_font, COL_TEXT, DT_LEFT | DT_VCENTER);
+        SelectObject(dc, g_font);
+        GetTextExtentPoint32W(dc, g_search, (int)wcslen(g_search), &sz);
+        { RECT caret = { t.left + sz.cx + S(1), r.top + S(9), t.left + sz.cx + S(2), r.bottom - S(9) }; fill(dc, &caret, COL_TEXT); }
+    }
+    else text(dc, L"Type here to search", t, g_font, COL_SUBTLE, DT_LEFT | DT_VCENTER);
+
+    if (g_show_list)
+    {
+        RECT head = { S(40), S(C_HEAD_Y), g_panel_w - S(32), S(C_HEAD_Y) + S(28) };
+        text(dc, g_search[0] ? L"Results" : L"All apps", head, g_font_bold, COL_TEXT, DT_LEFT | DT_VCENTER);
+        draw_list(dc);
+    }
+    else
+    {
+        RECT head = { S(40), S(C_HEAD_Y), S(300), S(C_HEAD_Y) + S(28) }, more = c_more_rect();
+        text(dc, L"Pinned", head, g_font_bold, COL_TEXT, DT_LEFT | DT_VCENTER);
+        if (g_hot_c == C_MORE) fill(dc, &more, COL_HOVER);
+        text(dc, L"All apps  \x203A", more, g_font, COL_TEXT, DT_CENTER | DT_VCENTER);
+        for (i = 0; i < min(g_npins, C_COLS * C_ROWS); i++)
+        {
+            int a = tile_app(i);
+            RECT c = c_pin_rect(i), label;
+            if (a < 0) continue;
+            InflateRect(&c, -S(4), -S(2));
+            if (g_hot_c == C_PIN + i) fill(dc, &c, COL_HOVER);
+            if (g_sel_tile == i) frame(dc, &c, COL_SUBTLE, S(1));
+            draw_entry_icon(dc, &g_apps[a], (c.left + c.right - S(32)) / 2, c.top + S(10), S(32));
+            label = c; label.top += S(48); label.left += S(4); label.right -= S(4);
+            text(dc, g_apps[a].name, label, g_font_small, COL_TEXT, DT_CENTER | DT_TOP | DT_END_ELLIPSIS | DT_SINGLELINE);
+        }
+        if (!g_npins)
+        {
+            RECT none = { S(40), S(C_BODY_Y), g_panel_w - S(40), S(C_BODY_Y) + S(40) };
+            text(dc, L"Right-click an app in All apps and choose Pin to Start.", none, g_font, COL_SUBTLE, DT_LEFT | DT_VCENTER);
+        }
+        head.top = c_rec_top() - S(36); head.bottom = head.top + S(28);
+        text(dc, L"Recommended", head, g_font_bold, COL_TEXT, DT_LEFT | DT_VCENTER);
+        for (i = 0; i < g_nrec; i++)
+        {
+            const struct entry *e = &g_apps[g_rec[i]];
+            RECT c = c_rec_rect(i), name, sub;
+            InflateRect(&c, -S(4), -S(2));
+            if (g_hot_c == C_REC + i) fill(dc, &c, COL_HOVER);
+            draw_entry_icon(dc, e, c.left + S(10), (c.top + c.bottom - S(32)) / 2, S(32));
+            name = c; name.left += S(54); name.right -= S(6); name.bottom = (c.top + c.bottom) / 2 + S(2);
+            sub = name; sub.top = name.bottom; sub.bottom = c.bottom;
+            text(dc, e->name, name, g_font, COL_TEXT, DT_LEFT | DT_BOTTOM | DT_END_ELLIPSIS | DT_SINGLELINE);
+            text(dc, L"Frequently used", sub, g_font_small, COL_SUBTLE, DT_LEFT | DT_TOP | DT_SINGLELINE);
+        }
+        if (!g_nrec)
+        {
+            RECT none = { S(40), c_rec_top(), g_panel_w - S(40), c_rec_top() + S(40) };
+            text(dc, L"The apps you use most will show here.", none, g_font, COL_SUBTLE, DT_LEFT | DT_VCENTER);
+        }
+    }
+
+    /* the user, and power, along the bottom */
+    fill(dc, &bar, COL_RAIL);
+    r = c_user_rect();
+    if (g_hot_c == C_USER) fill(dc, &r, COL_HOVER);
+    draw_avatar(dc, r.left + S(24), (r.top + r.bottom) / 2);
+    t = r; t.left += S(48);
+    text(dc, user_name(), t, g_font, COL_TEXT, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS | DT_SINGLELINE);
+    r = c_power_rect();
+    if (g_hot_c == C_POWER) fill(dc, &r, COL_HOVER);
+    draw_glyph(dc, RAIL_POWER, (r.left + r.right) / 2, (r.top + r.bottom) / 2, COL_TEXT);
+}
+
 static void on_paint(HWND hwnd)
 {
     PAINTSTRUCT ps;
@@ -1367,10 +1546,14 @@ static void on_paint(HWND hwnd)
 
     fill(mem, &all, COL_PANEL);
     SetBkMode(mem, TRANSPARENT);
-    draw_list(mem);
-    draw_tiles(mem);
-    draw_rail(mem);   /* last: the open rail lies over the list */
-    frame(mem, &all, g_pal->edge, S(1));
+    if (g_centered) draw_centered(mem);
+    else
+    {
+        draw_list(mem);
+        draw_tiles(mem);
+        draw_rail(mem);   /* last: the open rail lies over the list */
+        frame(mem, &all, g_pal->edge, S(1));
+    }
     BitBlt(dc, 0, 0, g_panel_w, g_panel_h, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldbmp);
     DeleteObject(bmp);
@@ -1405,7 +1588,8 @@ static int row_at(POINT pt)
 {
     int i, y = pt.y + g_scroll;
     if (pt.x < list_left() || pt.x >= list_left() + list_w()) return -1;
-    if (g_search[0] && pt.y < S(TOP_PAD) + S(SEARCH_H)) return -1;
+    if (pt.y < list_top() || pt.y >= list_bottom()) return -1;
+    if (g_search[0] && !g_centered && pt.y < S(TOP_PAD) + S(SEARCH_H)) return -1;
     for (i = 0; i < g_nrows; i++)
         if (g_rows[i].type != R_HEADER && y >= g_rows[i].y && y < g_rows[i].y + g_rows[i].h) return i;
     return -1;
@@ -1422,7 +1606,7 @@ static int tile_at(POINT pt)
     return -1;
 }
 
-static int max_scroll(void) { return max(0, g_content_h + S(8) - g_panel_h); }
+static int max_scroll(void) { return max(0, g_content_h + S(8) - list_bottom()); }
 
 static void scroll_to(int y)
 {
@@ -1431,10 +1615,10 @@ static void scroll_to(int y)
 
 static void ensure_visible(int row)
 {
-    int top = g_search[0] ? S(TOP_PAD) + S(SEARCH_H) + S(8) : 0;
+    int top = g_centered ? list_top() : g_search[0] ? S(TOP_PAD) + S(SEARCH_H) + S(8) : 0;
     if (row < 0) return;
     if (g_rows[row].y - g_scroll < top) scroll_to(g_rows[row].y - top);
-    else if (g_rows[row].y + g_rows[row].h - g_scroll > g_panel_h) scroll_to(g_rows[row].y + g_rows[row].h - g_panel_h + S(8));
+    else if (g_rows[row].y + g_rows[row].h - g_scroll > list_bottom()) scroll_to(g_rows[row].y + g_rows[row].h - list_bottom() + S(8));
 }
 
 static int next_item(int from, int dir)
@@ -1465,6 +1649,14 @@ static void load_start_settings(void)
     g_show_list = g_app_list;
     g_fullscreen = reg_value(START_KEY, L"FullScreen", 0) != 0;
     g_tile_cols = reg_value(START_KEY, L"MoreTiles", 0) ? 4 : 3;
+    g_centered = reg_value(START_KEY, L"Centered", 0) != 0;
+    if (g_centered)
+    {
+        g_app_list = FALSE;          /* the list shows for a search and All apps */
+        g_show_list = FALSE;
+        g_fullscreen = FALSE;
+        g_tile_cols = C_COLS;        /* the arrow keys move over the grid */
+    }
 }
 
 /* Start's place: beside the Start button, on whichever edge the taskbar is
@@ -1503,6 +1695,19 @@ static void layout_panel(void)
     case ABE_RIGHT: work.right = abd.rc.left; break;
     default:        work.bottom = abd.rc.top; break;
     }
+    if (g_centered)
+    {
+        HRGN round;
+        g_panel_w = min(S(C_W), work.right - work.left);
+        g_panel_h = min(S(C_H), work.bottom - work.top - S(12));
+        x = (work.left + work.right - g_panel_w) / 2;
+        y = abd.uEdge == ABE_TOP ? work.top + S(12) : work.bottom - g_panel_h - S(12);
+        round = CreateRoundRectRgn(0, 0, g_panel_w + 1, g_panel_h + 1, S(16), S(16));
+        SetWindowRgn(g_panel, round, TRUE);
+        SetWindowPos(g_panel, HWND_TOPMOST, x, y, g_panel_w, g_panel_h, SWP_NOACTIVATE);
+        return;
+    }
+    SetWindowRgn(g_panel, NULL, TRUE);
     if (g_fullscreen)
     {
         g_panel_w = work.right - work.left;
@@ -1548,6 +1753,8 @@ static void show_panel(BOOL show)
         g_launched[0] = 0;
         (void)work; (void)sh; (void)sw;
         load_start_settings();
+        if (g_centered) c_recommend();
+        g_hot_c = -1;
         layout_panel();
         ShowWindow(g_panel, SW_SHOW);
         SetForegroundWindow(g_panel);
@@ -1577,6 +1784,7 @@ static void key_down(WPARAM vk)
     {
     case VK_ESCAPE:
         if (g_search[0]) { g_search[0] = 0; search_changed(); }
+        else if (g_centered && g_show_list) { show_list(FALSE); build_rows(); g_scroll = 0; InvalidateRect(g_panel, NULL, FALSE); }
         else show_panel(FALSE);
         return;
     case VK_RETURN:
@@ -1636,6 +1844,18 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_ERASEBKGND: return 1;
     case WM_PAINT: on_paint(hwnd); return 0;
     case WM_MOUSEMOVE:
+        if (g_centered)
+        {
+            int part = c_hit(pt), row = g_show_list ? row_at(pt) : -1;
+            if (part != g_hot_c || row != g_hot_row)
+            {
+                TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
+                g_hot_c = part; g_hot_row = row;
+                InvalidateRect(hwnd, NULL, FALSE);
+                TrackMouseEvent(&tme);
+            }
+            return 0;
+        }
     {
         int row = row_at(pt), tile = tile_at(pt), rail = rail_at(pt);
         if (rail != -1) { row = -1; tile = -1; }   /* the rail lies on top */
@@ -1650,7 +1870,7 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_MOUSELEAVE:
-        g_hot_row = g_hot_tile = g_hot_rail = -1;
+        g_hot_row = g_hot_tile = g_hot_rail = g_hot_c = -1;
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     case WM_MOUSEWHEEL:
@@ -1658,6 +1878,24 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     case WM_LBUTTONUP:
+        if (g_centered)
+        {
+            int part = c_hit(pt), row;
+            POINT screen = pt;
+            ClientToScreen(hwnd, &screen);
+            if (part == C_USER) rail_action(RAIL_USER, screen);
+            else if (part == C_POWER) power_menu(screen);
+            else if (part == C_MORE) { show_list(TRUE); build_rows(); g_scroll = 0; InvalidateRect(hwnd, NULL, FALSE); }
+            else if (part >= C_REC && part < C_REC + g_nrec) run_entry(&g_apps[g_rec[part - C_REC]], NULL);
+            else if (part >= C_PIN && part < C_REC) run_entry(&g_apps[tile_app(part - C_PIN)], NULL);
+            else if (g_show_list && (row = row_at(pt)) >= 0) run_entry(entry_of(g_rows[row].id), NULL);
+            else if (g_show_list && !g_search[0] && pt.y >= S(C_HEAD_Y) && pt.y < S(C_BODY_Y))
+            {
+                show_list(FALSE);   /* the "All apps" heading: back to Pinned */
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+            return 0;
+        }
     {
         int rail = rail_at(pt), row, tile;
         POINT screen = pt;
@@ -1670,6 +1908,16 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_RBUTTONUP:
+        if (g_centered)
+        {
+            int part = c_hit(pt), row;
+            POINT screen = pt;
+            ClientToScreen(hwnd, &screen);
+            if (part >= C_REC && part < C_REC + g_nrec) entry_menu(g_rec[part - C_REC], screen);
+            else if (part >= C_PIN && part < C_REC) entry_menu(tile_app(part - C_PIN), screen);
+            else if (g_show_list && (row = row_at(pt)) >= 0) entry_menu(g_rows[row].id, screen);
+            return 0;
+        }
     {
         int row = row_at(pt), tile = tile_at(pt);
         POINT screen = pt;

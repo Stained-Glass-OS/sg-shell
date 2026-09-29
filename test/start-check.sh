@@ -239,6 +239,37 @@ if [ -n "${SG_TASKBAR_POSITIONS:-}" ]; then
     setreg 'HKCU\Software\Stained Glass\Taskbar' Position 3; "$WINE" "$T/poke.exe" tray >/dev/null 2>&1; sleep 2
 fi
 
+# --- the centred layout (Settings > Personalization > Start > Start layout) -------------------
+[ "$(val visible)" = 1 ] && poke
+setreg "$START_REG" Centered 1
+setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' Start_TrackProgs 1
+poke
+cx=$(( (W - 640) / 2 )); cy=$((H - BAR - 12 - 624))
+[ "$(val centered)" = 1 ] && [ "$(val rect)" = "$cx,$cy,$((cx + 640)),$((H - BAR - 12))" ] && pass "centred: in the middle, above the taskbar ($(val rect))" || fail "centred: $(val centered) $(val rect)"
+[ "$(val list | cut -d' ' -f1)" = 0 ] && has "tile File Explorer" && pass "Pinned apps, no list until asked" || fail "centred content: $(val list) $(d | grep '^tile' | tr '\n' '|')"
+shot centered
+colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
+[ "${colors:-1}" -ge 8 ] && pass "it paints the search box, icons and names ($colors colours)" || fail "flat centred panel ($colors colours)"
+xdotool type --delay 80 zeta; sleep 1.5
+[ "$(val list | cut -d' ' -f1)" = 1 ] && [ "$(d | sed -n 's/^best //p')" = "Zeta Test App" ] && pass "typing searches in the centred layout" || fail "centred search: $(val list) $(d | grep '^best')"
+xdotool key Return; sleep 3
+[ "$(val launched)" = "Zeta Test App" ] && [ "$(val visible)" = 0 ] && pass "Enter runs it and closes Start" || fail "centred Enter: '$(val launched)' $(val visible)"
+poke
+d | grep -qxF "rec Zeta Test App" && pass "Recommended: the app just used ($(d | sed -n 's/^rec //p' | tr '\n' ',' ))" || fail "Recommended: $(d | grep '^rec' | tr '\n' '|')"
+click $((cx + 640 - 91)) $((cy + 82))
+[ "$(val list | cut -d' ' -f1)" = 1 ] && has "header Z" && pass "All apps shows the whole list" || fail "All apps: $(val list)"
+xdotool key Escape; sleep 1
+[ "$(val visible)" = 1 ] && [ "$(val list | cut -d' ' -f1)" = 0 ] && pass "Escape goes back to Pinned" || fail "Escape from All apps: $(val visible) $(val list)"
+click $((cx + 640 - 48)) $((cy + 624 - 32))
+case "$(val menu_items)" in Lock,Sign\ out*) pass "the power button opens its menu" ;; *) fail "centred power: $(val menu) $(val menu_items)" ;; esac
+xdotool key Escape; sleep 0.8
+[ "$(val visible)" = 1 ] || poke
+click $((cx + 32 + 48)) $((cy + 104 + 42))
+[ "$(val launched)" = "File Explorer" ] && pass "a click on a pinned app runs it" || fail "pinned click: '$(val launched)'"
+setreg "$START_REG" Centered 0
+poke
+[ "$(val centered)" = 0 ] && [ "$(val rect)" = "0,$panel_y,708,$((H - BAR))" ] && pass "and back to the tiles (the default)" || fail "back: $(val rect)"
+
 # --- click away --------------------------------------------------------------------------
 [ "$(val visible)" = 1 ] || poke
 click 1000 300

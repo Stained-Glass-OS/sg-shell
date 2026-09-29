@@ -337,12 +337,18 @@ BOOL set_cmd_themes(int id, int code, HWND ctl)
 }
 
 /* ---- Start ------------------------------------------------------------------------------------ */
-enum { CMD_RECENT = CMD_PAGE_FIRST + 1, CMD_APPLIST, CMD_MORETILES, CMD_FULLSCREEN, CMD_MOSTUSED, CMD_SUGGEST };
+enum { CMD_RECENT = CMD_PAGE_FIRST + 1, CMD_APPLIST, CMD_MORETILES, CMD_FULLSCREEN, CMD_MOSTUSED, CMD_SUGGEST, CMD_LAYOUT };
 #define CDM L"Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager"
+static void tray_settings_changed(void);
 
 void set_build_start(void)
 {
+    static const WCHAR *layouts[] = { L"Tiles (the default)", L"Centered: Pinned and Recommended" };
     int y = st_title(L"Start");
+    /* the newer look: Start and the taskbar's buttons in the middle, Start
+     * as a grid of pinned apps over recommended ones (sg-start's centred
+     * layout); Tiles is the classic one, as installed */
+    st_combo(&y, L"Start layout", layouts, 2, reg_dword(HKEY_CURRENT_USER, SG_START, L"Centered", 0) ? 1 : 0, CMD_LAYOUT);
     st_toggle(&y, L"Show more tiles on Start", reg_dword(HKEY_CURRENT_USER, SG_START, L"MoreTiles", 0) != 0, CMD_MORETILES);
     st_toggle(&y, L"Show app list in Start menu", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowAppList", 1) != 0, CMD_APPLIST);
     st_toggle(&y, L"Show recently added apps", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowRecentlyAdded", 1) != 0, CMD_RECENT);
@@ -356,6 +362,16 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
 {
     const WCHAR *v = id == CMD_RECENT ? L"ShowRecentlyAdded" : id == CMD_APPLIST ? L"ShowAppList" :
                      id == CMD_MORETILES ? L"MoreTiles" : id == CMD_FULLSCREEN ? L"FullScreen" : NULL;
+    if (id == CMD_LAYOUT)
+    {
+        int sel = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, SG_START, L"Centered", sel == 1);
+        /* the taskbar's buttons move to the middle with it, and back */
+        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", sel == 1);
+        tray_settings_changed();
+        return TRUE;
+    }
     (void)code;
     /* Windows keeps these two where Windows programs look for them */
     if (id == CMD_MOSTUSED) { reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"Start_TrackProgs", st_checked(ctl)); return TRUE; }
