@@ -223,8 +223,8 @@ page_is Colors "ms-settings:colors"
 sleep 0.5
 # the accent tiles are below the fold: wheel down over the page until the dump says they are on screen
 set -- $(D rect)
-xdotool mousemove $(( ($1 + $3) / 2 + 150 )) 400
-for n in 1 2 3 4 5 6 7 8; do xdotool click 5; sleep 0.3; done
+xdotool mousemove $(( $3 - 60 )) 400   # clear of the page's boxes, which take the wheel themselves
+for n in 1 2 3 4 5 6 7 8 9 10; do xdotool click 5; sleep 0.3; done
 sleep 0.5
 set -- $(ctl_at SgCplTile '#107C41')
 if [ $# -eq 2 ]; then
@@ -364,6 +364,40 @@ if [ $# -eq 2 ]; then
         && pass "the Task View switch writes Explorer\\Advanced ShowTaskViewButton" || fail "ShowTaskViewButton: $(regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' ShowTaskViewButton)"
 else fail "no Task View switch on the Taskbar page"; fi
 sleep 0.5; shot taskbar-settings
+
+# --- the looks: Classic and Rounded, and the parts they set, each choosable after ------------------
+wine "$T/sg-settings64.exe" --set look rounded 2>/dev/null | tr -d '\r' | grep -q '^OK' && pass "--set look rounded" || fail "--set look rounded failed"
+ADVK='HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x1 ] \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x0 ] \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] \
+    && pass "Rounded: round corners, a centred taskbar of icons, centred Start, no desktops pager" \
+    || fail "Rounded look: style $(regq 'HKCU\Software\Stained Glass\Style' Rounded) al $(regq "$ADVK" TaskbarAl) start $(regq 'HKCU\Software\Stained Glass\Start' Centered) glom $(regq "$ADVK" TaskbarGlomLevel) desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
+PINDIR="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar"
+[ -f "$PINDIR/File Explorer.lnk" ] && [ -f "$PINDIR/Settings.lnk" ] && wine reg query 'HKCU\Software\Stained Glass\Taskbar' /v PinOrder 2>/dev/null | grep -q 'File Explorer.lnk' \
+    && pass "and File Explorer and Settings pinned to the taskbar, in order" || fail "pins: $(ls "$PINDIR" 2>&1 | tr '\n' ' ')"
+wine start ms-settings:themes >/dev/null 2>&1
+page_is Themes "ms-settings:themes (look)"
+sleep 0.5
+has ": Rounded: round corners, a centered taskbar and Start" && pass "Themes shows the Rounded look" || fail "Themes look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine start ms-settings:colors >/dev/null 2>&1
+page_is Colors "ms-settings:colors (style)"
+sleep 0.5
+has ": Rounded: round corners, a taller taskbar" && pass "Colors shows the Rounded window style" || fail "Colors style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine "$T/sg-settings64.exe" --set style classic >/dev/null 2>&1
+wine start ms-settings:themes >/dev/null 2>&1
+page_is Themes "ms-settings:themes (mixed)"
+sleep 0.5
+has ": Mixed" && pass "square windows with the centred taskbar: the look is Mixed" || fail "mixed look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine reg add 'HKCU\Software\Stained Glass\Taskbar' /v Color /t REG_DWORD /d 3 /f >/dev/null 2>&1
+wine start ms-settings:taskbar >/dev/null 2>&1
+page_is Taskbar "ms-settings:taskbar (color)"
+sleep 0.5
+has ": Light blue" && has "Show virtual desktops on the taskbar" && pass "Taskbar: its color and the virtual desktops switch" \
+    || fail "Taskbar color: $(tr -d '\r' < "$DUMP" | grep '^control' | grep -i 'combo\|desktops' | head -8)"
+wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x1 ] && pass "Classic sets it all back" || fail "Classic look"
 
 if [ "${WINI:-0}" = 1 ]; then
     wine start ms-settings:about >/dev/null 2>&1; page_is About "(before Win+I)"

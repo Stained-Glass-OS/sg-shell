@@ -6,6 +6,14 @@ sg-shell (0.1.0-63) unstable; urgency=medium
     All apps, the most used apps under Recommended, and the user and power
     buttons at the foot. Escape from All apps goes back to Pinned. The
     tiles stay the default. start-check covers it.
+  * Settings: the looks. Personalization > Themes > Look: Classic (square
+    windows, the taskbar and Start at the left) or Rounded (round corners,
+    a taller taskbar of icons, centred with Start, File Explorer, the web
+    browser and Settings pinned); each part stays choosable on its own
+    page, and a mix shows as Mixed. Colors > Window style (wine-sg 0483,
+    0484); Taskbar > Taskbar color (follow the mode, dark, light, light
+    blue, accent) and Show virtual desktops. --set look|style
+    classic|rounded. settings-check covers them.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 20:20:00 -0700
 

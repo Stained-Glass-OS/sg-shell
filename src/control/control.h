@@ -219,6 +219,11 @@ const WCHAR *pers_set_wallpaper(const WCHAR *src, int style);   /* NULL, or why 
 const WCHAR *pers_set_background(COLORREF c);
 const WCHAR *pers_set_accent(COLORREF c);
 const WCHAR *pers_set_mode(BOOL apps, BOOL light);
+/* look.c: the window style, and the Classic and Rounded looks */
+BOOL look_rounded(void);
+const WCHAR *look_set_style(BOOL rounded);
+const WCHAR *look_apply(BOOL rounded);
+void look_wait(void);
 extern const COLORREF PERS_ACCENTS[20], PERS_BACKGROUNDS[12];
 extern const WCHAR *const PERS_FIT_NAMES[];
 int  pers_pictures(WCHAR (*out)[MAX_PATH], int max);         /* Windows' and ours */

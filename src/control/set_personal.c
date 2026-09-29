@@ -133,13 +133,14 @@ BOOL set_cmd_background(int id, int code, HWND ctl)
 }
 
 /* ---- Colors --------------------------------------------------------------------------------- */
-enum { CMD_MODE = CMD_PAGE_FIRST + 1, CMD_APPS_MODE, CMD_SYS_MODE, CMD_TRANSPARENCY, CMD_ACC_FIRST = CMD_PAGE_FIRST + 300,
+enum { CMD_MODE = CMD_PAGE_FIRST + 1, CMD_APPS_MODE, CMD_SYS_MODE, CMD_TRANSPARENCY, CMD_STYLE, CMD_ACC_FIRST = CMD_PAGE_FIRST + 300,
        CMD_CUSTOM = CMD_PAGE_FIRST + 400 };
 
 void set_build_colors(void)
 {
     static const WCHAR *const modes[] = { L"Light", L"Dark", L"Custom" };
     static const WCHAR *const ld[] = { L"Light", L"Dark" };
+    static const WCHAR *const styles[] = { L"Classic: square corners", L"Rounded: round corners, a taller taskbar" };
     struct pstate st;
     int y = st_title(L"Colors"), i, mode;
     pers_read(&st);
@@ -152,6 +153,7 @@ void set_build_colors(void)
         st_combo(&y, L"Choose your default system mode", ld, 2, st.system_light ? 0 : 1, CMD_SYS_MODE);
         st_combo(&y, L"Choose your default app mode", ld, 2, st.apps_light ? 0 : 1, CMD_APPS_MODE);
     }
+    st_combo(&y, L"Window style", styles, 2, look_rounded() ? 1 : 0, CMD_STYLE);
     st_toggle(&y, L"Transparency effects", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSPARENCY);
     y = st_head(y, L"Choose your accent color");
     y = st_text(y, L"Accent colors");
@@ -189,6 +191,9 @@ BOOL set_cmd_colors(int id, int code, HWND ctl)
         if (code == CBN_SELCHANGE) failed(pers_set_mode(id == CMD_APPS_MODE, SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 0));
         return TRUE;
     case CMD_TRANSPARENCY: reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", st_checked(ctl)); return TRUE;
+    case CMD_STYLE:
+        if (code == CBN_SELCHANGE) failed(look_set_style(SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 1));
+        return TRUE;
     case CMD_CUSTOM: {
         static COLORREF custom[16];
         struct pstate st;
@@ -286,7 +291,7 @@ BOOL set_cmd_lockscreen(int id, int code, HWND ctl)
 }
 
 /* ---- Themes: a picture, a mode and an accent together --------------------------------------------- */
-enum { CMD_THEME_FIRST = CMD_PAGE_FIRST + 1 };
+enum { CMD_THEME_FIRST = CMD_PAGE_FIRST + 1, CMD_LOOK = CMD_PAGE_FIRST + 100 };
 static const struct { const WCHAR *name, *file; BOOL light; COLORREF accent; } THEMES[] = {
     { L"Stained Glass", L"stained-glass.jpg", TRUE, RGB(0x7B, 0x2F, 0xBE) },
     { L"Stained Glass Night", L"stained-glass-night.jpg", FALSE, RGB(0x9B, 0x3C, 0xC9) },
@@ -316,11 +321,26 @@ void set_build_themes(void)
     }
     y += S(150);
     y = st_para(y, L"A theme is a desktop picture, an accent color and light or dark mode together.");
+    y = st_head(y, L"Look");
+    {
+        static const WCHAR *const looks[] = { L"Classic: square windows, the taskbar and Start at the left",
+                                              L"Rounded: round corners, a centered taskbar and Start", L"Mixed" };
+        BOOL r = look_rounded(), centred = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1,
+             cstart = reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Start", L"Centered", 0) != 0;
+        int look = !r && !centred && !cstart ? 0 : r && centred && cstart ? 1 : 2;
+        st_combo(&y, L"Choose a look", looks, look == 2 ? 3 : 2, look, CMD_LOOK);
+    }
+    y = st_para(y, L"A look sets the window style, the taskbar and Start together. Each can still be changed on its own "
+                   L"under Colors, Taskbar and Start, to mix them.");
 }
 
 BOOL set_cmd_themes(int id, int code, HWND ctl)
 {
-    (void)code; (void)ctl;
+    if (id == CMD_LOOK) {
+        LRESULT sel = SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+        if (code == CBN_SELCHANGE && (sel == 0 || sel == 1)) failed(look_apply(sel == 1));
+        return TRUE;
+    }
     if (id >= CMD_THEME_FIRST && id < CMD_THEME_FIRST + (int)ARRAYSIZE(THEMES)) {
         int i = id - CMD_THEME_FIRST;
         WCHAR path[MAX_PATH];
@@ -386,7 +406,7 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
  * auto-hide in our own key; every change is announced with WM_SETTINGCHANGE
  * "TraySettings", which the taskbar (wine-sg 0164) reads them again on. */
 enum { CMD_LOCKBAR = CMD_PAGE_FIRST + 1, CMD_AUTOHIDE, CMD_SMALL, CMD_ALIGN, CMD_PEEK, CMD_BADGES,
-       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH };
+       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH, CMD_TBCOLOR, CMD_DESKTOPS };
 #define SG_TASKBAR L"Software\\Stained Glass\\Taskbar"
 #define SEARCH_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Search"
 
@@ -397,6 +417,8 @@ void set_build_taskbar(void)
     static const WCHAR *const where[] = { L"Left", L"Top", L"Right", L"Bottom" };
     static const WCHAR *const combine[] = { L"Always, hide labels", L"When taskbar is full", L"Never" };
     static const WCHAR *const search[] = { L"Hidden", L"Show search icon", L"Show search box" };
+    static const WCHAR *const colors[] = { L"Follow the Windows mode", L"Dark", L"Light", L"Light blue", L"Accent color" };
+    DWORD color;
     DWORD pos = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", 3), glom = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", 2);
     DWORD box = reg_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", 0);
     int y = st_title(L"Taskbar");
@@ -408,10 +430,13 @@ void set_build_taskbar(void)
     st_toggle(&y, L"Use Peek to preview the desktop when you move your mouse to the Show desktop button",
               reg_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", 1) == 0, CMD_PEEK);
     st_toggle(&y, L"Show Task View button", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", 1) != 0, CMD_TASKVIEW);
+    st_toggle(&y, L"Show virtual desktops on the taskbar", reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"ShowDesktops", 1) != 0, CMD_DESKTOPS);
     st_combo(&y, L"Taskbar location on screen", where, 4, pos <= 3 ? (int)pos : 3, CMD_POSITION);
     st_combo(&y, L"Combine taskbar buttons", combine, 3, glom <= 2 ? (int)glom : 2, CMD_COMBINE);
     st_combo(&y, L"Search", search, 3, box <= 2 ? (int)box : 0, CMD_SEARCH);
     st_combo(&y, L"Taskbar alignment", align, 2, reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1 ? 1 : 0, CMD_ALIGN);
+    color = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", 0);
+    st_combo(&y, L"Taskbar color", colors, 5, color <= 4 ? (int)color : 0, CMD_TBCOLOR);
 }
 
 static void tray_settings_changed(void)
@@ -430,6 +455,11 @@ BOOL set_cmd_taskbar(int id, int code, HWND ctl)
     case CMD_BADGES: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarBadges", st_checked(ctl)); break;
     case CMD_PEEK: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", !st_checked(ctl)); break;
     case CMD_TASKVIEW: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", st_checked(ctl)); break;
+    case CMD_DESKTOPS: reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"ShowDesktops", st_checked(ctl)); break;
+    case CMD_TBCOLOR:
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", sel);
+        break;
     case CMD_ALIGN:
         if (code != CBN_SELCHANGE) return TRUE;
         reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", sel == 1);
