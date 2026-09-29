@@ -120,6 +120,11 @@ def g_forward(pen):
     line(pen, 550, MID + 400, 950, MID); line(pen, 950, MID, 550, MID - 400)
 
 
+def g_up(pen):
+    rect(pen, 500 - W // 2, MID - 450, 500 + W // 2, MID + 400)
+    line(pen, 100, MID + 50, 500, MID + 450); line(pen, 500, MID + 450, 900, MID + 50)
+
+
 def g_search(pen):
     # a ring (as a square-ish octagon) and a handle
     cx, cy, r = 600, MID + 125, 330
@@ -177,6 +182,7 @@ GLYPHS = {
     0xE73E: ("checkMark", g_check),
     0xE72B: ("back", g_back),
     0xE72A: ("forward", g_forward),
+    0xE74A: ("up", g_up),
     0xE721: ("search", g_search),
     0xE72C: ("refresh", g_refresh),
 }

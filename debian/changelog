@@ -6,6 +6,8 @@ sg-shell (0.1.0-61) unstable; urgency=medium
     box's CBN_KILLFOCUS carried the ID Lock screen uses for Browse); the old
     page now goes before the new one is current, and commands from gone
     controls are dropped. Test: test/settings-teardown-check.sh.
+  * Stained Glass Icons font: an Up arrow (U+E74A, MDL2's "Up") beside Back
+    and Forward, for File Explorer's Up button (wine-sg 0479).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 17:05:01 -0700
 
