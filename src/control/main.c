@@ -11,6 +11,8 @@
 #include <windowsx.h>
 #include <stdarg.h>
 
+static BOOL g_tearing_down;   /* show_page(): the old page's controls are going */
+
 HWND g_main, g_page;
 HINSTANCE g_inst;
 int g_dpi = 96;
@@ -498,6 +500,8 @@ static LRESULT CALLBACK page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_COMMAND: {
         int id = LOWORD(wp);
+        /* nothing from a control that is gone (posted before its page went) */
+        if (g_tearing_down || (lp && !IsWindow((HWND)lp))) return 0;
         if (IS_NAV(id)) { navigate((enum page_id)(id - NAV_BASE)); return 0; }
         if (g_pages[g_cur].command && g_pages[g_cur].command(id, HIWORD(wp), (HWND)lp)) return 0;
         return 0;
@@ -550,14 +554,21 @@ static void set_title(void)
     InvalidateRect(g_up, NULL, TRUE);
 }
 
+/* while a page's controls are destroyed, what they send (a combo box's
+ * CBN_KILLFOCUS) is not a command: it reached the next page's handler under
+ * the same ID -- Background's combo box opened Lock screen's Browse dialog */
+static BOOL g_tearing_down;
+
 static void show_page(enum page_id p)
 {
     HWND child;
     RECT rc;
-    g_cur = p;
     /* a new page: its children, items and scroll position go */
     KillTimer(g_page, 1);
+    g_tearing_down = TRUE;
     while ((child = GetWindow(g_page, GW_CHILD))) DestroyWindow(child);
+    g_tearing_down = FALSE;
+    g_cur = p;
     clear_items();
     g_pane_w = 0; g_scroll = 0; g_content_h = 0;
     SetScrollPos(g_page, SB_VERT, 0, FALSE);

@@ -246,6 +246,7 @@ test: build
 	@sh test/mstsc-check.sh
 	@sh test/rootterm-check.sh
 	@sh test/bugreport-check.sh
+	@sh test/settings-teardown-check.sh
 	@sh test/admind-check.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh

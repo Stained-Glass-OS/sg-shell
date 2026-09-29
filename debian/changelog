@@ -1,3 +1,14 @@
+sg-shell (0.1.0-61) unstable; urgency=medium
+
+  * Settings: selecting Personalization > Lock screen no longer opens the
+    picture dialog by itself. A page's controls, as they were destroyed,
+    sent their notifications to the next page (Background's focused combo
+    box's CBN_KILLFOCUS carried the ID Lock screen uses for Browse); the old
+    page now goes before the new one is current, and commands from gone
+    controls are dropped. Test: test/settings-teardown-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 17:05:01 -0700
+
 sg-shell (0.1.0-60) unstable; urgency=medium
 
   * Remote Desktop Connection, as Windows 10's: a white banner with its
