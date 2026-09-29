@@ -454,12 +454,35 @@ void set_build_recovery(void)
                    L"leave programs half replaced.");
 }
 
+/* Advanced startup: the boot menu (systemd-boot) waits a minute at the next
+ * start instead of starting the default at once -- logind sets the loader's
+ * one-shot menu timeout, as `systemctl reboot --boot-loader-menu` does (an
+ * active session may, polkit's default). The restart itself is Windows',
+ * so programs are asked to close first. It only restarted: David, "Advanced
+ * setup does not seem to do anything but reboot". */
+static BOOL boot_menu_next_start(void)
+{
+    static char busctl[] = "/usr/bin/busctl", call[] = "call", dest[] = "org.freedesktop.login1",
+                path[] = "/org/freedesktop/login1", iface[] = "org.freedesktop.login1.Manager",
+                method[] = "SetRebootToBootLoaderMenu", sig[] = "t", usec[] = "60000000";
+    char *argv[] = { busctl, call, dest, path, iface, method, sig, usec, NULL };
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait) =
+        (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    return spawnvp && !spawnvp(argv, TRUE);
+}
+
 BOOL set_cmd_recovery(int id, int code, HWND ctl)
 {
     (void)code; (void)ctl;
     if (id == CMD_ADV_RESTART) {
-        if (MessageBoxW(g_main, L"Restart now? Save your work first.", L"Advanced startup", MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
-            ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
+        if (MessageBoxW(g_main, L"Restart now? Save your work first.\n\nThe boot menu will wait at the next start: choose "
+                        L"a device, a disc or another system there.", L"Advanced startup", MB_OKCANCEL | MB_ICONQUESTION) != IDOK)
+            return TRUE;
+        if (!boot_menu_next_start() &&
+            MessageBoxW(g_main, L"The boot menu could not be asked for; this PC will start as usual. Restart anyway?",
+                        L"Advanced startup", MB_OKCANCEL | MB_ICONWARNING) != IDOK)
+            return TRUE;
+        ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
         return TRUE;
     }
     return FALSE;

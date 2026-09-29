@@ -13,6 +13,9 @@ sg-shell (0.1.0-61) unstable; urgency=medium
     machine's defaults set Edge's HideFirstRunExperience and
     RendererAppContainerEnabled=0 policies (VM: Edge from Get a web browser
     shows pages, sandbox on).
+  * Settings > Recovery > Advanced startup: Restart now shows the boot
+    menu at the next start (logind's SetRebootToBootLoaderMenu, a minute's
+    wait in systemd-boot) -- it only restarted.
   * Magnifier's toolbar is on every virtual desktop, as its view is: it
     stayed on one and flickered as explorer hid it again and again.
 
