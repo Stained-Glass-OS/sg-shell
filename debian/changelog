@@ -1,3 +1,14 @@
+sg-shell (0.1.0-71) unstable; urgency=medium
+
+  * Taskbar flyouts (volume, network): a second click on the tray icon
+    closes the flyout instead of flickering it shut then open again. The
+    click's mouse-down deactivates the flyout (it hides), so the icon's
+    button-up no longer finds it open and reopened it; a short reopen guard
+    ignores a toggle-click that lands right after a deactivation-hide.
+    Gate: make test-volume (a poke drives the exact race; mutation-tested).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 16:05:00 -0700
+
 sg-shell (0.1.0-70) unstable; urgency=medium
 
   * SG Store is a default app: it appears in Start's app list and search

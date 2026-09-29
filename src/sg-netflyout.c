@@ -80,6 +80,7 @@ static int g_nnets, g_nwired, g_scroll;
 static BOOL g_has_wifi, g_radio_on = TRUE, g_busy, g_autoconnect = TRUE;
 static char g_wifi_dev[32];
 static HWND g_tray_wnd, g_fly, g_key;
+static DWORD g_fly_hidden;   /* GetTickCount when the flyout last hid on deactivation: a tray click within ~200ms is that same click and must not reopen it (else it flickers instead of closing) */
 static HFONT g_font, g_font_small, g_font_title;
 static UINT g_taskbar_created;
 static NOTIFYICONDATAW g_nid;
@@ -803,7 +804,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_PAINT: on_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_busy && GetParent((HWND)lp) != hwnd && (HWND)lp != g_key) ShowWindow(hwnd, SW_HIDE);
+        if (LOWORD(wp) == WA_INACTIVE && !g_busy && GetParent((HWND)lp) != hwnd && (HWND)lp != g_key) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
         return 0;
     case WM_CTLCOLOREDIT:
     {
@@ -899,6 +900,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 return 0;
             }
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
+            else if (GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed */ }
             else show_flyout();
         }
         else if (lp == WM_RBUTTONUP || lp == WM_CONTEXTMENU)

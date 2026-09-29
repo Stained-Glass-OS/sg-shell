@@ -40,6 +40,7 @@ static int g_nsinks, g_cur = -1;
 static BOOL g_known, g_failed;
 
 static HWND g_tray, g_fly;
+static DWORD g_fly_hidden;   /* GetTickCount when the flyout last hid on deactivation: a tray click within ~200ms of it is that same click, so it must not reopen (else it flickers instead of closing) */
 static NOTIFYICONDATAW g_nid;
 static HFONT g_font, g_font_small, g_font_icon;
 static UINT g_taskbar_created;
@@ -433,7 +434,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_PAINT: fly_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_dragging && !IsWindowVisible((HWND)lp)) ShowWindow(hwnd, SW_HIDE);
+        if (LOWORD(wp) == WA_INACTIVE && !g_dragging && !IsWindowVisible((HWND)lp)) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
         return 0;
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) ShowWindow(hwnd, SW_HIDE);
@@ -508,6 +509,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (lp == WM_LBUTTONUP)
         {
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
+            else if (GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed */ }
             else
             {
                 place_flyout();

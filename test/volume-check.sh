@@ -51,5 +51,25 @@ out=$(dump down); echo "$out" | sed 's/^/      /'
 [ "$out" = "VOLUME none failed
 TIP The sound service is not responding" ] && pass "the sound server down: said, not a silent blank" || fail "down: $out"
 grep -q '^sound --out ' "$T/calls" && pass "it asks sg-settingsctl, as Settings' Sound page does" || fail "calls: $(cat "$T/calls")"
+
+# --- a second click on the icon closes the flyout, not flickers it (David 2026-09-29) ----------
+# The click's mouse-down deactivates the flyout (it hides) before the icon's
+# button-up arrives; without the reopen guard the icon reopened it.
+MINGW="${MINGW64:-x86_64-w64-mingw32-gcc}"
+if command -v Xvfb >/dev/null && command -v "$MINGW" >/dev/null; then
+    "$MINGW" -O2 -municode -o "$T/fly-poke.exe" "$HERE/test/sg-fly-poke.c" 2>/dev/null
+    # the --dump runs above left a wineserver whose desktop has no display; start clean
+    "$WINE_DIR/bin/wineserver" -k 2>/dev/null; "$WINE_DIR/bin/wineserver" -w 2>/dev/null
+    Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display" >/dev/null 2>&1 & XP=$!
+    i=0; while [ ! -s "$T/display" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    echo one > "$T/mode"
+    DISPLAY=":$(cat "$T/display")" SG_SETTINGSCTL="$T/settingsctl" "$WINE_DIR/bin/wine" "$T/sg-volume64.exe" >"$T/vol.log" 2>&1 & VP=$!
+    out=$(WINEPREFIX="$T/pfx" DISPLAY=":$(cat "$T/display")" "$WINE_DIR/bin/wine" "$T/fly-poke.exe" SgVolumeTray SgVolumeFlyout 2>/dev/null | tr -d '\r')
+    kill "$VP" "$XP" 2>/dev/null
+    [ "$out" = "shown=1 after=0" ] && pass "a second click on the icon closes the flyout (no flicker reopen)" \
+        || { fail "flyout second click: $out (want shown=1 after=0)"; sed 's/^/      vol: /' "$T/vol.log" | head -5; }
+else
+    echo "SKIP  flyout second-click (no Xvfb or mingw)"
+fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"
