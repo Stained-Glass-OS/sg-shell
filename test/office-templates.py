@@ -61,6 +61,9 @@ try:
     check("titles Calibri Light 44 pt, text Calibri 28 pt",
           (t.CharFontName, t.CharHeight, b.CharFontName, b.CharHeight) == ("Calibri Light", 44.0, "Calibri", 28.0),
           (t.CharFontName, t.CharHeight, b.CharFontName, b.CharHeight))
+    kinds = [p.getByIndex(i).ShapeType.rsplit(".", 1)[1] for i in range(p.Count)]
+    check("the first slide is a title slide (title and subtitle to click into)",
+          kinds == ["TitleTextShape", "SubtitleShape"], kinds)
     d.close(True)
 finally:
     o.close()

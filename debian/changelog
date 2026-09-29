@@ -4,7 +4,8 @@ sg-shell (0.1.0-68) unstable; urgency=medium
     Excel's formula syntax (the settings Calc reads only from a user's
     profile, from the payload's sg-office-user.xcu; once, where the user
     has none of their own); a new presentation opens on its first slide,
-    not in the template chooser (payload 3). make test-office-wine checks
+    not in the template chooser, and it is a title slide -- a title and a
+    subtitle to click into (payload 4). make test-office-wine checks
     the seeding, closes LibreOffice as a user would between programs, and
     matches its windows' titles as LibreOffice writes them.
 

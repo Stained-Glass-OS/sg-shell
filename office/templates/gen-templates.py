@@ -189,7 +189,15 @@ def impress():
                  pstyle("subtitle", BODY, "24pt"), outline))
     content = ('<?xml version="1.0" encoding="UTF-8"?><office:document-content %s>%s<office:body>'
                '<office:presentation><draw:page draw:name="page1" draw:master-page-name="Default" '
-               'presentation:presentation-page-layout-name="AL1T0"/></office:presentation></office:body>'
+               'presentation:presentation-page-layout-name="AL1T0">'
+               # the first slide is a title slide, as Office's: a title and a subtitle to click into
+               '<draw:frame presentation:style-name="Default-title" draw:layer="layout" svg:width="25.4cm" '
+               'svg:height="6.63cm" svg:x="4.233cm" svg:y="3.118cm" presentation:class="title" '
+               'presentation:placeholder="true"><draw:text-box/></draw:frame>'
+               '<draw:frame presentation:style-name="Default-subtitle" draw:layer="layout" svg:width="25.4cm" '
+               'svg:height="4.6cm" svg:x="4.233cm" svg:y="10.001cm" presentation:class="subtitle" '
+               'presentation:placeholder="true"><draw:text-box/></draw:frame>'
+               '</draw:page></office:presentation></office:body>'
                '</office:document-content>' % (NS, FONT_DECLS))
     return content, styles
 
