@@ -25,6 +25,11 @@ sg-shell (0.1.0-61) unstable; urgency=medium
     emptied that. A Windows-side folder is now offered only when its own
     name is what it is for (Temp/Tmp, INetCache, Downloaded Program
     Files). test/cleanmgr-check.sh checks TEMP=C:\users.
+  * Display settings: a new resolution resizes Wine's desktop (the shell)
+    too -- with the compositor's modes, only the screen changed, the
+    desktop staying a smaller picture in its middle. It retries while Wine
+    learns the new screen size. VM: 1280x800 -> 1920x1080, taskbar at the
+    new bottom (wine-sg 0481), Keep changes.
   * Magnifier's toolbar is on every virtual desktop, as its view is: it
     stayed on one and flickered as explorer hid it again and again.
 

@@ -162,6 +162,24 @@ void set_build_display(void)
     st_link(&y, L"Advanced display settings", CMD_ADVANCED);
 }
 
+/* The compositor's output changed size: Wine's desktop -- the shell, sized
+ * when the session started -- takes the new size too. It stayed at the old
+ * one, a smaller picture in the middle of the screen. */
+static void desktop_follow(int w, int h)
+{
+    DEVMODEW dm = { .dmSize = sizeof(dm) };
+    int tries;
+    if (w <= 0 || h <= 0) return;
+    dm.dmPelsWidth = w; dm.dmPelsHeight = h;
+    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+    /* Wine learns the screen's new size a moment later (the X server's
+     * RandR event): until then the size is not among its modes */
+    for (tries = 0; tries < 30; tries++) {
+        if (ChangeDisplaySettingsExW(NULL, &dm, NULL, CDS_UPDATEREGISTRY, NULL) == DISP_CHANGE_SUCCESSFUL) return;
+        Sleep(200);
+    }
+}
+
 static BOOL apply_mode(int i, BOOL remember)
 {
     WCHAR args[128], err[256];
@@ -174,6 +192,7 @@ static BOOL apply_mode(int i, BOOL remember)
         ans = ctl_run(args, &ok, err, ARRAYSIZE(err), 10000);
         free(ans);
         if (!ok) { st_status(err[0] ? err : L"The display did not accept that resolution."); return FALSE; }
+        desktop_follow(g_modes[i].w, g_modes[i].h);
         return TRUE;
     } else {
         DEVMODEW dm = { .dmSize = sizeof(dm) };
@@ -197,6 +216,7 @@ static void revert_mode(void)
         BOOL ok;
         _snwprintf(args, ARRAYSIZE(args), L"display mode %S %S", g_output, g_prev_spec);
         free(ctl_run(args, &ok, NULL, 0, 10000));
+        if (ok) { int w = 0, h = 0; if (sscanf(g_prev_spec, "%dx%d", &w, &h) == 2) desktop_follow(w, h); }
     } else if (!g_modes_ctl && g_prev_dm.dmPelsWidth) {
         g_prev_dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
         ChangeDisplaySettingsExW(NULL, &g_prev_dm, NULL, CDS_UPDATEREGISTRY, NULL);
