@@ -110,6 +110,15 @@ if command -v xmllint >/dev/null; then
 fi
 grep -q '<dependency file="main"/>' "$P/sg-office.xcd.in" && grep -q 'file://@TEMPLATEDIR@/normal.ott' "$P/sg-office.xcd.in" \
     && pass "the defaults are read after LibreOffice's own, and name the templates" || fail "the .xcd's dependencies or templates"
+X2="$P/sg-office.xcd.in"
+grep -q '<prop oor:name="ooSetupFactoryDefaultFilter"><value>MS Word 2007 XML</value>' "$X2" \
+    && grep -q '<value>Calc MS Excel 2007 XML</value>' "$X2" && grep -q '<value>Impress MS PowerPoint 2007 XML</value>' "$X2" \
+    && grep -q '<prop oor:name="WarnAlienFormat"><value>false</value>' "$X2" \
+    && pass "Office's formats are the default formats, with no keep-format question" || fail "default formats"
+grep -q '<prop oor:name="Executable"><value>true</value>' "$X2" && grep -q '<prop oor:name="MacroSecurityLevel"><value>1</value>' "$X2" \
+    && pass "a document's VBA runs (asked about first, as Excel's Enable content)" || fail "VBA settings"
+grep -q '<prop oor:name="AutoPilot"><value>false</value>' "$X2" \
+    && pass "a new presentation opens on its first slide (no template chooser)" || fail "Impress starts in the template chooser"
 for t in normal.ott book.ots blank.otp; do
     [ "$(unzip -Z1 "$P/templates/$t" 2>/dev/null | head -1)" = mimetype ] || fail "template $t is not an ODF package"
 done

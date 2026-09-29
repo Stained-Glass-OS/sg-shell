@@ -172,8 +172,14 @@
   </node>
  </oor:component-data>
 
- <!-- Presentations: their VBA too (documents' is with Writer's settings above). -->
+ <!-- Presentations: their VBA too (documents' is with Writer's settings above);
+      a new presentation starts on its first slide, not in the template chooser. -->
  <oor:component-data oor:name="Impress" oor:package="org.openoffice.Office">
+  <node oor:name="Misc">
+   <node oor:name="NewDoc">
+    <prop oor:name="AutoPilot"><value>false</value></prop>
+   </node>
+  </node>
   <node oor:name="Filter">
    <node oor:name="Import">
     <node oor:name="VBA">

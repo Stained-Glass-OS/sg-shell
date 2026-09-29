@@ -97,7 +97,7 @@ shot() {   # KIND TITLE-PART ARGS...
     kind=$1 want=$2; shift 2
     "$WINE" "$B/sg-${kind}64.exe" "$@" >/dev/null 2>&1 &
     i=0; found=
-    while [ $i -lt 90 ]; do
+    while [ $i -lt 240 ]; do
         found=$(xdotool search --name "$want" 2>/dev/null | head -1)
         [ -n "$found" ] && break
         sleep 2; i=$((i + 2))
@@ -105,11 +105,23 @@ shot() {   # KIND TITLE-PART ARGS...
     sleep 8
     import -window root "$B/office-$kind.png" 2>/dev/null
     if [ -n "$found" ]; then pass "sg-$kind: a window '$(xdotool getwindowname "$found")'"; else fail "sg-$kind: no window named '$want'"; fi
+    # closed as a user closes it (a killed LibreOffice offers document
+    # recovery at its next start)
+    for w in $(xdotool search --name "SG Office" 2>/dev/null); do xdotool windowclose "$w" 2>/dev/null; done
+    sleep 8
     "$WINESERVER" -k 2>/dev/null; "$WINESERVER" -w 2>/dev/null
+    # the user's settings: seeded from the payload by the launcher (Excel's syntax)
+    set -- "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/LibreOffice/4/user/registrymodifications.xcu
+    if [ -f "$1" ] && grep -q 'Formula/Syntax"><prop oor:name="Grammar" oor:op="fuse"><value>1</value>' "$1"; then
+        [ "$kind" = spreadsheets ] && pass "a new user's profile starts with Excel's formula syntax (seeded by the launcher)"
+    else fail "the launcher did not seed the user's profile"; fi
+    # a fresh profile for the next program (a killed LibreOffice offers recovery)
+    rm -rf "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/LibreOffice
+    "$WINE" reg delete 'HKCU\Software\Stained Glass\SG Office' /v ProfileSeeded /f >/dev/null 2>&1
 }
-shot spreadsheets "book.xlsx - SG Office Spreadsheets" 'N:\book.xlsx'
-shot documents "SG Office Documents"
-shot presentations "SG Office Presentations"
+shot spreadsheets "^book\.xlsx .* SG Office Spreadsheets$" 'N:\book.xlsx'
+shot documents " SG Office Documents$"
+shot presentations " SG Office Presentations$"
 
 # 4. the Excel formula corpus: nothing that matched Excel may stop matching
 if /usr/bin/python3 "$HERE/office/parity/corpus.py" --run --wine 'C:\Program Files\LibreOffice\program\soffice.exe' \

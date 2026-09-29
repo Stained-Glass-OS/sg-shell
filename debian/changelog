@@ -1,3 +1,15 @@
+sg-shell (0.1.0-68) unstable; urgency=medium
+
+  * SG Office: the programs start a new user's LibreOffice profile with
+    Excel's formula syntax (the settings Calc reads only from a user's
+    profile, from the payload's sg-office-user.xcu; once, where the user
+    has none of their own); a new presentation opens on its first slide,
+    not in the template chooser (payload 3). make test-office-wine checks
+    the seeding, closes LibreOffice as a user would between programs, and
+    matches its windows' titles as LibreOffice writes them.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 13:30:00 -0700
+
 sg-shell (0.1.0-67) unstable; urgency=medium
 
   * SG Office, a new binary package (sg-office): SG Office Documents,

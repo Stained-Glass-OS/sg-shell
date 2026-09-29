@@ -19,6 +19,7 @@
 #include <shellapi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef SG_KIND
 #define SG_KIND L"--writer"
@@ -35,6 +36,62 @@ static BOOL office_program_dir(WCHAR *out, int cch)
         ExpandEnvironmentStringsW(L"%ProgramFiles%\\LibreOffice\\program", out, cch);
     swprintf(soffice, ARRAYSIZE(soffice), L"%ls\\soffice.exe", out);
     return GetFileAttributesW(soffice) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* A new user's LibreOffice profile starts with the settings Calc takes only
+ * from a user's own profile (Excel's formula syntax: payload
+ * sg-office-user.xcu). Once per user, and only where the profile has no
+ * value of its own; the user can change them all afterwards. */
+static void seed_profile(void)
+{
+    static const WCHAR key[] = L"Software\\Stained Glass\\SG Office";
+    WCHAR appdata[MAX_PATH], dir[MAX_PATH], file[MAX_PATH], seed[MAX_PATH];
+    DWORD done = 0, size = sizeof(done), len, got;
+    HANDLE f;
+    char *have = NULL, *items = NULL, *start, *end;
+    RegGetValueW(HKEY_CURRENT_USER, key, L"ProfileSeeded", RRF_RT_REG_DWORD, NULL, &done, &size);
+    if (done) return;
+    if (!GetEnvironmentVariableW(L"SG_OFFICE_PAYLOAD", seed, MAX_PATH)) lstrcpyW(seed, L"Z:\\usr\\share\\sg-office\\payload");
+    lstrcatW(seed, L"\\sg-office-user.xcu");
+    if (!GetEnvironmentVariableW(L"APPDATA", appdata, MAX_PATH)) return;
+    swprintf(dir, MAX_PATH, L"%ls\\LibreOffice\\4\\user", appdata);
+    swprintf(file, MAX_PATH, L"%ls\\registrymodifications.xcu", dir);
+    if (GetFileAttributesW(file) == INVALID_FILE_ATTRIBUTES) {
+        WCHAR d1[MAX_PATH], d2[MAX_PATH];
+        swprintf(d1, MAX_PATH, L"%ls\\LibreOffice", appdata);
+        swprintf(d2, MAX_PATH, L"%ls\\LibreOffice\\4", appdata);
+        CreateDirectoryW(d1, NULL); CreateDirectoryW(d2, NULL); CreateDirectoryW(dir, NULL);
+        if (!CopyFileW(seed, file, TRUE)) return;
+    } else {
+        /* an existing profile: our items go in before its end, unless it has a Grammar of its own */
+        f = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (f == INVALID_HANDLE_VALUE) return;
+        len = GetFileSize(f, NULL);
+        if ((have = malloc(len + 1))) { ReadFile(f, have, len, &got, NULL); have[got] = 0; }
+        CloseHandle(f);
+        f = CreateFileW(seed, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (f != INVALID_HANDLE_VALUE) {
+            DWORD l2 = GetFileSize(f, NULL);
+            if ((items = malloc(l2 + 1))) { ReadFile(f, items, l2, &got, NULL); items[got] = 0; }
+            CloseHandle(f);
+        }
+        if (have && items && !strstr(have, "Formula/Syntax\"><prop oor:name=\"Grammar\"") &&
+            (end = strstr(have, "</oor:items>")) && (start = strstr(items, "<item ")) && strstr(items, "</oor:items>")) {
+            *strstr(items, "</oor:items>") = 0;
+            f = CreateFileW(file, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (f != INVALID_HANDLE_VALUE) {
+                DWORD w;
+                WriteFile(f, have, (DWORD)(end - have), &w, NULL);
+                WriteFile(f, start, (DWORD)strlen(start), &w, NULL);
+                WriteFile(f, end, (DWORD)strlen(end), &w, NULL);
+                CloseHandle(f);
+            }
+        }
+        free(have);
+        free(items);
+    }
+    done = 1;
+    RegSetKeyValueW(HKEY_CURRENT_USER, key, L"ProfileSeeded", REG_DWORD, &done, sizeof(done));
 }
 
 /* Get SG Office, beside us; its exit code */
@@ -87,6 +144,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         setup(L"/apply");     /* an older payload: bring it up to date; carry on either way */
     }
     swprintf(soffice, ARRAYSIZE(soffice), L"%ls\\soffice.exe", program);
+    seed_profile();
     for (i = 1; i < argc; i++) {
         if (!_wcsicmp(argv[i], L"/p") || !_wcsicmp(argv[i], L"-p")) print = TRUE;
         else if (argv[i][0]) {
