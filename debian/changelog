@@ -14,6 +14,9 @@ sg-shell (0.1.0-63) unstable; urgency=medium
     0484); Taskbar > Taskbar color (follow the mode, dark, light, light
     blue, accent) and Show virtual desktops. --set look|style
     classic|rounded. settings-check covers them.
+  * Start: an app's menu has Pin to taskbar / Unpin from taskbar (wine-sg
+    0485): its shortcut goes where the taskbar keeps pins, last in their
+    order, and the taskbar shows it at once. start-check covers it.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 28 Sep 2026 20:20:00 -0700
 

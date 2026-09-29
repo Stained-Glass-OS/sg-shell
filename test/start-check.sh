@@ -145,7 +145,7 @@ poke; xdotool type --delay 80 zeta; sleep 1.5
 # the best match row: below the search field and its header, at 96 DPI
 click 110 $((panel_y + 112)) 3
 [ "$(val menu)" = context ] && pass "right-click opens the app's menu: $(val menu_items)" || fail "no context menu: $(val menu)"
-case "$(val menu_items)" in "Pin to Start,Run as administrator,Open file location,Uninstall") pass "Pin to Start, Run as administrator, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
+case "$(val menu_items)" in "Pin to Start,Pin to taskbar,Run as administrator,Open file location,Uninstall") pass "Pin to Start, Pin to taskbar, Run as administrator, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
 shot context
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && pass "Pin to Start adds a tile" || fail "not pinned: $(d | grep '^tile')"
@@ -158,6 +158,23 @@ click $((384 + col * 104 + 50)) $((panel_y + 40 + row * 104 + 50)) 3
 case "$(val menu_items)" in "Unpin from Start,"*) pass "a tile's menu offers Unpin" ;; *) fail "tile menu: $(val menu_items)" ;; esac
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && fail "still pinned" || pass "Unpin from Start removes the tile"
+# Pin to taskbar: a shortcut where the taskbar keeps its pins (wine-sg 0485), in its order
+TBPINS="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar"
+[ "$(val visible)" = 1 ] || poke
+xdotool key Escape; sleep 0.5; [ "$(val visible)" = 1 ] || poke
+xdotool type --delay 80 zeta; sleep 1.5
+click 110 $((panel_y + 112)) 3
+xdotool key k; sleep 1.5
+[ -f "$TBPINS/Zeta Test App.lnk" ] && "$WINE" reg query 'HKCU\Software\Stained Glass\Taskbar' /v PinOrder 2>/dev/null | grep -q 'Zeta Test App.lnk' \
+    && pass "Pin to taskbar: a shortcut in User Pinned\\TaskBar, last in PinOrder" || fail "taskbar pin: $(ls "$TBPINS" 2>&1 | tr '\n' ' ')"
+[ "$(val visible)" = 1 ] || poke
+xdotool key Escape; sleep 0.5; [ "$(val visible)" = 1 ] || poke
+xdotool type --delay 80 zeta; sleep 1.5
+click 110 $((panel_y + 112)) 3
+case "$(val menu_items)" in *"Unpin from taskbar"*) pass "then its menu offers Unpin from taskbar" ;; *) fail "taskbar unpin item: $(val menu_items)" ;; esac
+xdotool key k; sleep 1.5
+[ -f "$TBPINS/Zeta Test App.lnk" ] && fail "Unpin from taskbar left the shortcut" || pass "Unpin from taskbar removes it"
+xdotool key Escape; sleep 0.8      # the search clears; Start stays open for the rail
 
 # --- the rail -----------------------------------------------------------------------
 click 24 $((panel_y + 28))

@@ -1070,20 +1070,96 @@ static void power_menu(POINT pt)
     }
 }
 
+/* ---- the taskbar's pins (wine-sg 0485): shortcuts in User Pinned\TaskBar,
+ * in the order HKCU\Software\Stained Glass\Taskbar PinOrder lists --------- */
+
+static BOOL taskbar_pin_path(const struct entry *e, WCHAR *out)
+{
+    WCHAR dir[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL, 0, dir))) return FALSE;
+    lstrcatW(dir, L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar");
+    SHCreateDirectoryExW(NULL, dir, NULL);
+    _snwprintf(out, MAX_PATH, L"%ls\\%ls.lnk", dir, e->name);
+    out[MAX_PATH - 1] = 0;
+    return TRUE;
+}
+
+static BOOL taskbar_pinned(const struct entry *e)
+{
+    WCHAR lnk[MAX_PATH];
+    return taskbar_pin_path(e, lnk) && GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* the order, less (or plus, at its end) one shortcut's file name */
+static void taskbar_order(const WCHAR *file, BOOL add)
+{
+    static const WCHAR key[] = L"Software\\Stained Glass\\Taskbar";
+    WCHAR old[4096] = L"", out[4096], *p = out;
+    const WCHAR *q;
+    DWORD size = sizeof(old) - 2 * sizeof(WCHAR);
+    HKEY k;
+
+    RegGetValueW(HKEY_CURRENT_USER, key, L"PinOrder", RRF_RT_REG_MULTI_SZ, NULL, old, &size);
+    for (q = old; *q && p - out < 4000; q += lstrlenW(q) + 1)
+    {
+        if (!lstrcmpiW(q, file)) continue;
+        lstrcpyW(p, q);
+        p += lstrlenW(p) + 1;
+    }
+    if (add && p - out + lstrlenW(file) < 4000) { lstrcpyW(p, file); p += lstrlenW(p) + 1; }
+    *p++ = 0;
+    if (!RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL))
+    {
+        RegSetValueExW(k, L"PinOrder", 0, REG_MULTI_SZ, (BYTE *)out, (DWORD)((p - out) * sizeof(WCHAR)));
+        RegCloseKey(k);
+    }
+}
+
+static void taskbar_pin(const struct entry *e, BOOL on)
+{
+    WCHAR lnk[MAX_PATH];
+    DWORD_PTR r;
+    const WCHAR *ext;
+
+    if (!taskbar_pin_path(e, lnk)) return;
+    if (!on) DeleteFileW(lnk);
+    else if ((ext = wcsrchr(e->path, L'.')) && !lstrcmpiW(ext, L".lnk")) CopyFileW(e->path, lnk, FALSE);
+    else
+    {
+        IShellLinkW *link;
+        IPersistFile *file;
+        if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link)))
+        {
+            IShellLinkW_SetPath(link, e->path);
+            if (e->args[0]) IShellLinkW_SetArguments(link, e->args);
+            if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+            {
+                IPersistFile_Save(file, lnk, TRUE);
+                IPersistFile_Release(file);
+            }
+            IShellLinkW_Release(link);
+        }
+    }
+    taskbar_order(wcsrchr(lnk, L'\\') + 1, on);
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, &r);
+}
+
 static void entry_menu(int id, POINT pt)
 {
-    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL };
+    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR };
     struct entry *e = entry_of(id);
     HMENU m;
-    BOOL pinned;
+    BOOL pinned, on_taskbar;
     int cmd;
 
     if (!e) return;
     pinned = pin_index(e->name) >= 0;
+    on_taskbar = taskbar_pinned(e);
     m = menu_new();
     if (e->kind == K_APP)
     {
         menu_add(m, C_PIN, pinned ? L"Un&pin from Start" : L"&Pin to Start");
+        menu_add(m, C_TASKBAR, on_taskbar ? L"Unpin from tas&kbar" : L"Pin to tas&kbar");
         menu_add(m, 0, NULL);
         menu_add(m, C_RUNAS, L"Run as &administrator");
         menu_add(m, C_LOCATION, L"Open file &location");
@@ -1096,6 +1172,7 @@ static void entry_menu(int id, POINT pt)
     switch (cmd)
     {
     case C_PIN:       pin(e->name, !pinned); InvalidateRect(g_panel, NULL, FALSE); break;
+    case C_TASKBAR:   taskbar_pin(e, !on_taskbar); break;
     case C_RUNAS:     run_entry(e, e->kind == K_APP ? L"runas" : NULL); break;
     case C_LOCATION:  open_location(e); break;
     case C_UNINSTALL: show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", L"appwiz.cpl", NULL, SW_SHOWNORMAL); break;
