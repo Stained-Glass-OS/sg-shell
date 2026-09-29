@@ -1,4 +1,5 @@
 #!/bin/sh
+. "$(dirname "$0")/scratch-home.sh"
 # Gate for SG Store (sg-store64.exe): the catalogue engine and the window.
 #
 # Against a winget-pkgs-shaped source served from this machine (python3 -m
