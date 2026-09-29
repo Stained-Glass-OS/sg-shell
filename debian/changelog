@@ -1,3 +1,21 @@
+sg-shell (0.1.0-66) unstable; urgency=medium
+
+  * The PDF Viewer is SG PDF, a PDF editor: a menu bar, the tools pane
+    (Edit PDF, Comment, Fill & Sign, Redact, Organize Pages, Export PDF,
+    Combine Files, Protect) and each tool's bar; text edited in place with
+    reflow and its format (font, size, colour, bold, italic, alignment),
+    text and pictures added, moved, resized, replaced and deleted; comments;
+    form fields filled with the mouse, signatures typed, drawn or from a
+    picture, flatten; true redaction (Find text and patterns, text and
+    area marks, Apply, Remove Hidden Information); the page grid (rotate,
+    delete, drag to reorder, insert, extract, split); export to Word, text,
+    HTML and pictures; combine files; AES-256 passwords and permissions;
+    Save, Save As, undo and redo; light and dark app modes. Its icon has a
+    pen. Needs sg-session 0.1.0-63 (MuPDF). Gate: test/pdf-editor-check.sh;
+    test/pdf-check.sh still gates the viewer.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 11:00:00 -0700
+
 sg-shell (0.1.0-65) unstable; urgency=medium
 
   * defaults/88-sg-office.reg: Microsoft Office draws in software for new

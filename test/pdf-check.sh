@@ -1,13 +1,13 @@
 #!/bin/sh
 . "$(dirname "$0")/scratch-home.sh"
-# Gate for the PDF Viewer (sg-pdf64.exe) and its Linux half (sg-session's
-# sg-pdf, poppler). On a shell desktop under Xvfb, with defaults/80-sg-pdf.reg
+# Gate for SG PDF as a viewer (sg-pdf64.exe) and its Linux half (sg-session's
+# sg-pdf, MuPDF); the editor's gate is test/pdf-editor-check.sh. On a shell desktop under Xvfb, with defaults/80-sg-pdf.reg
 # imported (pointing at this build), and a four-page PDF made at test time
 # (test/mkpdf.py):
 #
 #   - a .pdf in a folder with a space opened through its association shows
-#     4 pages, the title "<file> - PDF Viewer", its bookmarks, and page 1's
-#     first word in dark pixels where poppler says it is
+#     4 pages, the title "<file> - SG PDF", its bookmarks, and page 1's
+#     first word in dark pixels where MuPDF says it is
 #   - scrolling (Page Down) reaches page 2, whose big word and purple bar are
 #     on the screen where the text layout puts them
 #   - find: "zebra" has 2 hits, the first on page 2 painted in the current
@@ -22,8 +22,8 @@
 #     a damaged file and a missing Linux half say so
 #
 # Screenshots: build/pdf-*.png. Needs wine-sg, Xvfb, xdotool, xclip,
-# ImageMagick, python3 with PIL and cairo, and sg-pdf with poppler's GI
-# bindings; skips (77) without them. SG_PDF_EXE tests another build
+# ImageMagick, python3 with PIL and cairo, and sg-pdf with MuPDF;
+# skips (77) without them. SG_PDF_EXE tests another build
 # (mutation testing), SG_PDF_HELPER another sg-pdf.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -42,7 +42,7 @@ for need in Xvfb xdotool xclip import python3; do command -v "$need" >/dev/null 
 python3 -c 'import PIL, cairo' 2>/dev/null || { echo "SKIP: python3 PIL or cairo missing"; exit 77; }
 [ -x "$WINE_DIR/bin/wine" ] && [ -f "$EXE" ] || { echo "SKIP: wine-sg or $EXE missing"; exit 77; }
 [ -n "$HELPER" ] && [ -x "$HELPER" ] || { echo "SKIP: sg-pdf (sg-session) not found"; exit 77; }
-/usr/bin/python3 -c 'import gi; gi.require_version("Poppler", "0.18")' 2>/dev/null || { echo "SKIP: gir1.2-poppler-0.18 missing"; exit 77; }
+printf 'state\nquit\n' | "$HELPER" --serve 2>/dev/null | grep -q 'ERR notopen' || { echo "SKIP: sg-pdf cannot serve (python3-pymupdf missing?)"; exit 77; }
 
 T=$(mktemp -d /var/tmp/sg-pdf-check.XXXXXX); chmod 755 "$T"
 # shellcheck disable=SC2317
@@ -62,6 +62,8 @@ wine wineboot --init >/dev/null 2>&1; wineserver -w
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 reg 'HKCU\Software\Wine\Explorer' /v Desktop /d shell
 reg 'HKCU\Software\Wine\Explorer\Desktops' /v shell /d 1024x768
+# the viewer's layout: no tools pane (the editor's gate has its own)
+reg 'HKCU\Software\Stained Glass\PDF Viewer' /v ToolsPane /t REG_DWORD /d 0
 winexe=$(wine winepath -w "$EXE" 2>/dev/null | tr -d '\r')
 python3 - "$HERE/defaults/80-sg-pdf.reg" "$winexe" > "$T/pdf.reg" <<'EOF2'
 import sys
@@ -120,8 +122,8 @@ clip() { xclip -o -selection clipboard 2>/dev/null | tr -d '\r'; }
 SG_PDF_DUMP="$(wd "$D")" wine start 'C:\my docs\gate file.pdf' >/dev/null 2>&1 &
 if wait_field file 'C:\my docs\gate file.pdf' 30; then pass "gate file.pdf opened through its association (a path with spaces)"
 else fail "the PDF did not open through its association (dump: '$(field file)')"; fi
-wait_field title 'gate file.pdf - PDF Viewer' 5 && pass "title is 'gate file.pdf - PDF Viewer'" || fail "title is '$(field title)'"
-[ "$(field bridged)" = 1 ] && pass "connected to poppler (sg-pdf's bridge)" || fail "not bridged"
+wait_field title 'gate file.pdf - SG PDF' 5 && pass "title is 'gate file.pdf - SG PDF'" || fail "title is '$(field title)'"
+[ "$(field bridged)" = 1 ] && pass "connected to MuPDF (sg-pdf's bridge)" || fail "not bridged"
 [ "$(field pages)" = 4 ] && pass "4 pages" || fail "pages: '$(field pages)'"
 [ "$(field outline)" = 4 ] && grep -q '^bookmark 1 1 Section One A' "$D" && pass "4 bookmarks, 'Section One A' nested under page 1's" \
     || fail "outline: $(grep -c ^bookmark "$D") bookmarks"
@@ -130,7 +132,7 @@ shot open
 set -- $(field 'word 1')
 if [ $# -ge 5 ] && [ "$5" = Alpha ]; then
     dk=$(dark "$OUT/pdf-open.png" "$1" "$2" "$3" "$4")
-    [ "$dk" -ge 15 ] 2>/dev/null && pass "page 1's 'Alpha' is ink on the screen where poppler puts it ($dk% dark)" \
+    [ "$dk" -ge 15 ] 2>/dev/null && pass "page 1's 'Alpha' is ink on the screen where MuPDF puts it ($dk% dark)" \
         || fail "page 1's 'Alpha' is not on the screen ($dk% dark at $1,$2-$3,$4)"
 else fail "no first word for page 1: '$*'"; fi
 
@@ -293,7 +295,7 @@ wait_line '^error This file could not be opened' 15 "$D3" && pass "a damaged fil
 shot broken
 wine taskkill /f /im sg-pdf64.exe >/dev/null 2>&1; sleep 1; rm -f "$D3"
 SG_PDF=/nonexistent/sg-pdf SG_PDF_DUMP="$(wd "$D3")" wine start 'C:\my docs\gate file.pdf' >/dev/null 2>&1 &
-wait_line '^error PDF viewing needs its Linux half' 15 "$D3" && [ "$(field bridged "$D3")" = 0 ] && pass "without sg-pdf the viewer says what is missing" \
+wait_line '^error SG PDF needs its Linux half' 15 "$D3" && [ "$(field bridged "$D3")" = 0 ] && pass "without sg-pdf the viewer says what is missing" \
     || fail "no helper: error '$(field error "$D3")'"
 wine taskkill /f /im sg-pdf64.exe >/dev/null 2>&1
 

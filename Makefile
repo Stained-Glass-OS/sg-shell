@@ -65,8 +65,8 @@ CLOCK_LIBS = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32 -lm
 WORDPAD_SRC  = $(wildcard src/wordpad/*.c) src/zip/zipcore.c
 WORDPAD_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -lmsimg32 -lole32 -loleaut32 -luuid \
                -lwindowscodecs -ladvapi32
-# PDF Viewer (sg-pdf): src/pdf/, its icon drawn at build time; poppler is
-# sg-session's sg-pdf, reached through its bridge.
+# SG PDF (sg-pdf, the PDF viewer and editor): src/pdf/, its icon drawn at build
+# time; MuPDF is sg-session's sg-pdf, reached through its bridge.
 PDF_SRC  = $(wildcard src/pdf/*.c)
 PDF_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lwinspool -lgdi32 -luser32 -ladvapi32 -lole32
 # The font viewer (fontview.exe) and the Fonts folder (sg-fontview): src/fontview/,
@@ -298,6 +298,7 @@ test-volume: build
 	@sh test/cleanmgr-check.sh
 	@sh test/resmon-check.sh
 	@sh test/pdf-check.sh
+	@sh test/pdf-editor-check.sh
 	@sh test/browser-check.sh
 
 clean:

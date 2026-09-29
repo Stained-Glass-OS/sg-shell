@@ -1,4 +1,4 @@
-/* sg-pdf -- PDF Viewer: the sidebar -- page thumbnails, and the bookmarks
+/* sg-pdf -- SG PDF: the sidebar -- page thumbnails, and the bookmarks
  * (the document's outline) in a tree.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -118,7 +118,7 @@ static void thumbs_paint(HWND hwnd, HDC out)
                 StretchBlt(dc, x, y, w, h, mem, 0, 0, g.pages[i].tw, g.pages[i].th, SRCCOPY);
             SelectObject(mem, o);
         }
-        if (!g.pages[i].thumb || g.pages[i].trot != g.rot || abs(g.pages[i].tw - w) > 2) {
+        if (!g.pages[i].thumb || g.pages[i].tstale || g.pages[i].trot != g.rot || abs(g.pages[i].tw - w) > 2) {
             double pw = (g.rot == 90 || g.rot == 270) ? g.pages[i].h : g.pages[i].w;
             render_want(i, (double)w / pw, g.rot, TRUE);
         }
@@ -351,10 +351,25 @@ static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     }
-    case WM_CTLCOLORSTATIC:
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+    case WM_CTLCOLORSTATIC: {
+        static HBRUSH b;
+        static COLORREF bc = (COLORREF)-1;
+        if (bc != C_SIDE) { if (b) DeleteObject(b); b = CreateSolidBrush(C_SIDE); bc = C_SIDE; }
+        SetBkColor((HDC)wp, C_SIDE);
+        SetTextColor((HDC)wp, C_TEXT);
+        return (LRESULT)b;
+    }
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/* the app mode changed: the tree's colours (the rest is drawn from the palette) */
+void side_apply_mode(void)
+{
+    if (!g_tree) return;
+    SendMessageW(g_tree, TVM_SETBKCOLOR, 0, C_SIDE);
+    SendMessageW(g_tree, TVM_SETTEXTCOLOR, 0, C_TEXT);
+    InvalidateRect(g_tree, NULL, TRUE);
 }
 
 void side_register(void)
@@ -380,6 +395,7 @@ HWND side_create(HWND parent)
                              0, 0, 10, 10, g_side, NULL, g_inst, NULL);
     SendMessageW(g_tree, WM_SETFONT, (WPARAM)g_font_small, FALSE);
     SendMessageW(g_tree, TVM_SETBKCOLOR, 0, C_SIDE);
+    SendMessageW(g_tree, TVM_SETTEXTCOLOR, 0, C_TEXT);
     SendMessageW(g_tree, TVM_SETITEMHEIGHT, dpx(26), 0);
     return g_side;
 }

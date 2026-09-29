@@ -294,7 +294,7 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"PowerShell 7", L"pwsh ps shell console terminal" },
     { L"Task Manager", L"taskmgr processes performance end task kill" },
     { L"Snipping Tool", L"screenshot screen capture snip print screen" },
-    { L"PDF Viewer", L"pdf document reader acrobat" },
+    { L"SG PDF", L"pdf document viewer editor edit redact sign form comment combine" },
     { L"File Explorer", L"files folders explorer documents downloads" },
     { L"Alarms & Clock", L"alarm timer stopwatch clock world" },
     { L"Sticky Notes", L"notes note memo" },
@@ -463,7 +463,7 @@ static void build_list(void)
     add_beside(L"Snipping Tool", L"sg-snip64.exe");
     add_beside(L"Character Map", L"sg-charmap64.exe");
     add_beside(L"WordPad", L"sg-wordpad64.exe");
-    add_beside(L"PDF Viewer", L"sg-pdf64.exe");
+    add_beside(L"SG PDF", L"sg-pdf64.exe");
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");

@@ -1,11 +1,12 @@
-/* PDF Viewer (sg-pdf): its icon (drawn at build time by gen-icon.py into
- * build/), the common-controls 6 manifest, the password prompt and the
- * version information (Settings > Default apps shows the FileDescription).
+/* SG PDF (sg-pdf): its icon (drawn at build time by gen-icon.py into
+ * build/), the common-controls 6 manifest, the dialogs and the version
+ * information (Settings > Default apps shows the FileDescription).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <windows.h>
+#include <commctrl.h>
 #include "resource.h"
 
 1 ICON "sg-pdf.ico"
@@ -23,9 +24,183 @@ BEGIN
     PUSHBUTTON "Cancel", IDCANCEL, 190, 70, 50, 15
 END
 
+IDD_TEXT1 DIALOGEX 0, 0, 260, 76
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION ""
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "", IDC_TX_PROMPT, 10, 8, 240, 10
+    EDITTEXT IDC_TX_EDIT, 10, 22, 240, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON "OK", IDOK, 146, 54, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 200, 54, 50, 15
+END
+
+IDD_TEXTM DIALOGEX 0, 0, 260, 136
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION ""
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "", IDC_TX_PROMPT, 10, 8, 240, 10
+    EDITTEXT IDC_TX_EDIT, 10, 22, 240, 84, ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
+    DEFPUSHBUTTON "OK", IDOK, 146, 114, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 200, 114, 50, 15
+END
+
+IDD_SIGNATURE DIALOGEX 0, 0, 300, 190
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Signature"
+FONT 9, "Segoe UI"
+BEGIN
+    AUTORADIOBUTTON "&Type", IDC_SG_TYPE, 10, 8, 50, 12, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "&Draw", IDC_SG_DRAW, 64, 8, 50, 12
+    AUTORADIOBUTTON "&Image", IDC_SG_IMAGE, 118, 8, 50, 12
+    LTEXT "Name:", -1, 10, 30, 30, 10
+    EDITTEXT IDC_SG_NAME, 42, 28, 248, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL "", IDC_SG_PREVIEW, "SgPdfSigPad", WS_BORDER, 10, 50, 280, 84
+    CONTROL "", IDC_SG_PAD, "SgPdfSigPad", WS_BORDER, 10, 50, 280, 84
+    PUSHBUTTON "C&lear", IDC_SG_CLEAR, 10, 140, 50, 15
+    EDITTEXT IDC_SG_FILE, 10, 140, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON "&Browse...", IDC_SG_BROWSE, 240, 140, 50, 15
+    DEFPUSHBUTTON "Apply", IDOK, 186, 168, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 240, 168, 50, 15
+END
+
+IDD_PROTECT DIALOGEX 0, 0, 300, 250
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Protect"
+FONT 9, "Segoe UI"
+BEGIN
+    AUTOCHECKBOX "&Require a password to open the document", IDC_PR_OPEN, 10, 8, 280, 12, WS_TABSTOP
+    LTEXT "Password:", -1, 22, 26, 70, 10
+    EDITTEXT IDC_PR_UPW, 96, 24, 194, 14, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "Confirm:", -1, 22, 44, 70, 10
+    EDITTEXT IDC_PR_UPW2, 96, 42, 194, 14, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    AUTOCHECKBOX "Restrict &editing and printing", IDC_PR_RESTRICT, 10, 66, 280, 12, WS_TABSTOP
+    LTEXT "Permissions password:", -1, 22, 84, 74, 10
+    EDITTEXT IDC_PR_OPW, 96, 82, 194, 14, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "Confirm:", -1, 22, 102, 70, 10
+    EDITTEXT IDC_PR_OPW2, 96, 100, 194, 14, ES_PASSWORD | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "Allowed without the permissions password:", -1, 22, 122, 268, 10
+    AUTOCHECKBOX "&Printing", IDC_PR_PRINT, 30, 136, 120, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Copying text and images", IDC_PR_COPY, 150, 136, 140, 12, WS_TABSTOP
+    AUTOCHECKBOX "C&ommenting", IDC_PR_ANNOT, 30, 150, 120, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Filling in forms", IDC_PR_FORM, 150, 150, 140, 12, WS_TABSTOP
+    AUTOCHECKBOX "Page &assembly", IDC_PR_ASSEMBLE, 30, 164, 120, 12, WS_TABSTOP
+    AUTOCHECKBOX "Changing &content", IDC_PR_MODIFY, 150, 164, 140, 12, WS_TABSTOP
+    LTEXT "The document is encrypted with AES-256. The security takes effect when you save it.", -1, 10, 186, 280, 20
+    DEFPUSHBUTTON "OK", IDOK, 186, 226, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 240, 226, 50, 15
+END
+
+IDD_EXPORT DIALOGEX 0, 0, 300, 230
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Export PDF"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "Export to:", -1, 10, 8, 280, 10
+    AUTORADIOBUTTON "&Word document (.docx)", IDC_EX_DOCX, 20, 22, 200, 12, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Plain &text (.txt)", IDC_EX_TXT, 20, 36, 200, 12
+    AUTORADIOBUTTON "&HTML web page (.html)", IDC_EX_HTML, 20, 50, 200, 12
+    AUTORADIOBUTTON "&PNG images, a page each", IDC_EX_PNG, 20, 64, 200, 12
+    AUTORADIOBUTTON "&JPEG images, a page each", IDC_EX_JPEG, 20, 78, 200, 12
+    LTEXT "Image resolution:", -1, 20, 96, 70, 10
+    COMBOBOX IDC_EX_DPI, 92, 94, 60, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT "Pages:", -1, 10, 116, 280, 10
+    AUTORADIOBUTTON "&All", IDC_EX_ALL, 20, 130, 60, 12, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "C&urrent page", IDC_EX_CURRENT, 84, 130, 70, 12
+    AUTORADIOBUTTON "Pa&ges:", IDC_EX_RANGE, 158, 130, 40, 12
+    EDITTEXT IDC_EX_RANGETXT, 200, 128, 90, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "", IDC_EX_NOTE, 10, 152, 280, 44
+    DEFPUSHBUTTON "Export", IDOK, 186, 206, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 240, 206, 50, 15
+END
+
+IDD_COMBINE DIALOGEX 0, 0, 320, 200
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Combine Files"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "The files are combined into one PDF in this order (PDF documents and pictures):", -1, 10, 8, 300, 10
+    LISTBOX IDC_CB_LIST, 10, 22, 236, 146, LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON "&Add Files...", IDC_CB_ADD, 252, 22, 58, 15
+    PUSHBUTTON "&Remove", IDC_CB_REMOVE, 252, 42, 58, 15
+    PUSHBUTTON "Move &Up", IDC_CB_UP, 252, 62, 58, 15
+    PUSHBUTTON "Move &Down", IDC_CB_DOWN, 252, 82, 58, 15
+    DEFPUSHBUTTON "Combine", IDOK, 206, 176, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 260, 176, 50, 15
+END
+
+IDD_PROPERTIES DIALOGEX 0, 0, 300, 196
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Document Properties"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "", IDC_PP_INFO, 10, 8, 280, 70
+    LTEXT "&Title:", -1, 10, 86, 50, 10
+    EDITTEXT IDC_PP_TITLE, 64, 84, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "&Author:", -1, 10, 104, 50, 10
+    EDITTEXT IDC_PP_AUTHOR, 64, 102, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "&Subject:", -1, 10, 122, 50, 10
+    EDITTEXT IDC_PP_SUBJECT, 64, 120, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT "&Keywords:", -1, 10, 140, 50, 10
+    EDITTEXT IDC_PP_KEYWORDS, 64, 138, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON "OK", IDOK, 186, 172, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 240, 172, 50, 15
+END
+
+IDD_FINDREDACT DIALOGEX 0, 0, 290, 150
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Find Text to Redact"
+FONT 9, "Segoe UI"
+BEGIN
+    AUTORADIOBUTTON "&Word or phrase:", IDC_FR_PHRASE, 10, 10, 76, 12, WS_GROUP | WS_TABSTOP
+    EDITTEXT IDC_FR_TEXT, 90, 8, 190, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    AUTORADIOBUTTON "&Patterns:", IDC_FR_PATTERN, 10, 30, 76, 12
+    COMBOBOX IDC_FR_PATLIST, 90, 28, 190, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    AUTOCHECKBOX "Match &case", IDC_FR_CASE, 90, 48, 90, 12, WS_TABSTOP
+    AUTOCHECKBOX "Whole words &only", IDC_FR_WHOLE, 180, 48, 100, 12, WS_TABSTOP
+    PUSHBUTTON "&Find", IDC_FR_FIND, 90, 66, 60, 15
+    LTEXT "", IDC_FR_RESULT, 156, 69, 124, 20
+    LTEXT "Every result is marked for redaction; Apply removes it.", -1, 10, 100, 270, 10
+    DEFPUSHBUTTON "&Mark All", IDOK, 176, 126, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 230, 126, 50, 15
+END
+
+IDD_SANITIZE DIALOGEX 0, 0, 290, 206
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Remove Hidden Information"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "", IDC_SN_HEAD, 10, 8, 270, 30
+    AUTOCHECKBOX "&Metadata (title, author, XMP)", IDC_SN_METADATA, 20, 42, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "File &attachments", IDC_SN_ATTACH, 20, 56, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Comments and markup", IDC_SN_COMMENTS, 20, 70, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Form fields (their values become page content)", IDC_SN_FORMS, 20, 84, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Hidden text", IDC_SN_HIDDEN, 20, 98, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "Hidden &layers", IDC_SN_LAYERS, 20, 112, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "&Bookmarks", IDC_SN_BOOKMARKS, 20, 126, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "Links, actions and &JavaScript", IDC_SN_LINKS, 20, 140, 260, 12, WS_TABSTOP
+    AUTOCHECKBOX "Embedded &thumbnails", IDC_SN_THUMBS, 20, 154, 260, 12, WS_TABSTOP
+    DEFPUSHBUTTON "Remove", IDOK, 176, 182, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 230, 182, 50, 15
+END
+
+IDD_SPLIT DIALOGEX 0, 0, 260, 96
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Split Document"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "Split into files of", -1, 10, 12, 60, 10
+    EDITTEXT IDC_SP_EVERY, 72, 10, 36, 14, ES_NUMBER | WS_TABSTOP
+    LTEXT "pages each.", -1, 112, 12, 80, 10
+    LTEXT "", IDC_SP_INFO, 10, 32, 240, 30
+    DEFPUSHBUTTON "Split", IDOK, 146, 72, 50, 15
+    PUSHBUTTON "Cancel", IDCANCEL, 200, 72, 50, 15
+END
+
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 2,0,0,0
+PRODUCTVERSION 2,0,0,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -34,12 +209,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Stained Glass OS"
-            VALUE "FileDescription", "PDF Viewer"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "FileDescription", "SG PDF"
+            VALUE "FileVersion", "2.0.0.0"
             VALUE "InternalName", "sg-pdf"
             VALUE "OriginalFilename", "sg-pdf64.exe"
             VALUE "ProductName", "Stained Glass OS"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductVersion", "2.0.0.0"
         END
     END
     BLOCK "VarFileInfo"

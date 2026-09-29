@@ -1,28 +1,29 @@
-/* sg-pdf -- PDF Viewer: the window, the toolbar, commands and the command line.
+/* sg-pdf -- SG PDF: the window, the menu, the toolbar, commands and the
+ * command line.
  *
- * Stained Glass OS opens PDF files out of the box with this viewer (Windows
- * opens them in its browser, which we do not ship). The Linux half is
- * sg-session's `sg-pdf` -- Debian's poppler -- which renders the pages and
- * reports their text, links and outline; this half lays them out and draws
- * them:
+ * Stained Glass OS opens and edits PDF files out of the box with this
+ * program (the .pdf association). The Linux half is sg-session's `sg-pdf`
+ * -- MuPDF -- which renders the pages, reports their text, links, outline,
+ * objects, comments and fields, and makes every change; this half lays the
+ * pages out, draws them and drives it. The layout is the familiar PDF
+ * editor's: a menu bar; a toolbar (sidebar, page box, zoom, fit, rotate,
+ * undo, redo, find, save, print, open, the tools pane); the sidebar of
+ * thumbnails or bookmarks on the left; the tools pane on the right (Edit
+ * PDF, Comment, Fill & Sign, Redact, Organize Pages, Export PDF, Combine
+ * Files, Protect) that becomes the open tool's properties; and under the
+ * toolbar, the open tool's own bar.
  *
- *   - one continuous scroll of every page; zoom (Ctrl+wheel at the pointer,
- *     Ctrl+Plus/Minus, the zoom menu), fit width (the default) and fit page
- *     (Ctrl+\ switches), actual size (Ctrl+1); rotate (Ctrl+] and Ctrl+[)
- *   - the page box ("3 of 10", Ctrl+G), PgUp/PgDn, Home/End, arrows, Space
- *   - a sidebar of page thumbnails, or the document's bookmarks
- *   - find (Ctrl+F; Enter/F3 next, Shift+Enter/Shift+F3 previous), every hit
- *     highlighted, the current one stronger, "2 of 7"
- *   - select text by dragging (a double-click selects a word; Ctrl+A all),
- *     Ctrl+C copies it
- *   - links: inside the document they go to their page, web and mail links
- *     open with the default program
- *   - print (Ctrl+P), open (Ctrl+O, or drop a file on the window),
- *     document properties
+ * Viewing: one continuous scroll of every page; zoom (Ctrl+wheel at the
+ * pointer, Ctrl+Plus/Minus, the zoom menu), fit width (the default) and fit
+ * page (Ctrl+\ switches), actual size (Ctrl+1); rotate the view (Ctrl+] and
+ * Ctrl+[); the page box ("3 of 10", Ctrl+G); find (Ctrl+F, F3); select text
+ * and Ctrl+C; links; print (Ctrl+P). Editing: see toolui.c, interact.c,
+ * doc.c, organize.c and dialogs.c; Ctrl+S saves, Ctrl+Shift+S saves as,
+ * Ctrl+Z undoes and Ctrl+Y redoes.
  *
- * Wine gives a Windows program no pipe to a native one, so the viewer
+ * Wine gives a Windows program no pipe to a native one, so the program
  * re-launches itself as `sg-pdf --bridge wine <itself> --bridged <args>` and
- * talks to poppler on its standard handles (bridge.c). SG_PDF names another
+ * talks to MuPDF on its standard handles (bridge.c). SG_PDF names another
  * sg-pdf; SG_PDF_DUMP=<file> writes what is shown after every paint (gates).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -32,6 +33,7 @@
 #include <shellapi.h>
 #include <commdlg.h>
 #include "resource.h"
+#include "../sg-mode.h"
 
 #define CLASS_NAME L"SgPdfWindow"
 #define SETTINGS_KEY L"Software\\Stained Glass\\PDF Viewer"
@@ -39,33 +41,156 @@
 #define SIDE_W dpx(172)
 
 app_t g;
+palette_t P;
 HWND g_main, g_view, g_bar;
 HINSTANCE g_inst;
-HFONT g_font, g_font_small, g_font_bold;
+HFONT g_font, g_font_small, g_font_bold, g_font_title;
 int g_printed = -1;
 static WCHAR g_dump[MAX_PATH];
 static HWND g_page_edit, g_find_edit, g_tip;
+static HMENU g_menu;
+static HBRUSH g_editbrush;
+
+const COLORREF COMMENT_COLORS[NCOLORS] = {
+    RGB(0xFF, 0xE5, 0x00), RGB(0xFF, 0x3B, 0x30), RGB(0x2E, 0x7D, 0xF6), RGB(0x2E, 0xB8, 0x4D),
+    RGB(0xAF, 0x52, 0xDE), RGB(0x10, 0x10, 0x10),
+};
+
+/* ---- light and dark -------------------------------------------------------------------------- */
+
+static void set_palette(BOOL dark)
+{
+    g.dark = dark;
+    if (!dark) {
+        P.bar = RGB(0xFF, 0xFF, 0xFF); P.line = RGB(0xE0, 0xE0, 0xE0); P.canvas = RGB(0xE9, 0xE9, 0xEC);
+        P.side = RGB(0xF3, 0xF3, 0xF3); P.text = RGB(0x1F, 0x1F, 0x1F); P.subtext = RGB(0x60, 0x60, 0x60);
+        P.hover = RGB(0xEB, 0xEB, 0xEB); P.press = RGB(0xDD, 0xDD, 0xDD); P.accent = RGB(112, 48, 192);
+        P.active = RGB(0xEE, 0xE6, 0xF8); P.shadow = RGB(0xC8, 0xC8, 0xCC); P.pane = RGB(0xFA, 0xFA, 0xFA);
+        P.edit = RGB(0xFF, 0xFF, 0xFF); P.disabled = RGB(0xA8, 0xA8, 0xA8);
+    } else {
+        P.bar = RGB(0x2B, 0x2B, 0x2B); P.line = RGB(0x40, 0x40, 0x40); P.canvas = RGB(0x1C, 0x1C, 0x1E);
+        P.side = RGB(0x24, 0x24, 0x26); P.text = RGB(0xF2, 0xF2, 0xF2); P.subtext = RGB(0xAA, 0xAA, 0xAA);
+        P.hover = RGB(0x3A, 0x3A, 0x3C); P.press = RGB(0x48, 0x48, 0x4A); P.accent = RGB(0xB9, 0x8E, 0xF5);
+        P.active = RGB(0x3B, 0x2F, 0x52); P.shadow = RGB(0x0C, 0x0C, 0x0C); P.pane = RGB(0x26, 0x26, 0x28);
+        P.edit = RGB(0x1E, 0x1E, 0x1E); P.disabled = RGB(0x66, 0x66, 0x66);
+    }
+    if (g_editbrush) DeleteObject(g_editbrush);
+    g_editbrush = CreateSolidBrush(P.edit);
+}
+
+/* the menu bar in the app mode: in dark, its items are ours to draw (Wine
+ * draws a menu bar in the system's colours), on the toolbar's colour */
+static const WCHAR *const MENU_NAMES[] = { L"&File", L"&Edit", L"&View", L"&Tools", L"&Help" };
+static HBRUSH g_menubrush;
+
+static void menu_mode(void)
+{
+    MENUINFO mi = { sizeof(mi) };
+    int i;
+    if (!g_menu) return;
+    for (i = 0; i < 5; i++) {
+        HMENU sub = GetSubMenu(g_menu, i);
+        if (g.dark) ModifyMenuW(g_menu, i, MF_BYPOSITION | MF_OWNERDRAW | MF_POPUP, (UINT_PTR)sub, (LPCWSTR)(ULONG_PTR)(i + 1));
+        else ModifyMenuW(g_menu, i, MF_BYPOSITION | MF_STRING | MF_POPUP, (UINT_PTR)sub, MENU_NAMES[i]);
+    }
+    if (g_menubrush) DeleteObject(g_menubrush);
+    g_menubrush = g.dark ? CreateSolidBrush(C_BAR) : NULL;
+    mi.fMask = MIM_BACKGROUND;
+    mi.hbrBack = g_menubrush;
+    SetMenuInfo(g_menu, &mi);
+    if (g_main) DrawMenuBar(g_main);
+}
+
+static BOOL menu_measure(MEASUREITEMSTRUCT *mi)
+{
+    HDC dc;
+    SIZE sz;
+    const WCHAR *t;
+    if (mi->CtlType != ODT_MENU || mi->itemData < 1 || mi->itemData > 5) return FALSE;
+    t = MENU_NAMES[mi->itemData - 1];
+    dc = GetDC(g_main);
+    SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
+    GetTextExtentPoint32W(dc, t + 1, lstrlenW(t) - 1, &sz);
+    ReleaseDC(g_main, dc);
+    mi->itemWidth = sz.cx + dpx(10);
+    mi->itemHeight = GetSystemMetrics(SM_CYMENU);
+    return TRUE;
+}
+
+static BOOL menu_draw(DRAWITEMSTRUCT *di)
+{
+    HBRUSH b;
+    RECT r = di->rcItem;
+    if (di->CtlType != ODT_MENU || di->itemData < 1 || di->itemData > 5) return FALSE;
+    b = CreateSolidBrush(di->itemState & (ODS_SELECTED | ODS_HOTLIGHT) ? C_HOVER : C_BAR);
+    FillRect(di->hDC, &r, b);
+    DeleteObject(b);
+    SetBkMode(di->hDC, TRANSPARENT);
+    SetTextColor(di->hDC, C_TEXT);
+    SelectObject(di->hDC, GetStockObject(DEFAULT_GUI_FONT));
+    DrawTextW(di->hDC, MENU_NAMES[di->itemData - 1], -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE |
+              (di->itemState & ODS_NOACCEL ? DT_HIDEPREFIX : 0));
+    return TRUE;
+}
+
+/* dark: the menu bar right of its last item (Wine paints it the system's colour) */
+static void menu_fill_rest(HWND hwnd)
+{
+    MENUBARINFO mb = { sizeof(mb) };
+    RECT last, wr, r;
+    HDC dc;
+    HBRUSH b;
+    int n;
+    if (!g.dark || !g_menu || !GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mb)) return;
+    n = GetMenuItemCount(g_menu);
+    if (n <= 0 || !GetMenuItemRect(hwnd, g_menu, n - 1, &last)) return;
+    GetWindowRect(hwnd, &wr);
+    SetRect(&r, last.right - wr.left, mb.rcBar.top - wr.top, mb.rcBar.right - wr.left, mb.rcBar.bottom - wr.top);
+    if (r.right <= r.left) return;
+    dc = GetWindowDC(hwnd);
+    b = CreateSolidBrush(C_BAR);
+    FillRect(dc, &r, b);
+    DeleteObject(b);
+    ReleaseDC(hwnd, dc);
+}
+
+void app_apply_mode(void)
+{
+    set_palette(sg_apps_dark());
+    menu_mode();
+    if (g_main) {
+        sg_mode_title(g_main, g.dark);
+        side_apply_mode();
+        RedrawWindow(g_main, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+    }
+}
 
 /* ---- toolbar ----------------------------------------------------------------------------------- */
 
-enum { G_SIDEBAR, G_MINUS, G_PLUS, G_FITWIDTH, G_FITPAGE, G_ROTATE, G_UP, G_DOWN, G_PRINT, G_OPEN, G_NONE };
+enum { G_SIDEBAR, G_MINUS, G_PLUS, G_FITWIDTH, G_FITPAGE, G_ROTATE, G_UP, G_DOWN, G_PRINT, G_OPEN, G_SAVE, G_UNDO, G_REDO,
+       G_TOOLS, G_NONE };
 typedef struct { int cmd, glyph; const WCHAR *tip, *name; RECT rc; } button_t;
-enum { B_SIDEBAR, B_ZOOMOUT, B_ZOOM, B_ZOOMIN, B_FIT, B_ROTATE, B_PREV, B_NEXT, B_PRINT, B_OPEN, B_COUNT };
+enum { B_SIDEBAR, B_ZOOMOUT, B_ZOOM, B_ZOOMIN, B_FIT, B_ROTATE, B_UNDO, B_REDO, B_PREV, B_NEXT, B_SAVE, B_PRINT, B_OPEN,
+       B_TOOLS, B_COUNT };
 static button_t g_btn[B_COUNT] = {
-    { CMD_SIDEBAR, G_SIDEBAR, L"Thumbnails and bookmarks", L"sidebar" },
+    { CMD_SIDEBAR, G_SIDEBAR, L"Thumbnails and bookmarks (F4)", L"sidebar" },
     { CMD_ZOOMOUT, G_MINUS, L"Zoom out (Ctrl+Minus)", L"zoomout" },
     { 0, G_NONE, L"Zoom", L"zoom" },
     { CMD_ZOOMIN, G_PLUS, L"Zoom in (Ctrl+Plus)", L"zoomin" },
     { CMD_FITWIDTH, G_FITWIDTH, L"Fit to width / page (Ctrl+\\)", L"fit" },
-    { CMD_ROTATE, G_ROTATE, L"Rotate (Ctrl+])", L"rotate" },
+    { CMD_ROTATE, G_ROTATE, L"Rotate view (Ctrl+])", L"rotate" },
+    { CMD_UNDO, G_UNDO, L"Undo (Ctrl+Z)", L"undo" },
+    { CMD_REDO, G_REDO, L"Redo (Ctrl+Y)", L"redo" },
     { CMD_FINDPREV, G_UP, L"Previous (Shift+F3)", L"findprev" },
     { CMD_FINDNEXT, G_DOWN, L"Next (F3)", L"findnext" },
+    { CMD_SAVE, G_SAVE, L"Save (Ctrl+S)", L"save" },
     { CMD_PRINT, G_PRINT, L"Print (Ctrl+P)", L"print" },
     { CMD_OPEN, G_OPEN, L"Open (Ctrl+O)", L"open" },
+    { CMD_PANE, G_TOOLS, L"Tools pane (Shift+F4)", L"tools" },
 };
 static int g_hover = -1, g_press = -1;
 static RECT g_of_rc, g_count_rc;
-static int g_seps[4], g_nseps;
+static int g_seps[6], g_nseps;
 
 int dpx(int px)
 {
@@ -76,6 +201,11 @@ static HFONT make_font(int pt10, int weight)
 {
     return CreateFontW(-MulDiv(pt10, g.dpi, 720), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
                        CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
+BOOL app_can(unsigned perm)
+{
+    return (g.perms & perm) != 0;
 }
 
 static void bar_layout(void)
@@ -102,16 +232,21 @@ static void bar_layout(void)
     SetRect(&g_btn[B_ZOOMIN].rc, x, top, x + b, top + b); x += b + dpx(4);
     SetRect(&g_btn[B_FIT].rc, x, top, x + b, top + b); x += b;
     SetRect(&g_btn[B_ROTATE].rc, x, top, x + b, top + b); x += b + dpx(8);
+    g_seps[g_nseps++] = x; x += dpx(9);
+    SetRect(&g_btn[B_UNDO].rc, x, top, x + b, top + b); x += b;
+    SetRect(&g_btn[B_REDO].rc, x, top, x + b, top + b); x += b + dpx(8);
     /* from the right */
     r = rc.right - dpx(8);
+    SetRect(&g_btn[B_TOOLS].rc, r - b, top, r, top + b); r -= b + dpx(8);
+    g_seps[g_nseps++] = r; r -= dpx(9);
     SetRect(&g_btn[B_OPEN].rc, r - b, top, r, top + b); r -= b;
-    SetRect(&g_btn[B_PRINT].rc, r - b, top, r, top + b); r -= b + dpx(8);
+    SetRect(&g_btn[B_PRINT].rc, r - b, top, r, top + b); r -= b;
+    SetRect(&g_btn[B_SAVE].rc, r - b, top, r, top + b); r -= b + dpx(8);
     g_seps[g_nseps++] = r; r -= dpx(9);
     SetRect(&g_btn[B_NEXT].rc, r - b, top, r, top + b); r -= b;
     SetRect(&g_btn[B_PREV].rc, r - b, top, r, top + b); r -= b;
     SetRect(&g_count_rc, r - dpx(76), 0, r - dpx(4), BAR_H); r -= dpx(80);
-    MoveWindow(g_find_edit, max(x, r - dpx(200)), (BAR_H - dpx(26)) / 2, min(dpx(200), r - x), dpx(26), TRUE);
-    /* tooltips follow the buttons */
+    MoveWindow(g_find_edit, max(x, r - dpx(200)), (BAR_H - dpx(26)) / 2, max(dpx(40), min(dpx(200), r - x)), dpx(26), TRUE);
     if (g_tip) {
         int i;
         for (i = 0; i < B_COUNT; i++) {
@@ -140,6 +275,14 @@ static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
         Rectangle(dc, cx - s, cy - s + dpx(1), cx + s + 1, cy + s);
         line(dc, cx - s + dpx(5), cy - s + dpx(1), cx - s + dpx(5), cy + s);
         break;
+    case G_TOOLS: {
+        int q = dpx(6), gap = dpx(2);
+        Rectangle(dc, cx - q - gap, cy - q - gap, cx - gap + 1, cy - gap + 1);
+        Rectangle(dc, cx + gap, cy - q - gap, cx + q + gap + 1, cy - gap + 1);
+        Rectangle(dc, cx - q - gap, cy + gap, cx - gap + 1, cy + q + gap + 1);
+        Rectangle(dc, cx + gap, cy + gap, cx + q + gap + 1, cy + q + gap + 1);
+        break;
+    }
     case G_MINUS: line(dc, cx - s + dpx(2), cy, cx + s - dpx(1), cy); break;
     case G_PLUS:
         line(dc, cx - s + dpx(2), cy, cx + s - dpx(1), cy);
@@ -158,12 +301,20 @@ static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
         line(dc, cx, cy + s - dpx(3), cx - a, cy + s - dpx(3) - a); line(dc, cx, cy + s - dpx(3), cx + a, cy + s - dpx(3) - a);
         break;
     case G_ROTATE: {
-        /* three quarters of a circle, clockwise, ending in an arrow at the top */
         int r = dpx(7);
         SetArcDirection(dc, AD_CLOCKWISE);
         Arc(dc, cx - r, cy - r, cx + r + 1, cy + r + 1, cx - r, cy, cx, cy - r);
         line(dc, cx, cy - r, cx - a, cy - r - a);
         line(dc, cx, cy - r, cx - a, cy - r + a);
+        break;
+    }
+    case G_UNDO: case G_REDO: {
+        /* a hook: an arc over the top, an arrow head at its start */
+        int r = dpx(6), d = glyph == G_UNDO ? 1 : -1, x0 = cx - d * dpx(1);
+        SetArcDirection(dc, glyph == G_UNDO ? AD_CLOCKWISE : AD_COUNTERCLOCKWISE);
+        Arc(dc, x0 - r, cy - r + dpx(1), x0 + r + 1, cy + r + dpx(2), x0 - d * r, cy + dpx(1), x0 + d * r / 2, cy + r + dpx(2));
+        line(dc, x0 - d * r, cy + dpx(1), x0 - d * r - d * a, cy + dpx(1) - a);
+        line(dc, x0 - d * r, cy + dpx(1), x0 - d * r + d * a, cy + dpx(1) - a);
         break;
     }
     case G_UP: line(dc, cx - s + dpx(3), cy + dpx(3), cx, cy - dpx(2)); line(dc, cx, cy - dpx(2), cx + s - dpx(3) + 1, cy + dpx(3) + 1); break;
@@ -173,6 +324,15 @@ static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
         Rectangle(dc, cx - s, cy - dpx(3), cx + s + 1, cy + dpx(4));
         Rectangle(dc, cx - dpx(4), cy + dpx(1), cx + dpx(5), cy + s);
         break;
+    case G_SAVE: {
+        /* a disk: a square with a clipped corner, a label and a shutter */
+        POINT pts[6] = { { cx - s, cy - s }, { cx + s - dpx(3), cy - s }, { cx + s, cy - s + dpx(3) },
+                         { cx + s, cy + s }, { cx - s, cy + s }, { cx - s, cy - s } };
+        Polyline(dc, pts, 6);
+        Rectangle(dc, cx - dpx(4), cy - s, cx + dpx(4), cy - dpx(3));
+        Rectangle(dc, cx - dpx(5), cy + dpx(1), cx + dpx(6), cy + s);
+        break;
+    }
     case G_OPEN: {
         POINT pts[6] = { { cx - s, cy + s - dpx(2) }, { cx - s, cy - s + dpx(2) }, { cx - dpx(2), cy - s + dpx(2) },
                          { cx, cy - s + dpx(4) }, { cx + s, cy - s + dpx(4) }, { cx + s, cy + s - dpx(2) } };
@@ -190,16 +350,19 @@ static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
 static BOOL btn_enabled(int i)
 {
     switch (i) {
-    case B_OPEN: case B_SIDEBAR: return TRUE;
+    case B_OPEN: case B_SIDEBAR: case B_TOOLS: return TRUE;
     case B_PREV: case B_NEXT: return g.nhits > 0;
     case B_PRINT: return g.npages > 0 && g.bridged;
+    case B_UNDO: return g.undo > 0 && g.bridged;
+    case B_REDO: return g.redo > 0 && g.bridged;
+    case B_SAVE: return g.npages > 0 && g.bridged && g.dirty;
     default: return g.npages > 0;
     }
 }
 
 static BOOL btn_on(int i)
 {
-    return i == B_SIDEBAR && g.side != SIDE_NONE;
+    return (i == B_SIDEBAR && g.side != SIDE_NONE) || (i == B_TOOLS && g.pane);
 }
 
 static void bar_paint(HWND hwnd)
@@ -225,7 +388,7 @@ static void bar_paint(HWND hwnd)
     for (i = 0; i < B_COUNT; i++) {
         button_t *b = &g_btn[i];
         BOOL en = btn_enabled(i);
-        COLORREF col = en ? (btn_on(i) ? C_ACCENT : C_TEXT) : RGB(0xA8, 0xA8, 0xA8);
+        COLORREF col = en ? (btn_on(i) ? C_ACCENT : C_TEXT) : C_DISABLED;
         if (en && i == g_press && i == g_hover) FillRect(dc, &b->rc, prs);
         else if (en && i == g_hover) FillRect(dc, &b->rc, hov);
         else if (btn_on(i)) FillRect(dc, &b->rc, act);
@@ -323,15 +486,15 @@ static LRESULT CALLBACK bar_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_COMMAND:
         if ((HWND)lp == g_find_edit && HIWORD(wp) == EN_CHANGE) {
-            /* a new word: the hits of the old one go */
             WCHAR t[256];
             GetWindowTextW(g_find_edit, t, 256);
             if (g.searched && wcscmp(t, g.needle)) view_find_clear();
         }
         return 0;
     case WM_CTLCOLOREDIT:
-        SetBkColor((HDC)wp, RGB(0xFF, 0xFF, 0xFF));
-        return (LRESULT)GetStockObject(WHITE_BRUSH);
+        SetBkColor((HDC)wp, C_EDITBG);
+        SetTextColor((HDC)wp, C_TEXT);
+        return (LRESULT)g_editbrush;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -358,24 +521,130 @@ static LRESULT CALLBACK edit_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return CallWindowProcW(g_edit_proc, hwnd, msg, wp, lp);
 }
 
+/* ---- the menu -------------------------------------------------------------------------------------- */
+
+static HMENU build_menu(void)
+{
+    HMENU bar = CreateMenu(), file = CreatePopupMenu(), edit = CreatePopupMenu(), view = CreatePopupMenu(),
+          tools = CreatePopupMenu(), help = CreatePopupMenu(), exp = CreatePopupMenu(), prot = CreatePopupMenu();
+    AppendMenuW(file, MF_STRING, CMD_OPEN, L"&Open...\tCtrl+O");
+    AppendMenuW(file, MF_STRING, CMD_SAVE, L"&Save\tCtrl+S");
+    AppendMenuW(file, MF_STRING, CMD_SAVEAS, L"Save &As...\tCtrl+Shift+S");
+    AppendMenuW(file, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(file, MF_STRING, CMD_COMBINE, L"Co&mbine Files...");
+    AppendMenuW(exp, MF_STRING, CMD_EXPORT_DOCX, L"&Word Document (.docx)...");
+    AppendMenuW(exp, MF_STRING, CMD_EXPORT_TXT, L"&Text (.txt)...");
+    AppendMenuW(exp, MF_STRING, CMD_EXPORT_HTML, L"&HTML Web Page...");
+    AppendMenuW(exp, MF_STRING, CMD_EXPORT_PNG, L"&PNG Images...");
+    AppendMenuW(exp, MF_STRING, CMD_EXPORT_JPEG, L"&JPEG Images...");
+    AppendMenuW(file, MF_POPUP, (UINT_PTR)exp, L"&Export To");
+    AppendMenuW(prot, MF_STRING, CMD_PROTECT, L"&Encrypt with Password...");
+    AppendMenuW(prot, MF_STRING, CMD_UNPROTECT, L"&Remove Security");
+    AppendMenuW(prot, MF_STRING, CMD_UNLOCK, L"Enter &Permissions Password...");
+    AppendMenuW(file, MF_POPUP, (UINT_PTR)prot, L"Pro&tect");
+    AppendMenuW(file, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(file, MF_STRING, CMD_PRINT, L"&Print...\tCtrl+P");
+    AppendMenuW(file, MF_STRING, CMD_PROPERTIES, L"Propert&ies...\tCtrl+D");
+    AppendMenuW(file, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(file, MF_STRING, CMD_CLOSE, L"&Close\tCtrl+W");
+    AppendMenuW(file, MF_STRING, CMD_EXIT, L"E&xit\tCtrl+Q");
+    AppendMenuW(edit, MF_STRING, CMD_UNDO, L"&Undo\tCtrl+Z");
+    AppendMenuW(edit, MF_STRING, CMD_REDO, L"&Redo\tCtrl+Y");
+    AppendMenuW(edit, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(edit, MF_STRING, CMD_COPY, L"&Copy\tCtrl+C");
+    AppendMenuW(edit, MF_STRING, CMD_DELETE, L"&Delete\tDel");
+    AppendMenuW(edit, MF_STRING, CMD_SELECTALL, L"Select &All\tCtrl+A");
+    AppendMenuW(edit, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(edit, MF_STRING, CMD_FIND, L"&Find\tCtrl+F");
+    AppendMenuW(edit, MF_STRING, CMD_FINDREDACT, L"Find Text to Re&dact...");
+    AppendMenuW(view, MF_STRING, CMD_ZOOMIN, L"Zoom &In\tCtrl+Plus");
+    AppendMenuW(view, MF_STRING, CMD_ZOOMOUT, L"Zoom &Out\tCtrl+Minus");
+    AppendMenuW(view, MF_STRING, CMD_ACTUAL, L"&Actual Size\tCtrl+1");
+    AppendMenuW(view, MF_STRING, CMD_FITWIDTH, L"Fit &Width\tCtrl+0");
+    AppendMenuW(view, MF_STRING, CMD_FITPAGE, L"Fit &Page");
+    AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(view, MF_STRING, CMD_ROTATE, L"Rotate View &Clockwise\tCtrl+]");
+    AppendMenuW(view, MF_STRING, CMD_ROTATE_LEFT, L"Rotate View Co&unterclockwise\tCtrl+[");
+    AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(view, MF_STRING, CMD_SIDEBAR, L"&Navigation Pane\tF4");
+    AppendMenuW(view, MF_STRING, CMD_PANE, L"&Tools Pane\tShift+F4");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_EDIT, L"&Edit PDF");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_COMMENT, L"&Comment");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_FILL, L"&Fill && Sign");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_REDACT, L"&Redact");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_ORGANIZE, L"&Organize Pages");
+    AppendMenuW(tools, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(tools, MF_STRING, CMD_EXPORT, L"E&xport PDF...");
+    AppendMenuW(tools, MF_STRING, CMD_COMBINE, L"Com&bine Files...");
+    AppendMenuW(tools, MF_STRING, CMD_PROTECT, L"&Protect...");
+    AppendMenuW(tools, MF_STRING, CMD_SANITIZE, L"Remove &Hidden Information...");
+    AppendMenuW(help, MF_STRING, CMD_ABOUT, L"&About SG PDF");
+    AppendMenuW(bar, MF_POPUP, (UINT_PTR)file, L"&File");
+    AppendMenuW(bar, MF_POPUP, (UINT_PTR)edit, L"&Edit");
+    AppendMenuW(bar, MF_POPUP, (UINT_PTR)view, L"&View");
+    AppendMenuW(bar, MF_POPUP, (UINT_PTR)tools, L"&Tools");
+    AppendMenuW(bar, MF_POPUP, (UINT_PTR)help, L"&Help");
+    return bar;
+}
+
+static void menu_state(HMENU m)
+{
+    BOOL doc = g.npages > 0 && g.bridged;
+    static const int NEED_DOC[] = { CMD_SAVEAS, CMD_PRINT, CMD_PROPERTIES, CMD_CLOSE, CMD_COPY, CMD_SELECTALL, CMD_FIND,
+                                    CMD_ZOOMIN, CMD_ZOOMOUT, CMD_ACTUAL, CMD_FITWIDTH, CMD_FITPAGE, CMD_ROTATE,
+                                    CMD_ROTATE_LEFT, CMD_EXPORT_DOCX, CMD_EXPORT_TXT, CMD_EXPORT_HTML, CMD_EXPORT_PNG,
+                                    CMD_EXPORT_JPEG, CMD_EXPORT, CMD_TOOL + TOOL_EDIT, CMD_TOOL + TOOL_COMMENT,
+                                    CMD_TOOL + TOOL_FILL, CMD_TOOL + TOOL_REDACT, CMD_TOOL + TOOL_ORGANIZE,
+                                    CMD_FINDREDACT, CMD_SANITIZE, CMD_PROTECT };
+    int i;
+    for (i = 0; i < (int)(sizeof(NEED_DOC) / sizeof(NEED_DOC[0])); i++)
+        EnableMenuItem(m, NEED_DOC[i], MF_BYCOMMAND | (doc ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_SAVE, MF_BYCOMMAND | (doc && g.dirty ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_UNDO, MF_BYCOMMAND | (doc && g.undo ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_REDO, MF_BYCOMMAND | (doc && g.redo ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_DELETE, MF_BYCOMMAND | (doc && g.pick.kind != PICK_NONE ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_UNPROTECT, MF_BYCOMMAND | (doc && g.encrypted && g.perms == 0xFFFF ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_UNLOCK, MF_BYCOMMAND | (doc && g.perms != 0xFFFF ? MF_ENABLED : MF_GRAYED));
+    CheckMenuItem(m, CMD_SIDEBAR, MF_BYCOMMAND | (g.side != SIDE_NONE ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_PANE, MF_BYCOMMAND | (g.pane ? MF_CHECKED : MF_UNCHECKED));
+    for (i = TOOL_EDIT; i < TOOL_COUNT; i++)
+        CheckMenuItem(m, CMD_TOOL + i, MF_BYCOMMAND | (g.tool == i ? MF_CHECKED : MF_UNCHECKED));
+}
+
 /* ---- the frame ---------------------------------------------------------------------------------- */
 
 void app_layout(void)
 {
     RECT rc;
-    int side;
+    int side, pane, tb, top, h;
     GetClientRect(g_main, &rc);
-    side = g.side != SIDE_NONE ? SIDE_W : 0;
+    side = g.side != SIDE_NONE && g.tool != TOOL_ORGANIZE ? SIDE_W : 0;
+    pane = g.pane ? toolui_pane_width() : 0;
+    tb = toolui_bar_height();
     MoveWindow(g_bar, 0, 0, rc.right, BAR_H, TRUE);
-    MoveWindow(g_side, 0, BAR_H, side, max(0, rc.bottom - BAR_H), TRUE);
+    top = BAR_H;
+    if (g_tbar) {
+        MoveWindow(g_tbar, 0, top, rc.right, tb, TRUE);
+        ShowWindow(g_tbar, tb ? SW_SHOWNA : SW_HIDE);
+        top += tb;
+    }
+    h = max(0, rc.bottom - top);
+    MoveWindow(g_side, 0, top, side, h, TRUE);
     ShowWindow(g_side, side ? SW_SHOWNA : SW_HIDE);
-    MoveWindow(g_view, side, BAR_H, max(0, rc.right - side), max(0, rc.bottom - BAR_H), TRUE);
+    if (g_pane) {
+        MoveWindow(g_pane, rc.right - pane, top, pane, h, TRUE);
+        ShowWindow(g_pane, pane ? SW_SHOWNA : SW_HIDE);
+    }
+    MoveWindow(g_view, side, top, max(0, rc.right - side - pane), h, TRUE);
+    if (g_org) MoveWindow(g_org, side, top, max(0, rc.right - side - pane), h, TRUE);
 }
 
 void app_update_title(void)
 {
-    WCHAR t[MAX_PATH + 32];
-    if (g.name[0]) swprintf(t, MAX_PATH + 32, L"%ls - %ls", g.name, APP_NAME);
+    WCHAR t[MAX_PATH + 64];
+    if (g.name[0])
+        swprintf(t, MAX_PATH + 64, L"%ls%ls%ls - %ls", g.dirty ? L"*" : L"", g.name,
+                 g.npages && g.perms != 0xFFFF ? L" (SECURED)" : L"", APP_NAME);
     else lstrcpyW(t, APP_NAME);
     SetWindowTextW(g_main, t);
 }
@@ -388,6 +657,17 @@ void app_status_changed(void)
         SetWindowTextW(g_page_edit, t);
     }
     if (g_bar) { bar_layout(); InvalidateRect(g_bar, NULL, FALSE); }
+    app_dump();
+}
+
+void app_set_status(const WCHAR *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vswprintf(g.status, 256, fmt, ap);
+    va_end(ap);
+    g.status[255] = 0;
+    toolui_update();
     app_dump();
 }
 
@@ -411,9 +691,6 @@ static void screen_rect(HWND hwnd, RECT *r)
     MapWindowPoints(hwnd, NULL, (POINT *)r, 2);
 }
 
-BOOL side_thumb_rect(int i, RECT *out);
-BOOL side_tab_center(int k, POINT *pt);
-
 void app_dump(void)
 {
     WCHAR tmp[MAX_PATH + 8], title[MAX_PATH + 40];
@@ -433,6 +710,10 @@ void app_dump(void)
     dumpf(f, L"fit %ls\n", g.fit == FIT_WIDTH ? L"width" : g.fit == FIT_PAGE ? L"page" : L"none");
     dumpf(f, L"rot %d\n", g.rot);
     dumpf(f, L"side %ls\n", g.side == SIDE_THUMBS ? L"thumbs" : g.side == SIDE_OUTLINE ? L"outline" : L"none");
+    dumpf(f, L"dark %d\n", g.dark);
+    dumpf(f, L"undo %d\nredo %d\ndirty %d\nperms %u\nencrypted %d\nprotect %hs\nform %d\nredactions %d\n",
+          g.undo, g.redo, g.dirty, g.perms, g.encrypted, g.protect, g.form, g.nredact);
+    dumpf(f, L"generation %d\n", g.generation);
     dumpf(f, L"outline %d\n", g.noutline);
     for (i = 0; i < g.noutline; i++) dumpf(f, L"bookmark %d %d %ls\n", g.outline[i].depth, g.outline[i].page + 1, g.outline[i].title ? g.outline[i].title : L"");
     dumpf(f, L"hits %d\n", g.nhits);
@@ -459,10 +740,10 @@ void app_dump(void)
         page_t *p = &g.pages[i];
         view_page_rect(i, &pr);
         GetClientRect(g_view, &cr);
-        if (pr.bottom < 0 || pr.top > cr.bottom) continue;
+        if (pr.bottom < 0 || pr.top > cr.bottom || !IsWindowVisible(g_view)) continue;
         screen_rect(g_view, &pr);
         dumpf(f, L"page %d %d %d %d %d %d\n", i + 1, pr.left, pr.top, pr.right, pr.bottom,
-              p->bmp && fabs(p->bscale - view_scale()) < 1e-4 && p->brot == g.rot);
+              p->bmp && !p->stale && fabs(p->bscale - view_scale()) < 1e-4 && p->brot == g.rot);
         /* the page's first word, where it is on the screen */
         if (page_load_text(i) && p->ntext) {
             int a = 0, b;
@@ -504,7 +785,7 @@ void app_dump(void)
         if (side_tab_center(0, &pt)) dumpf(f, L"tab thumbs %d %d\n", pt.x, pt.y);
         if (side_tab_center(1, &pt)) dumpf(f, L"tab outline %d %d\n", pt.x, pt.y);
     }
-    if (g.side == SIDE_OUTLINE && g_tree) {
+    if (g.side == SIDE_OUTLINE && g_tree && IsWindowVisible(g_tree)) {
         HTREEITEM it = TreeView_GetFirstVisible(g_tree);
         while (it) {
             RECT ir;
@@ -530,8 +811,12 @@ void app_dump(void)
         GetWindowRect(g_page_edit, &er);
         dumpf(f, L"pagebox %d %d\n", (er.left + er.right) / 2, (er.top + er.bottom) / 2);
     }
+    toolui_dump(f);
+    tool_dump(f);
+    org_dump(f);
     dumpf(f, L"focus %ls\n", GetFocus() == g_find_edit ? L"find" : GetFocus() == g_page_edit ? L"page" :
                              GetFocus() == g_view ? L"view" : L"other");
+    if (g.status[0]) dumpf(f, L"status %ls\n", g.status);
     if (g.error[0]) dumpf(f, L"error %ls\n", g.error);
     fclose(f);
     MoveFileExW(tmp, g_dump, MOVEFILE_REPLACE_EXISTING);
@@ -541,24 +826,25 @@ void app_dump(void)
 
 static void free_document(void)
 {
-    int i, k;
+    int i;
+    tool_cancel();
     for (i = 0; i < g.npages; i++) {
         page_t *p = &g.pages[i];
         if (p->bmp) DeleteObject(p->bmp);
         if (p->thumb) DeleteObject(p->thumb);
-        free(p->text);
-        free(p->boxes);
-        for (k = 0; k < p->nlinks; k++) free(p->links[k].uri);
-        free(p->links);
+        doc_free_page_cache(p);
     }
     free(g.pages);
     g.pages = NULL;
     g.npages = 0;
+    free(g.org_sel);
+    g.org_sel = NULL;
     for (i = 0; i < g.noutline; i++) free(g.outline[i].title);
     free(g.outline);
     g.outline = NULL;
     g.noutline = 0;
     if (g_tree) TreeView_DeleteAllItems(g_tree);
+    doc_free_fields();
     free(g.hits);
     g.hits = NULL;
     g.nhits = 0;
@@ -570,6 +856,13 @@ static void free_document(void)
     g.current = 0;
     g.doc_title[0] = 0;
     g.error[0] = 0;
+    g.status[0] = 0;
+    g.undo = g.redo = 0;
+    g.dirty = g.encrypted = g.form = FALSE;
+    g.perms = 0xFFFF;
+    g.nredact = 0;
+    lstrcpyA(g.protect, "keep");
+    g.pick.kind = PICK_NONE;
 }
 
 static INT_PTR CALLBACK password_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
@@ -591,7 +884,7 @@ static INT_PTR CALLBACK password_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
-static char *unix_path(const WCHAR *path)
+char *unix_path(const WCHAR *path)
 {
     static char *(CDECL *to_unix)(const WCHAR *);
     char *u, *copy;
@@ -605,7 +898,7 @@ static char *unix_path(const WCHAR *path)
 BOOL app_open(const WCHAR *path)
 {
     WCHAR full[MAX_PATH], pw[128] = L"", *base;
-    char *upath, req[MAX_PATH * 4 + 300], pw8[400], head[256], num[32], *s, *e;
+    char *upath, *eupath, req[MAX_PATH * 4 + 600], *epw, head[512], num[32], *s, *e;
     BYTE *data = NULL;
     DWORD len;
     int rc, n, i, tries = 0;
@@ -614,22 +907,34 @@ BOOL app_open(const WCHAR *path)
     render_clear_wants(TRUE);
     g.generation++;
     free_document();
+    if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
     lstrcpynW(g.path, full, MAX_PATH);
     base = wcsrchr(full, L'\\');
     lstrcpynW(g.name, base ? base + 1 : full, MAX_PATH);
     app_update_title();
     if (!g.bridged) {
-        lstrcpynW(g.error, L"PDF viewing needs its Linux half, sg-pdf (package sg-session).", 256);
+        lstrcpynW(g.error, L"SG PDF needs its Linux half, sg-pdf (package sg-session).", 256);
         goto done;
     }
     if (!(upath = unix_path(full))) {
         lstrcpynW(g.error, L"That file cannot be found.", 256);
         goto done;
     }
+    {
+        WCHAR *wu = from_utf8(upath, -1);
+        eupath = wu ? esc_utf8(wu) : _strdup(upath);
+        free(wu);
+    }
     for (;;) {
-        to_utf8(pw, pw8, sizeof(pw8));
-        for (s = pw8; *s; s++) if (*s == '\t' || *s == '\n' || *s == '\r') *s = ' ';
-        snprintf(req, sizeof(req), pw[0] ? "open\t%s\t%s" : "open\t%s", upath, pw8);
+        /* the password travels as it is typed; a tab or new line in it cannot */
+        WCHAR clean[128];
+        int k;
+        lstrcpynW(clean, pw, 128);
+        for (k = 0; clean[k]; k++) if (clean[k] == '\t' || clean[k] == '\n' || clean[k] == '\r') clean[k] = ' ';
+        epw = esc_utf8(clean);
+        snprintf(req, sizeof(req), pw[0] ? "open\t%s\t%s" : "open\t%s", upath, epw ? epw : "");
+        if (epw) { SecureZeroMemory(epw, strlen(epw)); free(epw); }
+        SecureZeroMemory(clean, sizeof(clean));
         rc = br_request(req, head, sizeof(head), &data, &len);
         if (rc == 0 && strstr(head, "ERR password") && tries++ < 5) {
             SecureZeroMemory(pw, sizeof(pw));
@@ -641,8 +946,8 @@ BOOL app_open(const WCHAR *path)
         }
         break;
     }
+    free(eupath);
     SecureZeroMemory(pw, sizeof(pw));
-    SecureZeroMemory(pw8, sizeof(pw8));
     SecureZeroMemory(req, sizeof(req));
     free(upath);
     if (rc != 1) {
@@ -657,6 +962,7 @@ BOOL app_open(const WCHAR *path)
     }
     n = br_field(head, "pages", num, sizeof(num)) ? atoi(num) : 0;
     g.pages = n > 0 ? calloc(n, sizeof(page_t)) : NULL;
+    g.org_sel = n > 0 ? calloc(n, sizeof(BOOL)) : NULL;
     for (s = (char *)data, i = 0; s && *s; s = e) {
         e = strchr(s, '\n');
         if (e) *e++ = 0;
@@ -672,13 +978,18 @@ BOOL app_open(const WCHAR *path)
         }
     }
     g.npages = i;
+    doc_apply_state(head, NULL, 0);
     free(data);
     if (!g.npages) lstrcpynW(g.error, L"This document has no pages.", 256);
     side_load_outline();
+    if (g.form) doc_load_fields();
 done:
     g.hit = -1;
     view_relayout(FALSE);
     side_update();
+    org_update();
+    toolui_update();
+    app_update_title();
     InvalidateRect(g_view, NULL, FALSE);
     app_status_changed();
     return g.npages > 0;
@@ -686,31 +997,37 @@ done:
 
 static void open_dialog(void)
 {
-    OPENFILENAMEW ofn = { sizeof(ofn) };
     WCHAR file[MAX_PATH] = L"";
-    ofn.hwndOwner = g_main;
-    ofn.lpstrFilter = L"PDF documents (*.pdf)\0*.pdf\0All files (*.*)\0*.*\0";
-    ofn.lpstrFile = file;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_EXPLORER;
-    if (GetOpenFileNameW(&ofn)) app_open(file);
+    if (!doc_close_prompt()) return;
+    if (file_dialog(FALSE, L"Open", L"PDF documents (*.pdf)\0*.pdf\0All files (*.*)\0*.*\0", L"pdf", file, MAX_PATH))
+        app_open(file);
 }
 
-static void properties(void)
+static void close_document(void)
 {
-    WCHAR t[1024], size[64] = L"";
-    if (!g.npages) return;
-    swprintf(size, 64, L"%.1f x %.1f in", g.pages[0].w / 72.0, g.pages[0].h / 72.0);
-    swprintf(t, 1024, L"File:\t%ls\nTitle:\t%ls\nPages:\t%d\nPage size:\t%ls", g.path,
-             g.doc_title[0] ? g.doc_title : L"(none)", g.npages, size);
-    MessageBoxW(g_main, t, L"Document properties", MB_OK | MB_ICONINFORMATION);
+    if (!doc_close_prompt()) return;
+    render_clear_wants(FALSE);
+    render_clear_wants(TRUE);
+    g.generation++;
+    free_document();
+    if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
+    g.path[0] = g.name[0] = 0;
+    view_relayout(FALSE);
+    side_update();
+    org_update();
+    toolui_update();
+    app_update_title();
+    InvalidateRect(g_view, NULL, FALSE);
+    app_status_changed();
 }
 
 static void save_settings(void)
 {
     HKEY k;
+    DWORD pane = g.pane;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, SETTINGS_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
     RegSetValueExW(k, L"Sidebar", 0, REG_DWORD, (const BYTE *)&g.side, sizeof(DWORD));
+    RegSetValueExW(k, L"ToolsPane", 0, REG_DWORD, (const BYTE *)&pane, sizeof(DWORD));
     RegCloseKey(k);
 }
 
@@ -718,14 +1035,53 @@ static void load_settings(void)
 {
     DWORD v, cb = sizeof(v);
     g.side = SIDE_NONE;
+    g.pane = TRUE;
     if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"Sidebar", RRF_RT_REG_DWORD, NULL, &v, &cb) && v <= SIDE_OUTLINE)
         g.side = (int)v;
+    cb = sizeof(v);
+    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"ToolsPane", RRF_RT_REG_DWORD, NULL, &v, &cb)) g.pane = v != 0;
+}
+
+static void about(void)
+{
+    MessageBoxW(g_main,
+                L"SG PDF\n\nView, edit, comment, fill and sign, redact, organize, protect and export PDF documents.\n\n"
+                L"Part of Stained Glass OS. Pages are rendered and edited by MuPDF (sg-session's sg-pdf).\n"
+                L"Free software under the GNU Affero General Public License, version 3 or later.",
+                L"About SG PDF", MB_OK | MB_ICONINFORMATION);
 }
 
 void app_command(int cmd)
 {
+    if (cmd >= CMD_TOOL + TOOL_EDIT && cmd < CMD_TOOL + TOOL_COUNT) {
+        tool_set(g.tool == cmd - CMD_TOOL ? TOOL_NONE : cmd - CMD_TOOL);
+        app_status_changed();
+        return;
+    }
+    if (cmd >= CMD_SUB && cmd <= CMD_SUB + SUB_MARKAREA) {
+        tool_set_sub(cmd - CMD_SUB);
+        app_status_changed();
+        return;
+    }
+    if (cmd >= CMD_COLOR && cmd < CMD_COLOR + NCOLORS) {
+        g.ccolor = COMMENT_COLORS[cmd - CMD_COLOR];
+        toolui_update();
+        app_status_changed();
+        return;
+    }
+    if (cmd >= CMD_ORG_ROTL && cmd <= CMD_ORG_SELALL) {
+        org_command(cmd);
+        app_status_changed();
+        return;
+    }
     switch (cmd) {
     case CMD_OPEN: open_dialog(); break;
+    case CMD_SAVE: if (g.npages) doc_save(FALSE); break;
+    case CMD_SAVEAS: if (g.npages) doc_save(TRUE); break;
+    case CMD_CLOSE: close_document(); break;
+    case CMD_EXIT: PostMessageW(g_main, WM_CLOSE, 0, 0); break;
+    case CMD_UNDO: tool_commit_editor(); doc_undo(-1); break;
+    case CMD_REDO: tool_commit_editor(); doc_undo(1); break;
     case CMD_PRINT: print_document(); break;
     case CMD_ZOOMIN: view_zoom_step(1); break;
     case CMD_ZOOMOUT: view_zoom_step(-1); break;
@@ -734,6 +1090,7 @@ void app_command(int cmd)
     case CMD_FITPAGE: view_set_zoom(g.zoom, FIT_PAGE, NULL); break;
     case CMD_ROTATE: case CMD_ROTATE_LEFT: {
         int page = g.current;
+        tool_commit_editor();
         g.rot = (g.rot + (cmd == CMD_ROTATE ? 90 : 270)) % 360;
         view_relayout(TRUE);
         view_goto_page(page, 0);
@@ -742,6 +1099,11 @@ void app_command(int cmd)
     }
     case CMD_SIDEBAR:
         side_set_mode(g.side == SIDE_NONE ? (g.noutline ? SIDE_OUTLINE : SIDE_THUMBS) : SIDE_NONE);
+        save_settings();
+        break;
+    case CMD_PANE:
+        g.pane = !g.pane;
+        app_layout();
         save_settings();
         break;
     case CMD_THUMBS: side_set_mode(SIDE_THUMBS); save_settings(); break;
@@ -757,7 +1119,14 @@ void app_command(int cmd)
         break;
     }
     case CMD_COPY: view_copy(); break;
-    case CMD_SELECTALL: view_select_all(); break;
+    case CMD_SELECTALL:
+        if (g.tool == TOOL_ORGANIZE) org_command(CMD_ORG_SELALL);
+        else view_select_all();
+        break;
+    case CMD_DELETE:
+        if (g.tool == TOOL_ORGANIZE) org_command(CMD_ORG_DELETE);
+        else tool_delete_pick();
+        break;
     case CMD_GOTOPAGE: {
         WCHAR t[16];
         GetWindowTextW(g_page_edit, t, 16);
@@ -767,7 +1136,53 @@ void app_command(int cmd)
     }
     case CMD_FIRST: view_goto_page(0, 0); break;
     case CMD_LAST: view_goto_page(g.npages - 1, 0); break;
-    case CMD_PROPERTIES: properties(); break;
+    case CMD_PROPERTIES: if (g.npages) dlg_properties(); break;
+    case CMD_EXPORT: if (g.npages) dlg_export_as(0); break;
+    case CMD_EXPORT_DOCX: case CMD_EXPORT_TXT: case CMD_EXPORT_PNG: case CMD_EXPORT_JPEG: case CMD_EXPORT_HTML:
+        if (g.npages) dlg_export_as(cmd - CMD_EXPORT_DOCX + 1);
+        break;
+    case CMD_COMBINE: dlg_combine(); break;
+    case CMD_PROTECT: if (g.npages) dlg_protect(); break;
+    case CMD_UNPROTECT:
+        if (g.npages && MessageBoxW(g_main, L"Remove the password and the restrictions from this document? This takes effect when you save it.",
+                                    L"Remove Security", MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
+            doc_request("protect\tmode=none");
+        break;
+    case CMD_UNLOCK: if (g.npages) dlg_permissions_password(); break;
+    case CMD_SANITIZE: if (g.npages) dlg_sanitize(FALSE); break;
+    case CMD_FINDREDACT: if (g.npages) { if (g.tool != TOOL_REDACT) tool_set(TOOL_REDACT); dlg_find_redact(); } break;
+    case CMD_APPLYREDACT:
+        if (!g.nredact) { MessageBoxW(g_main, L"Nothing is marked for redaction yet. Mark text or an area first.", L"Redact", MB_OK | MB_ICONINFORMATION); break; }
+        {
+            WCHAR t[300];
+            swprintf(t, 300, L"Apply %d redaction mark%ls?\n\nThe marked text, pictures and drawings are removed from the document "
+                     L"permanently; they cannot be recovered after you save.", g.nredact, g.nredact == 1 ? L"" : L"s");
+            if (MessageBoxW(g_main, t, L"Apply Redactions", MB_OKCANCEL | MB_ICONWARNING) == IDOK && doc_request("redactapply"))
+                dlg_sanitize(TRUE);
+        }
+        break;
+    case CMD_FLATTEN:
+        if (MessageBoxW(g_main, L"Flatten the form? The filled-in values become part of the page and can no longer be changed.",
+                        L"Flatten", MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
+            doc_request("flatten\tforms=1");
+        break;
+    case CMD_SIGN: if (dlg_signature(g_main)) tool_set_sub(SUB_SIGN); break;
+    case CMD_REPLACEIMAGE: {
+        WCHAR file[MAX_PATH] = L"";
+        if (g.pick.kind == PICK_OBJ && g.pick.page >= 0 && g.pick.page < g.npages &&
+            g.pages[g.pick.page].objs[g.pick.index].kind == OBJ_IMAGE &&
+            file_dialog(FALSE, L"Replace Image", L"Pictures\0*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff\0All files (*.*)\0*.*\0",
+                        NULL, file, MAX_PATH)) {
+            char *u = unix_path(file);
+            WCHAR *wu = u ? from_utf8(u, -1) : NULL;
+            char *e = wu ? esc_utf8(wu) : NULL;
+            if (e) doc_requestf("replaceimage\t%d\t%d\t%s", g.pick.page, g.pages[g.pick.page].objs[g.pick.index].id, e);
+            free(e); free(wu); free(u);
+        }
+        break;
+    }
+    case CMD_TOOLCLOSE: tool_set(TOOL_NONE); break;
+    case CMD_ABOUT: about(); break;
     }
     app_status_changed();
 }
@@ -777,19 +1192,25 @@ static BOOL accelerator(MSG *m)
 {
     HWND focus = GetFocus();
     BOOL ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
-    BOOL in_edit = focus == g_find_edit || focus == g_page_edit;
+    BOOL in_edit = focus == g_find_edit || focus == g_page_edit || tool_editor_open();
     if (m->message != WM_KEYDOWN) return FALSE;
     if (!IsChild(g_main, m->hwnd) && m->hwnd != g_main) return FALSE;
     switch (m->wParam) {
     case VK_F3: app_command(shift ? CMD_FINDPREV : CMD_FINDNEXT); return TRUE;
+    case VK_F4: app_command(shift ? CMD_PANE : CMD_SIDEBAR); return TRUE;
     }
     if (!ctrl) return FALSE;
     switch (m->wParam) {
     case 'O': app_command(CMD_OPEN); return TRUE;
+    case 'S': app_command(shift ? CMD_SAVEAS : CMD_SAVE); return TRUE;
     case 'P': app_command(CMD_PRINT); return TRUE;
+    case 'D': app_command(CMD_PROPERTIES); return TRUE;
     case 'F': app_command(CMD_FIND); return TRUE;
     case 'G': SetFocus(g_page_edit); SendMessageW(g_page_edit, EM_SETSEL, 0, -1); return TRUE;
-    case 'W': PostMessageW(g_main, WM_CLOSE, 0, 0); return TRUE;
+    case 'W': app_command(CMD_CLOSE); return TRUE;
+    case 'Q': PostMessageW(g_main, WM_CLOSE, 0, 0); return TRUE;
+    case 'Z': if (!in_edit) { app_command(shift ? CMD_REDO : CMD_UNDO); return TRUE; } break;
+    case 'Y': if (!in_edit) { app_command(CMD_REDO); return TRUE; } break;
     case VK_OEM_PLUS: case VK_ADD: app_command(CMD_ZOOMIN); return TRUE;
     case VK_OEM_MINUS: case VK_SUBTRACT: app_command(CMD_ZOOMOUT); return TRUE;
     case '0': case VK_NUMPAD0: app_command(CMD_FITWIDTH); return TRUE;
@@ -807,19 +1228,34 @@ static BOOL accelerator(MSG *m)
 
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) {
+        app_apply_mode();
+        return 0;
+    }
     switch (msg) {
+    case WM_NCPAINT: case WM_NCACTIVATE: {
+        LRESULT r = DefWindowProcW(hwnd, msg, wp, lp);
+        menu_fill_rest(hwnd);
+        return r;
+    }
     case WM_SIZE: app_layout(); return 0;
-    case WM_SETFOCUS: SetFocus(g_view); return 0;
+    case WM_SETFOCUS: SetFocus(g.tool == TOOL_ORGANIZE && g_org ? g_org : g_view); return 0;
+    case WM_INITMENUPOPUP: menu_state(g_menu); return 0;
+    case WM_MEASUREITEM: if (menu_measure((MEASUREITEMSTRUCT *)lp)) return TRUE; break;
+    case WM_DRAWITEM: if (menu_draw((DRAWITEMSTRUCT *)lp)) return TRUE; break;
+    case WM_COMMAND:
+        if (!lp && HIWORD(wp) == 0) { app_command(LOWORD(wp)); return 0; }
+        break;
     case WM_DROPFILES: {
         WCHAR file[MAX_PATH];
-        if (DragQueryFileW((HDROP)wp, 0, file, MAX_PATH)) app_open(file);
+        if (DragQueryFileW((HDROP)wp, 0, file, MAX_PATH) && doc_close_prompt()) app_open(file);
         DragFinish((HDROP)wp);
         return 0;
     }
     case WM_GETMINMAXINFO: {
         MINMAXINFO *mm = (MINMAXINFO *)lp;
-        mm->ptMinTrackSize.x = dpx(480);
-        mm->ptMinTrackSize.y = dpx(300);
+        mm->ptMinTrackSize.x = dpx(560);
+        mm->ptMinTrackSize.y = dpx(360);
         return 0;
     }
     case WM_DPICHANGED: {
@@ -829,6 +1265,11 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         view_relayout(TRUE);
         return 0;
     }
+    case WM_CLOSE:
+        tool_commit_editor();
+        if (!doc_close_prompt()) return 0;
+        DestroyWindow(hwnd);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -872,7 +1313,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     ctx_fn set_ctx = (ctx_fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext");
     const WCHAR *args = args_after_program(GetCommandLineW());
     WCHAR file[MAX_PATH] = L"";
-    INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES | ICC_STANDARD_CLASSES };
+    INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES | ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES |
+                                              ICC_TAB_CLASSES | ICC_UPDOWN_CLASS };
     WNDCLASSW wc = { 0 };
     MSG msg;
     HDC screen;
@@ -906,10 +1348,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     screen = GetDC(NULL);
     g.dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
+    set_palette(sg_apps_dark());
     g.zoom = 1.0;
     g.fit = FIT_WIDTH;
     g.hit = -1;
     g.sel_a.page = g.sel_b.page = -1;
+    g.perms = 0xFFFF;
+    lstrcpyA(g.protect, "keep");
+    lstrcpyW(g.fmt_font, L"Helvetica");
+    g.fmt_size = 12;
+    g.fmt_color = RGB(0, 0, 0);
+    g.ccolor = COMMENT_COLORS[0];
     GetEnvironmentVariableW(L"SG_PDF_DUMP", g_dump, MAX_PATH);
     render_init();
     g.bridged = bridged && br_start();
@@ -918,6 +1367,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     g_font = make_font(100, FW_NORMAL);
     g_font_small = make_font(90, FW_NORMAL);
     g_font_bold = make_font(90, FW_SEMIBOLD);
+    g_font_title = make_font(120, FW_SEMIBOLD);
 
     wc.lpfnWndProc = main_proc;
     wc.hInstance = inst;
@@ -931,15 +1381,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     RegisterClassW(&wc);
     view_register();
     side_register();
+    toolui_register();
+    org_register();
 
+    g_menu = build_menu();
     g_main = CreateWindowExW(WS_EX_ACCEPTFILES, CLASS_NAME, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                             CW_USEDEFAULT, CW_USEDEFAULT, dpx(980), dpx(720), NULL, NULL, inst, NULL);
+                             CW_USEDEFAULT, CW_USEDEFAULT, dpx(1100), dpx(740), NULL, g_menu, inst, NULL);
     if (!g_main) return 1;
     {
-        /* the window's DPI, now that it has one */
         UINT (WINAPI *for_window)(HWND) = (void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
         if (for_window && for_window(g_main)) g.dpi = for_window(g_main);
     }
+    sg_mode_title(g_main, g.dark);
+    menu_mode();
     g_bar = CreateWindowExW(0, L"SgPdfBar", NULL, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, 10, 10, g_main, NULL, inst, NULL);
     g_page_edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_CENTER | ES_NUMBER | ES_AUTOHSCROLL,
                                   0, 0, 10, 10, g_bar, NULL, inst, NULL);
@@ -962,15 +1416,18 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         SendMessageW(g_tip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
     }
     side_create(g_main);
-    g_view = CreateWindowExW(0, L"SgPdfView", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP,
+    toolui_create(g_main);
+    g_view = CreateWindowExW(0, L"SgPdfView", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | WS_CLIPCHILDREN,
                              0, 0, 10, 10, g_main, NULL, inst, NULL);
+    org_create(g_main);
     app_layout();
     ShowWindow(g_main, show == SW_SHOWMINNOACTIVE ? show : SW_SHOWNORMAL);
     UpdateWindow(g_main);
     SetFocus(g_view);
     if (g.bridged) render_start_thread();
     if (file[0] && app_open(file) && print_after) app_command(CMD_PRINT);
-    else if (!g.bridged) lstrcpynW(g.error, L"PDF viewing needs its Linux half, sg-pdf (package sg-session).", 256);
+    else if (!g.bridged) lstrcpynW(g.error, L"SG PDF needs its Linux half, sg-pdf (package sg-session).", 256);
+    toolui_update();
     app_status_changed();
 
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {

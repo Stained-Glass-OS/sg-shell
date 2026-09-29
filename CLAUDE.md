@@ -65,7 +65,7 @@ wine-sg or an X server.
 | `sg-fontview` | **The font viewer and the Fonts folder** (`fontview.exe`, `control fonts`, `shell:fonts`, %WINDIR%\Fonts). A font file (.ttf .otf .ttc .fon) shows its own names read from the file, version, kind, the alphabet and a sample line at 12-72 pt, with Print, Install (for you) and Install for all users (elevated), a face picker for collections. The Fonts folder: a tile per family drawn in its font, search, details (styles, where installed, files), Preview, Delete, Install new font, dropped files. Per-user fonts where Windows 10 keeps them (and in `~/.local/share/fonts` for Linux programs), all users' through the elevated copy and sg-admind. `defaults/81-sg-fontview.reg`; wine-sg 0183 gives the launcher, the associations, per-user font loading and `shell:` URLs. See "Fonts (sg-fontview)" below. |
 | `sg-wordpad` | **WordPad** (`wordpad.exe`, `write.exe`) -- Windows 10's WordPad in our own drawing: ribbon (File menu; Home: Clipboard, Font -- face and size boxes, grow/shrink, bold/italic/underline/strike, sub/superscript, highlight and text colour --, Paragraph -- indents, lists (bullets, numbers, letters, Roman), line spacing, alignment, Paragraph and Tabs dialogs --, Insert -- picture, date and time --, Editing -- Find, Replace, Select all; View: zoom, ruler, status bar, word wrap, units), a ruler with draggable indents and tab stops, a status-bar zoom slider, Page Setup, Print and Print preview (RichEdit's EM_FORMATRANGE, wine-sg 0184). Opens and saves RTF, .docx and .odt (our own readers and writers) and text; tables (Insert > Table, wine-sg 0240); opens Word 97-2003 .doc; page numbers, header and footer in print. `defaults/68-sg-wordpad.reg`; wine-sg 0180 hands Wine's wordpad.exe/write.exe over; sg-start lists it. See "WordPad" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
-| `sg-pdf` | **PDF Viewer** -- `.pdf` opens out of the box (Windows opens PDFs in Edge, which we do not ship). One continuous scroll of every page, zoom (Ctrl+wheel, Ctrl+Plus/Minus, the zoom menu), fit width/fit page (Ctrl+\\), rotate (Ctrl+] / Ctrl+[), the page box (Ctrl+G), a sidebar of thumbnails or the document's bookmarks, find with every hit highlighted (Ctrl+F, F3), select text by dragging and Ctrl+C, links (inside the document and to the web), print (Ctrl+P, the Print verb), password-protected documents. Pages are rendered by Debian's poppler in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; Settings > Default apps has a PDF viewer row. See "PDF Viewer" below. |
+| `sg-pdf` | **SG PDF** -- the PDF viewer and editor; `.pdf` opens in it out of the box (Windows opens PDFs in Edge, which we do not ship). Viewing as before (continuous scroll, zoom, fit, rotate, thumbnails, bookmarks, find, select and copy, links, print, passwords) and the familiar PDF editor's tools: Edit PDF (text in place with reflow, add text and pictures, move, resize, delete), Comment (standard annotations), Fill & Sign, **Redact** (true removal, and Remove Hidden Information), Organize Pages, Export (Word, text, HTML, pictures), Combine Files, Protect (AES-256); undo and redo; light and dark. MuPDF in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it. See "SG PDF" below. |
 | `sg-browser` | **Get a web browser** -- we ship no browser (Edge is Microsoft's). Web links (`http`, `https`) and `.htm`/`.html` open it until the user has one: none installed -- it offers Firefox, Chrome and Brave, downloads the maker's installer as the winget community repository describes it, checks its SHA-256, installs it silently (or through winget when the user has it), makes it the default and opens the link; one installed -- the link opens there; several -- "How do you want to open this?". The user's choice (UserChoice, as Settings > Default apps writes it) is honoured on every link. Internet Explorer (Wine's, Gecko) is offered for simple pages. `defaults/81-sg-browser.reg`; sg-start lists it. See "Get a web browser" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
@@ -1690,75 +1690,96 @@ whose owner this user cannot see is "(not this user's)".
   each shows on its tab; Storage lists C:. `-DSG_MUTANT_CPU` turns it red.
 
 
-## PDF Viewer (sg-pdf)
+## SG PDF (sg-pdf): the PDF viewer and editor
 
-`src/pdf/`: `main.c` (window, toolbar, commands, the command line, the
-dump), `view.c` (the continuous scroll: layout, painting, zoom, rotation,
-selection, search, links), `bridge.c` (the pipe to poppler and the render
-thread), `side.c` (thumbnails and the bookmarks tree), `print.c`. The icon is
-drawn by `gen-icon.py` at build time; `pdf.rc` carries it, a common-controls 6
-manifest, the password prompt and the version information (FileDescription
-"PDF Viewer", which Settings > Default apps shows).
+`src/pdf/`: `main.c` (window, menu bar, toolbar, commands, the command line,
+the dump), `view.c` (the continuous scroll: layout, painting, zoom,
+rotation, selection, search, links), `bridge.c` (the pipe to MuPDF and the
+render thread), `side.c` (thumbnails and the bookmarks tree), `print.c`,
+`doc.c` (every change as one request, and applying the answer: page layout,
+stale bitmaps, caches; Save/Save As; the close prompt), `toolui.c` (the
+tools pane on the right and the open tool's bar), `interact.c` (the mouse
+and keyboard on the pages for each tool; the in-place editor; the dump's
+objects, comments and fields), `organize.c` (the page grid),
+`dialogs.c` (text, signature, Protect, Export, Combine, properties, Find
+Text to Redact, Remove Hidden Information, Split, permissions password; the
+file dialogs). The icon (a page with a pen) is drawn by `gen-icon.py` at
+build time; `pdf.rc` carries it, a common-controls 6 manifest, the dialogs
+and the version information (FileDescription "SG PDF", which Settings >
+Default apps shows). Never "Adobe", "Acrobat" or "Reader" in any name: the
+layout follows the familiar PDF editor's workflow, the words and art are ours.
 
-- **Poppler does the PDF, we do the window.** sg-session's `sg-pdf` (Debian's
-  poppler through GObject introspection, cairo) opens the document, renders a
-  page to BGRA at any scale and quarter turn, and answers each page's text
-  with a box per UTF-16 unit, its links, the outline and search hits -- all
-  in top-left page points; the protocol is in sg-session's CLAUDE.md. Wine
-  gives a Windows program no pipe to a native one, so the viewer re-launches
-  itself as `sg-pdf --bridge wine <itself> --bridged <args>` (as sg-dictate
-  does); `SG_PDF` names another sg-pdf. Without it the window says what is
-  missing rather than failing silently.
-- **Rendering is off the UI thread.** The view asks, at each paint, for the
-  visible pages (and the next) at the current scale and rotation; the render
-  thread reads the pixels straight into a DIB section and posts it back.
-  While a new zoom renders, the old bitmap is stretched in its place. Pages
-  far from the view drop their bitmaps. One critical section keeps each
-  request and its answer together on the shared pipe (the UI thread asks for
-  text, links and search itself -- small answers).
-- **Highlights are multiplied into the page** (`PatBlt` with DPa): the
-  selection light blue, search hits yellow, the current hit orange, and the
-  text under them stays black.
-- **Selection is by character boxes**: a caret position is the nearest box's
-  near or far side (above the first line: the start; below the last: the
-  end); a drag can cross pages; Ctrl+A loads every page's text. Copied text
-  has `\r\n` line ends.
-- **Print** renders each page at the printer's resolution (at most 300 dpi),
-  turns a page whose shape is the paper's other way round, fits and centres
-  it; `/p <file>` is Explorer's Print verb. No printer in the gate's prefix,
-  so printing is not gated yet (`SG_PDF_PRINT_TO` exists for when it is).
-- **Things that bit.** cairo (the gate's PDF maker) places every page's links
-  by the *last* page's height, so a landscape page at the end moved page 1's
-  links -- the gate's document is all Letter. The render queue's lock must
-  exist before the first paint (it did not, and the first window hung).
-  `pkill -f` on a pattern that appears in your own command line kills your
-  shell: the gate uses `taskkill`.
+- **MuPDF does the PDF, we do the window.** sg-session's `sg-pdf` (Debian's
+  python3-pymupdf; until sg-session 0.1.0-63 poppler, view-only) holds the
+  document, renders a page to BGRA, answers text, links, outline, search,
+  the page's objects, comments and fields, and makes every edit; the protocol
+  is in sg-session's CLAUDE.md. Every change answers with the new state (page
+  sizes, undo/redo depth, dirty, permissions, security, form, marks): the
+  pages are laid out again only when their number or sizes changed, and
+  what was shown stays (stale) until drawn again, so an edit does not flash.
+- **Tools** (pane on the right, or the Tools menu): **Edit PDF** (hover
+  outlines, click to pick, drag to move, handles to resize, Del; double-click
+  text or Enter: an editor over the block -- commit by a click elsewhere or
+  Ctrl+Enter, Escape cancels; the Format pane's font, size, colour, bold,
+  italic and alignment apply to the picked block or to new text; Add text;
+  Add image; Replace), **Comment** (sticky note, highlight, underline,
+  strikethrough, text box, rectangle, oval, arrow, line, free form; six
+  colours; the comments list; pick, move, Del, double-click to edit the
+  text), **Fill & Sign** (fields work with no tool too: a text field opens an
+  editor, a check box or radio button toggles, a list offers its choices;
+  Add text; Sign -- typed, drawn or a picture -- placed with a click or a
+  drag; Flatten), **Redact** (drag over text or a box over anything; Mark
+  area; Find text -- a phrase or a pattern: phone numbers, e-mail addresses,
+  social security numbers, card numbers, dates; Apply asks, then offers
+  Remove Hidden Information; saving with marks not applied asks), **Organize
+  Pages** (the grid: click, Ctrl, Shift, Ctrl+A; drag to move; rotate,
+  delete, blank page, insert from a PDF or a picture, extract, split), and
+  the dialogs **Export PDF** (Word .docx -- reflowed, honestly said so --
+  text, HTML, PNG, JPEG), **Combine Files**, **Protect** (AES-256: a
+  password to open, a permissions password with what stays allowed; File >
+  Protect > Remove Security / Enter Permissions Password). A secured
+  document says "(SECURED)" in the title.
+- **Light and dark**: the palette follows the app mode (sg-mode.h), live
+  on WM_SETTINGCHANGE "ImmersiveColorSet"; the page stays white.
+- **Rendering is off the UI thread**, as before; the in-place editor is an
+  EDIT child of the view kept over its block at each paint.
+- **Things that bit.** A second click on an Organize thumbnail within the
+  double-click time goes to the page (a gate sleeping 0.3 s between a click
+  and a drag left Organize). The dragged box must be computed before the
+  drag mode is reset (a move became a resize by handle 0). MuPDF's "remove
+  if covered" misses stroked paths, and `get_drawings()` reports what
+  annotations draw: sg-pdf works around both. A click the gate aims below the
+  view lands on the taskbar and minimizes the window: the editor gate uses
+  fit page, so every point it clicks is on the page.
 - **`SG_PDF_DUMP=<file>`** (a Windows path) is rewritten after every paint
-  and change: file, title, bridged, pages, current page, zoom, fit, rotation,
-  sidebar, bookmarks, hits and the current hit's screen rectangle, the
-  selection's length, each visible page's screen rectangle and whether its
-  bitmap is current, its first word's screen rectangle, its links, the
-  thumbnails, the tree's items, the toolbar's buttons and boxes, the focus,
-  an error.
-- **Gate: `test/pdf-check.sh`** (Xvfb picks its display; the PDF is made at
-  test time by `test/mkpdf.py` with cairo; `SG_PDF_HELPER` or a sibling
-  `../sg-session/bin/sg-pdf` or `/usr/bin/sg-pdf`): a PDF in a folder with a
-  space opened through its association (`wine start`), 4 pages, title,
-  bookmarks, page 1's word in ink where poppler puts it; Page Down to page 2,
-  its word and purple bar on the screen where the layout puts them; find
-  "zebra" (2 hits, the current one orange, F3 to page 3, Escape); a mouse
-  drag over page 2's word and Ctrl+C gives exactly "Zebra" (xclip); Ctrl+A
-  copies all four pages in order; zoom in/out, Ctrl+0; rotate; page 1's link
-  to page 3 and its web link; the bookmarks and thumbnails going to their
-  pages; **double-clicking the .pdf in an Explorer window** (the icon found
-  by its purple band in the screenshot); a qpdf-encrypted PDF asking for its
-  password; a damaged file; no sg-pdf. 32 checks. Mutants
-  `-DSG_MUTANT_FIRSTPAGE` (every page renders page 1), `-DSG_MUTANT_COPY`
-  (the copy starts one character late) and `-DSG_MUTANT_NOHITS` (hits not
-  drawn), run with `SG_PDF_EXE=`, each turn it red. Screenshots
-  `build/pdf-*.png`.
-- **Not yet:** forms, annotations and highlighting of our own, two-page view,
-  presentation mode, a printing gate, remembering the last page per file.
+  and change: as before, plus the state (undo, redo, dirty, perms,
+  encrypted, protect, form, redactions), the tool and subtool, the tool bar's
+  and pane's buttons (`tbtn NAME x y on enabled`, `panebtn NAME x y`), the
+  list items, the format, the pick, the editor, each visible page's objects
+  (`obj`), comments (`annot`), fields (`field`), the organize grid (`org`),
+  the dark mode, a status message. `SG_PDF_QUIET` leaves out "done" and
+  error message boxes (the status says it); `SG_PDF_FILE_ANSWERS=<file>`
+  answers the file dialogs a line each (paths joined by `|` for several).
+- **Gates:** `test/pdf-check.sh` (the viewer, unchanged: association,
+  scroll, find, select and copy, zoom, rotate, links, bookmarks, thumbnails,
+  Explorer's double-click, a password, a damaged file, no sg-pdf; its
+  mutants `-DSG_MUTANT_FIRSTPAGE`, `-DSG_MUTANT_COPY`, `-DSG_MUTANT_NOHITS`)
+  and **`test/pdf-editor-check.sh`** (the editor, driven on the X mouse and
+  keyboard, every result read back from the saved file from outside by
+  `test/pdf-editor-probe.py` -- MuPDF, pdftotext, qpdf): edit a paragraph in
+  place, move and resize a picture, delete a line, add text, save, undo and
+  redo in the saved file; every comment kind saved as its annotation, one
+  deleted; closing with changes asks; a form filled with the mouse (text,
+  check box, radio, combo), signed, flattened, saved as; redaction by Find
+  text, a pattern, a text drag and an area, applied with hidden information
+  removed -- nothing of it left in pdftotext or any raw stream, the
+  picture's pixels changed; organize (rotate, delete, drag, blank); export to
+  Word; combine; protect (qpdf shows AESv3, reopening asks for the
+  password); the dark palette. Mutants: see the commit message.
+- **Not yet:** a paragraph with mixed fonts takes its dominant font when
+  edited; curved vector paths under a redaction mark are removed whole (not
+  cut); moving a path redraws it (its stacking order changes); no OCR, no
+  digital (certificate) signatures, no two-page view or presentation mode.
 
 ## Get a web browser (sg-browser)
 

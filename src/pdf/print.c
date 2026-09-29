@@ -1,7 +1,7 @@
-/* sg-pdf -- PDF Viewer: printing.
+/* sg-pdf -- SG PDF: printing.
  *
  * The Print dialog (printer, pages, copies), then each page rendered by
- * poppler at the printer's resolution (at most 300 dpi -- beyond that the
+ * MuPDF at the printer's resolution (at most 300 dpi -- beyond that the
  * bitmap grows and nothing gets sharper on paper), turned to suit the paper
  * (a landscape page on portrait paper is turned a quarter), fitted into the
  * printable area and centred. SG_PDF_PRINT_TO=<file> prints to that file on

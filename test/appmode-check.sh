@@ -68,7 +68,8 @@ charmap SgCharMap sg-charmap64.exe - all
 paint SgPaintMain sg-paint64.exe - top
 snip SgSnippingTool sg-snip64.exe - all
 zip SgZipBrowse sg-zip64.exe ZIP all
-mmc MMCMainFrame sg-mmc64.exe services.msc all'
+mmc MMCMainFrame sg-mmc64.exe services.msc all
+pdf SgPdfWindow sg-pdf64.exe - top'
 
 check() {   # app class stage: prints "<title mean> <client mean>"
     stage=$3

@@ -1,4 +1,4 @@
-/* sg-pdf -- PDF Viewer: the pages, in one continuous scroll.
+/* sg-pdf -- SG PDF: the pages, in one continuous scroll.
  *
  * Pages are laid out top to bottom at the zoom (fit width, fit page, or a
  * percentage), each drawn from the bitmap the render thread made for this
@@ -69,7 +69,7 @@ void view_page_to_client(int i, float x, float y, POINT *pt)
     pt->y = p->y - g.sy + (int)floor(dy + 0.5);
 }
 
-static void client_to_page(int i, int cx, int cy, float *x, float *y)
+void view_client_to_page(int i, int cx, int cy, float *x, float *y)
 {
     page_t *p = &g.pages[i];
     double s = view_scale();
@@ -359,6 +359,19 @@ static void follow_link(int page, int k)
         ShellExecuteW(g_main, NULL, l->uri, NULL, NULL, SW_SHOWNORMAL);
 }
 
+/* the page under a client point; clamp: the nearest page */
+int view_page_at(POINT pt, BOOL clamp)
+{
+    int i;
+    for (i = 0; i < g.npages; i++) {
+        RECT rc;
+        view_page_rect(i, &rc);
+        if (PtInRect(&rc, pt)) return i;
+        if (clamp && (pt.y < rc.bottom + GAP / 2 || i == g.npages - 1)) return i;
+    }
+    return -1;
+}
+
 /* the caret position (between characters) nearest a point; clamp: to the nearest page */
 static BOOL caret_at(POINT pt, caret_t *c, BOOL clamp)
 {
@@ -377,7 +390,7 @@ static BOOL caret_at(POINT pt, caret_t *c, BOOL clamp)
     if (pg < 0) return FALSE;
     if (!page_load_text(pg)) return FALSE;
     p = &g.pages[pg];
-    client_to_page(pg, pt.x, pt.y, &x, &y);
+    view_client_to_page(pg, pt.x, pt.y, &x, &y);
     c->page = pg;
     c->pos = 0;
     for (i = 0; i < p->ntext; i++) {
@@ -406,7 +419,7 @@ static BOOL over_text(POINT pt)
         view_page_rect(i, &rc);
         if (!PtInRect(&rc, pt)) continue;
         if (!page_load_text(i)) return FALSE;
-        client_to_page(i, pt.x, pt.y, &x, &y);
+        view_client_to_page(i, pt.x, pt.y, &x, &y);
         for (k = 0; k < g.pages[i].ntext; k++) {
             frect *b = &g.pages[i].boxes[k];
             if (x >= b->x1 - 2 && x <= b->x2 + 2 && y >= b->y1 && y <= b->y2) return TRUE;
@@ -414,6 +427,11 @@ static BOOL over_text(POINT pt)
         return FALSE;
     }
     return FALSE;
+}
+
+BOOL view_over_text(POINT pt)
+{
+    return over_text(pt);
 }
 
 static int caret_cmp(const caret_t *a, const caret_t *b)
@@ -473,6 +491,42 @@ void view_copy(void)
         } else GlobalFree(mem);
     }
     free(text);
+}
+
+BOOL view_has_selection(void)
+{
+    return g.has_sel;
+}
+
+void view_clear_selection(void)
+{
+    if (!g.has_sel) return;
+    g.has_sel = FALSE;
+    InvalidateRect(g_view, NULL, FALSE);
+    app_status_changed();
+}
+
+/* the selected characters of one page as rectangles, one a line (page points) */
+int view_selection_rects(int page, frect *out, int cap)
+{
+    caret_t a, b;
+    page_t *p;
+    int from, to, k, n = 0;
+    if (!g.has_sel || page < 0 || page >= g.npages) return 0;
+    sel_order(&a, &b);
+    if (page < a.page || page > b.page || !page_load_text(page)) return 0;
+    p = &g.pages[page];
+    from = page == a.page ? a.pos : 0;
+    to = page == b.page ? b.pos : p->ntext;
+    for (k = from; k < to && k < p->ntext; k++) {
+        frect *c = &p->boxes[k];
+        if (p->text[k] == '\n' || c->x2 <= c->x1) continue;
+        if (n && fabsf(c->y1 - out[n - 1].y1) < 0.5f * (out[n - 1].y2 - out[n - 1].y1) && c->x1 >= out[n - 1].x1 - 1) {
+            out[n - 1].x1 = min(out[n - 1].x1, c->x1); out[n - 1].x2 = max(out[n - 1].x2, c->x2);
+            out[n - 1].y1 = min(out[n - 1].y1, c->y1); out[n - 1].y2 = max(out[n - 1].y2, c->y2);
+        } else if (n < cap) out[n++] = *c;
+    }
+    return n;
 }
 
 void view_select_all(void)
@@ -590,13 +644,16 @@ void view_rendered(int page, BOOL thumb, double scale, int rot, int gen, HBITMAP
         p->tw = w;
         p->th = h;
         p->trot = rot;
+        p->tstale = FALSE;
         side_update();
+        org_update();
         app_dump();
         return;
     }
     if (fabs(scale - view_scale()) > 1e-4 || rot != g.rot) {
-        /* made for a zoom we left: still better than nothing if there is nothing */
-        if (p->bmp) { DeleteObject(bmp); return; }
+        /* made for a zoom we left: still better than nothing, or than a page
+         * drawn before the last change */
+        if (p->bmp && !p->stale) { DeleteObject(bmp); return; }
     }
     if (p->bmp) DeleteObject(p->bmp);
     p->bmp = bmp;
@@ -604,6 +661,7 @@ void view_rendered(int page, BOOL thumb, double scale, int rot, int gen, HBITMAP
     p->bh = h;
     p->bscale = scale;
     p->brot = rot;
+    p->stale = FALSE;
     {
         RECT rc;
         view_page_rect(page, &rc);
@@ -685,7 +743,8 @@ static void paint(HDC out)
             } else FillRect(dc, &rc, white);
             SelectObject(mem, ob);
         } else FillRect(dc, &rc, white);
-        if (!p->bmp || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(i, s, g.rot, FALSE);
+        if (!p->bmp || p->stale || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(i, s, g.rot, FALSE);
+        fields_paint(dc, i);
 
         /* search hits, the current one stronger */
 #ifdef SG_MUTANT_NOHITS
@@ -716,8 +775,9 @@ static void paint(HDC out)
     /* the next page too, so scrolling on finds it ready */
     if (last_visible >= 0 && last_visible + 1 < g.npages) {
         page_t *p = &g.pages[last_visible + 1];
-        if (!p->bmp || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(last_visible + 1, s, g.rot, FALSE);
+        if (!p->bmp || p->stale || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(last_visible + 1, s, g.rot, FALSE);
     }
+    tool_paint(dc);
 
     BitBlt(out, 0, 0, cr.right, cr.bottom, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbuf);
@@ -767,6 +827,18 @@ static void drag_to(POINT pt)
 static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
+    case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_MOUSEMOVE: case WM_LBUTTONDBLCLK: case WM_RBUTTONUP:
+        if (tool_mouse(hwnd, msg, wp, lp)) return 0;
+        break;
+    case WM_APP + 10:
+        tool_commit_editor();
+        return 0;
+    case WM_CTLCOLOREDIT:
+        /* the editor over the page: the page's white */
+        SetBkColor((HDC)wp, RGB(0xFF, 0xFF, 0xFF));
+        return (LRESULT)GetStockObject(WHITE_BRUSH);
+    }
+    switch (msg) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
@@ -780,6 +852,7 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (g.npages) relayout_at(NULL);
         return 0;
     case WM_VSCROLL: scroll_msg(SB_VERT, LOWORD(wp)); return 0;
+    case WM_COMMAND: return 0;
     case WM_HSCROLL: scroll_msg(SB_HORZ, LOWORD(wp)); return 0;
     case WM_MOUSEWHEEL: {
         int delta = GET_WHEEL_DELTA_WPARAM(wp);
@@ -798,6 +871,7 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_KEYDOWN: {
         int cw, ch;
         BOOL ctrl = GetKeyState(VK_CONTROL) < 0;
+        if (tool_key(wp)) return 0;
         client_size(&cw, &ch);
         switch (wp) {
         case VK_UP: view_scroll_to(g.sx, g.sy - dpx(40)); return 0;
@@ -906,14 +980,20 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_SETCURSOR:
-        if (LOWORD(lp) == HTCLIENT && g_cursor) { SetCursor(g_cursor); return TRUE; }
+        if (LOWORD(lp) == HTCLIENT) {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+            if (tool_setcursor(pt)) return TRUE;
+            if (g_cursor) { SetCursor(g_cursor); return TRUE; }
+        }
         break;
     case WM_APP_RENDERED:
         return bridge_on_rendered(lp);
     case WM_APP_GONE:
         if (g.bridged) {
             g.bridged = FALSE;
-            if (!g.npages) lstrcpynW(g.error, L"The PDF reader (sg-pdf) stopped.", 256);
+            if (!g.npages) lstrcpynW(g.error, L"The PDF engine (sg-pdf) stopped.", 256);
             InvalidateRect(hwnd, NULL, FALSE);
             app_status_changed();
         }

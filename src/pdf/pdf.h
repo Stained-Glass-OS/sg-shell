@@ -1,4 +1,4 @@
-/* sg-pdf -- PDF Viewer: what its parts share.
+/* sg-pdf -- SG PDF: what its parts share.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -9,7 +9,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define _WIN32_WINNT 0x0A00
 #include <windows.h>
-#include "../sg-mode.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <stdio.h>
@@ -18,24 +17,33 @@
 #include <math.h>
 #include <wctype.h>
 
-#define APP_NAME L"PDF Viewer"
+#define APP_NAME L"SG PDF"
 
-/* colours: Stained Glass Light */
-#define C_BAR      RGB(0xFF, 0xFF, 0xFF)
-#define C_LINE     RGB(0xE0, 0xE0, 0xE0)
-#define C_CANVAS   RGB(0xE9, 0xE9, 0xEC)
-#define C_SIDE     RGB(0xF3, 0xF3, 0xF3)
-#define C_TEXT     RGB(0x1F, 0x1F, 0x1F)
-#define C_SUBTEXT  RGB(0x60, 0x60, 0x60)
-#define C_HOVER    RGB(0xEB, 0xEB, 0xEB)
-#define C_PRESS    RGB(0xDD, 0xDD, 0xDD)
-#define C_ACCENT   (sg_accent())
-#define C_ACTIVE   RGB(0xEE, 0xE6, 0xF8)
-#define C_SHADOW   RGB(0xC8, 0xC8, 0xCC)
+/* colours: Stained Glass Light and Dark (the app mode, sg-mode.h) */
+typedef struct {
+    COLORREF bar, line, canvas, side, text, subtext, hover, press, accent, active, shadow, pane, edit, disabled;
+} palette_t;
+extern palette_t P;
+#define C_BAR      (P.bar)
+#define C_LINE     (P.line)
+#define C_CANVAS   (P.canvas)
+#define C_SIDE     (P.side)
+#define C_TEXT     (P.text)
+#define C_SUBTEXT  (P.subtext)
+#define C_HOVER    (P.hover)
+#define C_PRESS    (P.press)
+#define C_ACCENT   (P.accent)
+#define C_ACTIVE   (P.active)
+#define C_SHADOW   (P.shadow)
+#define C_PANE     (P.pane)
+#define C_EDITBG   (P.edit)
+#define C_DISABLED (P.disabled)
 /* highlights are multiplied into the page (DPa), so the text stays black */
 #define C_SELECT   RGB(0xB5, 0xD5, 0xFF)
 #define C_HIT      RGB(0xFF, 0xEB, 0x3B)
 #define C_HITCUR   RGB(0xFF, 0x96, 0x32)
+#define C_FIELD    RGB(0xDD, 0xE6, 0xFF)
+#define C_REDMARK  RGB(0xD0, 0x10, 0x10)
 
 #define WM_APP_RENDERED  (WM_APP + 1)
 #define WM_APP_GONE      (WM_APP + 2)
@@ -49,6 +57,38 @@ typedef struct {
     WCHAR *uri;
 } link_t;
 
+/* Edit PDF: a page's objects, as sg-pdf's "objects" reports them */
+enum { OBJ_TEXT, OBJ_IMAGE, OBJ_PATH };
+typedef struct {
+    int kind, id;
+    frect box;
+    WCHAR font[64];
+    float size, lh;
+    COLORREF color;
+    int style;              /* 1 bold, 2 italic */
+    int align;
+    int xref;
+    WCHAR *text;
+} obj_t;
+
+/* Comment: a page's annotations */
+typedef struct {
+    int xref;
+    char type[16];          /* Highlight, Text, FreeText, Square, ... Redact */
+    frect box;
+    COLORREF color;
+    WCHAR *author, *contents;
+} annot_t;
+
+/* Fill & Sign: the document's form fields */
+enum { FLD_TEXT, FLD_CHECK, FLD_RADIO, FLD_COMBO, FLD_LIST, FLD_BUTTON, FLD_SIGNATURE, FLD_OTHER };
+typedef struct {
+    int page, xref, type, flags;
+    frect box;
+    float fontsize;
+    WCHAR *name, *value, *options;  /* options: '\n' between them */
+} field_t;
+
 typedef struct {
     double w, h;            /* points */
     /* the rendered page (UI thread only) */
@@ -57,6 +97,7 @@ typedef struct {
     double bscale;
     HBITMAP thumb;
     int tw, th, trot;
+    BOOL stale, tstale;     /* drawn before the last change: shown until redrawn */
     /* text and links, loaded when first needed */
     BOOL text_loaded, links_loaded;
     WCHAR *text;
@@ -64,6 +105,12 @@ typedef struct {
     int ntext;
     link_t *links;
     int nlinks;
+    /* the editor's view of the page, loaded when first needed */
+    BOOL objs_loaded, annots_loaded;
+    obj_t *objs;
+    int nobjs;
+    annot_t *annots;
+    int nannots;
     /* layout, in document pixels at the current zoom */
     int x, y, dw, dh;
 } page_t;
@@ -75,6 +122,21 @@ typedef struct { int page, pos; } caret_t;
 enum { FIT_NONE, FIT_WIDTH, FIT_PAGE };
 enum { SIDE_NONE, SIDE_THUMBS, SIDE_OUTLINE };
 
+/* the tools (the right-hand pane) and what each does with the mouse */
+enum { TOOL_NONE, TOOL_EDIT, TOOL_COMMENT, TOOL_FILL, TOOL_REDACT, TOOL_ORGANIZE, TOOL_COUNT };
+enum {
+    SUB_SELECT = 0,
+    SUB_ADDTEXT, SUB_ADDIMAGE,                                          /* Edit PDF */
+    SUB_NOTE, SUB_HIGHLIGHT, SUB_UNDERLINE, SUB_STRIKE, SUB_FREETEXT,   /* Comment */
+    SUB_RECT, SUB_ELLIPSE, SUB_ARROW, SUB_LINE, SUB_INK,
+    SUB_FILLTEXT, SUB_SIGN,                                             /* Fill & Sign */
+    SUB_MARKTEXT, SUB_MARKAREA,                                         /* Redact */
+};
+
+/* what is picked (Edit PDF: an object; Comment and Redact: an annotation) */
+enum { PICK_NONE, PICK_OBJ, PICK_ANNOT };
+typedef struct { int kind, page, index; } pick_t;
+
 typedef struct {
     /* the document */
     WCHAR path[MAX_PATH];       /* Windows path */
@@ -82,10 +144,19 @@ typedef struct {
     WCHAR doc_title[256];
     page_t *pages;
     int npages;
-    int generation;             /* bumped for each document opened */
+    int generation;             /* bumped for each document opened, and each change */
     outline_t *outline;
     int noutline;
     WCHAR error[256];
+    /* the document's state, as sg-pdf reports it after each change */
+    int undo, redo;
+    BOOL dirty, encrypted, form;
+    unsigned perms;
+    char protect[16];
+    int nredact;
+    field_t *fields;
+    int nfields;
+    BOOL fields_loaded;
     /* the view */
     double zoom;                /* 1.0 = 100% */
     int fit;
@@ -94,6 +165,7 @@ typedef struct {
     int docw, doch;             /* laid-out size */
     int current;                /* the page in the middle of the view */
     int side;
+    BOOL pane;                  /* the tools pane on the right */
     /* search */
     WCHAR needle[256];
     hit_t *hits;
@@ -102,15 +174,31 @@ typedef struct {
     /* selection */
     caret_t sel_a, sel_b;
     BOOL selecting, has_sel;
+    /* the tools */
+    int tool, sub;
+    pick_t pick;
+    WCHAR fmt_font[64];         /* Edit PDF / Add text: the format for new text */
+    float fmt_size;
+    COLORREF fmt_color;
+    int fmt_style, fmt_align;
+    COLORREF ccolor;            /* Comment: the colour */
+    int sig_kind;               /* Fill & Sign: the signature to place (0 none, 1 ink, 2 text, 3 image) */
+    WCHAR *sig_data;
+    WCHAR image_path[MAX_PATH]; /* Edit PDF: the picture to place */
+    WCHAR status[256];          /* the last message (an edit refused ...) */
+    /* organize */
+    BOOL *org_sel;
+    int org_anchor;
     /* bridge */
     BOOL bridged;
     UINT dpi;
+    BOOL dark;
 } app_t;
 
 extern app_t g;
-extern HWND g_main, g_view, g_bar, g_side, g_tree;
+extern HWND g_main, g_view, g_bar, g_side, g_tree, g_tbar, g_pane, g_org;
 extern HINSTANCE g_inst;
-extern HFONT g_font, g_font_small, g_font_bold;
+extern HFONT g_font, g_font_small, g_font_bold, g_font_title;
 
 /* main.c */
 int dpx(int px);
@@ -120,6 +208,10 @@ void app_dump(void);
 BOOL app_open(const WCHAR *path);
 void app_status_changed(void);
 void app_command(int cmd);
+void app_set_status(const WCHAR *fmt, ...);
+char *unix_path(const WCHAR *path);
+void app_apply_mode(void);
+BOOL app_can(unsigned perm);
 
 /* bridge.c */
 BOOL br_start(void);
@@ -133,6 +225,22 @@ void render_want(int page, double scale, int rot, BOOL thumb);
 void render_clear_wants(BOOL thumbs);
 void to_utf8(const WCHAR *w, char *out, int cap);
 WCHAR *from_utf8(const char *s, int len);
+char *esc_utf8(const WCHAR *w);         /* UTF-8 with \t \n \r \\ escaped; free it */
+WCHAR *unesc_utf8(const char *s, int len);
+
+/* doc.c: requests that change the document, and what they change */
+BOOL doc_request(const char *line);     /* TRUE: done; FALSE: refused (g.status says why) */
+BOOL doc_requestf(const char *fmt, ...);
+void doc_apply_state(const char *head, const BYTE *data, DWORD len);
+void doc_free_page_cache(page_t *p);
+BOOL doc_load_objects(int page);
+BOOL doc_load_annots(int page);
+BOOL doc_load_fields(void);
+void doc_free_fields(void);
+BOOL doc_save(BOOL save_as);
+BOOL doc_close_prompt(void);           /* FALSE: the user cancelled */
+void doc_undo(int dir);
+void doc_pages_spec(char *out, int cap, const int *pages, int n);
 
 /* view.c */
 void view_register(void);
@@ -148,11 +256,17 @@ void view_find_clear(void);
 void view_copy(void);
 void view_select_all(void);
 void view_page_to_client(int page, float x, float y, POINT *pt);
+void view_client_to_page(int page, int cx, int cy, float *x, float *y);
+int view_page_at(POINT pt, BOOL clamp);      /* the page under a client point, -1 none */
 void view_box_to_client(int page, const frect *b, RECT *rc);
 BOOL page_load_text(int page);
 BOOL page_load_links(int page);
 void view_rendered(int page, BOOL thumb, double scale, int rot, int gen, HBITMAP bmp, int w, int h);
 void view_free_far(void);
+int view_selection_rects(int page, frect *out, int cap);  /* the selection on a page, one rect a line */
+BOOL view_has_selection(void);
+BOOL view_over_text(POINT pt);
+void view_clear_selection(void);
 
 /* side.c */
 void side_register(void);
@@ -161,14 +275,63 @@ void side_set_mode(int mode);
 void side_update(void);
 void side_load_outline(void);
 void side_ensure_visible(int page);
-
 BOOL side_thumb_rect(int i, RECT *out);
 BOOL side_tab_center(int k, POINT *pt);
+void side_apply_mode(void);
 
 /* print.c */
 void print_document(void);
 
-/* toolbar (main.c) */
+/* toolui.c: the tools pane and each tool's bar */
+void toolui_register(void);
+void toolui_create(HWND parent);
+void tool_set(int tool);
+void tool_set_sub(int sub);
+void toolui_update(void);                /* the state changed: enable, check, refresh lists */
+void toolui_layout(void);
+int toolui_bar_height(void);
+int toolui_pane_width(void);
+void toolui_dump(FILE *f);
+void toolui_format_from_pick(void);
+const WCHAR *tool_name(int tool);
+
+/* interact.c: the mouse and the keyboard on the pages, by tool */
+BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+BOOL tool_key(WPARAM vk);
+BOOL tool_setcursor(POINT pt);
+void tool_paint(HDC dc);
+void tool_cancel(void);
+void tool_dump(FILE *f);
+BOOL tool_editor_open(void);
+void tool_commit_editor(void);
+void tool_delete_pick(void);
+void tool_after_change(void);
+void fields_paint(HDC dc, int page);
+
+/* dialogs.c */
+BOOL dlg_text(HWND owner, const WCHAR *title, const WCHAR *prompt, WCHAR *buf, int cap, BOOL multiline);
+BOOL dlg_signature(HWND owner);
+void dlg_protect(void);
+void dlg_export_as(int kind);        /* 0: ask; 1 docx, 2 txt, 3 png, 4 jpeg, 5 html */
+void dlg_combine(void);
+void dlg_properties(void);
+void dlg_find_redact(void);
+void dlg_sanitize(BOOL after_apply);
+void dlg_split(void);
+BOOL dlg_permissions_password(void);
+BOOL file_dialog(BOOL save, const WCHAR *title, const WCHAR *filter, const WCHAR *defext, WCHAR *out, int cap);
+BOOL file_dialog_multi(const WCHAR *title, const WCHAR *filter, WCHAR ***files, int *n);
+
+/* organize.c */
+void org_register(void);
+HWND org_create(HWND parent);
+void org_show(BOOL on);
+void org_update(void);
+void org_dump(FILE *f);
+void org_command(int cmd);
+int org_selected(int *out, int cap);
+
+/* commands (the menu, the bars, the keyboard) */
 #define CMD_OPEN 100
 #define CMD_PRINT 101
 #define CMD_ZOOMIN 102
@@ -190,5 +353,48 @@ void print_document(void);
 #define CMD_FIRST 118
 #define CMD_LAST 119
 #define CMD_PROPERTIES 120
+#define CMD_SAVE 121
+#define CMD_SAVEAS 122
+#define CMD_UNDO 123
+#define CMD_REDO 124
+#define CMD_CLOSE 125
+#define CMD_EXIT 126
+#define CMD_PANE 127
+#define CMD_ABOUT 128
+/* tools: CMD_TOOL + TOOL_x */
+#define CMD_TOOL 140
+#define CMD_EXPORT 150
+#define CMD_EXPORT_DOCX 151
+#define CMD_EXPORT_TXT 152
+#define CMD_EXPORT_PNG 153
+#define CMD_EXPORT_JPEG 154
+#define CMD_EXPORT_HTML 155
+#define CMD_COMBINE 156
+#define CMD_PROTECT 157
+#define CMD_UNPROTECT 158
+#define CMD_UNLOCK 159
+#define CMD_SANITIZE 160
+#define CMD_FINDREDACT 161
+#define CMD_APPLYREDACT 162
+#define CMD_FLATTEN 163
+#define CMD_SIGN 164
+#define CMD_DELETE 165
+#define CMD_REPLACEIMAGE 166
+#define CMD_TOOLCLOSE 167
+/* subtools: CMD_SUB + SUB_x */
+#define CMD_SUB 170
+/* organize */
+#define CMD_ORG_ROTL 200
+#define CMD_ORG_ROTR 201
+#define CMD_ORG_DELETE 202
+#define CMD_ORG_BLANK 203
+#define CMD_ORG_INSERT 204
+#define CMD_ORG_EXTRACT 205
+#define CMD_ORG_SPLIT 206
+#define CMD_ORG_SELALL 207
+/* comment colours: CMD_COLOR + index */
+#define CMD_COLOR 220
+#define NCOLORS 6
+extern const COLORREF COMMENT_COLORS[NCOLORS];
 
 #endif

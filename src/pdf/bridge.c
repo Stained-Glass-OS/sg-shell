@@ -1,13 +1,13 @@
-/* sg-pdf -- PDF Viewer: talking to the Linux half (sg-session's sg-pdf).
+/* sg-pdf -- SG PDF: talking to the Linux half (sg-session's sg-pdf, MuPDF).
  *
  * Wine gives a Windows program no AF_UNIX and no pipe to a native program,
  * so the viewer re-launches itself as `sg-pdf --bridge wine <itself>
- * --bridged ...` and its standard handles are then pipes to poppler. One
+ * --bridged ...` and its standard handles are then pipes to MuPDF. One
  * request a line; each answer a line, "OK ... bytes=N" or "ERR kind msg",
  * then N bytes (see sg-pdf's header for the protocol).
  *
- * The pipe is shared by the UI thread (text, links, search, outline: small
- * answers) and the render thread (bitmaps); a critical section keeps each
+ * The pipe is shared by the UI thread (text, links, search, outline, every
+ * edit: small answers) and the render thread (bitmaps); a critical section keeps each
  * request and its answer together. The render thread reads a page's pixels
  * straight into the DIB section it hands to the view.
  *
@@ -35,6 +35,47 @@ WCHAR *from_utf8(const char *s, int len)
     if (!w) return NULL;
     MultiByteToWideChar(CP_UTF8, 0, s, len, w, n);
     w[n] = 0;
+    return w;
+}
+
+/* text for a request field: UTF-8, with tab, new line, carriage return and
+ * backslash escaped by a backslash (sg-pdf's unesc) */
+char *esc_utf8(const WCHAR *w)
+{
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, NULL, 0, NULL, NULL), i, k = 0;
+    char *u, *out;
+    if (n <= 0 || !(u = malloc(n))) return NULL;
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, u, n, NULL, NULL);
+    if (!(out = malloc(n * 2 + 1))) { free(u); return NULL; }
+    for (i = 0; u[i]; i++) {
+        char c = u[i];
+        if (c == '\\' || c == '\t' || c == '\n' || c == '\r') {
+            out[k++] = '\\';
+            out[k++] = c == '\t' ? 't' : c == '\n' ? 'n' : c == '\r' ? 'r' : '\\';
+        } else out[k++] = c;
+    }
+    out[k] = 0;
+    free(u);
+    return out;
+}
+
+/* a field of an answer: UTF-8 with sg-pdf's escapes -> UTF-16 */
+WCHAR *unesc_utf8(const char *s, int len)
+{
+    char *u;
+    WCHAR *w;
+    int i, k = 0;
+    if (len < 0) len = (int)strlen(s);
+    if (!(u = malloc(len + 1))) return NULL;
+    for (i = 0; i < len; i++) {
+        if (s[i] == '\\' && i + 1 < len) {
+            char n = s[++i];
+            u[k++] = n == 't' ? '\t' : n == 'n' ? '\n' : n == 'r' ? '\r' : n;
+        } else u[k++] = s[i];
+    }
+    u[k] = 0;
+    w = from_utf8(u, -1);
+    free(u);
     return w;
 }
 

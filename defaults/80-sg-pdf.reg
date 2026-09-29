@@ -1,10 +1,10 @@
 Windows Registry Editor Version 5.00
 
-; Stained Glass OS -- PDF Viewer (sg-pdf).
+; Stained Glass OS -- SG PDF (sg-pdf), the PDF viewer and editor.
 ;
-; PDF files open in our viewer out of the box (Windows opens them in its
+; PDF files open in SG PDF out of the box (Windows opens them in its
 ; browser, which we do not ship): .pdf's default ProgID is
-; StainedGlass.PDF.Document, with the viewer in OpenWithProgids so a PDF
+; StainedGlass.PDF.Document, with SG PDF in OpenWithProgids so a PDF
 ; program installed later still leaves it in Open with. Wine's own "pdffile"
 ; ProgID (wine.inf, which sends PDFs to winebrowser) is pointed at it too.
 ; The Print verb is `sg-pdf64.exe /p <file>`.
@@ -44,7 +44,7 @@ Windows Registry Editor Version 5.00
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-pdf64.exe]
-"FriendlyAppName"="PDF Viewer"
+"FriendlyAppName"="SG PDF"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-pdf64.exe\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-pdf64.exe\" \"%1\""

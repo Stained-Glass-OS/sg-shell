@@ -1,6 +1,7 @@
 #!/usr/bin/python3
-# The PDF Viewer's icon, drawn here at build time (no artwork is committed):
-# a white page with a folded corner, lines of text, and a purple band.
+# SG PDF's icon, drawn here at build time (no artwork is committed): a
+# white page with a folded corner, lines of text, a purple band, and a pen
+# across its corner (it edits, too).
 #
 #   gen-icon.py OUT.ico
 #
@@ -33,6 +34,20 @@ def draw():
     by0, by1 = y1 - 330, y1 - 110
     d.rectangle([x0 - 70, by0, x1 - 40, by1], fill=(112, 48, 192, 255))
     d.rounded_rectangle([x0 + 20, (by0 + by1) // 2 - 28, x1 - 170, (by0 + by1) // 2 + 28], radius=28, fill=(255, 255, 255, 255))
+    # the pen: a charcoal barrel from the top right down over the page, a gold nib
+    import math
+    ang = math.radians(135)
+    tipx, tipy = x1 - 250, y0 + 520
+    dx, dy = -math.cos(ang), -math.sin(ang)          # up and to the right
+    nx, ny = -dy, dx
+    w, length, nib = 58, 430, 120
+    def pt(a, b):
+        return (tipx + dx * a + nx * b, tipy + dy * a + ny * b)
+    d.polygon([pt(nib, -w), pt(nib + length, -w), pt(nib + length, w), pt(nib, w)], fill=(0x2E, 0x2E, 0x36, 255))
+    d.polygon([pt(nib + length, -w), pt(nib + length + 50, -w + 12), pt(nib + length + 50, w - 12), pt(nib + length, w)],
+              fill=(0x55, 0x55, 0x60, 255))
+    d.polygon([pt(0, 0), pt(nib, -w), pt(nib, w)], fill=(0xF2, 0xB6, 0x1B, 255))
+    d.polygon([pt(0, 0), pt(40, -18), pt(40, 18)], fill=(0x2E, 0x2E, 0x36, 255))
     return im
 
 
