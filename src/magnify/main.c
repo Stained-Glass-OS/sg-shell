@@ -892,6 +892,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
                                 NULL, NULL, inst, NULL);
     }
     if (!g_bar) return 1;
+    /* on every virtual desktop, as the magnified view is: the toolbar stayed
+     * on the desktop it opened on while the view followed to the next one,
+     * and explorer hiding it again and again as it was raised flickered it
+     * (explorer's pinned-window mark, wine-sg 0068) */
+    SetPropW(g_bar, L"__sg_vdesk_pinned", (HANDLE)1);
 
     RegisterHotKey(g_bar, HK_FULL, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'F');
     RegisterHotKey(g_bar, HK_LENS, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'L');

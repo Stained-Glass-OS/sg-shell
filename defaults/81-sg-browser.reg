@@ -62,3 +62,12 @@ Windows Registry Editor Version 5.00
 "Publisher"="Microsoft"
 "Description"="Microsoft's browser, downloaded from Microsoft."
 "Colour"=dword:000078d4
+
+; Microsoft Edge, installed from here, opened no window (David): its first-run
+; page ends the browser here, and its renderers, sandboxed in an AppContainer
+; (which Wine does not provide), crash -- STATUS_ACCESS_VIOLATION on every
+; tab. Edge's own policies turn both off; the rest of its sandbox stays.
+; (Edge shows "managed by your organization" for a machine with policies.)
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Edge]
+"HideFirstRunExperience"=dword:00000001
+"RendererAppContainerEnabled"=dword:00000000
