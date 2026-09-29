@@ -1783,9 +1783,14 @@ static void layout_panel(void)
     if (g_centered)
     {
         HRGN round;
+        /* the centred panel follows the taskbar's alignment: over a left-aligned
+         * Start button when the taskbar is Left, else centred on the screen
+         * (Settings > Personalization > Taskbar > Taskbar alignment) */
+        BOOL centre_al = reg_value(ADVANCED_KEY, L"TaskbarAl", 1) != 0;
         g_panel_w = min(S(C_W), work.right - work.left);
         g_panel_h = min(S(C_H), work.bottom - work.top - S(12));
-        x = (work.left + work.right - g_panel_w) / 2;
+        x = !centre_al && (abd.uEdge == ABE_BOTTOM || abd.uEdge == ABE_TOP) ? work.left + S(12)
+                                                                            : (work.left + work.right - g_panel_w) / 2;
         y = abd.uEdge == ABE_TOP ? work.top + S(12) : work.bottom - g_panel_h - S(12);
         round = CreateRoundRectRgn(0, 0, g_panel_w + 1, g_panel_h + 1, S(16), S(16));
         SetWindowRgn(g_panel, round, TRUE);
@@ -1832,12 +1837,12 @@ static void show_panel(BOOL show)
         load_pins();
         g_search[0] = 0;
         g_rail_open = FALSE;
+        load_start_settings();   /* before build_rows(): the list/tiles are built for the current layout */
         build_rows();
         g_scroll = 0;
         g_hot_row = g_hot_tile = g_hot_rail = g_sel_row = g_sel_tile = -1;
         g_launched[0] = 0;
         (void)work; (void)sh; (void)sw;
-        load_start_settings();
         if (g_centered) c_recommend();
         g_hot_c = -1;
         layout_panel();

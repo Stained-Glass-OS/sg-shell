@@ -1,3 +1,21 @@
+sg-shell (0.1.0-69) unstable; urgency=medium
+
+  * Start layout: switching Tiles -> Centered -> Tiles loads the layout
+    settings before the menu's rows are built, so the app list is not
+    left in the previous (centred) state on the first paint.
+  * Centered Start follows the taskbar alignment: with Taskbar alignment
+    set to Left, the centred Start opens over the left Start button
+    instead of the middle of the screen.
+  * Start layout option no longer reads as a recommendation: the centred
+    option is "Centered: pinned and recent apps" (was "... Recommended");
+    Tiles stays the default.
+  * The virtual-desktops pager on the taskbar is off by default in every
+    look (it was on for Classic). Gates: make test (settings-check for the
+    label and the default, start-check for the layout switch and Left
+    alignment); mutation-tested.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 15:10:00 -0700
+
 sg-shell (0.1.0-68) unstable; urgency=medium
 
   * SG Office: the programs start a new user's LibreOffice profile with

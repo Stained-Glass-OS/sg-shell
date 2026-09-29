@@ -263,6 +263,14 @@ setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' Start_
 poke
 cx=$(( (W - 640) / 2 )); cy=$((H - BAR - 12 - 624))
 [ "$(val centered)" = 1 ] && [ "$(val rect)" = "$cx,$cy,$((cx + 640)),$((H - BAR - 12))" ] && pass "centred: in the middle, above the taskbar ($(val rect))" || fail "centred: $(val centered) $(val rect)"
+# taskbar aligned Left: the centred Start anchors over the left Start button, not the middle (David 2026-09-29)
+[ "$(val visible)" = 1 ] && poke
+setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' TaskbarAl 0
+poke
+[ "$(val rect)" = "12,$cy,$((12 + 640)),$((H - BAR - 12))" ] && pass "centred + Left alignment: Start on the left ($(val rect))" || fail "centred Left: $(val rect)"
+[ "$(val visible)" = 1 ] && poke
+setreg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' TaskbarAl 1
+poke
 [ "$(val list | cut -d' ' -f1)" = 0 ] && has "tile File Explorer" && pass "Pinned apps, no list until asked" || fail "centred content: $(val list) $(d | grep '^tile' | tr '\n' '|')"
 shot centered
 colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
@@ -286,6 +294,8 @@ click $((cx + 32 + 48)) $((cy + 104 + 42))
 setreg "$START_REG" Centered 0
 poke
 [ "$(val centered)" = 0 ] && [ "$(val rect)" = "0,$panel_y,708,$((H - BAR))" ] && pass "and back to the tiles (the default)" || fail "back: $(val rect)"
+# the tiles layout is rebuilt with fresh settings, not left in the centred state's stale list (David 2026-09-29)
+[ "$(d | grep -c '^item')" -ge 5 ] && d | grep -q '^header ' && pass "back to Tiles restores the full app list (not blank/cut off)" || fail "tiles after centred: items=$(d | grep -c '^item') headers=$(d | grep -c '^header')"
 
 # --- click away --------------------------------------------------------------------------
 [ "$(val visible)" = 1 ] || poke

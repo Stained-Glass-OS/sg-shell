@@ -363,7 +363,7 @@ static void tray_settings_changed(void);
 
 void set_build_start(void)
 {
-    static const WCHAR *layouts[] = { L"Tiles (the default)", L"Centered: Pinned and Recommended" };
+    static const WCHAR *layouts[] = { L"Tiles (the default)", L"Centered: pinned and recent apps" };
     int y = st_title(L"Start");
     /* the newer look: Start and the taskbar's buttons in the middle, Start
      * as a grid of pinned apps over recommended ones (sg-start's centred
@@ -430,7 +430,7 @@ void set_build_taskbar(void)
     st_toggle(&y, L"Use Peek to preview the desktop when you move your mouse to the Show desktop button",
               reg_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", 1) == 0, CMD_PEEK);
     st_toggle(&y, L"Show Task View button", reg_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", 1) != 0, CMD_TASKVIEW);
-    st_toggle(&y, L"Show virtual desktops on the taskbar", reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"ShowDesktops", 1) != 0, CMD_DESKTOPS);
+    st_toggle(&y, L"Show virtual desktops on the taskbar", reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"ShowDesktops", 0) != 0, CMD_DESKTOPS);
     st_combo(&y, L"Taskbar location on screen", where, 4, pos <= 3 ? (int)pos : 3, CMD_POSITION);
     st_combo(&y, L"Combine taskbar buttons", combine, 3, glom <= 2 ? (int)glom : 2, CMD_COMBINE);
     st_combo(&y, L"Search", search, 3, box <= 2 ? (int)box : 0, CMD_SEARCH);

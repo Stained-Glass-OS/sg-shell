@@ -396,8 +396,26 @@ sleep 0.5
 has ": Light blue" && has "Show virtual desktops on the taskbar" && pass "Taskbar: its color and the virtual desktops switch" \
     || fail "Taskbar color: $(tr -d '\r' < "$DUMP" | grep '^control' | grep -i 'combo\|desktops' | head -8)"
 wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
+# the virtual-desktops pager is off by default in every look (David 2026-09-29)
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
-    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x1 ] && pass "Classic sets it all back" || fail "Classic look"
+    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] && pass "Classic sets it all back, desktops pager still off" || fail "Classic look: desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
+
+# --- Start layout: Tiles is the default, the Centred option is not 'Recommended' (David 2026-09-29) ---
+# the combo dump shows only the selected item, so check each selection in turn
+wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1
+wine start ms-settings:personalization-start >/dev/null 2>&1
+page_is Start "ms-settings:personalization-start (Tiles default)"
+sleep 0.5
+tr -d '\r' < "$DUMP" | grep -q '^control ComboBox id=2007 .*: Tiles (the default)' \
+    && pass "Start layout defaults to Tiles" || fail "Start default: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox id=2007')"
+wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 1 /f >/dev/null 2>&1
+wine start ms-settings:personalization-start >/dev/null 2>&1
+page_is Start "ms-settings:personalization-start (centred label)"
+sleep 0.5
+has "Centered: pinned and recent apps" && ! has "Pinned and Recommended" \
+    && pass "Centred option is labelled without 'Recommended'" \
+    || fail "Centred label: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox id=2007')"
+wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1
 
 if [ "${WINI:-0}" = 1 ]; then
     wine start ms-settings:about >/dev/null 2>&1; page_is About "(before Win+I)"

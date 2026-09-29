@@ -141,7 +141,7 @@ const WCHAR *look_apply(BOOL rounded)
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarGlomLevel", rounded ? 0 : 2);
     reg_set_dword(HKEY_CURRENT_USER, SEARCHKEY, L"SearchboxTaskbarMode", rounded ? 1 : 0);
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"ShowTaskViewButton", 1);
-    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"ShowDesktops", rounded ? 0 : 1);
+    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"ShowDesktops", 0);   /* off by default in every look; the Taskbar toggle turns it on */
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Color", 0);
     reg_set_dword(HKEY_CURRENT_USER, START, L"Centered", rounded ? 1 : 0);
     if (rounded) default_pins();
