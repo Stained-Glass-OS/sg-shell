@@ -1,0 +1,95 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- SG Store (sg-store): the application store.
+;
+; A catalogue of applications the OS can install on demand. For any app the
+; Windows (wine-sg) build is the ideal path and the default suggestion; our own
+; builds (SG Office) sit beside them; native Linux desktop apps are a hidden
+; last resort (Tier=linux), shown only behind SG Store's "Advanced" disclosure.
+;
+; We ship no third-party or Microsoft binary: SG Store downloads the maker's
+; installer at the user's request and runs it only if it is exactly the file
+; the maker published -- a pinned SHA-256, or the winget community repository's,
+; the same engine as "Get a web browser". Our own suites run their own setup
+; program (which does its own pinned-hash download). See ADR 0015.
+;
+; OS updates are NOT handled here: they keep their own path (Settings >
+; Update & Security). SG Store never touches the system upgrade.
+;
+; Each app is Apps\NN with:
+;   Name, Publisher, Description, Category, Colour (0x00RRGGBB letter badge),
+;   Tier   = windows | ours | linux         (inferred from Source if absent)
+;   Source = winget:<PackageId>
+;          | pin:<Url>|<Sha256>|<Type>|<Silent>
+;          | ours:setup:<AppPathsExe>
+;          | ours:apt:<package> | linux:apt:<package>   (installed from Settings)
+;   DetectName = matched against installed programs to read the installed version
+;   PinVersion = the available version for a pin: entry (update checks)
+;
+; A mirror or Group Policy may later replace the whole catalogue via
+; HKLM\Software\Stained Glass\Store CatalogUrl. The winget source is the same
+; ListUrl/RawUrl as Web Browsers (SG_BROWSER_LIST_URL / RawUrl for the gate).
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-store.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sgstore.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-store64.exe]
+"FriendlyAppName"="SG Store"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-store64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\""
+
+; ---- the starter catalogue -----------------------------------------------------------
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\01]
+"Name"="Mozilla Firefox"
+"Publisher"="Mozilla"
+"Description"="Free and open source web browser, from a non-profit."
+"Category"="Browsers"
+"Colour"=dword:00e66000
+"Tier"="windows"
+"Source"="winget:Mozilla.Firefox"
+"DetectName"="Firefox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\02]
+"Name"="Google Chrome"
+"Publisher"="Google"
+"Description"="The most used web browser, from Google."
+"Category"="Browsers"
+"Colour"=dword:001a73e8
+"Tier"="windows"
+"Source"="winget:Google.Chrome"
+"DetectName"="Google Chrome"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\03]
+"Name"="Brave"
+"Publisher"="Brave Software"
+"Description"="Web browser that blocks ads and trackers by default."
+"Category"="Browsers"
+"Colour"=dword:00fb542b
+"Tier"="windows"
+"Source"="winget:Brave.Brave"
+"DetectName"="Brave"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\04]
+"Name"="SG Office"
+"Publisher"="Stained Glass OS"
+"Description"="Documents, spreadsheets and presentations in Microsoft Office's formats. Our build of LibreOffice."
+"Category"="Productivity"
+"Colour"=dword:00107c41
+"Tier"="ours"
+"Source"="ours:setup:sg-office-setup.exe"
+"DetectName"="LibreOffice"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\90]
+"Name"="GIMP (Linux)"
+"Publisher"="The GIMP Team"
+"Description"="Native Linux image editor. Prefer Windows programs where they exist."
+"Category"="Graphics"
+"Colour"=dword:005c5c5c
+"Tier"="linux"
+"Source"="linux:apt:gimp"
+"DetectName"="GIMP"

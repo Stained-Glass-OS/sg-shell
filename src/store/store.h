@@ -1,0 +1,80 @@
+/* SG Store -- an application store for Stained Glass OS.
+ *
+ * A catalogue of applications the OS can install on demand. For any app the
+ * Windows (wine-sg) build is the ideal path and the default suggestion; our
+ * own builds (SG Office, our browser builds) sit beside them; native Linux
+ * desktop apps are a hidden last resort, shown only behind an "Advanced"
+ * disclosure. The store checks for and installs per-app updates.
+ *
+ * We never ship or redistribute a third-party or Microsoft binary: the store
+ * downloads the maker's installer at the user's request and runs it only if it
+ * is exactly the file the maker published (a pinned SHA-256, or the winget
+ * community repository's -- the same engine as "Get a web browser",
+ * src/browser/fetch.c). Our own builds come from our apt repo / freesoft.page.
+ *
+ * OS updates are NOT handled here: they keep their own path (Settings >
+ * Update & Security). The store never touches the system upgrade.
+ *
+ * Copyright (C) 2026 Stained Glass OS contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+#ifndef SG_STORE_H
+#define SG_STORE_H
+
+#define WIN32_LEAN_AND_MEAN
+#define _WIN32_WINNT 0x0A00
+#include <windows.h>
+#include <windowsx.h>
+#include <shlwapi.h>
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wctype.h>
+#include "browser.h"      /* package_t, pkg_resolve/download/install, winget_* */
+
+#define STORE_KEY L"Software\\Stained Glass\\Store"
+
+/* Tiers, in the order the UI prefers them. */
+enum { TIER_WINDOWS, TIER_OURS, TIER_LINUX };
+
+/* How an entry is installed and update-checked. */
+enum { SRC_WINGET, SRC_PIN, SRC_OURS_SETUP, SRC_OURS_APT, SRC_LINUX_APT, SRC_UNKNOWN };
+
+/* Per-app state. */
+enum { AST_NOT_INSTALLED, AST_INSTALLED, AST_UPDATE, AST_INSTALLING, AST_DONE, AST_FAILED };
+
+typedef struct {
+    WCHAR ord[8];                 /* the catalogue ordinal ("01") */
+    WCHAR name[128], publisher[128], desc[256], category[64];
+    DWORD colour;                 /* 0x00RRGGBB, letter badge -- no logos */
+    int   tier;                   /* TIER_* */
+    int   method;                 /* SRC_* */
+    WCHAR winget_id[128];         /* SRC_WINGET */
+    WCHAR setup_exe[128];         /* SRC_OURS_SETUP: an App Paths name, e.g. sg-office-setup.exe */
+    WCHAR apt_pkg[128];           /* SRC_OURS_APT / SRC_LINUX_APT */
+    /* SRC_PIN: a vendor download pinned in the catalogue */
+    WCHAR pin_url[2048], pin_type[32], pin_silent[512], pin_version[64];
+    BYTE  pin_sha[32];
+    BOOL  pin_has_sha;
+    /* how to tell it is installed and read its version */
+    WCHAR detect_name[128];       /* matched against Uninstall DisplayName / StartMenuInternet */
+    /* runtime */
+    int   state;                  /* AST_* */
+    WCHAR installed_version[64];
+    WCHAR available_version[64];
+    WCHAR msg[256];
+} app_t;
+
+#define MAX_APPS 128
+
+/* catalog.c */
+int  catalog_load(app_t *apps, int max);         /* reads HKLM Store\Apps\NN; returns count */
+void app_detect(app_t *a);                        /* installed? + installed_version; sets state */
+BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
+BOOL app_shown_by_default(const app_t *a);        /* windows/ours: yes; linux: no */
+int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
+const WCHAR *tier_name(int tier);
+
+#endif

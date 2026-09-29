@@ -77,6 +77,11 @@ FONTVIEW_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -ladv
 # manifest reader (manifest.c) is plain C, also built natively by its gate.
 BROWSER_SRC  = $(wildcard src/browser/*.c)
 BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
+# SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
+# install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build
+# time. See docs/decisions/0015-sg-store.md.
+STORE_SRC  = src/store/main.c src/store/catalog.c src/browser/fetch.c src/browser/manifest.c
+STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -lmsimg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -218,6 +223,10 @@ build:
 	@$(WINDRES64) -I src/browser -I $(BUILD) src/browser/browser.rc -O coff -o $(BUILD)/sg-browser-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-browser64.exe $(BROWSER_SRC) \
 	    $(BUILD)/sg-browser-res64.o $(BROWSER_LIBS) && echo "built sg-browser (64-bit)"
+	@python3 src/store/gen-icon.py $(BUILD)/sg-store.ico
+	@$(WINDRES64) -I src/store -I $(BUILD) src/store/store.rc -O coff -o $(BUILD)/sg-store-res64.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -Isrc/browser -Isrc/store -o $(BUILD)/sg-store64.exe \
+	    $(STORE_SRC) $(BUILD)/sg-store-res64.o $(STORE_LIBS) && echo "built sg-store (64-bit)"
 	@$(MAKE) --no-print-directory office
 	@for p in $(CONSOLE_TOOLS); do \
 	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
@@ -334,6 +343,13 @@ test-volume: build
 	@sh test/pdf-check.sh
 	@sh test/pdf-editor-check.sh
 	@sh test/browser-check.sh
+	@sh test/store-check.sh
+
+# SG Store: the catalogue engine (install/verify/update) against a mock winget
+# source and a stand-in installer, and the window. test/store-check.sh.
+.PHONY: test-store
+test-store: build
+	@sh test/store-check.sh
 
 clean:
 	rm -rf $(BUILD)
