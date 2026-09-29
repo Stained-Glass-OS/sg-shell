@@ -39,7 +39,10 @@ def write(path, cases, engine=""):
            "and known behaviour. The workbook is opened in SG Office, recalculated, saved back to .xlsx, and "
            "each result and each function's saved name checked." % (datetime.date.today().isoformat(),
                                                                       " against " + engine if engine else ""), "",
-           "SG Office Functions, our add-in, provides: %s." % ", ".join(ours), "",
+           "SG Office Functions, our add-in, has: %s. A function LibreOffice has itself is LibreOffice's "
+           "(its built-ins come first); with LibreOffice 26.8 the add-in supplies BINOM.DIST.RANGE, DBCS, "
+           "IMCOSH, IMCOT, IMCSC, IMCSCH, IMSEC, IMSECH, IMSINH, IMTAN, PERCENTOF, PHONETIC, REGEXEXTRACT, "
+           "REGEXREPLACE, TRIMRANGE and VALUETOTEXT (20 cases; measured by removing it)." % ", ".join(ours), "",
            "**Functions:** %d supported, %d partly (some cases differ), %d differ, %d missing -- of %d tested."
            % (n["supported"], n["partly"], n["differs"], n["missing"], len(per)), "",
            "**Cases:** %d match Excel, %d differ, %d missing, %d right but saved differently -- of %d."
