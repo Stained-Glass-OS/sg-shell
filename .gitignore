@@ -6,3 +6,4 @@
 /debian/sg-shell/
 /debian/*.debhelper
 __pycache__/
+/debian/sg-office/

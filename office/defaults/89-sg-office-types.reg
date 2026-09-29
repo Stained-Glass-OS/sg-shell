@@ -1,0 +1,109 @@
+Windows Registry Editor Version 5.00
+
+
+; Stained Glass OS -- SG Office: which program each file type opens with.
+;
+; NEVER CHANGE THIS FILE once shipped (see office/gen-reg.py): a changed
+; file is imported again, and would take the types back from a suite the
+; user installed since (Microsoft Office takes them when it installs).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docx]
+@="SGOffice.Document.12"
+"Content Type"="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docm]
+@="SGOffice.Document.12"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.doc]
+@="SGOffice.Document.8"
+"Content Type"="application/msword"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dotx]
+@="SGOffice.DocumentTemplate"
+"Content Type"="application/vnd.openxmlformats-officedocument.wordprocessingml.template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dotm]
+@="SGOffice.DocumentTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dot]
+@="SGOffice.DocumentTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odt]
+@="SGOffice.OpenDocumentText"
+"Content Type"="application/vnd.oasis.opendocument.text"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ott]
+@="SGOffice.OpenDocumentText"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsx]
+@="SGOffice.Sheet.12"
+"Content Type"="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsm]
+@="SGOffice.Sheet.12"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsb]
+@="SGOffice.Sheet.12"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xls]
+@="SGOffice.Sheet.8"
+"Content Type"="application/vnd.ms-excel"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xltx]
+@="SGOffice.SheetTemplate"
+"Content Type"="application/vnd.openxmlformats-officedocument.spreadsheetml.template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xltm]
+@="SGOffice.SheetTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlt]
+@="SGOffice.SheetTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ods]
+@="SGOffice.OpenDocumentSpreadsheet"
+"Content Type"="application/vnd.oasis.opendocument.spreadsheet"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ots]
+@="SGOffice.OpenDocumentSpreadsheet"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.csv]
+@="SGOffice.CSV"
+"Content Type"="text/csv"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pptx]
+@="SGOffice.Show.12"
+"Content Type"="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pptm]
+@="SGOffice.Show.12"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppt]
+@="SGOffice.Show.8"
+"Content Type"="application/vnd.ms-powerpoint"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppsx]
+@="SGOffice.SlideShow"
+"Content Type"="application/vnd.openxmlformats-officedocument.presentationml.slideshow"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppsm]
+@="SGOffice.SlideShow"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pps]
+@="SGOffice.SlideShow"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.potx]
+@="SGOffice.ShowTemplate"
+"Content Type"="application/vnd.openxmlformats-officedocument.presentationml.template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.potm]
+@="SGOffice.ShowTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pot]
+@="SGOffice.ShowTemplate"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odp]
+@="SGOffice.OpenDocumentPresentation"
+"Content Type"="application/vnd.oasis.opendocument.presentation"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.otp]
+@="SGOffice.OpenDocumentPresentation"

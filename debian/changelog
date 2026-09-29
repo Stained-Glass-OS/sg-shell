@@ -1,3 +1,24 @@
+sg-shell (0.1.0-67) unstable; urgency=medium
+
+  * SG Office, a new binary package (sg-office): SG Office Documents,
+    Spreadsheets and Presentations in Start; Office's document,
+    spreadsheet and presentation types open with them (Open with keeps
+    them when another suite takes the types; New > .docx/.xlsx/.pptx);
+    Settings > Default apps has Documents, Spreadsheets and Presentations
+    rows. Get SG Office downloads The Document Foundation's LibreOffice
+    26.8.0 for Windows at the user's request, checks its SHA-256, installs
+    it silently for all users and applies SG Office's payload: Office's
+    formats by default, Excel's formula syntax, the spreadsheet ribbon's
+    Home tab as Excel's (Styles with Format as Table, Cells, Editing),
+    Calibri-sized templates, VBA enabled with a prompt, and SG Office
+    Functions (TEXTSPLIT, TEXTBEFORE/AFTER, VSTACK/HSTACK, TAKE/DROP,
+    CHOOSEROWS/COLS, TOROW/TOCOL, WRAPROWS/COLS, EXPAND, REGEX*, PERCENTOF,
+    ...) under Excel's own names. No LibreOffice binary is in the package.
+    Gates: make test-office, make test-office-wine (office/parity: 714 of
+    775 Excel formula cases match; office/vba).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 12:10:00 -0700
+
 sg-shell (0.1.0-66) unstable; urgency=medium
 
   * The PDF Viewer is SG PDF, a PDF editor: a menu bar, the tools pane

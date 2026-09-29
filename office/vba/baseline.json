@@ -1,0 +1,262 @@
+{
+ "excel.vba:RangeAndCells": {
+  "expected": "50",
+  "got": "50",
+  "status": "match"
+ },
+ "excel.vba:RangeFill": {
+  "expected": "21",
+  "got": "21",
+  "status": "match"
+ },
+ "excel.vba:FormulaA1": {
+  "expected": "6",
+  "got": "6",
+  "status": "match"
+ },
+ "excel.vba:FormulaText": {
+  "expected": "\"=SUM(A1:A3)\"",
+  "got": "=SUM(A1:A3)",
+  "status": "match"
+ },
+ "excel.vba:FormulaR1C1": {
+  "expected": "10",
+  "got": "10",
+  "status": "match"
+ },
+ "excel.vba:EndXlUp": {
+  "expected": "7",
+  "got": "7",
+  "status": "match"
+ },
+ "excel.vba:ForEachCell": {
+  "expected": "15",
+  "got": "15",
+  "status": "match"
+ },
+ "excel.vba:WorksheetFunctions": {
+  "expected": "\"30|4|2\"",
+  "got": "30|4|2",
+  "status": "match"
+ },
+ "excel.vba:VLookupFunction": {
+  "expected": "\"Bob\"",
+  "got": "Bob",
+  "status": "match"
+ },
+ "excel.vba:StringFunctions": {
+  "expected": "\"HELLO|ell|3|a-b-c|world|2\"",
+  "got": "HELLO|ell|3|a-b-c|world|2",
+  "status": "match"
+ },
+ "excel.vba:FormatNumber": {
+  "expected": "\"1,234.50|45.60%|0012\"",
+  "got": "1,234.50|45.60%|0012",
+  "status": "match"
+ },
+ "excel.vba:DateFunctions": {
+  "expected": "\"2024-02-29|2024|3|29\"",
+  "got": "2024-02-29|2024|3|29",
+  "status": "match"
+ },
+ "excel.vba:DateDiffDays": {
+  "expected": "60",
+  "got": "60",
+  "status": "match"
+ },
+ "excel.vba:ArraysAndReDim": {
+  "expected": "\"3|5|9\"",
+  "got": "3|5|9",
+  "status": "match"
+ },
+ "excel.vba:RangeToArray": {
+  "expected": "\"2|3|6\"",
+  "got": "2|3|6",
+  "status": "match"
+ },
+ "excel.vba:ArrayToRange": {
+  "expected": "24",
+  "got": "24",
+  "status": "match"
+ },
+ "excel.vba:CollectionObject": {
+  "expected": "\"3|b\"",
+  "got": "3|b",
+  "status": "match"
+ },
+ "excel.vba:ScriptingDictionary": {
+  "expected": "\"2|20|True\"",
+  "got": "#ERR 91: Object variable not set.\nAdditional information: An exception occurred \nType: com.sun.star.lang.WrappedTargetRuntimeException\nMessage: [automation bridge] unexpected exception in IUnknownWrapper::getValue ! Message : \n.",
+  "status": "error"
+ },
+ "excel.vba:OnErrorResumeNext": {
+  "expected": "11",
+  "got": "#ERR (never returned: LibreOffice hung or ended)",
+  "status": "error"
+ },
+ "excel.vba:OnErrorGoTo": {
+  "expected": "\"caught 13\"",
+  "got": "caught 13",
+  "status": "match"
+ },
+ "excel.vba:SelectCaseAndLoops": {
+  "expected": "\"B|10\"",
+  "got": "B|10",
+  "status": "match"
+ },
+ "excel.vba:WithBlockFont": {
+  "expected": "\"True|14\"",
+  "got": "True|14",
+  "status": "match"
+ },
+ "excel.vba:InteriorColor": {
+  "expected": "255",
+  "got": "255",
+  "status": "match"
+ },
+ "excel.vba:NumberFormat": {
+  "expected": "\"0.00%|12.50%\"",
+  "got": "0.00%|12.50%",
+  "status": "match"
+ },
+ "excel.vba:WorksheetsAddAndName": {
+  "expected": "\"Report|Sheet1\"",
+  "got": "Report|Report",
+  "status": "differs"
+ },
+ "excel.vba:SheetsByName": {
+  "expected": "99",
+  "got": "99",
+  "status": "match"
+ },
+ "excel.vba:CopyDestination": {
+  "expected": "3",
+  "got": "3",
+  "status": "match"
+ },
+ "excel.vba:PasteSpecialValues": {
+  "expected": "\"6|False\"",
+  "got": "6|False",
+  "status": "match"
+ },
+ "excel.vba:SortRange": {
+  "expected": "\"Ann|Cid\"",
+  "got": "Ann|Cid",
+  "status": "match"
+ },
+ "excel.vba:FindCell": {
+  "expected": "4",
+  "got": "4",
+  "status": "match"
+ },
+ "excel.vba:OffsetResizeAddress": {
+  "expected": "\"$B$2:$C$3\"",
+  "got": "$B$2:$C$3",
+  "status": "match"
+ },
+ "excel.vba:CurrentRegionAndUsedRange": {
+  "expected": "\"3|2\"",
+  "got": "3|2",
+  "status": "match"
+ },
+ "excel.vba:EvaluateAndBrackets": {
+  "expected": "\"3|8\"",
+  "got": "#ERR 1: An exception occurred \nType: com.sun.star.uno.RuntimeException\nMessage: .",
+  "status": "error"
+ },
+ "excel.vba:NamedRange": {
+  "expected": "5",
+  "got": "5",
+  "status": "match"
+ },
+ "excel.vba:InsertDeleteRows": {
+  "expected": "\"x|3\"",
+  "got": "x|3",
+  "status": "match"
+ },
+ "excel.vba:TypeConversions": {
+  "expected": "\"12|3.5|True|False|7\"",
+  "got": "12|3.5|True|False|7",
+  "status": "match"
+ },
+ "excel.vba:FileIO": {
+  "expected": "\"line one\"",
+  "got": "line one",
+  "status": "match"
+ },
+ "excel.vba:ApplicationProperties": {
+  "expected": "\"True|Microsoft Excel\"",
+  "got": "True|Microsoft Excel",
+  "status": "match"
+ },
+ "excel.vba:UserDefinedFunctionInCell": {
+  "expected": "42",
+  "got": "42",
+  "status": "match"
+ },
+ "excel.vba:AutoFilterVisibleRows": {
+  "expected": "2",
+  "got": "3",
+  "status": "differs"
+ },
+ "excel.vba:CommentsAndHyperlinks": {
+  "expected": "\"note|https://example.com/\"",
+  "got": "#ERR 1: An exception occurred \nType: com.sun.star.uno.RuntimeException\nMessage: unsatisfied query for interface of type ooo.vba.excel.XWorksheet!.",
+  "status": "error"
+ },
+ "excel.vba:ColumnWidthAndAlignment": {
+  "expected": "\"20|-4108\"",
+  "got": "20|-4108",
+  "status": "match"
+ },
+ "excel.vba:ChartObjectsAdd": {
+  "expected": "1",
+  "got": "#ERR 1: An exception occurred \nType: com.sun.star.uno.RuntimeException\nMessage: unsatisfied query for interface of type ooo.vba.excel.XWorksheet!.",
+  "status": "error"
+ },
+ "excel.vba:ListObjectsTable": {
+  "expected": "\"Table1|3\"",
+  "got": "#ERR 423: Property or method not found: ListObjects.",
+  "status": "error"
+ },
+ "word.vba:ContentText": {
+  "expected": "\"Hello world\"",
+  "got": "Hello world",
+  "status": "match"
+ },
+ "word.vba:InsertAfterParagraphs": {
+  "expected": "3",
+  "got": "#ERR 423: Property or method not found: InsertAfter.",
+  "status": "error"
+ },
+ "word.vba:SelectionTypeText": {
+  "expected": "\"typed\"",
+  "got": "typed",
+  "status": "match"
+ },
+ "word.vba:FindReplace": {
+  "expected": "\"a cat and a cat\"",
+  "got": "a cat and a cat",
+  "status": "match"
+ },
+ "word.vba:FontBold": {
+  "expected": "-1",
+  "got": "-1",
+  "status": "match"
+ },
+ "word.vba:TablesAdd": {
+  "expected": "\"x|2\"",
+  "got": "#ERR 423: Property or method not found: Cell.",
+  "status": "error"
+ },
+ "word.vba:BookmarksAdd": {
+  "expected": "\"mark\"",
+  "got": "m",
+  "status": "differs"
+ },
+ "word.vba:ParagraphStyle": {
+  "expected": "\"Heading 1\"",
+  "got": "Heading 1",
+  "status": "match"
+ }
+}

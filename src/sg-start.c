@@ -303,6 +303,9 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"On-Screen Keyboard", L"osk keyboard accessibility touch" },
     { L"Get a web browser", L"browser internet firefox chrome edge brave" },
     { L"Remote Desktop Connection", L"rdp mstsc remote" },
+    { L"SG Office Documents", L"office word docx doc odt document writer letter text" },
+    { L"SG Office Spreadsheets", L"office excel xlsx xls ods csv spreadsheet sheet calc table" },
+    { L"SG Office Presentations", L"office powerpoint pptx ppt odp presentation slides slideshow impress" },
 };
 
 static void add_app(const WCHAR *name, const WCHAR *path, const FILETIME *created)
@@ -464,6 +467,10 @@ static void build_list(void)
     add_beside(L"Character Map", L"sg-charmap64.exe");
     add_beside(L"WordPad", L"sg-wordpad64.exe");
     add_beside(L"SG PDF", L"sg-pdf64.exe");
+    /* SG Office (package sg-office): listed when it is installed */
+    add_beside(L"SG Office Documents", L"sg-documents64.exe");
+    add_beside(L"SG Office Spreadsheets", L"sg-spreadsheets64.exe");
+    add_beside(L"SG Office Presentations", L"sg-presentations64.exe");
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");

@@ -113,6 +113,10 @@ static const struct { const WCHAR *label, *exts[8], *proto; } KINDS[] = {
     { L"Video player", { L".mp4", L".mkv", L".avi", L".webm", L".wmv", L".mov", NULL } },
     { L"Text editor", { L".txt", L".log", L".ini", NULL } },
     { L"PDF viewer", { L".pdf", NULL } },
+    /* SG Office's, or Microsoft Office's once it is installed and has taken them */
+    { L"Documents", { L".docx", L".doc", L".docm", L".odt", NULL } },
+    { L"Spreadsheets", { L".xlsx", L".xls", L".xlsm", L".ods", L".csv", NULL } },
+    { L"Presentations", { L".pptx", L".ppt", L".pptm", L".odp", NULL } },
     { L"Web browser", { L".htm", L".html", NULL }, L"http" },
     { L"Email", { NULL }, L"mailto" },
 };

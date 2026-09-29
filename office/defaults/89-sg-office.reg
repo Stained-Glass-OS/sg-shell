@@ -1,0 +1,509 @@
+Windows Registry Editor Version 5.00
+
+
+; Stained Glass OS -- SG Office: its programs and file types (office/gen-reg.py).
+; Which program a type opens with by default is 89-sg-office-types.reg.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-documents.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-documents64.exe]
+"FriendlyAppName"="SG Office Documents"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-documents64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-documents64.exe\SupportedTypes]
+".docx"=""
+".docm"=""
+".doc"=""
+".dotx"=""
+".dotm"=""
+".dot"=""
+".odt"=""
+".ott"=""
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-spreadsheets.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-spreadsheets64.exe]
+"FriendlyAppName"="SG Office Spreadsheets"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-spreadsheets64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-spreadsheets64.exe\SupportedTypes]
+".xlsx"=""
+".xlsm"=""
+".xlsb"=""
+".xls"=""
+".xltx"=""
+".xltm"=""
+".xlt"=""
+".ods"=""
+".ots"=""
+".csv"=""
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-presentations.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-presentations64.exe]
+"FriendlyAppName"="SG Office Presentations"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-presentations64.exe\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-presentations64.exe\SupportedTypes]
+".pptx"=""
+".pptm"=""
+".ppt"=""
+".ppsx"=""
+".ppsm"=""
+".pps"=""
+".potx"=""
+".potm"=""
+".pot"=""
+".odp"=""
+".otp"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12]
+@="Document"
+"FriendlyTypeName"="Document"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docx\OpenWithProgids]
+"SGOffice.Document.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docm\OpenWithProgids]
+"SGOffice.Document.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8]
+@="Document (97-2003)"
+"FriendlyTypeName"="Document (97-2003)"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.doc\OpenWithProgids]
+"SGOffice.Document.8"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate]
+@="Document Template"
+"FriendlyTypeName"="Document Template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dotx\OpenWithProgids]
+"SGOffice.DocumentTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dotm\OpenWithProgids]
+"SGOffice.DocumentTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.dot\OpenWithProgids]
+"SGOffice.DocumentTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText]
+@="OpenDocument Text"
+"FriendlyTypeName"="OpenDocument Text"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odt\OpenWithProgids]
+"SGOffice.OpenDocumentText"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ott\OpenWithProgids]
+"SGOffice.OpenDocumentText"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12]
+@="Spreadsheet"
+"FriendlyTypeName"="Spreadsheet"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsx\OpenWithProgids]
+"SGOffice.Sheet.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsm\OpenWithProgids]
+"SGOffice.Sheet.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsb\OpenWithProgids]
+"SGOffice.Sheet.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8]
+@="Spreadsheet (97-2003)"
+"FriendlyTypeName"="Spreadsheet (97-2003)"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xls\OpenWithProgids]
+"SGOffice.Sheet.8"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate]
+@="Spreadsheet Template"
+"FriendlyTypeName"="Spreadsheet Template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xltx\OpenWithProgids]
+"SGOffice.SheetTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xltm\OpenWithProgids]
+"SGOffice.SheetTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlt\OpenWithProgids]
+"SGOffice.SheetTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet]
+@="OpenDocument Spreadsheet"
+"FriendlyTypeName"="OpenDocument Spreadsheet"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ods\OpenWithProgids]
+"SGOffice.OpenDocumentSpreadsheet"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ots\OpenWithProgids]
+"SGOffice.OpenDocumentSpreadsheet"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV]
+@="Comma Separated Values"
+"FriendlyTypeName"="Comma Separated Values"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.csv\OpenWithProgids]
+"SGOffice.CSV"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12]
+@="Presentation"
+"FriendlyTypeName"="Presentation"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pptx\OpenWithProgids]
+"SGOffice.Show.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pptm\OpenWithProgids]
+"SGOffice.Show.12"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8]
+@="Presentation (97-2003)"
+"FriendlyTypeName"="Presentation (97-2003)"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppt\OpenWithProgids]
+"SGOffice.Show.8"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow]
+@="Slide Show"
+"FriendlyTypeName"="Slide Show"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppsx\OpenWithProgids]
+"SGOffice.SlideShow"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.ppsm\OpenWithProgids]
+"SGOffice.SlideShow"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pps\OpenWithProgids]
+"SGOffice.SlideShow"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate]
+@="Presentation Template"
+"FriendlyTypeName"="Presentation Template"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.potx\OpenWithProgids]
+"SGOffice.ShowTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.potm\OpenWithProgids]
+"SGOffice.ShowTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pot\OpenWithProgids]
+"SGOffice.ShowTemplate"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation]
+@="OpenDocument Presentation"
+"FriendlyTypeName"="OpenDocument Presentation"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe,1"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\print\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.odp\OpenWithProgids]
+"SGOffice.OpenDocumentPresentation"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.otp\OpenWithProgids]
+"SGOffice.OpenDocumentPresentation"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.docx\SGOffice.Document.12\ShellNew]
+"NullFile"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.xlsx\SGOffice.Sheet.12\ShellNew]
+"NullFile"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pptx\SGOffice.Show.12\ShellNew]
+"NullFile"=""
+
+[HKEY_LOCAL_MACHINE\Software\RegisteredApplications]
+"SG Office"="Software\\Stained Glass\\SG Office\\Capabilities"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\SG Office\Capabilities]
+"ApplicationName"="SG Office"
+"ApplicationDescription"="Documents, spreadsheets and presentations, in Microsoft Office's formats."
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\SG Office\Capabilities\FileAssociations]
+".docx"="SGOffice.Document.12"
+".docm"="SGOffice.Document.12"
+".doc"="SGOffice.Document.8"
+".dotx"="SGOffice.DocumentTemplate"
+".dotm"="SGOffice.DocumentTemplate"
+".dot"="SGOffice.DocumentTemplate"
+".odt"="SGOffice.OpenDocumentText"
+".ott"="SGOffice.OpenDocumentText"
+".xlsx"="SGOffice.Sheet.12"
+".xlsm"="SGOffice.Sheet.12"
+".xlsb"="SGOffice.Sheet.12"
+".xls"="SGOffice.Sheet.8"
+".xltx"="SGOffice.SheetTemplate"
+".xltm"="SGOffice.SheetTemplate"
+".xlt"="SGOffice.SheetTemplate"
+".ods"="SGOffice.OpenDocumentSpreadsheet"
+".ots"="SGOffice.OpenDocumentSpreadsheet"
+".csv"="SGOffice.CSV"
+".pptx"="SGOffice.Show.12"
+".pptm"="SGOffice.Show.12"
+".ppt"="SGOffice.Show.8"
+".ppsx"="SGOffice.SlideShow"
+".ppsm"="SGOffice.SlideShow"
+".pps"="SGOffice.SlideShow"
+".potx"="SGOffice.ShowTemplate"
+".potm"="SGOffice.ShowTemplate"
+".pot"="SGOffice.ShowTemplate"
+".odp"="SGOffice.OpenDocumentPresentation"
+".otp"="SGOffice.OpenDocumentPresentation"

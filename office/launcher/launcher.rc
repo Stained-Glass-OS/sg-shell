@@ -1,0 +1,35 @@
+/* SG Office -- a launcher's resources: icon 1 the program, icon 2 its files
+ * (DefaultIcon ",1"), and the version information Settings > Default apps
+ * and Open with show. SG_ICON, SG_FILE_ICON, SG_TITLE_A come from the Makefile.
+ *
+ * Copyright (C) 2026 Stained Glass OS contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+#include <windows.h>
+
+1 ICON SG_ICON
+2 ICON SG_FILE_ICON
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Stained Glass OS"
+            VALUE "FileDescription", SG_TITLE_A
+            VALUE "FileVersion", "1.0"
+            VALUE "ProductName", "SG Office"
+            VALUE "ProductVersion", "1.0"
+            VALUE "LegalCopyright", "Stained Glass OS contributors, AGPL-3.0-or-later"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

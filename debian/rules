@@ -53,5 +53,14 @@ override_dh_auto_install:
 	# drawn by src/sg-icons-font.py; theme/52-sg-fonts.reg maps names to it.
 	install -d debian/sg-shell/usr/share/fonts/truetype/stained-glass
 	python3 src/sg-icons-font.py debian/sg-shell/usr/share/fonts/truetype/stained-glass/StainedGlassIcons.ttf
+	# SG Office (package sg-office): its programs, the payload Get SG Office
+	# puts on top of LibreOffice, and its registrations (office/).
+	install -d debian/sg-office/usr/libexec/stained-glass/shell debian/sg-office/usr/share/sg-office \
+	    debian/sg-office/usr/share/stained-glass/defaults.d
+	install -m0755 build/sg-documents64.exe build/sg-spreadsheets64.exe build/sg-presentations64.exe \
+	    build/sg-office-setup64.exe debian/sg-office/usr/libexec/stained-glass/shell/
+	cp -r build/office/payload debian/sg-office/usr/share/sg-office/payload
+	install -m0644 office/defaults/*.reg debian/sg-office/usr/share/stained-glass/defaults.d/
+	install -D -m0644 office/parity/REPORT.md debian/sg-office/usr/share/doc/sg-office/excel-compatibility.md
 	# Recommended per-program settings for the Compatibility tab (src/compat).
 	install -D -m0644 data/compat-presets.ini debian/sg-shell/usr/share/stained-glass/compat-presets.ini
