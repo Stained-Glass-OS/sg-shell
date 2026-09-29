@@ -64,6 +64,8 @@ try:
     kinds = [p.getByIndex(i).ShapeType.rsplit(".", 1)[1] for i in range(p.Count)]
     check("the first slide is a title slide (title and subtitle to click into)",
           kinds == ["TitleTextShape", "SubtitleShape"], kinds)
+    fills = [(p.getByIndex(i).FillStyle.value, p.getByIndex(i).LineStyle.value) for i in range(p.Count)]
+    check("its placeholders are text on the slide (no fill, no line)", all(f == ("NONE", "NONE") for f in fills), fills)
     d.close(True)
 finally:
     o.close()

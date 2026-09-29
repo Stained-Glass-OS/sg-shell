@@ -161,8 +161,11 @@ def calc():
 # ---- Presentations -------------------------------------------------------------------------------
 def impress():
     def pstyle(name, font, size, extra=""):
+        # no fill, no line: text on the slide, as Office's placeholders (LibreOffice's
+        # default drawing style would paint them blue)
+        graphic = extra or '<style:graphic-properties draw:fill="none" draw:stroke="none"/>'
         return ('<style:style style:name="Default-%s" style:family="presentation">%s%s</style:style>'
-                % (name, extra, text_props(font, size)))
+                % (name, graphic, text_props(font, size)))
     outline = "".join(pstyle("outline%d" % i, BODY, s) for i, s in ((1, "28pt"), (2, "24pt"), (3, "20pt"),
                                                                      (4, "18pt"), (5, "18pt"), (6, "18pt"),
                                                                      (7, "18pt"), (8, "18pt"), (9, "18pt")))
@@ -185,8 +188,10 @@ def impress():
               'presentation:class="outline" presentation:placeholder="true"><draw:text-box/></draw:frame>'
               '</style:master-page></office:master-styles></office:document-styles>'
               % (NS, FONT_DECLS, text_props(BODY, "18pt"),
-                 pstyle("title", HEAD, "44pt", '<style:graphic-properties draw:textarea-vertical-align="middle"/>'),
-                 pstyle("subtitle", BODY, "24pt"), outline))
+                 pstyle("title", HEAD, "44pt", '<style:graphic-properties draw:fill="none" draw:stroke="none" '
+                                               'draw:textarea-vertical-align="middle"/>'),
+                 pstyle("subtitle", BODY, "24pt", '<style:graphic-properties draw:fill="none" draw:stroke="none"/>'
+                                                    '<style:paragraph-properties fo:text-align="center"/>'), outline))
     content = ('<?xml version="1.0" encoding="UTF-8"?><office:document-content %s>%s<office:body>'
                '<office:presentation><draw:page draw:name="page1" draw:master-page-name="Default" '
                'presentation:presentation-page-layout-name="AL1T0">'
