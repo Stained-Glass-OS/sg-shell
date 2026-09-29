@@ -95,9 +95,32 @@ static item_t *add_item(const WCHAR *id, const WCHAR *name, const WCHAR *desc)
     return it;
 }
 
+/* Only a folder whose own name is what the item is for (Temp, INetCache...)
+ * is emptied. The paths come from the environment and the shell: a broken
+ * TEMP makes GetTempPath fall back to the profile or the Windows folder --
+ * services had "%USERPROFILE%\...\Temp" unexpanded (wine-sg 0470) -- and
+ * "Temporary files" would have deleted every file older than a week there. */
+static BOOL folder_named(const WCHAR *dir, const WCHAR *const *names)
+{
+    const WCHAR *leaf = wcsrchr(dir, '\\');
+    WCHAR root[MAX_PATH];
+    int i;
+    if (!leaf || !leaf[1] || leaf - dir < 3) return FALSE;          /* not a drive's root */
+    if (GetWindowsDirectoryW(root, MAX_PATH) && !_wcsicmp(dir, root)) return FALSE;
+    for (i = 0; names[i]; i++) if (!_wcsicmp(leaf + 1, names[i])) return TRUE;
+    return FALSE;
+}
+
 static void windows_item(const WCHAR *id, const WCHAR *name, const WCHAR *desc, const WCHAR *dir, int days, BOOL checked)
 {
-    item_t *it = add_item(id, name, desc);
+    static const WCHAR *const temp_names[] = { L"Temp", L"Tmp", NULL };
+    static const WCHAR *const cache_names[] = { L"INetCache", L"Temporary Internet Files", L"Content.IE5", NULL };
+    static const WCHAR *const dpf_names[] = { L"Downloaded Program Files", NULL };
+    const WCHAR *const *names = !wcscmp(id, L"temporary-files") ? temp_names :
+                                !wcscmp(id, L"internet-cache") ? cache_names : dpf_names;
+    item_t *it;
+    if (!folder_named(dir, names)) return;
+    it = add_item(id, name, desc);
     if (!it) return;
     lstrcpynW(it->dir, dir, MAX_PATH);
     it->min_age_days = days;
@@ -164,6 +187,8 @@ static void dump(void)
     for (i = 0; i < g_nitems; i++)
         fprintf(f, "ITEM %d\t%ls\t%ls\t%llu\t%d\n", i, g_items[i].id, g_items[i].name, g_items[i].size,
                 g_lv ? (ListView_GetCheckState(g_lv, i) ? 1 : 0) : g_items[i].checked);
+    for (i = 0; i < g_nitems; i++)
+        if (g_items[i].dir[0]) fprintf(f, "DIR %ls\t%ls\n", g_items[i].id, g_items[i].dir);
     fprintf(f, "MSG %ls\nEND\n", g_msg);
     fclose(f);
 }

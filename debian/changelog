@@ -16,6 +16,15 @@ sg-shell (0.1.0-61) unstable; urgency=medium
   * Settings > Recovery > Advanced startup: Restart now shows the boot
     menu at the next start (logind's SetRebootToBootLoaderMenu, a minute's
     wait in systemd-boot) -- it only restarted.
+  * Disk Cleanup, checked (David: "is it trustworthy?"): it keeps within
+    what it names -- Temp older than a week, the internet cache, Downloaded
+    Program Files, the user's trash and caches; symlinked folders are not
+    entered (they read as reparse points), a symlink is removed, never its
+    target. One hole closed: with a broken TEMP, GetTempPath falls back to
+    the profile or the Windows folder, and "Temporary files" would have
+    emptied that. A Windows-side folder is now offered only when its own
+    name is what it is for (Temp/Tmp, INetCache, Downloaded Program
+    Files). test/cleanmgr-check.sh checks TEMP=C:\users.
   * Magnifier's toolbar is on every virtual desktop, as its view is: it
     stayed on one and flickered as explorer hid it again and again.
 

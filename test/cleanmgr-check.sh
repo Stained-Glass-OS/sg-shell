@@ -110,5 +110,25 @@ wait_dump '^MSG Done' 20 && pass "cleaned" || fail "not done: $(d | grep '^MSG')
 [ ! -e "$XDG_CACHE_HOME/thumbnails/normal/a.png" ] && pass "the thumbnails are deleted" || fail "thumbnail still there"
 [ ! -e "$XDG_DATA_HOME/Trash/files/deleted.txt" ] && pass "the Recycle Bin is emptied" || fail "trash still holds deleted.txt"
 
+# A broken TEMP (as services had, "%USERPROFILE%" unexpanded) makes
+# GetTempPath fall back to a profile or the Windows folder: Disk Cleanup must
+# not offer to empty that as "Temporary files".
+xdotool key Escape; sleep 2
+DUMP="$T/dump2.txt"   # a dump of its own: the first dialog may still write its
+windump2=$(wine winepath -w "$DUMP" 2>/dev/null | tr -d '\r')
+# (TEMP as the registry has it: Disk Cleanup relaunches itself through the
+# sg-sysinfo bridge, a fresh process that reads HKCU\Environment)
+reg 'HKCU\Environment' /v TEMP /t REG_EXPAND_SZ /d 'C:\users'
+reg 'HKCU\Environment' /v TMP /t REG_EXPAND_SZ /d 'C:\users'
+SG_MMC_DUMP="$windump2" wine "$winexe" >/dev/null 2>&1 &
+if wait_dump '^ITEM ' 30; then
+    [ -z "$(item temporary-files 4)" ] && pass "with TEMP at C:\\users, no 'Temporary files' to empty there" \
+        || fail "TEMP at C:\\users offered as Temporary files ($(item temporary-files 4) bytes)"
+    d | grep -q '^DIR internet-cache' && pass "the other folders are still offered" || fail "no internet cache item"
+    xdotool key Escape
+else
+    fail "Disk Cleanup did not open the second time"
+fi
+
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC
