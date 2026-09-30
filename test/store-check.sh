@@ -545,6 +545,11 @@ if [ "$v" != NOWINDOW ]; then
     [ "$sel" != - ] && [ -n "$sel" ] && pass "Down in the list selects an app ($sel)" || fail "selected '$sel' (first $first)"
     xdotool key Escape; sleep 0.5
     [ "$(field focus)" = search ] && pass "Esc in the list goes back to the search box" || fail "focus '$(field focus)'"
+    # full width: the cards take two columns, not one narrow one in the middle
+    xdotool key super+Up; sleep 1.5
+    xdotool key Down; sleep 0.6
+    [ "$(field columns)" = 2 ] && pass "a wide window shows the cards in two columns" || fail "columns '$(field columns)' at full width"
+    import -window root "$OUT/store-wide.png" 2>/dev/null
 else fail "the window did not open"; fi
 wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")

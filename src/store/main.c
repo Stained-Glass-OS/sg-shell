@@ -45,7 +45,8 @@ static WCHAR g_query[128];                /* the search box */
 static int g_cat;                         /* the chosen category: 0 = all */
 static int g_sel = -1;                    /* the selected app (keyboard), or -1 */
 static int g_view[MAX_APPS], g_nview;     /* what the list shows, in order */
-static int g_view_y[MAX_APPS];            /* each shown card's top, content coordinates */
+static int g_view_y[MAX_APPS];
+static int g_cols = 1;                     /* the cards' columns, as last drawn */            /* each shown card's top, content coordinates */
 
 #define dpx(x) MulDiv((x), g_dpi, 96)
 
@@ -179,6 +180,7 @@ static void dump(void)
     swprintf(tmp, ARRAYSIZE(tmp), L"%ls.tmp", g_dump);
     if (!(f = _wfopen(tmp, L"wb"))) return;
     dumpf(f, L"window %d\n", g_wnd ? 1 : 0);
+    dumpf(f, L"columns %d\n", g_cols);
     dumpf(f, L"search %ls\n", g_query);
     dumpf(f, L"category %ls\n", g_cats[g_cat]);
     dumpf(f, L"catalog %d\n", g_napps);
@@ -422,12 +424,26 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
     return y + cardh + dpx(12);
 }
 
+/* The content's band across the window, and its columns of cards: one up to
+ * about 900 px, two or three wider -- full screen, one 720 px column left
+ * most of the screen empty (David). Columns are at most 560 px wide. */
+#define CARD_GAP 16
+static int content_box(const RECT *rc, int *x, int *w)
+{
+    int avail = rc->right - dpx(40), cols = avail >= dpx(1400) ? 3 : avail >= dpx(900) ? 2 : 1;
+    int colw = min(dpx(560), (avail - (cols - 1) * dpx(CARD_GAP)) / cols);
+    if (cols == 1) colw = min(avail, dpx(720));
+    *w = cols * colw + (cols - 1) * dpx(CARD_GAP);
+    *x = (rc->right - *w) / 2;
+    return cols;
+}
+
 static void layout_search(HWND hwnd)
 {
     RECT rc;
     int x, w;
     GetClientRect(hwnd, &rc);
-    x = dpx(20); w = rc.right - dpx(40); if (w > dpx(720)) { x = (rc.right - dpx(720)) / 2; w = dpx(720); }
+    content_box(&rc, &x, &w);
     if (g_search) MoveWindow(g_search, x + dpx(70), dpx(66), w - dpx(70), dpx(28), TRUE);
 }
 
@@ -437,7 +453,7 @@ static void paint(HWND hwnd)
     HDC wdc = BeginPaint(hwnd, &ps), dc;
     RECT rc;
     HBITMAP bmp, oldbmp;
-    int x, w, i, top, head = header_height();
+    int x, w, i, top, head = header_height(), cols, colw, col = 0, rowbottom;
     WCHAR cursec[64] = L"";
     GetClientRect(hwnd, &rc);
     dc = CreateCompatibleDC(wdc);
@@ -446,14 +462,17 @@ static void paint(HWND hwnd)
     { HBRUSH bg = CreateSolidBrush(C_BG); FillRect(dc, &rc, bg); DeleteObject(bg); }
 
     g_nhits = 0;
-    x = dpx(20); w = rc.right - dpx(40); if (w > dpx(720)) { x = (rc.right - dpx(720)) / 2; w = dpx(720); }
+    g_cols = cols = content_box(&rc, &x, &w);
+    colw = (w - (cols - 1) * dpx(CARD_GAP)) / cols;
 
-    /* the list (scrolled), under the header */
+    /* the list (scrolled), under the header: sections, each a grid of cards */
     build_view();
     top = head + dpx(8) - g_scroll;
+    rowbottom = top;
     for (i = 0; i < g_nview; i++) {
         const app_t *a = &g_apps[g_view[i]];
         if (lstrcmpiW(app_section(a), cursec)) {
+            if (col) { top = rowbottom; col = 0; }   /* the last row's end */
             RECT ch = { x, top, x + w, top + dpx(26) };
             lstrcpynW(cursec, app_section(a), ARRAYSIZE(cursec));
             text(dc, g_f_head, C_TEXT, ch, cursec, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -468,8 +487,10 @@ static void paint(HWND hwnd)
             }
         }
         g_view_y[i] = top + g_scroll;
-        top = draw_card(dc, x, w, top, g_view[i], rc.bottom);
+        rowbottom = max(rowbottom, draw_card(dc, x + col * (colw + dpx(CARD_GAP)), colw, top, g_view[i], rc.bottom));
+        if (++col == cols) { col = 0; top = rowbottom; }
     }
+    if (col) top = rowbottom;
     if (!g_nview) {
         RECT e = { x, top + dpx(20), x + w, top + dpx(60) };
         WCHAR msg[256];

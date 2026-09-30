@@ -38,6 +38,10 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     or the accent changes, and Start tells it once as the session starts.
     Test: test/control-check.sh (a stand-in records the calls; mutant: a
     mode change that says nothing).
+  * SG Store uses a wide window (David: full screen left big blank spots
+    either side): the cards are a grid of two or three columns beside each
+    other when there is room, the header and search across the same width.
+    Test: test/store-check.sh (maximized: two columns; mutant: one).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 
