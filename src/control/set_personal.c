@@ -484,3 +484,60 @@ BOOL set_cmd_taskbar(int id, int code, HWND ctl)
     tray_settings_changed();
     return TRUE;
 }
+
+/* ---- Share & reset ---------------------------------------------------------------------------- */
+/* a look saved to a file, read back, or put back as a new account has it
+ * (lookshare.c; David 2026-09-29) */
+enum { CMD_LOOK_EXPORT = CMD_PAGE_FIRST + 1, CMD_LOOK_IMPORT, CMD_LOOK_RESET };
+
+void set_build_lookshare(void)
+{
+    int y = st_title(L"Share & reset");
+    y = st_para(y, L"Your look is the choices on these pages: the window style, light or dark, the accent color, the "
+                   L"desktop picture, and how the taskbar and Start are laid out. Your pins, tiles and files are not part of it.");
+    y = st_head(y, L"Share your look");
+    y = st_para(y, L"Save your look to a file to keep it, to use it on another computer, or to give it to someone.");
+    st_button(&y, L"Save my look...", CMD_LOOK_EXPORT);
+    st_button(&y, L"Use a saved look...", CMD_LOOK_IMPORT);
+    y = st_head(y, L"Reset");
+    y = st_para(y, L"Put back the look a new account starts with: the Classic look and the Stained Glass theme.");
+    st_button(&y, L"Reset to the default look", CMD_LOOK_RESET);
+}
+
+static BOOL look_file(WCHAR *file, BOOL save)
+{
+    OPENFILENAMEW ofn = { sizeof(ofn) };
+    file[0] = 0;
+    if (save) lstrcpyW(file, L"My look.sglook");
+    ofn.hwndOwner = g_main;
+    ofn.lpstrFilter = L"Stained Glass look (*.sglook)\0*.sglook\0";
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"sglook";
+    ofn.Flags = OFN_EXPLORER | (save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
+    return save ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn);
+}
+
+BOOL set_cmd_lookshare(int id, int code, HWND ctl)
+{
+    WCHAR file[MAX_PATH];
+    const WCHAR *why;
+    (void)code; (void)ctl;
+    switch (id)
+    {
+    case CMD_LOOK_EXPORT:
+        if (look_file(file, TRUE)) { if (!(why = look_export(file))) st_status(L"Your look is saved."); else failed(why); }
+        return TRUE;
+    case CMD_LOOK_IMPORT:
+        if (look_file(file, FALSE)) { if (!(why = look_import(file))) { st_status(L"The saved look is in use."); refresh_page(); } else failed(why); }
+        return TRUE;
+    case CMD_LOOK_RESET:
+        if (MessageBoxW(g_main, L"Put back the default look? Your pins, tiles and files are kept.", L"Reset",
+                        MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
+        {
+            if (!(why = look_reset())) { st_status(L"The default look is back."); refresh_page(); } else failed(why);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}

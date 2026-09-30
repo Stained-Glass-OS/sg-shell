@@ -31,7 +31,7 @@ enum page_id {
     PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT,
     PG_S_BLUETOOTH, PG_S_MOUSE, PG_S_TYPING,
     PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
-    PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR,
+    PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_LOOKSHARE,
     PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP,
     PG_S_YOURINFO, PG_S_SIGNIN, PG_S_OTHERUSERS,
     PG_S_DATETIME, PG_S_REGION,
@@ -224,6 +224,10 @@ BOOL look_rounded(void);
 const WCHAR *look_set_style(BOOL rounded);
 const WCHAR *look_apply(BOOL rounded);
 void look_wait(void);
+/* lookshare.c: a look saved to an .sglook file, read back, or put back as new */
+const WCHAR *look_export(const WCHAR *path);
+const WCHAR *look_import(const WCHAR *path);
+const WCHAR *look_reset(void);
 extern const COLORREF PERS_ACCENTS[20], PERS_BACKGROUNDS[12];
 extern const WCHAR *const PERS_FIT_NAMES[];
 int  pers_pictures(WCHAR (*out)[MAX_PATH], int max);         /* Windows' and ours */

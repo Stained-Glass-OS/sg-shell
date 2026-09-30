@@ -400,6 +400,39 @@ wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
     && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] && pass "Classic sets it all back, desktops pager still off" || fail "Classic look: desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
 
+# --- Share & reset: a look saved, reset, read back; a shared file sets only look choices ---------
+SG='C:\users\Public'
+DWMK='HKCU\Software\Microsoft\Windows\DWM'
+TBK='HKCU\Software\Stained Glass\Taskbar'
+sgset() { wine "$T/sg-settings64.exe" --set "$@" 2>/dev/null | tr -d '\r' | tail -1; }
+sgset look rounded >/dev/null; sgset accent 112233 >/dev/null; sgset mode apps dark >/dev/null
+wine reg add "$TBK" /v Position /t REG_DWORD /d 1 /f >/dev/null 2>&1
+[ "$(sgset look export "$SG\\mine.sglook")" = OK ] && grep -q '^Style=rounded' "$WINEPREFIX/drive_c/users/Public/mine.sglook" \
+    && grep -q '^Accent=112233' "$WINEPREFIX/drive_c/users/Public/mine.sglook" && grep -q '^Position=1' "$WINEPREFIX/drive_c/users/Public/mine.sglook" \
+    && pass "Share & reset: the look is saved to a .sglook file (style, accent, taskbar)" || fail "look export: $(tr -d '\r' < "$WINEPREFIX/drive_c/users/Public/mine.sglook" 2>&1 | head -8 | tr '\n' ' ')"
+sgset look reset >/dev/null
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$DWMK" AccentColor)" = 0xffbe2f7b ] \
+    && [ "$(regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme)" = 0x1 ] && [ -z "$(regq "$TBK" Position)" ] \
+    && pass "reset puts back the default look: Classic, the Stained Glass accent, light, the taskbar's own place" \
+    || fail "look reset: rounded $(regq 'HKCU\Software\Stained Glass\Style' Rounded) accent $(regq "$DWMK" AccentColor) position $(regq "$TBK" Position)"
+[ "$(sgset look import "$SG\\mine.sglook")" = OK ] && [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x1 ] \
+    && [ "$(regq "$DWMK" AccentColor)" = 0xff332211 ] && [ "$(regq "$TBK" Position)" = 0x1 ] \
+    && pass "a saved look is read back (Rounded, its accent, the taskbar at the top)" \
+    || fail "look import: rounded $(regq 'HKCU\Software\Stained Glass\Style' Rounded) accent $(regq "$DWMK" AccentColor) position $(regq "$TBK" Position)"
+printf '[Look]\r\nFormat=1\r\n[Taskbar]\r\nPosition=99\r\n[HKEY_CURRENT_USER\\Software\\SgLookEvil]\r\n"x"=dword:1\r\n' > "$WINEPREFIX/drive_c/users/Public/evil.sglook"
+sgset look import "$SG\\evil.sglook" >/dev/null
+[ "$(regq "$TBK" Position)" = 0x1 ] && ! wine reg query 'HKCU\Software\SgLookEvil' >/dev/null 2>&1 \
+    && pass "a shared file sets only look choices, within their range (Position=99 and a registry section ignored)" \
+    || fail "look import took more than a look: position $(regq "$TBK" Position)"
+printf '[Other]\r\nx=1\r\n' > "$WINEPREFIX/drive_c/users/Public/not.sglook"
+case "$(sgset look import "$SG\\not.sglook")" in FAILED*) pass "a file that is not a saved look is refused" ;; *) fail "a non-look file was taken" ;; esac
+sgset look classic >/dev/null
+wine start ms-settings:personalization-share >/dev/null 2>&1
+page_is "Share & reset" "ms-settings:personalization-share"
+sleep 0.5
+has "Save my look..." && has "Use a saved look..." && has "Reset to the default look" \
+    && pass "Personalization > Share & reset: save, use and reset" || fail "Share & reset page: $(tr -d '\r' < "$DUMP" | grep -c '^control')"
+
 # --- Start layout: Tiles is the default, the Centred option is not 'Recommended' (David 2026-09-29) ---
 # the combo dump shows only the selected item, so check each selection in turn
 wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1

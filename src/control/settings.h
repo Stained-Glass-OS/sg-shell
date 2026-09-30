@@ -39,6 +39,7 @@
     [PG_S_THEMES]       = { L"Themes",                       PG_S_HOME, set_build_themes,    set_cmd_themes }, \
     [PG_S_START]        = { L"Start",                        PG_S_HOME, set_build_start,     set_cmd_start }, \
     [PG_S_TASKBAR]      = { L"Taskbar",                      PG_S_HOME, set_build_taskbar,   set_cmd_taskbar }, \
+    [PG_S_LOOKSHARE]    = { L"Share & reset",                PG_S_HOME, set_build_lookshare, set_cmd_lookshare }, \
     [PG_S_APPS]         = { L"Apps & features",              PG_S_HOME, set_build_apps,      set_cmd_apps }, \
     [PG_S_DEFAULTAPPS]  = { L"Default apps",                 PG_S_HOME, set_build_defaultapps, set_cmd_defaultapps }, \
     [PG_S_STARTUP]      = { L"Startup",                      PG_S_HOME, set_build_startup,   set_cmd_startup }, \
@@ -106,6 +107,7 @@ void set_build_background(void); BOOL set_cmd_background(int, int, HWND);
 void set_build_colors(void);    BOOL set_cmd_colors(int, int, HWND);
 void set_build_lockscreen(void); BOOL set_cmd_lockscreen(int, int, HWND);
 void set_build_themes(void);    BOOL set_cmd_themes(int, int, HWND);
+void set_build_lookshare(void); BOOL set_cmd_lookshare(int, int, HWND);
 void set_build_start(void);     BOOL set_cmd_start(int, int, HWND);
 void set_build_taskbar(void);   BOOL set_cmd_taskbar(int, int, HWND);
 void set_build_apps(void);      BOOL set_cmd_apps(int, int, HWND);

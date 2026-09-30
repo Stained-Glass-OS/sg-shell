@@ -1,3 +1,16 @@
+sg-shell (0.1.0-73) unstable; urgency=medium
+
+  * Settings > Personalization > Share & reset: save your look (the window
+    style, light or dark, the accent, the desktop picture, and the taskbar
+    and Start layout -- not pins, tiles or files) to an .sglook file, use a
+    saved one, or put back the look a new account starts with (Classic, the
+    Stained Glass theme). A saved look is read back through the pages' own
+    setters, each choice checked against its range: a shared file can set
+    nothing else. sg-settings --set look reset | look export|import PATH.
+    Gate: make test (settings-check; mutation-tested).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 17:45:00 -0700
+
 sg-shell (0.1.0-72) unstable; urgency=medium
 
   * Settings > Themes > Choose a look: the options are Classic, Rounded and
