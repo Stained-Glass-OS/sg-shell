@@ -33,6 +33,11 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     (Administrator)" did (not through the elevation broker: its SYSTEM
     account is not Linux's root). Test: test/rootterm-check.sh (the
     launcher run with stand-in scripts; mutant: --admin ignored).
+  * Linux programs follow the user's light or dark mode and accent (David):
+    Settings tells sg-settingsctl look (sg-session) whenever the apps' mode
+    or the accent changes, and Start tells it once as the session starts.
+    Test: test/control-check.sh (a stand-in records the calls; mutant: a
+    mode change that says nothing).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

@@ -219,6 +219,7 @@ const WCHAR *pers_set_wallpaper(const WCHAR *src, int style);   /* NULL, or why 
 const WCHAR *pers_set_background(COLORREF c);
 const WCHAR *pers_set_accent(COLORREF c);
 const WCHAR *pers_set_mode(BOOL apps, BOOL light);
+void pers_linux_look(void);   /* Linux programs follow the mode and accent (sg-settingsctl look) */
 /* look.c: the window style, and the whole looks: Classic, Rounded, and the
  * Horizon and Glass taskbars (Taskbar Style, wine-sg 0600) */
 enum { LOOK_CLASSIC, LOOK_ROUNDED, LOOK_HORIZON, LOOK_GLASS, LOOK_COUNT };

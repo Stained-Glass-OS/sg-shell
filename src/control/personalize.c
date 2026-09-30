@@ -224,7 +224,26 @@ const WCHAR *pers_set_accent(COLORREF c)
     }
     announce(L"ImmersiveColorSet");
     PostMessageW(HWND_BROADCAST, WM_DWMCOLORIZATIONCOLORCHANGED, colorization, TRUE);
+    pers_linux_look();
     return NULL;
+}
+
+/* Linux programs follow the apps' mode and the accent: sg-settingsctl look
+ * (GTK's files, the desktop's color-scheme, the portal) -- started, not
+ * waited for. SG_SETTINGSCTL names another one (the gate's). */
+void pers_linux_look(void)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait) =
+        (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    BOOL light = reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"AppsUseLightTheme", 1) != 0;
+    DWORD accent = reg_dword(HKEY_CURRENT_USER, DWM, L"AccentColor", 0xFFBE2F7B);   /* ABGR */
+    char tool[MAX_PATH] = "/usr/bin/sg-settingsctl", verb[] = "look", mode[8], hex[8];
+    char *argv[] = { tool, verb, mode, hex, NULL };
+    DWORD n = GetEnvironmentVariableA("SG_SETTINGSCTL", tool, sizeof(tool));
+    if (!n || n >= sizeof(tool) || tool[0] != '/') strcpy(tool, "/usr/bin/sg-settingsctl");
+    strcpy(mode, light ? "light" : "dark");
+    snprintf(hex, sizeof(hex), "%02x%02x%02x", (unsigned)(accent & 0xFF), (unsigned)((accent >> 8) & 0xFF), (unsigned)((accent >> 16) & 0xFF));
+    if (spawnvp) spawnvp(argv, FALSE);   /* no sg-settingsctl: nothing to tell */
 }
 
 const WCHAR *pers_set_mode(BOOL apps, BOOL light)
@@ -232,6 +251,7 @@ const WCHAR *pers_set_mode(BOOL apps, BOOL light)
     if (!reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, apps ? L"AppsUseLightTheme" : L"SystemUsesLightTheme", light ? 1 : 0))
         return L"the setting could not be saved";
     announce(L"ImmersiveColorSet");
+    if (apps) pers_linux_look();
     return NULL;
 }
 

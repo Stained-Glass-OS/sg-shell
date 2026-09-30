@@ -126,6 +126,9 @@ if command -v convert >/dev/null; then
     [ "$r" = OK ] && [ "$(regq 'HKCU\Control Panel\Colors' Background)" = "30 85 46" ] && [ -z "$(regq 'HKCU\Control Panel\Desktop' Wallpaper)" ] \
         && pass "Personalization: a solid color clears the picture and sets Colors\\Background" || fail "background: $r"
 else echo "info  no ImageMagick; skipped the wallpaper checks"; fi
+# Linux programs are told the look (sg-settingsctl look), through a stand-in
+printf '#!/bin/sh\necho "$*" >> "%s/look.log"\n' "$T" > "$T/settingsctl"; chmod 755 "$T/settingsctl"
+export SG_SETTINGSCTL="$T/settingsctl"
 r=$(ctl --set accent 107C41)
 [ "$r" = OK ] && [ "$(regq 'HKCU\Software\Microsoft\Windows\DWM' AccentColor)" = 0xff417c10 ] \
     && [ "$(regq 'HKCU\Software\Microsoft\Windows\DWM' ColorizationColor)" = 0xc4107c41 ] \
@@ -138,6 +141,10 @@ ctl --set mode apps dark >/dev/null; ctl --set mode system light >/dev/null
 [ "$(regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme)" = 0x0 ] && \
 [ "$(regq 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' SystemUsesLightTheme)" = 0x1 ] \
     && pass "Personalization: app and Windows modes are AppsUseLightTheme / SystemUsesLightTheme" || fail "modes"
+sleep 1
+grep -qx 'look light 107c41' "$T/look.log" 2>/dev/null && grep -qx 'look dark 107c41' "$T/look.log" && [ "$(grep -c . "$T/look.log")" = 2 ] \
+    && pass "Personalization: Linux programs are told the apps' mode and the accent (sg-settingsctl look)" || fail "look: $(cat "$T/look.log" 2>/dev/null | tr '\n' '|')"
+unset SG_SETTINGSCTL
 out=$(ctl --dump personalization)
 [ "$(val "$out" accent)" = 107C41 ] && [ "$(val "$out" mode.apps)" = dark ] && [ "$(val "$out" background.type)" = solid ] \
     && pass "Personalization: the page reads back what was set" || fail "readback: $out"

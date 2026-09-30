@@ -2558,6 +2558,18 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
             }
         }
     }
+    /* Linux programs take this user's light or dark mode and accent from the
+     * start (sg-settingsctl look; Settings tells it again on a change) */
+    {
+        LONG (WINAPI *spawnvp)(char * const argv[], int wait) =
+            (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+        DWORD accent = reg_value(L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFBE2F7B);   /* ABGR */
+        char tool[] = "/usr/bin/sg-settingsctl", verb[] = "look", mode[8], hex[8];
+        char *argv[] = { tool, verb, mode, hex, NULL };
+        strcpy(mode, reg_value(L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", L"AppsUseLightTheme", 1) ? "light" : "dark");
+        snprintf(hex, sizeof(hex), "%02x%02x%02x", (unsigned)(accent & 0xFF), (unsigned)((accent >> 8) & 0xFF), (unsigned)((accent >> 16) & 0xFF));
+        if (spawnvp && GetFileAttributesW(L"\\\\?\\unix\\usr\\bin\\sg-settingsctl") != INVALID_FILE_ATTRIBUTES) spawnvp(argv, FALSE);
+    }
     /* warm the list and its icons, so the first opening is quick */
     build_list();
     first_run();
