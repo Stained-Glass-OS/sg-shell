@@ -2,14 +2,15 @@
 # trademark-check: no user-visible "Windows" in our own text.
 #
 # "Windows" is Microsoft's trademark; Stained Glass OS must never present
-# itself as Windows. This scans the text a person can see -- string literals
-# in C and resource scripts, the data of .reg files, .desktop Name/Comment,
-# manifest descriptions, messages in Python and shell tools, and the lines
-# wine-sg's patches ADD -- for the word "Windows" (capital W) and fails on any
-# that is not a technical identifier or explicitly allowed -- and the same for
-# Microsoft's feature names ("User Account Control", "SmartScreen", ...), and,
-# with --brand, another word in the files it names ("Wine" in the dialogs the
-# shell shows as its own: its Run dialog said "Wine will open it for you").
+# itself as Windows. This scans the text a person can see -- string literals in
+# C, C++, JavaScript and resource scripts, the strings of JSON files, the data
+# of .reg files, .desktop Name/Comment, manifest descriptions, messages in
+# Python and shell tools, and the lines patches ADD to such files -- for the
+# word "Windows" (capital W) and fails on any that is not a technical
+# identifier or explicitly allowed -- and the same for Microsoft's feature
+# names ("User Account Control", "SmartScreen", ...), and, with --brand,
+# another word in the files it names ("Wine" in the dialogs the shell shows as
+# its own: its Run dialog said "Wine will open it for you").
 #
 # Technical identifiers pass by themselves: a registry or file path (the word
 # next to a backslash or slash: Software\Microsoft\Windows\..., C:\Windows,
@@ -168,6 +169,40 @@ def manifest_strings(text):
     return out
 
 
+def js_strings(text):
+    """String literals of JavaScript text ('...', "...", `...`), comments removed.
+    (Web and JavaScript text: SG Office's editors, any HTML/JS UI.)"""
+    out, i, n, line = [], 0, len(text), 1
+    while i < n:
+        c = text[i]
+        if c == "\n":
+            line += 1; i += 1
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2); j = n if j < 0 else j + 2
+            line += text.count("\n", i, j); i = j
+        elif text.startswith("//", i):
+            j = text.find("\n", i); i = n if j < 0 else j
+        elif c in "'\"`":
+            j, buf, start = i + 1, [], line
+            while j < n and text[j] != c and (c == "`" or text[j] != "\n"):
+                if text[j] == "\\" and j + 1 < n:
+                    buf.append(text[j:j + 2]); j += 2
+                else:
+                    if text[j] == "\n":
+                        line += 1
+                    buf.append(text[j]); j += 1
+            out.append((start, "".join(buf)))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def json_strings(text):
+    """Every string of a JSON (locale) file, keys and values alike."""
+    return js_strings(text)
+
+
 def patch_strings(text):
     """String literals on the lines a patch adds to C, resource and .inf files."""
     out, cur, added, start = [], None, [], {}
@@ -176,7 +211,8 @@ def patch_strings(text):
     def flush():
         if cur and added:
             body = "\n".join(a for _, a in added)
-            for off, s in c_strings(body):
+            ext = (js_strings if re.search(r"\.(js|json)$", cur) else c_strings)
+            for off, s in ext(body):
                 out.append((added[off - 1][0], s, cur))
 
     for no, l in enumerate(lines, 1):
@@ -184,7 +220,7 @@ def patch_strings(text):
             flush(); added = []
             path = l[4:].split("\t")[0]
             path = path[2:] if path.startswith("b/") else path
-            cur = path if re.search(r"\.(c|h|rc|inf\.in|inf|mc|idl)$", path) else None
+            cur = path if re.search(r"\.(c|h|rc|inf\.in|inf|mc|idl|cpp|hpp|cc|js|json)$", path) else None
         elif l.startswith("@@"):
             flush(); added = []
         elif l.startswith("+") and cur:
@@ -198,6 +234,8 @@ def patch_strings(text):
 EXTRACT = [
     (re.compile(r"\.(c|h|rc|cpp)$"), c_strings),
     (re.compile(r"\.py$"), py_strings),
+    (re.compile(r"\.js$"), js_strings),
+    (re.compile(r"\.json$"), json_strings),
     (re.compile(r"\.reg$"), reg_strings),
     (re.compile(r"\.desktop(\.in)?$"), desktop_strings),
     (re.compile(r"\.manifest$"), manifest_strings),
