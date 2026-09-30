@@ -194,6 +194,102 @@ r=$(ask source-remove extras); { [ "$(first "$r")" = OK ] && [ ! -e "$f" ]; } &&
 r=$(ask source-remove debian); case "$(first "$r")" in "FAILED "*) pass "and only those";; *) fail "removed a system source: $r";; esac
 [ -f "$A/debian.sources" ] || fail "debian.sources is gone"
 
+# --- SG Store: system packages (apt-install, deb-install) ---
+# a stand-in apt-get that reports progress on APT::Status-Fd, looks at the
+# progress file sg-admind publishes meanwhile, and "installs" (the section's
+# own; the others' stand-ins come back after it)
+cp "$B/apt-get" "$T/apt-get.others"; cp "$B/dpkg-query" "$T/dpkg-query.others"
+cat > "$B/apt-get" <<EOF
+#!/bin/sh
+fd=; last=
+for a in "\$@"; do case \$a in APT::Status-Fd=*) fd=\${a#APT::Status-Fd=} ;; esac; last=\$a; done
+printf 'apt-get %s\n' "\$*" >> "$CALLS"
+case " \$* " in *" update "*) exit 0 ;; esac
+[ -n "\$fd" ] && eval "printf 'pmstatus:x:50:Unpacking the thing\n' >&\$fd"
+sleep 0.6
+cat "$S"/replies/*.progress >> "$T/progress-seen" 2>/dev/null
+if [ -f "\$last" ]; then printf '%s %s\n' "\$(dpkg-deb -f "\$last" Package)" "\$(dpkg-deb -f "\$last" Version)" >> "$T/installed"
+else printf '%s 9.9\n' "\$last" >> "$T/installed"; fi
+EOF
+cat > "$B/dpkg-query" <<EOF
+#!/bin/sh
+eval "pkg=\\\${\$#}"
+v=\$(sed -n "s/^\$pkg //p" "$T/installed" 2>/dev/null | tail -1)
+[ -n "\$v" ] || exit 1
+printf 'installed %s' "\$v"
+EOF
+chmod +x "$B/apt-get" "$B/dpkg-query"
+DEBS="$T/debs"; mkdir -p "$DEBS" "$T/work"; chmod 700 "$DEBS"
+export SG_ADMIN_DEBS="$DEBS" SG_ADMIN_WORK="$T/work"
+: > "$CALLS"; : > "$T/installed"
+r=$(ask apt-install gimp)
+{ [ "$(first "$r")" = OK ] && grep -q '^apt-get .* install gimp$' "$CALLS" && printf '%s' "$r" | grep -q 'gimp 9.9'; } \
+    && pass "apt-install runs apt-get install and answers the installed version" || fail "apt-install: $r / $(cat "$CALLS")"
+grep -q '^PROGRESS [0-9]' "$T/progress-seen" 2>/dev/null && grep -q 'Unpacking the thing' "$T/progress-seen" \
+    && pass "and publishes apt's progress while it runs" || fail "progress: $(cat "$T/progress-seen" 2>/dev/null)"
+[ -z "$(ls "$S"/replies/*.progress 2>/dev/null)" ] && pass "the progress file goes with the answer" || fail "progress left behind"
+: > "$CALLS"
+for bad in 'gimp; reboot' '-oAPT::X=1' '../gimp' 'Gimp' ''; do
+    r=$(ask apt-install "$bad"); case "$(first "$r")" in "FAILED "*) ;; *) fail "apt-install '$bad': $r" ;; esac
+done
+[ ! -s "$CALLS" ] && pass "refuses what is not a package name, apt never runs" || fail "a bad name reached apt: $(cat "$CALLS")"
+
+P="$T/pkg"; mkdir -p "$P/DEBIAN"
+printf 'Package: sg-gate-hello\nVersion: 1.2-3\nArchitecture: all\nMaintainer: Gate <g@example.org>\nDescription: gate\n' > "$P/DEBIAN/control"
+dpkg-deb --root-owner-group --build "$P" "$T/hello.deb" >/dev/null 2>&1 || fail "the gate's .deb does not build"
+stage() { cp "$T/hello.deb" "$DEBS/$1"; }
+# deb_file_request ADMIND ID VERSION [link] -- stage, file the request, run
+deb_request() {
+    stage "$2.deb"
+    [ -n "${4:-}" ] && ln "$DEBS/$2.deb" "$T/extra-link"     # a second name: not SYSTEM's own file
+    printf 'deb-install\n%s\nsg-gate-hello\n%s\n' "$2.deb" "$3" > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$2.req"
+    python3 "$1" 2>>"$T/log"; rm -f "$T/extra-link"
+    cat "$S/replies/$2.rep" 2>/dev/null
+}
+deb_cases() { # the sg-admind to test -- prints one word per case
+    : > "$CALLS"; : > "$T/installed"
+    id=$(next_id); r=$(deb_request "$1" "$id" 1.2-3)
+    { [ "$(first "$r")" = OK ] && grep -q "^apt-get .* install $T/work/sg-deb-[^/]*/package.deb\$" "$CALLS" \
+      && [ ! -e "$DEBS/$id.deb" ] && [ -z "$(ls -A "$T/work")" ]; } && echo installs || echo "no-install"
+    # the file changed after it was shown: another version
+    : > "$CALLS"
+    id=$(next_id); r=$(deb_request "$1" "$id" 1.2-4); rm -f "$DEBS/$id.deb"
+    case "$(first "$r")" in "FAILED The file changed"*) grep -q ' install ' "$CALLS" && echo installed-changed || echo refuses-changed ;;
+                            *) echo installed-changed ;; esac
+    # a staged file with another name as well: not SYSTEM's own
+    : > "$CALLS"
+    id=$(next_id); r=$(deb_request "$1" "$id" 1.2-3 link); rm -f "$DEBS/$id.deb"
+    case "$(first "$r")" in "FAILED "*) grep -q ' install ' "$CALLS" && echo installed-foreign || echo refuses-foreign ;;
+                            *) echo installed-foreign ;; esac
+}
+# shellcheck disable=SC2046
+set -- $(deb_cases "$ADMIND")
+[ "${1:-}" = installs ] && pass "deb-install takes SYSTEM's staged .deb, apt installs its own copy, both copies go" || fail "deb-install: ${1:-} $(tail -2 "$T/log")"
+[ "${2:-}" = refuses-changed ] && pass "a package that is not the version shown is refused, apt never runs" || fail "changed: ${2:-}"
+[ "${3:-}" = refuses-foreign ] && pass "a staged file that is not SYSTEM's own is refused" || fail "foreign: ${3:-}"
+: > "$CALLS"
+for bad in '../hello.deb' 'hello.deb' "$(next_id).deb/x"; do
+    r=$(ask deb-install "$bad" sg-gate-hello 1.2-3); case "$(first "$r")" in "FAILED "*) ;; *) fail "deb-install '$bad': $r" ;; esac
+done
+id=$(next_id); ln -s "$T/hello.deb" "$DEBS/$id.deb"
+r=$(ask deb-install "$id.deb" sg-gate-hello 1.2-3); rm -f "$DEBS/$id.deb"
+case "$(first "$r")" in "FAILED "*) ;; *) fail "deb-install through a link: $r" ;; esac
+id=$(next_id); printf 'not a package\n' > "$DEBS/$id.deb"
+r=$(ask deb-install "$id.deb" sg-gate-hello 1.2-3)
+case "$(first "$r")" in "FAILED The file is not a Linux"*) ;; *) fail "deb-install of a non-package: $r" ;; esac
+[ ! -s "$CALLS" ] && pass "refuses other names, links and files that are not packages, apt never runs" || fail "reached apt: $(cat "$CALLS")"
+# mutants: without the version check, without the owner check -- the gate must catch both
+sed 's/^        if (pkg, ver) != (want_pkg, want_ver):/        if False:/' "$ADMIND" > "$T/mut-nocheck"
+sed "s/^            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != system_uid():  # SYSTEM's own\$/            if False:/" "$ADMIND" > "$T/mut-noowner"
+[ "$(grep -c 'if False:' "$T/mut-nocheck")" = 1 ] && [ "$(grep -c 'if False:' "$T/mut-noowner")" = 1 ] || fail "the mutants did not apply"
+# shellcheck disable=SC2046
+set -- $(deb_cases "$T/mut-nocheck")
+[ "${2:-}" != refuses-changed ] && pass "MUTANT NOVERSIONCHECK installs a changed package (gate catches it)" || fail "NOVERSIONCHECK not detected"
+# shellcheck disable=SC2046
+set -- $(deb_cases "$T/mut-noowner")
+[ "${3:-}" != refuses-foreign ] && pass "MUTANT NOOWNER installs a file that is not SYSTEM's own (gate catches it)" || fail "NOOWNER not detected"
+cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"
+
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac
 r=$(ask hostname a b); case "$(first "$r")" in "FAILED Malformed"*) pass "refuses the wrong number of fields";; *) fail "arity: $r";; esac

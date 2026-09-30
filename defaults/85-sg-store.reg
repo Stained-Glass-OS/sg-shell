@@ -4,8 +4,9 @@ Windows Registry Editor Version 5.00
 ;
 ; A catalogue of applications the OS can install on demand. For any app the
 ; Windows (wine-sg) build is the ideal path and the default suggestion; our own
-; builds (SG Office) sit beside them; native Linux desktop apps are a hidden
-; last resort (Tier=linux), shown only behind SG Store's "Advanced" disclosure.
+; builds (SG Office) sit beside them; native Linux desktop apps (Tier=linux)
+; are listed last, in SG Store's "Linux apps" section, and installed with apt
+; through the administrator's consent and sg-admind (apt-install).
 ;
 ; We ship no third-party or Microsoft binary: SG Store downloads the maker's
 ; installer at the user's request and runs it only if it is exactly the file
@@ -22,11 +23,20 @@ Windows Registry Editor Version 5.00
 ;   Source = winget:<PackageId>
 ;          | pin:<Url>|<Sha256>|<Type>|<Silent>
 ;          | ours:setup:<AppPathsExe>
-;          | ours:apt:<package> | linux:apt:<package>   (installed from Settings)
+;          | ours:apt:<package> | linux:apt:<package>   (apt, via sg-admind)
 ;   Package = (ours:setup) the system package the setup program comes in; a
 ;             machine without it has sg-admind install it first (one consent)
-;   DetectName = matched against installed programs to read the installed version
+;   DetectName = a Windows program's Uninstall DisplayName: "A|B|!C" -- the
+;                name starts with A or B as a whole word ("Git" is not "GitHub
+;                Desktop"), and not with C ("XnView|!XnView MP"); * is any run of
+;                characters ("Mozilla Firefox*ESR"). A Linux app
+;                is detected by dpkg's state of its package, never by name.
+;   Run        = a Linux app's program (Open), e.g. /usr/bin/gimp
 ;   PinVersion = the available version for a pin: entry (update checks)
+;
+; Every winget: id here exists in github.com/microsoft/winget-pkgs (checked
+; 2026-09-30, each resolving to an installer SG Store can run). FileZilla is
+; not in that repository, so it is offered as a Linux app only.
 ;
 ; A mirror or Group Policy may later replace the whole catalogue via
 ; HKLM\Software\Stained Glass\Store CatalogUrl. The winget source is the same
@@ -44,7 +54,36 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\Applications\sg-store64.exe\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\""
 
-; ---- the starter catalogue -----------------------------------------------------------
+; ---- Linux software packages (.deb): double-click installs ------------------------------
+; "Install a Linux package" (sg-store64.exe --deb): what the package is (name,
+; version, who made it), then apt installs it with its dependencies after an
+; administrator's consent -- e.g. Valve's steam.deb.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.deb]
+@="SG.LinuxPackage"
+"Content Type"="application/vnd.debian.binary-package"
+"PerceivedType"="application"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage]
+@="Linux software package"
+"FriendlyTypeName"="Linux software package"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage\shell\open]
+@="&Install"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\" --deb \"%1\""
+
+; ---- the catalogue --------------------------------------------------------------------
+; Replaced whole on each import, so an app taken out of the list goes.
+
+[-HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps]
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\01]
 "Name"="Mozilla Firefox"
@@ -54,7 +93,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00e66000
 "Tier"="windows"
 "Source"="winget:Mozilla.Firefox"
-"DetectName"="Firefox"
+"DetectName"="Mozilla Firefox|!Mozilla Firefox*ESR"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\02]
 "Name"="Google Chrome"
@@ -87,12 +126,1052 @@ Windows Registry Editor Version 5.00
 "Package"="sg-office"
 "DetectName"="LibreOffice"
 
-[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\90]
-"Name"="GIMP (Linux)"
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\05]
+"Name"="Vivaldi"
+"Publisher"="Vivaldi Technologies"
+"Description"="A web browser you can arrange your own way: tabs, panels, mail and notes."
+"Category"="Browsers"
+"Colour"=dword:00ef3939
+"Tier"="windows"
+"Source"="winget:Vivaldi.Vivaldi"
+"DetectName"="Vivaldi"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\06]
+"Name"="Opera"
+"Publisher"="Opera Software"
+"Description"="Web browser with a built-in ad blocker and free VPN."
+"Category"="Browsers"
+"Colour"=dword:00cc1b2a
+"Tier"="windows"
+"Source"="winget:Opera.Opera"
+"DetectName"="Opera Stable"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\07]
+"Name"="LibreWolf"
+"Publisher"="LibreWolf"
+"Description"="A Firefox build focused on privacy, security and freedom."
+"Category"="Browsers"
+"Colour"=dword:0000acff
+"Tier"="windows"
+"Source"="winget:LibreWolf.LibreWolf"
+"DetectName"="LibreWolf"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\08]
+"Name"="Waterfox"
+"Publisher"="BrowserWorks"
+"Description"="A private web browser based on Firefox."
+"Category"="Browsers"
+"Colour"=dword:001f6fb2
+"Tier"="windows"
+"Source"="winget:Waterfox.Waterfox"
+"DetectName"="Waterfox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\09]
+"Name"="Firefox ESR"
+"Publisher"="Mozilla"
+"Description"="Firefox's Extended Support Release: fewer, larger updates, for organisations."
+"Category"="Browsers"
+"Colour"=dword:00b34700
+"Tier"="windows"
+"Source"="winget:Mozilla.Firefox.ESR"
+"DetectName"="Mozilla Firefox*ESR"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\10]
+"Name"="Apache OpenOffice"
+"Publisher"="Apache Software Foundation"
+"Description"="Word processor, spreadsheets, presentations, drawing and databases."
+"Category"="Productivity"
+"Colour"=dword:000e85cd
+"Tier"="windows"
+"Source"="winget:Apache.OpenOffice"
+"DetectName"="OpenOffice"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\11]
+"Name"="SumatraPDF"
+"Publisher"="Krzysztof Kowalczyk"
+"Description"="Small, fast reader for PDF, EPUB, MOBI, comic books and more."
+"Category"="Productivity"
+"Colour"=dword:00d4a017
+"Tier"="windows"
+"Source"="winget:SumatraPDF.SumatraPDF"
+"DetectName"="SumatraPDF"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\12]
+"Name"="Foxit PDF Reader"
+"Publisher"="Foxit Software"
+"Description"="Read, fill in, sign and comment on PDF documents."
+"Category"="Productivity"
+"Colour"=dword:00e8531f
+"Tier"="windows"
+"Source"="winget:Foxit.FoxitReader"
+"DetectName"="Foxit PDF Reader"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\13]
+"Name"="Joplin"
+"Publisher"="Laurent Cozic"
+"Description"="Open source note taking and to-do lists, with sync."
+"Category"="Productivity"
+"Colour"=dword:001071d3
+"Tier"="windows"
+"Source"="winget:Joplin.Joplin"
+"DetectName"="Joplin"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\14]
+"Name"="Obsidian"
+"Publisher"="Obsidian"
+"Description"="A private writing app for linked notes in plain Markdown files."
+"Category"="Productivity"
+"Colour"=dword:007c3aed
+"Tier"="windows"
+"Source"="winget:Obsidian.Obsidian"
+"DetectName"="Obsidian"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\15]
+"Name"="calibre"
+"Publisher"="Kovid Goyal"
+"Description"="Organise, convert and read e-books."
+"Category"="Productivity"
+"Colour"=dword:008a5a2b
+"Tier"="windows"
+"Source"="winget:calibre.calibre"
+"DetectName"="calibre"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\16]
+"Name"="Scribus"
+"Publisher"="The Scribus Team"
+"Description"="Open source desktop publishing: brochures, newsletters, posters."
+"Category"="Productivity"
+"Colour"=dword:004b6e2e
+"Tier"="windows"
+"Source"="winget:Scribus.Scribus"
+"DetectName"="Scribus"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\17]
+"Name"="GnuCash"
+"Publisher"="GnuCash Development Team"
+"Description"="Personal and small-business accounting."
+"Category"="Productivity"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:GnuCash.GnuCash"
+"DetectName"="GnuCash"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\18]
+"Name"="KeePass"
+"Publisher"="Dominik Reichl"
+"Description"="A free, open source password manager."
+"Category"="Productivity"
+"Colour"=dword:003b73b9
+"Tier"="windows"
+"Source"="winget:DominikReichl.KeePass"
+"DetectName"="KeePass Password Safe"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\19]
+"Name"="KeePassXC"
+"Publisher"="KeePassXC Team"
+"Description"="A community password manager that reads KeePass databases."
+"Category"="Productivity"
+"Colour"=dword:006cac4d
+"Tier"="windows"
+"Source"="winget:KeePassXCTeam.KeePassXC"
+"DetectName"="KeePassXC"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\20]
+"Name"="Bitwarden"
+"Publisher"="Bitwarden"
+"Description"="A password manager that syncs across your devices."
+"Category"="Productivity"
+"Colour"=dword:00175ddc
+"Tier"="windows"
+"Source"="winget:Bitwarden.Bitwarden"
+"DetectName"="Bitwarden"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\21]
+"Name"="GIMP"
 "Publisher"="The GIMP Team"
-"Description"="Native Linux image editor. Prefer Windows programs where they exist."
+"Description"="The GNU Image Manipulation Program: photo retouching, painting and image editing."
 "Category"="Graphics"
-"Colour"=dword:005c5c5c
+"Colour"=dword:005c5543
+"Tier"="windows"
+"Source"="winget:GIMP.GIMP.3"
+"DetectName"="GIMP"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\22]
+"Name"="Inkscape"
+"Publisher"="Inkscape"
+"Description"="Professional vector graphics: illustrations, logos, diagrams."
+"Category"="Graphics"
+"Colour"=dword:001c1c1c
+"Tier"="windows"
+"Source"="winget:Inkscape.Inkscape"
+"DetectName"="Inkscape"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\23]
+"Name"="Krita"
+"Publisher"="Krita Foundation"
+"Description"="A painting program made by artists, for artists."
+"Category"="Graphics"
+"Colour"=dword:003b5bdb
+"Tier"="windows"
+"Source"="winget:KDE.Krita"
+"DetectName"="Krita"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\24]
+"Name"="Paint.NET"
+"Publisher"="dotPDN"
+"Description"="Easy image and photo editing with layers and effects."
+"Category"="Graphics"
+"Colour"=dword:002a6fdb
+"Tier"="windows"
+"Source"="winget:dotPDN.PaintDotNet"
+"DetectName"="paint.net"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\25]
+"Name"="IrfanView"
+"Publisher"="Irfan Skiljan"
+"Description"="A fast, compact image viewer and converter."
+"Category"="Graphics"
+"Colour"=dword:00c62828
+"Tier"="windows"
+"Source"="winget:IrfanSkiljan.IrfanView"
+"DetectName"="IrfanView"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\26]
+"Name"="XnView"
+"Publisher"="XnSoft"
+"Description"="Image viewer, browser and batch converter for hundreds of formats."
+"Category"="Graphics"
+"Colour"=dword:00546e7a
+"Tier"="windows"
+"Source"="winget:XnSoft.XnView.Classic"
+"DetectName"="XnView|!XnView MP"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\27]
+"Name"="XnView MP"
+"Publisher"="XnSoft"
+"Description"="Image viewer and photo organiser, the newer XnView."
+"Category"="Graphics"
+"Colour"=dword:0037474f
+"Tier"="windows"
+"Source"="winget:XnSoft.XnViewMP"
+"DetectName"="XnView MP"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\28]
+"Name"="FastStone Image Viewer"
+"Publisher"="FastStone"
+"Description"="Image browser, viewer, converter and editor."
+"Category"="Graphics"
+"Colour"=dword:000b7a75
+"Tier"="windows"
+"Source"="winget:FastStone.Viewer"
+"DetectName"="FastStone Image Viewer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\29]
+"Name"="Blender"
+"Publisher"="Blender Foundation"
+"Description"="Free 3D creation: modelling, animation, rendering and video editing."
+"Category"="Graphics"
+"Colour"=dword:00e87d0d
+"Tier"="windows"
+"Source"="winget:BlenderFoundation.Blender"
+"DetectName"="Blender"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\30]
+"Name"="darktable"
+"Publisher"="darktable team"
+"Description"="Photo workflow and raw developer."
+"Category"="Graphics"
+"Colour"=dword:00424242
+"Tier"="windows"
+"Source"="winget:darktable.darktable"
+"DetectName"="darktable"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\31]
+"Name"="RawTherapee"
+"Publisher"="RawTherapee"
+"Description"="Raw photo processing."
+"Category"="Graphics"
+"Colour"=dword:006d4c41
+"Tier"="windows"
+"Source"="winget:RawTherapee.RawTherapee"
+"DetectName"="RawTherapee"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\32]
+"Name"="Greenshot"
+"Publisher"="Greenshot"
+"Description"="A light screenshot tool: capture, mark up and save."
+"Category"="Graphics"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:Greenshot.Greenshot"
+"DetectName"="Greenshot"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\33]
+"Name"="ShareX"
+"Publisher"="ShareX Team"
+"Description"="Screen capture, recording and file sharing."
+"Category"="Graphics"
+"Colour"=dword:001976d2
+"Tier"="windows"
+"Source"="winget:ShareX.ShareX"
+"DetectName"="ShareX"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\34]
+"Name"="VLC media player"
+"Publisher"="VideoLAN"
+"Description"="Plays almost any video or audio file, disc or stream."
+"Category"="Media"
+"Colour"=dword:00ff8800
+"Tier"="windows"
+"Source"="winget:VideoLAN.VLC"
+"DetectName"="VLC media player"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\35]
+"Name"="Audacity"
+"Publisher"="Audacity Team"
+"Description"="Record and edit audio."
+"Category"="Media"
+"Colour"=dword:000b62d6
+"Tier"="windows"
+"Source"="winget:Audacity.Audacity"
+"DetectName"="Audacity"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\36]
+"Name"="HandBrake"
+"Publisher"="The HandBrake Team"
+"Description"="Convert video from nearly any format."
+"Category"="Media"
+"Colour"=dword:00b71c1c
+"Tier"="windows"
+"Source"="winget:HandBrake.HandBrake"
+"DetectName"="HandBrake"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\37]
+"Name"="K-Lite Codec Pack"
+"Publisher"="KLCP"
+"Description"="Codecs and filters so programs can play more video and audio formats."
+"Category"="Media"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:CodecGuide.K-LiteCodecPack.Standard"
+"DetectName"="K-Lite Codec Pack"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\38]
+"Name"="MediaMonkey"
+"Publisher"="Ventis Media"
+"Description"="Organise and play a large music and video collection."
+"Category"="Media"
+"Colour"=dword:00283593
+"Tier"="windows"
+"Source"="winget:VentisMedia.MediaMonkey.2024"
+"DetectName"="MediaMonkey"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\39]
+"Name"="Winamp"
+"Publisher"="Winamp"
+"Description"="The classic music player."
+"Category"="Media"
+"Colour"=dword:00f57c00
+"Tier"="windows"
+"Source"="winget:Winamp.Winamp"
+"DetectName"="Winamp"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\40]
+"Name"="foobar2000"
+"Publisher"="Peter Pawlowski"
+"Description"="An advanced, light audio player."
+"Category"="Media"
+"Colour"=dword:00263238
+"Tier"="windows"
+"Source"="winget:PeterPawlowski.foobar2000"
+"DetectName"="foobar2000"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\41]
+"Name"="AIMP"
+"Publisher"="Artem Izmaylov"
+"Description"="A free audio player with a sound engine of its own."
+"Category"="Media"
+"Colour"=dword:00f9a825
+"Tier"="windows"
+"Source"="winget:AIMP.AIMP"
+"DetectName"="AIMP"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\42]
+"Name"="MPC-HC"
+"Publisher"="MPC-HC Team"
+"Description"="A very light open source media player."
+"Category"="Media"
+"Colour"=dword:001e88e5
+"Tier"="windows"
+"Source"="winget:clsid2.mpc-hc"
+"DetectName"="MPC-HC"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\43]
+"Name"="OBS Studio"
+"Publisher"="OBS Project"
+"Description"="Record your screen and stream live."
+"Category"="Media"
+"Colour"=dword:00302e31
+"Tier"="windows"
+"Source"="winget:OBSProject.OBSStudio"
+"DetectName"="OBS Studio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\44]
+"Name"="Shotcut"
+"Publisher"="Meltytech"
+"Description"="A free, open source video editor."
+"Category"="Media"
+"Colour"=dword:0000796b
+"Tier"="windows"
+"Source"="winget:Meltytech.Shotcut"
+"DetectName"="Shotcut"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\45]
+"Name"="Kdenlive"
+"Publisher"="KDE"
+"Description"="Free and open source video editing."
+"Category"="Media"
+"Colour"=dword:00527eb2
+"Tier"="windows"
+"Source"="winget:KDE.Kdenlive"
+"DetectName"="Kdenlive"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\46]
+"Name"="OpenShot"
+"Publisher"="OpenShot Studios"
+"Description"="A simple, open source video editor."
+"Category"="Media"
+"Colour"=dword:00c62828
+"Tier"="windows"
+"Source"="winget:OpenShot.OpenShot"
+"DetectName"="OpenShot Video Editor"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\47]
+"Name"="Mp3tag"
+"Publisher"="Florian Heidenreich"
+"Description"="Edit the tags of your music files."
+"Category"="Media"
+"Colour"=dword:005d4037
+"Tier"="windows"
+"Source"="winget:FlorianHeidenreich.Mp3tag"
+"DetectName"="Mp3tag"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\48]
+"Name"="LMMS"
+"Publisher"="LMMS Developers"
+"Description"="Make music: sequencer, synthesisers and samples."
+"Category"="Media"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:LMMS.LMMS"
+"DetectName"="LMMS"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\49]
+"Name"="Git"
+"Publisher"="The Git Development Community"
+"Description"="Distributed version control, with Git Bash."
+"Category"="Development"
+"Colour"=dword:00f05033
+"Tier"="windows"
+"Source"="winget:Git.Git"
+"DetectName"="Git"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\50]
+"Name"="Python 3.13"
+"Publisher"="Python Software Foundation"
+"Description"="The Python programming language (Python 3.14 comes with Stained Glass OS; this adds 3.13 beside it)."
+"Category"="Development"
+"Colour"=dword:003776ab
+"Tier"="windows"
+"Source"="winget:Python.Python.3.13"
+"DetectName"="Python 3.13"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\51]
+"Name"="Notepad++"
+"Publisher"="Notepad++ Team"
+"Description"="A free source code editor for many languages."
+"Category"="Development"
+"Colour"=dword:0090e59a
+"Tier"="windows"
+"Source"="winget:Notepad++.Notepad++"
+"DetectName"="Notepad++"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\52]
+"Name"="VSCodium"
+"Publisher"="VSCodium"
+"Description"="A code editor: a freely licensed build of VS Code without telemetry."
+"Category"="Development"
+"Colour"=dword:002f80ed
+"Tier"="windows"
+"Source"="winget:VSCodium.VSCodium"
+"DetectName"="VSCodium"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\53]
+"Name"="Geany"
+"Publisher"="The Geany developer team"
+"Description"="A small, fast programmer's editor and IDE."
+"Category"="Development"
+"Colour"=dword:00a0522d
+"Tier"="windows"
+"Source"="winget:Geany.Geany"
+"DetectName"="Geany"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\54]
+"Name"="Sublime Text"
+"Publisher"="Sublime HQ"
+"Description"="A sophisticated text editor for code and prose."
+"Category"="Development"
+"Colour"=dword:00ff9800
+"Tier"="windows"
+"Source"="winget:SublimeHQ.SublimeText.4"
+"DetectName"="Sublime Text"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\55]
+"Name"="Node.js LTS"
+"Publisher"="OpenJS Foundation"
+"Description"="JavaScript runtime, long-term support release."
+"Category"="Development"
+"Colour"=dword:003c873a
+"Tier"="windows"
+"Source"="winget:OpenJS.NodeJS.LTS"
+"DetectName"="Node.js"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\56]
+"Name"="CMake"
+"Publisher"="Kitware"
+"Description"="Cross-platform build system generator."
+"Category"="Development"
+"Colour"=dword:00064f8c
+"Tier"="windows"
+"Source"="winget:Kitware.CMake"
+"DetectName"="CMake"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\57]
+"Name"="Java 21 (Temurin JDK)"
+"Publisher"="Eclipse Adoptium"
+"Description"="An open source Java development kit, long-term support."
+"Category"="Development"
+"Colour"=dword:00e76f00
+"Tier"="windows"
+"Source"="winget:EclipseAdoptium.Temurin.21.JDK"
+"DetectName"="Eclipse Temurin JDK"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\58]
+"Name"="Go"
+"Publisher"="The Go Authors"
+"Description"="The Go programming language."
+"Category"="Development"
+"Colour"=dword:0000add8
+"Tier"="windows"
+"Source"="winget:GoLang.Go"
+"DetectName"="Go Programming Language"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\59]
+"Name"="Strawberry Perl"
+"Publisher"="strawberryperl.com"
+"Description"="Perl with a compiler and libraries."
+"Category"="Development"
+"Colour"=dword:00c2185b
+"Tier"="windows"
+"Source"="winget:StrawberryPerl.StrawberryPerl"
+"DetectName"="Strawberry Perl"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\60]
+"Name"="TortoiseGit"
+"Publisher"="TortoiseGit"
+"Description"="Git from File Explorer's right-click menu."
+"Category"="Development"
+"Colour"=dword:00558b2f
+"Tier"="windows"
+"Source"="winget:TortoiseGit.TortoiseGit"
+"DetectName"="TortoiseGit"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\61]
+"Name"="WinMerge"
+"Publisher"="WinMerge"
+"Description"="Compare and merge files and folders."
+"Category"="Development"
+"Colour"=dword:00fbc02d
+"Tier"="windows"
+"Source"="winget:WinMerge.WinMerge"
+"DetectName"="WinMerge"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\62]
+"Name"="PyCharm Community"
+"Publisher"="JetBrains"
+"Description"="A Python IDE."
+"Category"="Development"
+"Colour"=dword:0021d789
+"Tier"="windows"
+"Source"="winget:JetBrains.PyCharm.Community"
+"DetectName"="PyCharm Community Edition"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\63]
+"Name"="Lazarus"
+"Publisher"="Lazarus Team"
+"Description"="A Delphi-like IDE for Free Pascal."
+"Category"="Development"
+"Colour"=dword:001565c0
+"Tier"="windows"
+"Source"="winget:Lazarus.Lazarus"
+"DetectName"="Lazarus"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\64]
+"Name"="TeXstudio"
+"Publisher"="TeXstudio"
+"Description"="An editor for LaTeX documents."
+"Category"="Development"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:TeXstudio.TeXstudio"
+"DetectName"="TeXstudio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\65]
+"Name"="7-Zip"
+"Publisher"="Igor Pavlov"
+"Description"="A file archiver with a high compression ratio."
+"Category"="Utilities"
+"Colour"=dword:00333333
+"Tier"="windows"
+"Source"="winget:7zip.7zip"
+"DetectName"="7-Zip"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\66]
+"Name"="WinRAR"
+"Publisher"="win.rar"
+"Description"="Open and make RAR and ZIP archives."
+"Category"="Utilities"
+"Colour"=dword:007b1fa2
+"Tier"="windows"
+"Source"="winget:RARLab.WinRAR"
+"DetectName"="WinRAR"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\67]
+"Name"="PeaZip"
+"Publisher"="Giorgio Tani"
+"Description"="An open source archiver for 200+ archive types."
+"Category"="Utilities"
+"Colour"=dword:00689f38
+"Tier"="windows"
+"Source"="winget:Giorgiotani.Peazip"
+"DetectName"="PeaZip"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\68]
+"Name"="WinDirStat"
+"Publisher"="The WinDirStat Team"
+"Description"="See what is using your disk space, and clean up."
+"Category"="Utilities"
+"Colour"=dword:0000838f
+"Tier"="windows"
+"Source"="winget:WinDirStat.WinDirStat"
+"DetectName"="WinDirStat"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\69]
+"Name"="WizTree"
+"Publisher"="Antibody Software"
+"Description"="A very fast disk space analyser."
+"Category"="Utilities"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:AntibodySoftware.WizTree"
+"DetectName"="WizTree"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\70]
+"Name"="Everything"
+"Publisher"="voidtools"
+"Description"="Find files and folders by name instantly."
+"Category"="Utilities"
+"Colour"=dword:00ff6f00
+"Tier"="windows"
+"Source"="winget:voidtools.Everything"
+"DetectName"="Everything"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\71]
+"Name"="CPU-Z"
+"Publisher"="CPUID"
+"Description"="Shows your processor, memory and board."
+"Category"="Utilities"
+"Colour"=dword:006a1b9a
+"Tier"="windows"
+"Source"="winget:CPUID.CPU-Z"
+"DetectName"="CPUID CPU-Z"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\72]
+"Name"="HWiNFO"
+"Publisher"="REALiX"
+"Description"="Hardware information and sensor monitoring."
+"Category"="Utilities"
+"Colour"=dword:001565c0
+"Tier"="windows"
+"Source"="winget:REALiX.HWiNFO"
+"DetectName"="HWiNFO"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\73]
+"Name"="CrystalDiskInfo"
+"Publisher"="Crystal Dew World"
+"Description"="Checks your drives' health."
+"Category"="Utilities"
+"Colour"=dword:000277bd
+"Tier"="windows"
+"Source"="winget:CrystalDewWorld.CrystalDiskInfo"
+"DetectName"="CrystalDiskInfo"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\74]
+"Name"="CrystalDiskMark"
+"Publisher"="Crystal Dew World"
+"Description"="A simple disk benchmark."
+"Category"="Utilities"
+"Colour"=dword:0000897b
+"Tier"="windows"
+"Source"="winget:CrystalDewWorld.CrystalDiskMark"
+"DetectName"="CrystalDiskMark"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\75]
+"Name"="BleachBit"
+"Publisher"="BleachBit"
+"Description"="Frees disk space and clears private data."
+"Category"="Utilities"
+"Colour"=dword:00d84315
+"Tier"="windows"
+"Source"="winget:BleachBit.BleachBit"
+"DetectName"="BleachBit"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\76]
+"Name"="Total Commander"
+"Publisher"="Ghisler Software"
+"Description"="A two-pane file manager with plugins."
+"Category"="Utilities"
+"Colour"=dword:001a237e
+"Tier"="windows"
+"Source"="winget:Ghisler.TotalCommander"
+"DetectName"="Total Commander"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\77]
+"Name"="Thunderbird"
+"Publisher"="Mozilla"
+"Description"="Email, calendar and contacts."
+"Category"="Internet"
+"Colour"=dword:000a84ff
+"Tier"="windows"
+"Source"="winget:Mozilla.Thunderbird"
+"DetectName"="Mozilla Thunderbird"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\78]
+"Name"="PuTTY"
+"Publisher"="Simon Tatham"
+"Description"="SSH and Telnet client."
+"Category"="Internet"
+"Colour"=dword:002c3e8c
+"Tier"="windows"
+"Source"="winget:PuTTY.PuTTY"
+"DetectName"="PuTTY release"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\79]
+"Name"="WinSCP"
+"Publisher"="Martin Prikryl"
+"Description"="SFTP, SCP, FTP and S3 file transfers."
+"Category"="Internet"
+"Colour"=dword:002a6db5
+"Tier"="windows"
+"Source"="winget:WinSCP.WinSCP"
+"DetectName"="WinSCP"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\80]
+"Name"="qBittorrent"
+"Publisher"="The qBittorrent project"
+"Description"="A free, ad-free BitTorrent client."
+"Category"="Internet"
+"Colour"=dword:002f67ba
+"Tier"="windows"
+"Source"="winget:qBittorrent.qBittorrent"
+"DetectName"="qBittorrent"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\81]
+"Name"="Pidgin"
+"Publisher"="Pidgin"
+"Description"="One chat program for many networks."
+"Category"="Internet"
+"Colour"=dword:007e57c2
+"Tier"="windows"
+"Source"="winget:Pidgin.Pidgin"
+"DetectName"="Pidgin"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\82]
+"Name"="HexChat"
+"Publisher"="HexChat"
+"Description"="An IRC chat client."
+"Category"="Internet"
+"Colour"=dword:0037474f
+"Tier"="windows"
+"Source"="winget:HexChat.HexChat"
+"DetectName"="HexChat"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\83]
+"Name"="Element"
+"Publisher"="Element"
+"Description"="Secure messaging on Matrix."
+"Category"="Internet"
+"Colour"=dword:000dbd8b
+"Tier"="windows"
+"Source"="winget:Element.Element"
+"DetectName"="Element"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\84]
+"Name"="Discord"
+"Publisher"="Discord"
+"Description"="Voice, video and text chat with friends and communities."
+"Category"="Internet"
+"Colour"=dword:005865f2
+"Tier"="windows"
+"Source"="winget:Discord.Discord"
+"DetectName"="Discord"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\85]
+"Name"="Zoom"
+"Publisher"="Zoom"
+"Description"="Video meetings and team chat."
+"Category"="Internet"
+"Colour"=dword:000b5cff
+"Tier"="windows"
+"Source"="winget:Zoom.Zoom"
+"DetectName"="Zoom"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\86]
+"Name"="Telegram Desktop"
+"Publisher"="Telegram"
+"Description"="A cloud-based messaging app."
+"Category"="Internet"
+"Colour"=dword:00229ed9
+"Tier"="windows"
+"Source"="winget:Telegram.TelegramDesktop"
+"DetectName"="Telegram Desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\87]
+"Name"="Steam"
+"Publisher"="Valve"
+"Description"="Buy, download and play games."
+"Category"="Games"
+"Colour"=dword:00171a21
+"Tier"="windows"
+"Source"="winget:Valve.Steam"
+"DetectName"="Steam"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\88]
+"Name"="GOG GALAXY"
+"Publisher"="GOG.com"
+"Description"="Your GOG games and friends in one place."
+"Category"="Games"
+"Colour"=dword:006a1b9a
+"Tier"="windows"
+"Source"="winget:GOG.Galaxy"
+"DetectName"="GOG GALAXY"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\89]
+"Name"="Epic Games Launcher"
+"Publisher"="Epic Games"
+"Description"="The Epic Games Store and its free games."
+"Category"="Games"
+"Colour"=dword:002a2a2a
+"Tier"="windows"
+"Source"="winget:EpicGames.EpicGamesLauncher"
+"DetectName"="Epic Games Launcher"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\90]
+"Name"="Heroic Games Launcher"
+"Publisher"="Heroic Games Launcher"
+"Description"="An open source launcher for Epic, GOG and Amazon games."
+"Category"="Games"
+"Colour"=dword:000d47a1
+"Tier"="windows"
+"Source"="winget:HeroicGamesLauncher.HeroicGamesLauncher"
+"DetectName"="Heroic"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\91]
+"Name"="Prism Launcher"
+"Publisher"="Prism Launcher Contributors"
+"Description"="A launcher for Minecraft with many installations side by side."
+"Category"="Games"
+"Colour"=dword:004caf50
+"Tier"="windows"
+"Source"="winget:PrismLauncher.PrismLauncher"
+"DetectName"="Prism Launcher"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\92]
+"Name"="DOSBox"
+"Publisher"="DOSBox Team"
+"Description"="Run old DOS games."
+"Category"="Games"
+"Colour"=dword:00795548
+"Tier"="windows"
+"Source"="winget:DOSBox.DOSBox"
+"DetectName"="DOSBox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\93]
+"Name"="ScummVM"
+"Publisher"="The ScummVM Team"
+"Description"="Play classic adventure games from their data files."
+"Category"="Games"
+"Colour"=dword:0043a047
+"Tier"="windows"
+"Source"="winget:ScummVM.ScummVM"
+"DetectName"="ScummVM"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L01]
+"Name"="GIMP"
+"Publisher"="The GIMP Team"
+"Description"="Image editor, built for Linux."
+"Category"="Graphics"
+"Colour"=dword:005c5543
 "Tier"="linux"
 "Source"="linux:apt:gimp"
-"DetectName"="GIMP"
+"Run"="/usr/bin/gimp"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L02]
+"Name"="FileZilla"
+"Publisher"="Tim Kosse"
+"Description"="FTP, FTPS and SFTP client."
+"Category"="Internet"
+"Colour"=dword:00bf0000
+"Tier"="linux"
+"Source"="linux:apt:filezilla"
+"Run"="/usr/bin/filezilla"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L03]
+"Name"="Inkscape"
+"Publisher"="Inkscape"
+"Description"="Vector graphics editor, built for Linux."
+"Category"="Graphics"
+"Colour"=dword:001c1c1c
+"Tier"="linux"
+"Source"="linux:apt:inkscape"
+"Run"="/usr/bin/inkscape"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L04]
+"Name"="Krita"
+"Publisher"="Krita Foundation"
+"Description"="Digital painting, built for Linux."
+"Category"="Graphics"
+"Colour"=dword:003b5bdb
+"Tier"="linux"
+"Source"="linux:apt:krita"
+"Run"="/usr/bin/krita"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L05]
+"Name"="Blender"
+"Publisher"="Blender Foundation"
+"Description"="3D creation suite, built for Linux."
+"Category"="Graphics"
+"Colour"=dword:00e87d0d
+"Tier"="linux"
+"Source"="linux:apt:blender"
+"Run"="/usr/bin/blender"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L06]
+"Name"="darktable"
+"Publisher"="darktable team"
+"Description"="Photo workflow and raw developer, built for Linux."
+"Category"="Graphics"
+"Colour"=dword:00424242
+"Tier"="linux"
+"Source"="linux:apt:darktable"
+"Run"="/usr/bin/darktable"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L07]
+"Name"="VLC media player"
+"Publisher"="VideoLAN"
+"Description"="Media player, built for Linux."
+"Category"="Media"
+"Colour"=dword:00ff8800
+"Tier"="linux"
+"Source"="linux:apt:vlc"
+"Run"="/usr/bin/vlc"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L08]
+"Name"="Audacity"
+"Publisher"="Audacity Team"
+"Description"="Audio editor, built for Linux."
+"Category"="Media"
+"Colour"=dword:000b62d6
+"Tier"="linux"
+"Source"="linux:apt:audacity"
+"Run"="/usr/bin/audacity"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L09]
+"Name"="Kdenlive"
+"Publisher"="KDE"
+"Description"="Video editor, built for Linux."
+"Category"="Media"
+"Colour"=dword:00527eb2
+"Tier"="linux"
+"Source"="linux:apt:kdenlive"
+"Run"="/usr/bin/kdenlive"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L10]
+"Name"="OBS Studio"
+"Publisher"="OBS Project"
+"Description"="Screen recording and streaming, built for Linux."
+"Category"="Media"
+"Colour"=dword:00302e31
+"Tier"="linux"
+"Source"="linux:apt:obs-studio"
+"Run"="/usr/bin/obs"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L11]
+"Name"="HandBrake"
+"Publisher"="The HandBrake Team"
+"Description"="Video converter, built for Linux."
+"Category"="Media"
+"Colour"=dword:00b71c1c
+"Tier"="linux"
+"Source"="linux:apt:handbrake"
+"Run"="/usr/bin/ghb"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L12]
+"Name"="Thunderbird"
+"Publisher"="Mozilla"
+"Description"="Email and calendar, built for Linux."
+"Category"="Internet"
+"Colour"=dword:000a84ff
+"Tier"="linux"
+"Source"="linux:apt:thunderbird"
+"Run"="/usr/bin/thunderbird"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L13]
+"Name"="Remmina"
+"Publisher"="Remmina"
+"Description"="Remote desktop client (RDP, VNC, SSH), built for Linux."
+"Category"="Internet"
+"Colour"=dword:001565c0
+"Tier"="linux"
+"Source"="linux:apt:remmina"
+"Run"="/usr/bin/remmina"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L14]
+"Name"="Transmission"
+"Publisher"="Transmission Project"
+"Description"="A simple BitTorrent client, built for Linux."
+"Category"="Internet"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:transmission-gtk"
+"Run"="/usr/bin/transmission-gtk"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L15]
+"Name"="KeePassXC"
+"Publisher"="KeePassXC Team"
+"Description"="Password manager, built for Linux."
+"Category"="Productivity"
+"Colour"=dword:006cac4d
+"Tier"="linux"
+"Source"="linux:apt:keepassxc"
+"Run"="/usr/bin/keepassxc"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L16]
+"Name"="calibre"
+"Publisher"="Kovid Goyal"
+"Description"="E-book manager, built for Linux."
+"Category"="Productivity"
+"Colour"=dword:008a5a2b
+"Tier"="linux"
+"Source"="linux:apt:calibre"
+"Run"="/usr/bin/calibre"

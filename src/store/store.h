@@ -59,8 +59,11 @@ typedef struct {
     WCHAR pin_url[2048], pin_type[32], pin_silent[512], pin_version[64];
     BYTE  pin_sha[32];
     BOOL  pin_has_sha;
-    /* how to tell it is installed and read its version */
-    WCHAR detect_name[128];       /* matched against Uninstall DisplayName / StartMenuInternet */
+    /* how to tell it is installed and read its version: a Windows program
+     * by the Uninstall entries' DisplayName (detect_name), a Linux one by
+     * dpkg's state of apt_pkg -- never the other way round */
+    WCHAR detect_name[128];       /* "Name|Other|!Not this" -- see name_matches() */
+    WCHAR run[260];               /* SRC_LINUX_APT: the Unix program Open starts */
     /* runtime */
     int   state;                  /* AST_* */
     WCHAR installed_version[64];
@@ -68,15 +71,30 @@ typedef struct {
     WCHAR msg[256];
 } app_t;
 
-#define MAX_APPS 128
+#define MAX_APPS 256
+
+/* The categories, in the order the store shows them; Linux apps come last,
+ * in a section of their own. */
+#define LINUX_SECTION L"Linux apps"
 
 /* catalog.c */
+BOOL name_matches(const WCHAR *display, const WCHAR *patterns);
+BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch);
 int  catalog_load(app_t *apps, int max);         /* reads HKLM Store\Apps\NN; returns count */
 void app_detect(app_t *a);                        /* installed? + installed_version; sets state */
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
-BOOL app_shown_by_default(const app_t *a);        /* windows/ours: yes; linux: no */
+const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 int  app_install_elevated(app_t *a, WCHAR *err, int cch);   /* the elevated (SYSTEM) copy's part (--install-elevated) */
 const WCHAR *tier_name(int tier);
+
+/* sysinstall.c: system packages (Linux apps, .deb files) through the
+ * administrator's consent and sg-admind */
+enum { SYS_OK = 0, SYS_DENIED = 1, SYS_FAILED = 10, SYS_CANCELLED = 11 };
+int  sys_install_apt(const app_t *a, WCHAR *err, int cch);     /* from the store: elevate, wait */
+int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / --elevated-deb */
+int  sys_deb_window(HINSTANCE inst, const WCHAR *file);         /* --deb FILE */
+BOOL sys_unix_path(const WCHAR *dos, char *out, int cch);
+void sys_run_linux(const WCHAR *unix_path);
 
 #endif

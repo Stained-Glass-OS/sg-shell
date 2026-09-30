@@ -80,8 +80,8 @@ BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi3
 # SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
 # install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build
 # time. See docs/decisions/0017-sg-store.md.
-STORE_SRC  = src/store/main.c src/store/catalog.c src/browser/fetch.c src/browser/manifest.c
-STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -lmsimg32
+STORE_SRC  = src/store/main.c src/store/catalog.c src/store/sysinstall.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
+STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -lmsimg32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 
@@ -225,7 +225,7 @@ build:
 	    $(BUILD)/sg-browser-res64.o $(BROWSER_LIBS) && echo "built sg-browser (64-bit)"
 	@python3 src/store/gen-icon.py $(BUILD)/sg-store.ico
 	@$(WINDRES64) -I src/store -I $(BUILD) src/store/store.rc -O coff -o $(BUILD)/sg-store-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -Isrc/browser -Isrc/store -o $(BUILD)/sg-store64.exe \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -Isrc/browser -Isrc/store -Isrc/zip -o $(BUILD)/sg-store64.exe \
 	    $(STORE_SRC) $(BUILD)/sg-store-res64.o $(STORE_LIBS) && echo "built sg-store (64-bit)"
 	@$(MAKE) --no-print-directory office
 	@for p in $(CONSOLE_TOOLS); do \

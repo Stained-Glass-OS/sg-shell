@@ -50,14 +50,27 @@
 #   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
+#   apt-install PACKAGE      SG Store's Linux apps: apt-get install PACKAGE
+#   deb-install FILE PACKAGE VERSION
+#                            a .deb SYSTEM copied into /var/cache/stained-
+#                            glass-admin/debs (SG Store's "Install a Linux
+#                            package"), installed with apt so its dependencies
+#                            come too -- only if it is still the PACKAGE at
+#                            VERSION the person was shown
+#
+# The two installs publish their progress while apt runs, for the elevated
+# program's progress bar: replies/<id>.progress (root:sgsystem 0640),
+# "PROGRESS <percent>" and a line saying what apt is doing.
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 SPOOL = "/run/stained-glass-admin"
@@ -77,6 +90,13 @@ FONTS_SRC = "/var/lib/stained-glass/prefix/drive_c/windows/Fonts"
 FONTS_DST = "/usr/local/share/fonts/stained-glass"
 MAX_FONT = 64 << 20
 
+# SG Store's .deb files: SYSTEM copies one here (only it may write here;
+# sg-admind.tmpfiles), sg-admind takes it into a folder of its own.
+DEBS_SRC = "/var/cache/stained-glass-admin/debs"
+WORK_DIR = "/var/tmp"
+MAX_DEB = 4 << 30
+CURRENT_ID = None      # the request being answered (its progress file)
+
 TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
 if TEST:
     # The gate runs this unprivileged against a spool of its own, with stand-ins
@@ -86,6 +106,8 @@ if TEST:
     ZONEINFO = os.environ.get("SG_ADMIN_ZONEINFO", ZONEINFO)
     FONTS_SRC = os.environ.get("SG_ADMIN_FONTS_SRC", FONTS_SRC)
     FONTS_DST = os.environ.get("SG_ADMIN_FONTS_DST", FONTS_DST)
+    DEBS_SRC = os.environ.get("SG_ADMIN_DEBS", DEBS_SRC)
+    WORK_DIR = os.environ.get("SG_ADMIN_WORK", WORK_DIR)
 
 
 class Refused(Exception):
@@ -561,6 +583,198 @@ def op_font_remove(args):
     return []
 
 
+# ---- system packages: SG Store's Linux apps and .deb files --------------------
+PKG_RE = re.compile(r"^[a-z0-9][a-z0-9+.-]{1,99}$")
+VERSION_RE = re.compile(r"^[A-Za-z0-9.+~:-]{1,100}$")
+STAGED_RE = re.compile(r"^[0-9a-f]{16,64}\.deb$")
+
+
+def progress(percent, text):
+    """replies/<id>.progress: what the elevated program's bar shows"""
+    if not CURRENT_ID:
+        return
+    replies = os.path.join(SPOOL, "replies")
+    tmp = os.path.join(replies, ".%s.progress" % CURRENT_ID)
+    try:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "w") as f:
+            f.write("PROGRESS %d\n%s\n" % (max(0, min(100, int(percent))), text.replace("\n", " ")[:200]))
+        if not TEST:
+            os.chown(tmp, 0, system_gid())
+        os.replace(tmp, os.path.join(replies, "%s.progress" % CURRENT_ID))
+    except OSError as e:
+        log("progress: %s" % e)
+
+
+def apt_env():
+    return {"PATH": PATH, "LANG": "C.UTF-8", "DEBIAN_FRONTEND": "noninteractive",
+            "APT_LISTCHANGES_FRONTEND": "none", "NEEDRESTART_MODE": "a"}
+
+
+def apt_get(args, what, base=0, span=100):
+    """apt-get with its status on a pipe: dlstatus (downloading) and pmstatus
+    (dpkg) lines become the progress file, base..base+span percent."""
+    rfd, wfd = os.pipe()
+    log_fd, log_path = tempfile.mkstemp(prefix="sg-apt-", dir=WORK_DIR)
+    argv = ["apt-get", "-y", "-q", "-o", "APT::Status-Fd=%d" % wfd, "-o", "DPkg::Lock::Timeout=600",
+            "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"] + args
+    try:
+        try:
+            p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log_fd, stderr=subprocess.STDOUT,
+                                 pass_fds=(wfd,), env=apt_env())
+        except FileNotFoundError:
+            raise Refused("apt-get is not installed.")
+        finally:
+            os.close(wfd)
+        with os.fdopen(rfd, "r", errors="replace") as status:
+            for line in status:
+                parts = line.rstrip("\n").split(":", 3)
+                if len(parts) < 4 or parts[0] not in ("dlstatus", "pmstatus"):
+                    continue
+                try:
+                    pct = float(parts[2])
+                except ValueError:
+                    continue
+                if parts[0] == "dlstatus":      # downloading: the first half
+                    progress(base + span * pct / 200, parts[3])
+                else:                           # unpacking and setting up: the second
+                    progress(base + span / 2 + span * pct / 200, parts[3])
+        try:
+            rc = p.wait(timeout=3 * 3600)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            raise Refused("%s did not finish in time." % what)
+        os.lseek(log_fd, 0, os.SEEK_SET)
+        out = os.read(log_fd, 1 << 20).decode("utf-8", "replace")
+    finally:
+        os.close(log_fd)
+        os.unlink(log_path)
+    if rc != 0:
+        errors = [l[3:].strip() for l in out.splitlines() if l.startswith("E: ")]
+        log("apt-get %s failed (%d): %s" % (" ".join(args), rc, errors[-1] if errors else out.strip()[-300:]))
+        raise Refused("%s%s" % (what, (": " + errors[0]) if errors else "."))
+    return out
+
+
+def refresh_lists():
+    """the package lists, so apt finds today's versions (offline: carry on)"""
+    progress(1, "Getting the list of packages...")
+    try:
+        apt_get(["update"], "The package lists could not be refreshed", 0, 0)
+    except Refused as e:
+        log("apt-get update: %s" % e)
+
+
+def installed_version(pkg):
+    r = run(["dpkg-query", "-W", "-f", "${db:Status-Status} ${Version}", pkg])
+    parts = r.stdout.strip().split(" ", 1)
+    return parts[1] if r.returncode == 0 and len(parts) == 2 and parts[0] == "installed" else None
+
+
+def op_apt_install(args):
+    (pkg,) = args
+    if not PKG_RE.fullmatch(pkg):
+        raise Refused("'%s' is not a package name." % pkg)
+    refresh_lists()
+    apt_get(["install", pkg], "%s could not be installed" % pkg, 5, 95)
+    ver = installed_version(pkg)
+    if not ver:
+        raise Refused("%s was not installed." % pkg)
+    progress(100, "Done")
+    return ["%s %s" % (pkg, ver)]
+
+
+def deb_fields(path):
+    r = run(["dpkg-deb", "--show", "--showformat=${Package}\\n${Version}\\n${Architecture}\\n", path])
+    if r.returncode != 0:
+        raise Refused("The file is not a Linux software package (.deb).")
+    f = r.stdout.split("\n")
+    if len(f) < 3:
+        raise Refused("The file is not a Linux software package (.deb).")
+    return f[0], f[1], f[2]
+
+
+def arch_ok(arch):
+    if arch == "all":
+        return True
+    native = run(["dpkg", "--print-architecture"]).stdout.strip()
+    foreign = run(["dpkg", "--print-foreign-architectures"]).stdout.split()
+    return arch == native or arch in foreign
+
+
+def take_staged(name):
+    """the staged file's bytes, copied into a folder of ours; the staged file
+    goes. Only SYSTEM's own regular file, never through a link."""
+    if not STAGED_RE.fullmatch(name):
+        raise Refused("'%s' is not a staged package." % name)
+    try:
+        dfd = os.open(DEBS_SRC, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        raise Refused("The staging folder for packages is missing.")
+    work = tempfile.mkdtemp(prefix="sg-deb-", dir=WORK_DIR)
+    try:
+        try:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+        except OSError:
+            raise Refused("The package was not staged.")
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != system_uid():  # SYSTEM's own
+                raise Refused("The package was not staged by an administrator.")
+            if st.st_size > MAX_DEB:
+                raise Refused("The package is too large.")
+            dst = os.path.join(work, "package.deb")
+            out = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644)
+            with os.fdopen(out, "wb") as o:
+                while True:
+                    chunk = os.read(fd, 1 << 20)
+                    if not chunk:
+                        break
+                    o.write(chunk)
+        finally:
+            os.close(fd)
+            try:
+                os.unlink(name, dir_fd=dfd)
+            except OSError:
+                pass
+    except BaseException:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
+    finally:
+        os.close(dfd)
+    # apt's download sandbox (_apt) reads the file: the folder is ours, 0755
+    os.chmod(work, 0o755)
+    return work, dst
+
+
+def op_deb_install(args):
+    name, want_pkg, want_ver = args
+    if not PKG_RE.fullmatch(want_pkg) or not VERSION_RE.fullmatch(want_ver):
+        raise Refused("That is not a package and version.")
+    progress(1, "Checking the package...")
+    work, deb = take_staged(name)
+    try:
+        pkg, ver, arch = deb_fields(deb)
+        if (pkg, ver) != (want_pkg, want_ver):
+            raise Refused("The file changed: it is now %s %s, not the %s %s that was shown. Nothing was installed."
+                          % (pkg, ver, want_pkg, want_ver))
+        if not arch_ok(arch):
+            raise Refused("%s is built for another kind of processor (%s)." % (pkg, arch))
+        refresh_lists()
+        apt_get(["install", deb], "%s could not be installed" % pkg, 5, 95)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    got = installed_version(pkg)
+    if got != ver:
+        raise Refused("%s %s was not installed." % (pkg, ver))
+    progress(100, "Done")
+    return ["%s %s" % (pkg, ver)]
+
+
 OPS = {
     "ping": (op_ping, 0),
     "hostname": (op_hostname, 1),
@@ -579,6 +793,8 @@ OPS = {
     "package-install": (op_package_install, 1),
     "font-install": (op_font_install, 1),
     "font-remove": (op_font_remove, 1),
+    "apt-install": (op_apt_install, 1),
+    "deb-install": (op_deb_install, 3),
 }
 SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password
 
@@ -632,6 +848,10 @@ def answer(req_id, lines):
     if not TEST:
         os.chown(tmp, 0, system_gid())
     os.replace(tmp, os.path.join(replies, "%s.rep" % req_id))
+    try:
+        os.unlink(os.path.join(replies, "%s.progress" % req_id))
+    except OSError:
+        pass
 
 
 def handle(fields):
@@ -647,6 +867,7 @@ def handle(fields):
 
 
 def process():
+    global CURRENT_ID
     uid = system_uid()
     reqdir = os.path.join(SPOOL, "requests")
     dirfd = os.open(reqdir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -670,6 +891,7 @@ def process():
                 pass
             if fields is None:
                 continue
+            CURRENT_ID = m.group(1)
             try:
                 detail = handle(fields)
                 reply = ["OK"] + detail
@@ -682,6 +904,7 @@ def process():
                 log("%s: error: %r" % (fields[0] if fields else "?", e))
             fields = None
             answer(m.group(1), reply)
+            CURRENT_ID = None
     finally:
         os.close(dirfd)
     # old answers nobody collected

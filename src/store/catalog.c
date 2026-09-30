@@ -14,18 +14,22 @@
  */
 #include "store.h"
 #include <shellapi.h>
+#include "zipcore.h"
 
 const WCHAR *tier_name(int tier)
 {
     return tier == TIER_WINDOWS ? L"windows" : tier == TIER_OURS ? L"ours" : L"linux";
 }
 
-BOOL app_shown_by_default(const app_t *a)
+/* The section an app is listed in: its category, or -- for a native Linux
+ * app -- the Linux apps section, which comes after every other, so the
+ * Windows build of a program stays the suggested one. */
+const WCHAR *app_section(const app_t *a)
 {
-#ifdef SG_MUTANT_SHOWLINUX
-    (void)a; return TRUE;   /* the mutant leaks the Linux tier into the default view */
+#ifdef SG_MUTANT_LINUXMIXED
+    return a->category;     /* the mutant files Linux apps among the Windows programs */
 #else
-    return a->tier != TIER_LINUX;
+    return a->tier == TIER_LINUX ? LINUX_SECTION : a->category;
 #endif
 }
 
@@ -117,6 +121,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"Description", a->desc, ARRAYSIZE(a->desc));
         reg_str(item, L"Category", a->category, ARRAYSIZE(a->category));
         reg_str(item, L"DetectName", a->detect_name, ARRAYSIZE(a->detect_name));
+        reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"PinVersion", a->pin_version, ARRAYSIZE(a->pin_version));
         colour = 0x00808080; cb = sizeof(colour);
         RegGetValueW(item, NULL, L"Colour", RRF_RT_REG_DWORD, NULL, &colour, &cb);
@@ -138,8 +143,55 @@ int catalog_load(app_t *apps, int max)
 
 /* ---- detecting an installed program ---------------------------------------------------------------- */
 
-/* Read the DisplayVersion of the first Uninstall entry whose DisplayName holds
- * the app's detect name (HKLM, HKLM\WOW6432Node and HKCU). */
+/* Does an Uninstall DisplayName name this app? patterns is "A|B|!C": the
+ * name starts with A or B -- as a whole word, so "Git" is not "GitHub
+ * Desktop" -- and does not start with C ("XnView|!XnView MP"). Case is
+ * ignored; '*' stands for any run of characters ("Mozilla Firefox*ESR").
+ * A pattern that ends in punctuation ("Mozilla Firefox (") needs no word
+ * end after it. */
+static BOOL glob_word(const WCHAR *s, const WCHAR *p, int pn, WCHAR last)
+{
+    if (!pn) return !*s || !iswalnum(last) || !iswalnum(*s);
+    if (*p == '*') {
+        for (;;) {
+            if (glob_word(s, p + 1, pn - 1, last)) return TRUE;
+            if (!*s) return FALSE;
+            last = *s++;
+        }
+    }
+    if (!*s || towlower(*s) != towlower(*p)) return FALSE;
+    return glob_word(s + 1, p + 1, pn - 1, *p);
+}
+
+static BOOL starts_word(const WCHAR *name, const WCHAR *pat, int n)
+{
+    return n > 0 && glob_word(name, pat, n, 0);
+}
+
+BOOL name_matches(const WCHAR *display, const WCHAR *patterns)
+{
+    const WCHAR *p = patterns;
+    BOOL hit = FALSE;
+    if (!display[0] || !patterns[0]) return FALSE;
+#ifdef SG_MUTANT_SUBSTRING
+    { WCHAR first[128]; int k = 0;
+      while (p[k] && p[k] != '|' && k < 127) { first[k] = p[k]; k++; }
+      first[k] = 0;
+      return StrStrIW(display, first) != NULL; }   /* the old way: anywhere in the name */
+#endif
+    while (*p) {
+        const WCHAR *end = wcschr(p, '|');
+        int n = end ? (int)(end - p) : lstrlenW(p);
+        if (*p == '!') { if (starts_word(display, p + 1, n - 1)) return FALSE; }
+        else if (starts_word(display, p, n)) hit = TRUE;
+        p += n;
+        if (*p == '|') p++;
+    }
+    return hit;
+}
+
+/* Read the DisplayVersion of the first Uninstall entry whose DisplayName is
+ * the app's (HKLM, HKLM\WOW6432Node and HKCU). */
 static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
 {
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
@@ -158,7 +210,7 @@ static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
         for (i = 0; n = ARRAYSIZE(sub), !RegEnumKeyExW(key, i, sub, &n, NULL, NULL, NULL, NULL); i++) {
             if (RegOpenKeyExW(key, sub, 0, KEY_READ, &item)) continue;
             reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
-            if (name[0] && StrStrIW(name, needle)) {
+            if (name_matches(name, needle)) {
                 reg_str(item, L"DisplayVersion", version, cch);
                 RegCloseKey(item);
                 RegCloseKey(key);
@@ -169,6 +221,52 @@ static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
         RegCloseKey(key);
     }
     return FALSE;
+}
+
+/* Is a Debian package installed (dpkg's status file: a stanza with
+ * "Package: <pkg>" and "Status: install ok installed")? Z: is the root
+ * file system; SG_DPKG_STATUS names another file for the gate. */
+BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch)
+{
+    WCHAR path[MAX_PATH] = L"Z:\\var\\lib\\dpkg\\status";
+    char want[160], *text, *p;
+    HANDLE h;
+    DWORD size, got = 0;
+    BOOL found = FALSE;
+    version[0] = 0;
+    if (!pkg[0]) return FALSE;
+    GetEnvironmentVariableW(L"SG_DPKG_STATUS", path, MAX_PATH);
+    h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    size = GetFileSize(h, NULL);
+    if (size == INVALID_FILE_SIZE || size > (256u << 20) || !(text = malloc(size + 2))) { CloseHandle(h); return FALSE; }
+    ReadFile(h, text + 1, size, &got, NULL);
+    CloseHandle(h);
+    text[0] = '\n';                 /* every stanza line now follows a '\n' */
+    text[got + 1] = 0;
+    snprintf(want, sizeof(want), "\nPackage: %ls\n", pkg);
+    for (p = text; (p = strstr(p, want)); p++) {
+        char *end = strstr(p + 1, "\n\n"), *st, *ver, save = 0;
+        if (end) { save = *end; *end = 0; }
+        st = strstr(p, "\nStatus: install ok installed\n");
+        if (!st && end) st = strstr(p, "\nStatus: install ok installed");   /* the stanza's last line */
+        ver = strstr(p, "\nVersion: ");
+        if (st) {
+            found = TRUE;
+            if (ver) {
+                char v[128];
+                int k = 0;
+                ver += 10;
+                while (ver[k] && ver[k] != '\n' && k < 127) { v[k] = ver[k]; k++; }
+                v[k] = 0;
+                MultiByteToWideChar(CP_UTF8, 0, v, -1, version, cch);
+            }
+        }
+        if (end) *end = save;
+        if (found) break;
+    }
+    free(text);
+    return found;
 }
 
 /* The path an App Paths name resolves to (e.g. sg-office-setup.exe) -- only
@@ -219,6 +317,16 @@ void app_detect(app_t *a)
         }
         return;
     }
+    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) {
+        /* a system package: dpkg says, never a Windows program's name -- the
+         * Windows GIMP installed made "GIMP (Linux)" look installed */
+#ifdef SG_MUTANT_LINUXBYNAME
+        if (find_installed(a->detect_name, a->installed_version, 64)) a->state = AST_INSTALLED;
+#else
+        if (dpkg_installed(a->apt_pkg, a->installed_version, 64)) a->state = AST_INSTALLED;
+#endif
+        return;
+    }
     if (find_installed(a->detect_name, a->installed_version, 64))
         a->state = AST_INSTALLED;
 }
@@ -255,6 +363,51 @@ BOOL app_check_update(app_t *a, WCHAR *err, int cch)
 
 /* ---- installing (or updating) ---------------------------------------------------------------------- */
 
+/* A zip whose manifest names the installer inside it (NestedInstallerType:
+ * Paint.NET's): the zip was checked against its SHA-256 as downloaded; take
+ * out the one installer it holds, of that kind, and run it as that kind. */
+static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
+{
+    zarchive z;
+    int i, pick = -1, r;
+    BOOL msi = !_wcsicmp(p->nested, L"msi") || !_wcsicmp(p->nested, L"wix");
+    const WCHAR *ext = msi ? L".msi" : L".exe";
+    WCHAR out[MAX_PATH], *slash;
+    BYTE *data;
+    size_t len;
+    HANDLE h;
+    DWORD put;
+    if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); return FALSE; }
+    for (i = 0; i < z.n; i++) {
+        int n = lstrlenW(z.e[i].name);
+        if (z.e[i].dir || n < 5 || _wcsicmp(z.e[i].name + n - 4, ext)) continue;
+        if (pick >= 0) { zip_close(&z); swprintf(err, cch, L"%ls holds more than one installer.", p->id); return FALSE; }
+        pick = i;
+    }
+    if (pick < 0) { zip_close(&z); swprintf(err, cch, L"%ls holds no installer.", p->id); return FALSE; }
+    if ((r = zip_read(&z, pick, &data, &len))) { zip_close(&z); swprintf(err, cch, L"The installer could not be unpacked (%ls).", zip_strerror(r)); return FALSE; }
+    zip_close(&z);
+    /* beside the download, so pkg_cleanup takes both away */
+    lstrcpynW(out, p->file, MAX_PATH);
+    if ((slash = wcsrchr(out, L'\\'))) slash[1] = 0; else out[0] = 0;
+    if (lstrlenW(out) + 10 >= MAX_PATH) { free(data); lstrcpynW(err, L"The installer could not be unpacked.", cch); return FALSE; }
+    lstrcatW(out, L"setup");
+    lstrcatW(out, ext);
+    h = CreateFileW(out, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE || !WriteFile(h, data, (DWORD)len, &put, NULL) || put != len) {
+        if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+        free(data);
+        swprintf(err, cch, L"The installer could not be unpacked.");
+        return FALSE;
+    }
+    CloseHandle(h);
+    free(data);
+    DeleteFileW(p->file);
+    lstrcpynW(p->file, out, MAX_PATH);
+    lstrcpynW(p->type, p->nested, ARRAYSIZE(p->type));
+    return TRUE;
+}
+
 static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
 {
     package_t p;
@@ -265,6 +418,9 @@ static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LO
     if (winget_path(winget, MAX_PATH))
         return winget_install(winget, &p, err, cch) ? 0 : 1;
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
+#ifndef SG_MUTANT_NOZIP
+    if (!_wcsicmp(p.type, L"zip") && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
+#endif
     ok = pkg_install(&p, err, cch);
     pkg_cleanup(&p);
     return ok ? 0 : 1;
@@ -452,11 +608,9 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
     case SRC_OURS_SETUP: return install_ours_setup(a, err, cch);
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
-        /* A Windows program has no pipe to native apt; the sg-session apt
-         * bridge is a tracked follow-up (ADR 0017). For now the card explains
-         * the app is installed from Settings. */
-        lstrcpynW(err, L"Install this from Settings > Apps (it is a system package).", cch);
-        return 1;
+        /* a system package: apt, as root, through the administrator's
+         * consent and sg-admind (sysinstall.c) */
+        return sys_install_apt(a, err, cch);
     default:
         lstrcpynW(err, L"This app's source is not understood.", cch);
         return 1;

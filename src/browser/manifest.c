@@ -103,6 +103,7 @@ static void set_field(mf_entry *e, const char *key, const char *val, int switche
     else if (!strcmp(key, "InstallerType")) copy(e->type, v, sizeof(e->type));
     else if (!strcmp(key, "InstallerUrl")) copy(e->url, v, sizeof(e->url));
     else if (!strcmp(key, "InstallerSha256")) copy(e->sha, v, sizeof(e->sha));
+    else if (!strcmp(key, "NestedInstallerType")) copy(e->nested, v, sizeof(e->nested));
 }
 
 int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
@@ -167,6 +168,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->arch[0]) copy(e->arch, root->arch, sizeof(e->arch));
         if (!e->url[0]) copy(e->url, root->url, sizeof(e->url));
         if (!e->sha[0]) copy(e->sha, root->sha, sizeof(e->sha));
+        if (!e->nested[0]) copy(e->nested, root->nested, sizeof(e->nested));
     }
     return n + 1;
 }
@@ -179,6 +181,21 @@ static int arch_rank(const char *a, int is64)
     return 0;   /* arm, arm64 */
 }
 
+static int runnable(const char *t)
+{
+    static const char *const kinds[] = { "msi", "wix", "nullsoft", "inno", "burn", "exe" };
+    unsigned i;
+    for (i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) if (!strcasecmp(t, kinds[i])) return 1;
+    return 0;
+}
+
+int mf_type_rank(const char *type, const char *nested)
+{
+    if (runnable(type)) return 2;
+    if (!strcasecmp(type, "zip") && nested && runnable(nested)) return 1;
+    return 0;
+}
+
 int mf_pick(const mf_entry *list, int n, const char *locale, int admin, int is64)
 {
     int i, best = -1, bestscore = -1;
@@ -186,7 +203,13 @@ int mf_pick(const mf_entry *list, int n, const char *locale, int admin, int is64
         const mf_entry *e = &list[i];
         int score, ar = arch_rank(e->arch, is64);
         if (!e->url[0] || !ar) continue;
+        /* an installer we can run beats a portable zip for a better arch or
+         * scope (Notepad++, Telegram, Heroic list both) */
+#ifdef SG_MUTANT_ANYTYPE
         score = ar * 100;
+#else
+        score = mf_type_rank(e->type, e->nested) * 1000 + ar * 100;
+#endif
         if (locale && !strcasecmp(e->locale, locale)) score += 20;
         else if (!strcasecmp(e->locale, "en-US") || !e->locale[0]) score += 10;
         if (!strcasecmp(e->scope, admin ? "machine" : "user")) score += 5;

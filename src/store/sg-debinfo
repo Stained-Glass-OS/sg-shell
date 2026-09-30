@@ -1,0 +1,64 @@
+#!/bin/sh
+# sg-debinfo FILE OUT -- what a Linux software package (.deb) is, for SG
+# Store's "Install a Linux package" window (sg-store64.exe --deb). Read-only:
+# dpkg-deb reads the package's control file; nothing is installed here.
+#
+# OUT receives, one per line (written whole: renamed into place):
+#   PACKAGE name / VERSION v / ARCH a / ARCH_OK yes|no / MAINTAINER who /
+#   DESCRIPTION the summary line / HOMEPAGE url / SIZE installed size /
+#   INSTALLED the version installed now, or -
+#   OK
+# or ERROR invalid <why>, when FILE is not a package that can be installed.
+#
+# Copyright (C) 2026 Stained Glass OS contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -u
+[ $# -eq 2 ] || { echo "usage: sg-debinfo FILE OUT" >&2; exit 2; }
+file=$1 out=$2
+part="$out.part"
+: > "$part" || exit 1
+say() { printf '%s\n' "$*" >> "$part"; }
+done_() { mv -f "$part" "$out"; exit 0; }
+fail() { say "ERROR invalid $1"; done_; }
+# one line, no control characters: what the package says is shown, not trusted
+clean() { head -n 1 | tr -d '\000-\037\177' | cut -c1-240; }
+
+[ -f "$file" ] || fail "The file could not be found."
+dpkg-deb --info "$file" >/dev/null 2>&1 || fail "This file is not a Linux software package (.deb), so it cannot be installed."
+field() { dpkg-deb --field "$file" "$1" 2>/dev/null | clean; }
+
+pkg=$(field Package)
+ver=$(field Version)
+arch=$(field Architecture)
+case $pkg in
+    ''|*[!a-z0-9+.-]*) fail "The package has no valid name, so it cannot be installed." ;;
+esac
+[ -n "$ver" ] || fail "The package has no version, so it cannot be installed."
+
+native=$(dpkg --print-architecture 2>/dev/null)
+arch_ok=no
+if [ "$arch" = all ] || [ "$arch" = "$native" ] || dpkg --print-foreign-architectures 2>/dev/null | grep -qx "$arch"; then
+    arch_ok=yes
+fi
+size=$(field Installed-Size)
+case $size in
+    ''|*[!0-9]*) size_text= ;;
+    *) if [ "$size" -ge 1024 ]; then size_text="$((size / 1024)) MB"; else size_text="$size KB"; fi ;;
+esac
+installed=$(dpkg-query -W -f '${db:Status-Status} ${Version}\n' "$pkg" 2>/dev/null | head -n 1)
+case $installed in
+    "installed "*) installed=${installed#installed } ;;
+    *) installed=- ;;
+esac
+
+say "PACKAGE $pkg"
+say "VERSION $ver"
+say "ARCH $arch"
+say "ARCH_OK $arch_ok"
+say "MAINTAINER $(field Maintainer)"
+say "DESCRIPTION $(field Description)"
+say "HOMEPAGE $(field Homepage)"
+say "SIZE $size_text"
+say "INSTALLED $installed"
+say OK
+done_

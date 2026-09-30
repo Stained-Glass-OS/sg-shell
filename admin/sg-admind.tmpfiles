@@ -3,3 +3,7 @@
 d /run/stained-glass-admin          0755 root     root     -
 d /run/stained-glass-admin/requests 0700 sgsystem sgsystem -
 d /run/stained-glass-admin/replies  0750 root     sgsystem -
+# SG Store's .deb files: SYSTEM stages one here, sg-admind takes it (and
+# removes it) when it installs; nobody else may write or read here.
+d /var/cache/stained-glass-admin      0755 root     root     -
+d /var/cache/stained-glass-admin/debs 0700 sgsystem sgsystem 1d

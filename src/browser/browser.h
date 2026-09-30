@@ -25,6 +25,7 @@ enum { STAGE_FIND, STAGE_DOWNLOAD, STAGE_INSTALL, STAGE_DONE, STAGE_FAILED };
 
 typedef struct {
     WCHAR id[128], version[64], url[2048], type[32], scope[16], silent[512], arch[16];
+    WCHAR nested[32];           /* a zip's NestedInstallerType (SG Store unpacks those) */
     BYTE sha256[32];
     WCHAR file[MAX_PATH];       /* the download */
     WCHAR command[1024];        /* the installer's arguments, as run */

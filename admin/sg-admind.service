@@ -9,3 +9,6 @@ ExecStart=/usr/libexec/stained-glass/sg-admind
 # Root, because renaming the computer, managing accounts and setting the time
 # zone are root's; every operation is on a fixed, validated list.
 PrivateTmp=yes
+# SG Store's installs run apt, which can take long (a large program, a slow
+# mirror): no start timeout short of that.
+TimeoutStartSec=4h

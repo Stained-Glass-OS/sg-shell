@@ -25,6 +25,43 @@ sg-shell (0.1.0-80) unstable; urgency=medium
     (package-install), test/office-check.sh (the registration). Verified on
     qa3: Store > SG Office > Install, with and without the package.
 
+  * SG Store v2 (David's report, 2026-09-30):
+    - The Windows GIMP installed no longer makes the Linux GIMP look
+      installed: a Linux app is detected by dpkg's state of its package
+      only, a Windows program by its own Uninstall name only -- as a whole
+      word ("Git" is not "GitHub Desktop"), with exclusions ("XnView" is
+      not "XnView MP") and * for any run of characters.
+    - Search: a search box over the whole catalogue (names, makers,
+      descriptions, categories); categories to pick from; the keyboard
+      (typing searches, Down/Up move through the list, Enter installs or
+      opens, Esc goes back to the search box, Ctrl+F).
+    - A "Linux apps" section and category, listed after all the others:
+      the Windows build of a program stays the suggested one. Linux apps
+      now install from the store: apt, through the administrator's consent
+      and sg-admind's new apt-install, with a progress window.
+    - The catalogue grows from 5 apps to 108: 92 Windows programs by winget
+      id (each checked to exist in winget-pkgs and to resolve to an
+      installer the store can run), SG Office, and 16 Linux apps.
+      Installers we can run are picked over portable zips of the same
+      arch (Notepad++, Telegram, Heroic list both), and a zip that holds
+      the installer is unpacked and run (Paint.NET).
+    - "Install from a file..." in the store, for a downloaded .exe, .msi
+      or .deb.
+  * Linux software packages (.deb) install by double-click in File
+    Explorer or on the desktop (e.g. Valve's steam.deb): "Install a Linux
+    package" says what the package is (name, version, maker, web site,
+    size), refuses a file that is not one, and on Install asks for an
+    administrator's consent; the elevated copy stages the file where only
+    SYSTEM may write and sg-admind's new deb-install installs it with apt
+    (its dependencies come too) -- only if it is still the package and
+    version that was shown -- showing apt's progress and the result.
+    New helper sg-debinfo (dpkg-deb's reading of the file).
+  * Gates: test/store-check.sh (64 checks, 9 mutant builds) and
+    test/admind-check.sh (apt-install, deb-install, two mutants). On the
+    QA VM: Valve's steam.deb opened by ShellExecute, consent, apt's
+    progress, installed; the Linux FileZilla installed and opened from the
+    store; a refused consent says so on the card.
+
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:30:00 +0000
 
 sg-shell (0.1.0-79) unstable; urgency=medium

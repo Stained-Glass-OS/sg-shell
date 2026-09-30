@@ -9,6 +9,7 @@
 
 typedef struct {
     char arch[16], scope[16], locale[24], type[24], url[2048], sha[80], silent[512];
+    char nested[24];            /* NestedInstallerType, for a zip that holds the installer */
 } mf_entry;
 
 #define MF_MAX_ENTRIES 64
@@ -20,8 +21,13 @@ int mf_newest_version(const char *json, char *out, int cap);
 /* an installer manifest: the root's values and each installer (the root's
  * values filled in under it); returns how many installers. text is changed. */
 int mf_parse(char *text, mf_entry *root, mf_entry *list, int max);
-/* the installer for this PC: 64-bit first, the user's locale, the scope an
- * administrator (machine) or a user (user) installs to; -1 if none fits */
+/* how well we can run an installer type: 2 = directly (msi, wix, nullsoft,
+ * inno, burn, exe), 1 = a zip holding one of those (NestedInstallerType),
+ * 0 = not at all (portable, msix, a zip of portable files...) */
+int mf_type_rank(const char *type, const char *nested);
+/* the installer for this PC: one we can run first (mf_type_rank), then
+ * 64-bit, the user's locale, the scope an administrator (machine) or a user
+ * (user) installs to; -1 if none fits */
 int mf_pick(const mf_entry *list, int n, const char *locale, int admin, int is64);
 /* 64 hex digits -> 32 bytes; 0 if not valid */
 int mf_sha256(const char *hex, unsigned char out[32]);
