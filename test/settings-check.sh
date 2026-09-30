@@ -443,7 +443,7 @@ b=$(upm)
 wine start ms-settings:personalization-effects >/dev/null 2>&1
 page_is Effects "ms-settings:personalization-effects"
 sleep 0.5
-anim=$(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | grep -F ': Show animations in Windows' | sed -n 's/.* state=\([0-9]*\).*/\1/p')
+anim=$(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | grep -F ': Show animations' | sed -n 's/.* state=\([0-9]*\).*/\1/p')
 [ -n "$b" ] && [ $((0x$b & 2)) -eq 0 ] && [ "$anim" = 0 ] && has "Slide between virtual desktops" \
     && pass "Show animations off is Windows' own setting (UserPreferencesMask), and the page shows it off" \
     || fail "effects animations: mask byte $b, toggle $anim"

@@ -578,7 +578,7 @@ void set_build_effects(void)
 {
     int y = st_title(L"Effects");
     y = st_para(y, L"How things move. With animations off, windows and desktops change at once.");
-    st_toggle(&y, L"Show animations in Windows", effects_animations(), CMD_ANIMATIONS);
+    st_toggle(&y, L"Show animations", effects_animations(), CMD_ANIMATIONS);
     y = st_head(y, L"Animations");
     st_toggle(&y, L"Slide between virtual desktops", reg_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", 1) != 0, CMD_SLIDE);
     y = st_para(y, L"Task View's windows fly into place when it opens, while animations are on.");

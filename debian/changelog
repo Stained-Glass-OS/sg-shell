@@ -1,6 +1,6 @@
 sg-shell (0.1.0-75) unstable; urgency=medium
 
-  * Settings > Personalization > Effects: "Show animations in Windows"
+  * Settings > Personalization > Effects: "Show animations"
     (Windows' own switch, kept in UserPreferencesMask) and "Slide between
     virtual desktops" (wine-sg 0521); Task View's windows fly into place
     (0520) while animations are on. The page reads the switch from the
