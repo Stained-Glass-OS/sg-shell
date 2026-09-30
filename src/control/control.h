@@ -228,6 +228,8 @@ void look_wait(void);
 const WCHAR *look_export(const WCHAR *path);
 const WCHAR *look_import(const WCHAR *path);
 const WCHAR *look_reset(void);
+/* set_system.c: Wine's desktop takes the output's new size */
+void desktop_follow(int w, int h);
 /* set_personal.c: Settings > Personalization > Effects */
 const WCHAR *effects_set(const WCHAR *what, BOOL on);
 BOOL effects_animations(void);

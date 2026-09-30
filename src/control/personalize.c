@@ -620,7 +620,7 @@ static BOOL parse_rgb(const WCHAR *s, COLORREF *c)
 int personalize_set(int argc, WCHAR **argv)
 {
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
-                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded | look classic|rounded|reset | look export|import PATH | effects animations|slide on|off";
+                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded | look classic|rounded|reset | look export|import PATH | effects animations|slide on|off | desktop WxH";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {
@@ -637,6 +637,17 @@ int personalize_set(int argc, WCHAR **argv)
         BOOL rounded = !lstrcmpW(argv[1], L"rounded");
         why = !lstrcmpW(argv[0], L"look") ? look_apply(rounded) : look_set_style(rounded);
         look_wait();
+    }
+    else if (argc == 2 && !lstrcmpW(argv[0], L"desktop")) {
+        /* the session's watcher, when the output changed size outside Settings
+         * (sg-session's sg-run-explorer): the desktop -- the shell -- follows */
+        int w = 0, h = 0;
+        if (swscanf(argv[1], L"%dx%d", &w, &h) == 2 && w >= 320 && h >= 200 && w <= 16384 && h <= 16384) {
+            DEVMODEW dm = { .dmSize = sizeof(dm) };
+            desktop_follow(w, h);
+            why = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && (int)dm.dmPelsWidth == w && (int)dm.dmPelsHeight == h
+                  ? NULL : L"the desktop did not take that size";
+        } else why = L"a size is WIDTHxHEIGHT";
     }
     else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[2], L"on") || !lstrcmpW(argv[2], L"off")))
         why = effects_set(argv[1], !lstrcmpW(argv[2], L"on"));

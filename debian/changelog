@@ -1,3 +1,11 @@
+sg-shell (0.1.0-76) unstable; urgency=medium
+
+  * sg-settings --set desktop WxH: the shell desktop takes a new output size
+    (as Settings does after changing the mode), for the session's watcher
+    that follows a size change made any other way.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 20:32:20 -0700
+
 sg-shell (0.1.0-75) unstable; urgency=medium
 
   * Settings > Personalization > Effects: "Show animations"

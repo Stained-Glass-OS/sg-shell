@@ -165,7 +165,7 @@ void set_build_display(void)
 /* The compositor's output changed size: Wine's desktop -- the shell, sized
  * when the session started -- takes the new size too. It stayed at the old
  * one, a smaller picture in the middle of the screen. */
-static void desktop_follow(int w, int h)
+void desktop_follow(int w, int h)
 {
     DEVMODEW dm = { .dmSize = sizeof(dm) };
     int tries;
