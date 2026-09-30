@@ -1,0 +1,24 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: a Linux app's .desktop file (Steam puts one on the desktop
+; at its first start) opens the app, through sg-linuxapp64.exe (gio launch),
+; and shows by its name alone, as a shortcut does. Start lists the installed
+; ones itself (Programs\Linux apps, src/linuxapps).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.desktop]
+@="SG.LinuxApp"
+"PerceivedType"="application"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp]
+@="Linux app"
+"FriendlyTypeName"="Linux app"
+"NeverShowExt"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-linuxapp64.exe\" --run \"%1\""

@@ -24,6 +24,7 @@ override_dh_auto_install:
 	    build/sg-snip64.exe \
 	    build/sg-charmap64.exe \
 	    build/sg-rootterm64.exe src/rootterm/sg-root-terminal src/sg-rdp-connect \
+	    build/sg-linuxapp64.exe \
 	    build/sg-bugreport64.exe src/bugreport/sg-bugreport-info src/bugreport/sg-debug-run \
 	    build/sg-wordpad64.exe \
 	    build/sg-fontview64.exe \
@@ -50,6 +51,8 @@ override_dh_auto_install:
 	# what sg-compositor shows where no window is (its backdrop.c)
 	python3 theme/gen-backdrop.py debian/sg-shell/usr/share/stained-glass/backdrop.sgbd
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
+	# Linux apps Start does not list: the system's own plumbing (src/linuxapps)
+	install -m0644 src/linuxapps/linux-apps-hidden debian/sg-shell/usr/share/stained-glass/linux-apps-hidden
 	# The shell's icon font (caption buttons of Windows 10/11-era programs):
 	# drawn by src/sg-icons-font.py; theme/52-sg-fonts.reg maps names to it.
 	install -d debian/sg-shell/usr/share/fonts/truetype/stained-glass

@@ -9,6 +9,16 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     recommends from the source it brought (an i386 library as :i386). One
     that cannot be had is named in the Store's answer; the package stays.
     Test: test/admind-check.sh (mutants NOI386, NORECOMMENDS).
+  * Linux apps in Start: a Linux program installed from its package (the
+    Store's Linux apps, a .deb such as Steam's, Flatpak) had no way to be
+    started from the shell. sg-linuxapp64.exe makes a shortcut in
+    Programs\Linux apps for each app a Linux desktop would show, with the
+    app's own icon (its theme PNGs in an .ico), named "NAME (Linux)" beside a
+    Windows program of the same name; Start runs it once per session and it
+    follows the applications folders. A .desktop file (Steam's on the
+    desktop) opens the app. The system's own plumbing is listed in
+    /usr/share/stained-glass/linux-apps-hidden. Test: make test-linuxapps
+    (mutants: no NoDisplay filter, no removal, no hidden list, no launch).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

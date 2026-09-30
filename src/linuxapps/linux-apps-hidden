@@ -1,0 +1,13 @@
+# Linux apps Start does not list (sg-linuxapp64.exe): the system's own
+# plumbing, and programs Stained Glass has its own of. One desktop id a line
+# (the .desktop file's name without .desktop); "prefix*" for a family.
+debian-xterm
+debian-uxterm
+python3*
+sdl-freerdp*
+org.freedesktop.Xwayland
+org.gnome.Zenity
+xdg-desktop-portal*
+wine*
+org.gnome.Settings*
+nm-connection-editor

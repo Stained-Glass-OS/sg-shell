@@ -2147,6 +2147,24 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     g_panel = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, PANEL_CLASS, L"Start",
                               WS_POPUP, 0, 0, S(PANEL_W), S(PANEL_H), NULL, NULL, inst, NULL);
     sg_round_corners(g_panel);   /* the tiles' Start, in the Rounded style (the centred one has its own) */
+    /* Linux apps' shortcuts (src/linuxapps): made now and kept up to date
+     * while the session lasts, by a program of their own */
+    {
+        WCHAR self[MAX_PATH], cmdline[MAX_PATH + 16], *slash;
+        STARTUPINFOW si;
+        PROCESS_INFORMATION pi;
+        DWORD n = GetModuleFileNameW(NULL, self, MAX_PATH);
+        memset(&si, 0, sizeof(si)); si.cb = sizeof(si);
+        if (n && n < MAX_PATH - 24 && (slash = wcsrchr(self, '\\'))) {
+            lstrcpyW(slash + 1, L"sg-linuxapp64.exe");
+            _snwprintf(cmdline, ARRAYSIZE(cmdline), L"\"%ls\" --watch", self);
+            cmdline[ARRAYSIZE(cmdline) - 1] = 0;
+            if (GetFileAttributesW(self) != INVALID_FILE_ATTRIBUTES &&
+                CreateProcessW(self, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+                CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+            }
+        }
+    }
     /* warm the list and its icons, so the first opening is quick */
     build_list();
     first_run();
