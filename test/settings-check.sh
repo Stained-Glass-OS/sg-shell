@@ -417,6 +417,37 @@ wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
     && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] && pass "Classic sets it all back, desktops pager still off" || fail "Classic look: desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
 
+# --- the Horizon and Glass looks: the taskbar of older desktops (wine-sg 0600) ----------------------
+TBS() { regq 'HKCU\Software\Stained Glass\Taskbar' Style; }
+[ "$(TBS)" = 0x0 ] && pass "Classic: the flat taskbar (Taskbar Style 0)" || fail "Classic taskbar style: $(TBS)"
+wine "$T/sg-settings64.exe" --set look horizon 2>/dev/null | tr -d '\r' | grep -q '^OK' && [ "$(TBS)" = 0x1 ] \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] \
+    && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x1 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x0 ] \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
+    && pass "--set look horizon: Taskbar Style 1, square windows, labelled buttons at the left, no Task View" \
+    || fail "Horizon look: style $(TBS) rounded $(regq 'HKCU\Software\Stained Glass\Style' Rounded) glom $(regq "$ADVK" TaskbarGlomLevel) taskview $(regq "$ADVK" ShowTaskViewButton)"
+wine start ms-settings:themes >/dev/null 2>&1
+page_is Themes "ms-settings:themes (horizon)"
+sleep 0.5
+has ": Horizon" && pass "Themes shows the Horizon look" || fail "Themes horizon: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine start ms-settings:taskbar >/dev/null 2>&1
+page_is Taskbar "ms-settings:taskbar (style)"
+sleep 0.5
+has ": Horizon: bright blue" && pass "Taskbar shows its style: Horizon" || fail "Taskbar style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine "$T/sg-settings64.exe" --set look glass 2>/dev/null | tr -d '\r' | grep -q '^OK' && [ "$(TBS)" = 0x2 ] \
+    && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] \
+    && pass "--set look glass: Taskbar Style 2, combined icon buttons, square windows" \
+    || fail "Glass look: style $(TBS) glom $(regq "$ADVK" TaskbarGlomLevel)"
+wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep -qx 'taskbar.style=glass' \
+    && pass "--dump personalization: taskbar.style=glass" || fail "dump: $(wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep taskbar)"
+wine start ms-settings:themes >/dev/null 2>&1
+page_is Themes "ms-settings:themes (glass)"
+sleep 0.5
+has ": Glass" && pass "Themes shows the Glass look" || fail "Themes glass: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
+[ "$(TBS)" = 0x0 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x2 ] \
+    && pass "Classic again: the flat taskbar, Task View, labelled buttons" || fail "Classic after glass: style $(TBS) taskview $(regq "$ADVK" ShowTaskViewButton)"
+
 # --- Share & reset: a look saved, reset, read back; a shared file sets only look choices ---------
 SG='C:\users\Public'
 DWMK='HKCU\Software\Microsoft\Windows\DWM'

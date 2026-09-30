@@ -219,10 +219,14 @@ const WCHAR *pers_set_wallpaper(const WCHAR *src, int style);   /* NULL, or why 
 const WCHAR *pers_set_background(COLORREF c);
 const WCHAR *pers_set_accent(COLORREF c);
 const WCHAR *pers_set_mode(BOOL apps, BOOL light);
-/* look.c: the window style, and the Classic and Rounded looks */
+/* look.c: the window style, and the whole looks: Classic, Rounded, and the
+ * Horizon and Glass taskbars (Taskbar Style, wine-sg 0600) */
+enum { LOOK_CLASSIC, LOOK_ROUNDED, LOOK_HORIZON, LOOK_GLASS, LOOK_COUNT };
+extern const WCHAR *const LOOK_KEYS[LOOK_COUNT];   /* classic, rounded, horizon, glass */
 BOOL look_rounded(void);
+DWORD look_taskbar_style(void);   /* 0 flat, 1 Horizon, 2 Glass */
 const WCHAR *look_set_style(BOOL rounded);
-const WCHAR *look_apply(BOOL rounded);
+const WCHAR *look_apply(int look);
 void look_wait(void);
 /* lookshare.c: a look saved to an .sglook file, read back, or put back as new */
 const WCHAR *look_export(const WCHAR *path);

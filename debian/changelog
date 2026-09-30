@@ -14,6 +14,14 @@ sg-shell (0.1.0-79) unstable; urgency=medium
     too, run by msiexec (David: "so you can debug an installer"). With
     wine-sg 10.0-123 the verb shows by its name, not "sgdebugreport".
 
+  * Personalization: two more looks, Horizon and Glass, with the taskbar of
+    older desktops (wine-sg 0600) -- Horizon a bright blue bar with a green
+    Start button, Glass a dark glass bar with a round Start orb and big icon
+    buttons. Themes > Look chooses them (and --set look horizon|glass);
+    Taskbar > Taskbar style sets the bar alone; a saved look carries it.
+    Start takes the look's colours and a frame in the bar's colour. Classic
+    stays the default. Gates: test/settings-check.sh, test/start-check.sh.
+
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 19:30:00 +0000
 
 sg-shell (0.1.0-78) unstable; urgency=medium

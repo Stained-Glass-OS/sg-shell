@@ -36,6 +36,7 @@ static const struct choice { const WCHAR *section, *name, *key, *value; DWORD ma
     { L"Taskbar", L"Position",    SG_TASKBAR, L"Position", 3 },
     { L"Taskbar", L"AutoHide",    SG_TASKBAR, L"AutoHide", 1 },
     { L"Taskbar", L"Color",       SG_TASKBAR, L"Color", 4 },
+    { L"Taskbar", L"Style",       SG_TASKBAR, L"Style", 2 },
     { L"Taskbar", L"Desktops",    SG_TASKBAR, L"ShowDesktops", 1 },
     { L"Start",   L"Centered",    SG_START,   L"Centered", 1 },
     { L"Start",   L"MoreTiles",   SG_START,   L"MoreTiles", 1 },
@@ -162,7 +163,7 @@ const WCHAR *look_reset(void)
 
     for (i = 0; i < (int)ARRAYSIZE(CHOICES); i++)
         RegDeleteKeyValueW(HKEY_CURRENT_USER, CHOICES[i].key, CHOICES[i].value);
-    if ((why = look_apply(FALSE))) return why;     /* Classic: the taskbar and Start as a new account has them */
+    if ((why = look_apply(LOOK_CLASSIC))) return why;     /* Classic: the taskbar and Start as a new account has them */
     pers_set_mode(TRUE, TRUE);
     pers_set_mode(FALSE, TRUE);
     pers_set_accent(RGB(0x7B, 0x2F, 0xBE));        /* the Stained Glass theme */

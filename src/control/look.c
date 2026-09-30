@@ -1,12 +1,15 @@
 /*
  * Stained Glass Settings -- the look: the window style (square or rounded
  * corners) and the two whole looks, Classic and Rounded, that set the style,
- * the taskbar and Start together. Every part stays choosable on its own page
- * afterwards, so the looks mix: a rounded style with a classic taskbar, a
- * centred taskbar with square windows, any taskbar colour.
+ * the taskbar and Start together, and two more with the taskbar of older
+ * desktops: Horizon (a bright blue bar, a green Start button) and Glass (a
+ * dark glass bar, a round Start orb). Every part stays choosable on its own
+ * page afterwards, so the looks mix: a rounded style with a classic taskbar,
+ * a centred taskbar with square windows, any taskbar colour or style.
  *
  *   HKCU\Software\Stained Glass\Style Rounded       wine-sg 0483, 0484
  *   HKCU\Software\Stained Glass\Taskbar Color, ShowDesktops, PinOrder (0484, 0485)
+ *   HKCU\Software\Stained Glass\Taskbar Style       wine-sg 0600 (0 flat, 1 Horizon, 2 Glass)
  *   HKCU\Software\Stained Glass\Start Centered      sg-start
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -46,6 +49,14 @@ static DWORD WINAPI reframe_later(void *arg)
     Sleep(700);
     EnumWindows(reframe, 0);
     return 0;
+}
+
+const WCHAR *const LOOK_KEYS[LOOK_COUNT] = { L"classic", L"rounded", L"horizon", L"glass" };
+
+DWORD look_taskbar_style(void)
+{
+    DWORD v = reg_dword(HKEY_CURRENT_USER, TASKBAR, L"Style", 0);
+    return v <= 2 ? v : 0;
 }
 
 BOOL look_rounded(void)
@@ -134,17 +145,25 @@ static void default_pins(void)
     }
 }
 
-/* the whole look: Classic (the default) or Rounded */
-const WCHAR *look_apply(BOOL rounded)
+/* the whole look: Classic (the default), Rounded, Horizon or Glass. Horizon
+ * and Glass keep square windows and Start at the left; Horizon's buttons
+ * have labels (combined when the bar is full), Glass's are icons with the
+ * pins, as those desktops had them; neither had Task View. */
+const WCHAR *look_apply(int look)
 {
+    BOOL rounded = look == LOOK_ROUNDED;
+    DWORD glom = look == LOOK_ROUNDED || look == LOOK_GLASS ? 0 : look == LOOK_HORIZON ? 1 : 2;
+
+    if (look < 0 || look >= LOOK_COUNT) return L"unknown look";
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarAl", rounded ? 1 : 0);
-    reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarGlomLevel", rounded ? 0 : 2);
+    reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarGlomLevel", glom);
     reg_set_dword(HKEY_CURRENT_USER, SEARCHKEY, L"SearchboxTaskbarMode", rounded ? 1 : 0);
-    reg_set_dword(HKEY_CURRENT_USER, ADV, L"ShowTaskViewButton", 1);
+    reg_set_dword(HKEY_CURRENT_USER, ADV, L"ShowTaskViewButton", look == LOOK_HORIZON || look == LOOK_GLASS ? 0 : 1);
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"ShowDesktops", 0);   /* off by default in every look; the Taskbar toggle turns it on */
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Color", 0);
+    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Style", look == LOOK_HORIZON ? 1 : look == LOOK_GLASS ? 2 : 0);
     reg_set_dword(HKEY_CURRENT_USER, START, L"Centered", rounded ? 1 : 0);
-    if (rounded) default_pins();
+    if (rounded || look == LOOK_GLASS) default_pins();
     broadcast(L"TraySettings");
     return look_set_style(rounded);
 }

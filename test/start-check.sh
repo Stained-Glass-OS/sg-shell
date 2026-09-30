@@ -112,6 +112,15 @@ px() { convert "$HERE/build/start-$1.png" -format "%[fx:int(255*p{$2,$3}.r)],%[f
 poke; poke
 shot light
 [ "$(val mode)" = light ] && [ "$(px light 700 $((H - BAR - 12)))" = "242,242,242" ] && pass "and light when the Windows mode is light" || fail "light mode: $(val mode) $(px light 700 $((H - BAR - 12)))"
+# the taskbar's looks (Taskbar Style, wine-sg 0600): Start takes their colours and a frame in the bar's
+TBSTYLE() { "$WINE" reg add 'HKCU\Software\Stained Glass\Taskbar' /v Style /t REG_DWORD /d "$1" /f >/dev/null 2>&1; }
+TBSTYLE 1; poke; poke; shot horizon
+[ "$(val look)" = horizon ] && [ "$(px horizon 1 $((panel_y + 300)))" = "42,98,214" ] && [ "$(px horizon 700 $((H - BAR - 12)))" = "246,249,254" ] \
+    && pass "Horizon: a light panel in a blue frame" || fail "Horizon Start: $(val look) frame $(px horizon 1 $((panel_y + 300))) panel $(px horizon 700 $((H - BAR - 12)))"
+TBSTYLE 2; poke; poke; shot glass
+[ "$(val look)" = glass ] && [ "$(px glass 1 $((panel_y + 300)))" = "138,154,176" ] && [ "$(px glass 700 $((H - BAR - 12)))" = "30,39,51" ] \
+    && pass "Glass: a dark blue-grey panel with a light rim" || fail "Glass Start: $(val look) frame $(px glass 1 $((panel_y + 300))) panel $(px glass 700 $((H - BAR - 12)))"
+TBSTYLE 0
 "$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v SystemUsesLightTheme /t REG_DWORD /d 0 /f >/dev/null 2>&1
 poke; poke
 

@@ -89,7 +89,23 @@ static const struct start_palette light_palette = {
     RGB(0xB0, 0xB0, 0xB0), RGB(0xA0, 0xA0, 0xA0),
     RGB(0xF9, 0xF9, 0xF9), RGB(0xE0, 0xE0, 0xE0), RGB(0xCC, 0xCC, 0xCC), RGB(0xCC, 0xCC, 0xCC), RGB(0xE4, 0xE4, 0xE4),
 };
+/* the taskbar's looks (HKCU\Software\Stained Glass\Taskbar Style, wine-sg
+ * 0600) give Start their colours and a frame in the bar's colour: Horizon a
+ * light panel in a blue frame, Glass a dark blue-grey one with a light rim */
+static const struct start_palette horizon_palette = {
+    RGB(0xF6, 0xF9, 0xFE), RGB(0xD3, 0xE2, 0xFA), RGB(0xE2, 0xEC, 0xFC), RGB(0xC2, 0xD8, 0xFA),
+    RGB(0xA4, 0xC4, 0xF6), RGB(0x00, 0x00, 0x00), RGB(0x4A, 0x5A, 0x78), RGB(0xFF, 0xFF, 0xFF),
+    RGB(0xA0, 0xA8, 0xB8), RGB(0x9A, 0xB0, 0xD4),
+    RGB(0xF8, 0xFA, 0xFE), RGB(0xC2, 0xD8, 0xFA), RGB(0xC8, 0xD4, 0xE8), RGB(0x2A, 0x62, 0xD6), RGB(0xDC, 0xE8, 0xFA),
+};
+static const struct start_palette glass_palette = {
+    RGB(0x1E, 0x27, 0x33), RGB(0x15, 0x1C, 0x26), RGB(0x23, 0x2E, 0x3C), RGB(0x34, 0x46, 0x5C),
+    RGB(0x45, 0x5C, 0x78), RGB(0xFF, 0xFF, 0xFF), RGB(0xA8, 0xB4, 0xC4), RGB(0x2A, 0x36, 0x44),
+    RGB(0x5A, 0x66, 0x76), RGB(0x5C, 0x6A, 0x7C),
+    RGB(0x24, 0x2F, 0x3C), RGB(0x3A, 0x4E, 0x66), RGB(0x44, 0x54, 0x6A), RGB(0x8A, 0x9A, 0xB0), RGB(0x2A, 0x38, 0x48),
+};
 static const struct start_palette *g_pal = &dark_palette;
+static int g_look_frame;   /* the look's frame, px at 96 DPI (0: the flat look's 1 px edge) */
 #define COL_PANEL    (g_pal->panel)
 #define COL_RAIL     (g_pal->rail)
 #define COL_RAIL_OPEN (g_pal->rail_open)
@@ -807,6 +823,7 @@ static void dump(void)
         dprint(f, L"rect=%ld,%ld,%ld,%ld\n", wr.left, wr.top, wr.right, wr.bottom);
     }
     dprint(f, L"mode=%ls\n", g_pal == &dark_palette ? L"dark" : L"light");
+    dprint(f, L"look=%ls\n", g_pal == &horizon_palette ? L"horizon" : g_pal == &glass_palette ? L"glass" : L"flat");
     dprint(f, L"list=%d tile_cols=%d fullscreen=%d\n", g_show_list, g_tile_cols, g_fullscreen);
     dprint(f, L"centered=%d\n", g_centered);
     dprint(f, L"search=%ls\n", g_search);
@@ -1659,6 +1676,7 @@ static void on_paint(HWND hwnd)
         draw_rail(mem);   /* last: the open rail lies over the list */
         frame(mem, &all, g_pal->edge, S(1));
     }
+    if (g_look_frame) frame(mem, &all, g_pal->edge, S(g_look_frame));
     BitBlt(dc, 0, 0, g_panel_w, g_panel_h, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldbmp);
     DeleteObject(bmp);
@@ -1853,6 +1871,12 @@ static void show_panel(BOOL show)
         QueryPerformanceCounter(&g_open_start);
         g_open_ms = -1;
         g_pal = sg_system_dark() ? &dark_palette : &light_palette;
+        switch (reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0))
+        {
+        case 1: g_pal = &horizon_palette; g_look_frame = 3; break;
+        case 2: g_pal = &glass_palette; g_look_frame = 2; break;
+        default: g_look_frame = 0; break;
+        }
         build_list();
         load_pins();
         g_search[0] = 0;

@@ -324,14 +324,18 @@ void set_build_themes(void)
     y = st_head(y, L"Look");
     {
         /* short names: the descriptions did not fit the box (David 2026-09-29) */
-        static const WCHAR *const looks[] = { L"Classic", L"Rounded", L"Mixed" };
+        static const WCHAR *const looks[] = { L"Classic", L"Rounded", L"Horizon", L"Glass", L"Mixed" };
         BOOL r = look_rounded(), centred = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1,
              cstart = reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Start", L"Centered", 0) != 0;
-        int look = !r && !centred && !cstart ? 0 : r && centred && cstart ? 1 : 2;
-        st_combo(&y, L"Choose a look", looks, look == 2 ? 3 : 2, look, CMD_LOOK);
+        DWORD bar = look_taskbar_style();
+        int look = r || centred || cstart ? (r && centred && cstart && !bar ? LOOK_ROUNDED : 4)
+                 : bar == 1 ? LOOK_HORIZON : bar == 2 ? LOOK_GLASS : LOOK_CLASSIC;
+        st_combo(&y, L"Choose a look", looks, look == 4 ? 5 : 4, look, CMD_LOOK);
     }
     y = st_para(y, L"Classic: square windows, with the taskbar's buttons and Start at the left. "
-                   L"Rounded: round corners, with the taskbar's buttons and Start in the middle.");
+                   L"Rounded: round corners, with the taskbar's buttons and Start in the middle. "
+                   L"Horizon: a bright blue taskbar with a green Start button. "
+                   L"Glass: a dark glass taskbar with a round Start button and big icons.");
     y = st_para(y, L"A look sets the window style, the taskbar and Start together. Each can still be changed on its own "
                    L"under Colors, Taskbar and Start, to mix them (Mixed).");
 }
@@ -340,7 +344,7 @@ BOOL set_cmd_themes(int id, int code, HWND ctl)
 {
     if (id == CMD_LOOK) {
         LRESULT sel = SendMessageW(ctl, CB_GETCURSEL, 0, 0);
-        if (code == CBN_SELCHANGE && (sel == 0 || sel == 1)) failed(look_apply(sel == 1));
+        if (code == CBN_SELCHANGE && sel >= 0 && sel < LOOK_COUNT) failed(look_apply((int)sel));
         return TRUE;
     }
     if (id >= CMD_THEME_FIRST && id < CMD_THEME_FIRST + (int)ARRAYSIZE(THEMES)) {
@@ -408,7 +412,7 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
  * auto-hide in our own key; every change is announced with WM_SETTINGCHANGE
  * "TraySettings", which the taskbar (wine-sg 0164) reads them again on. */
 enum { CMD_LOCKBAR = CMD_PAGE_FIRST + 1, CMD_AUTOHIDE, CMD_SMALL, CMD_ALIGN, CMD_PEEK, CMD_BADGES,
-       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH, CMD_TBCOLOR, CMD_DESKTOPS };
+       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH, CMD_TBCOLOR, CMD_DESKTOPS, CMD_TBSTYLE };
 #define SG_TASKBAR L"Software\\Stained Glass\\Taskbar"
 #define SEARCH_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Search"
 
@@ -420,6 +424,7 @@ void set_build_taskbar(void)
     static const WCHAR *const combine[] = { L"Always, hide labels", L"When taskbar is full", L"Never" };
     static const WCHAR *const search[] = { L"Hidden", L"Show search icon", L"Show search box" };
     static const WCHAR *const colors[] = { L"Follow the system mode", L"Dark", L"Light", L"Light blue", L"Accent color" };
+    static const WCHAR *const styles[] = { L"Flat (the default)", L"Horizon: bright blue", L"Glass: dark glass" };
     DWORD color;
     DWORD pos = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", 3), glom = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", 2);
     DWORD box = reg_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", 0);
@@ -439,6 +444,8 @@ void set_build_taskbar(void)
     st_combo(&y, L"Taskbar alignment", align, 2, reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1 ? 1 : 0, CMD_ALIGN);
     color = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", 0);
     st_combo(&y, L"Taskbar color", colors, 5, color <= 4 ? (int)color : 0, CMD_TBCOLOR);
+    /* the taskbar of older desktops (wine-sg 0600); its own colours replace Taskbar color */
+    st_combo(&y, L"Taskbar style", styles, 3, (int)look_taskbar_style(), CMD_TBSTYLE);
 }
 
 static void tray_settings_changed(void)
@@ -461,6 +468,10 @@ BOOL set_cmd_taskbar(int id, int code, HWND ctl)
     case CMD_TBCOLOR:
         if (code != CBN_SELCHANGE || sel < 0) return TRUE;
         reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", sel);
+        break;
+    case CMD_TBSTYLE:
+        if (code != CBN_SELCHANGE || sel < 0 || sel > 2) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Style", sel);
         break;
     case CMD_ALIGN:
         if (code != CBN_SELCHANGE) return TRUE;
