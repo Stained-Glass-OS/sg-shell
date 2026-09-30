@@ -1,3 +1,17 @@
+sg-shell (0.1.0-81) unstable; urgency=medium
+
+  * SG Store: Steam from its .deb starts without asking for more. Its
+    libraries are 32-bit (steam-libs-i386) and come from Steam's own apt
+    source, which the package adds as it installs -- so apt could not
+    install them, and Steam's first run stopped to ask for a terminal and an
+    administrator password. sg-admind now turns i386 on for a package that
+    asks for i386 libraries, and after the package installs what it
+    recommends from the source it brought (an i386 library as :i386). One
+    that cannot be had is named in the Store's answer; the package stays.
+    Test: test/admind-check.sh (mutants NOI386, NORECOMMENDS).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
+
 sg-shell (0.1.0-80) unstable; urgency=medium
 
   * SG Store installs SG Office again (David, on real hardware: "SG Office

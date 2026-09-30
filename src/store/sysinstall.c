@@ -351,10 +351,19 @@ static DWORD WINAPI job_thread(void *arg)
         MultiByteToWideChar(CP_UTF8, 0, t, -1, wide, ARRAYSIZE(wide));
         free(t);
         if (!wcsncmp(wide, L"OK", 2) && (wide[2] == L'\n' || !wide[2])) {
-            WCHAR detail[256] = L"";
-            if (wide[2] == L'\n') { lstrcpynW(detail, wide + 3, ARRAYSIZE(detail)); if ((nl = wcschr(detail, L'\n'))) *nl = 0; }
+            WCHAR detail[256] = L"", *extra = NULL;
+            if (wide[2] == L'\n') {
+                lstrcpynW(detail, wide + 3, ARRAYSIZE(detail));
+                if ((nl = wcschr(detail, L'\n'))) { *nl = 0; if (!wcsncmp(nl + 1, L"Not installed: ", 15)) extra = nl + 16; }
+                if (extra && (nl = wcschr(extra, L'\n'))) *nl = 0;
+            }
             ok = TRUE;
-            _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is installed.", detail[0] ? detail : j->title + 11);
+            /* the package, and what it recommends that could not be had
+             * (Steam's libraries, from Steam's own server) */
+            if (extra && *extra)
+                _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is installed, without %ls.", detail[0] ? detail : j->title + 11, extra);
+            else
+                _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is installed.", detail[0] ? detail : j->title + 11);
         } else if (!wcsncmp(wide, L"FAILED ", 7)) {
             WCHAR *e = wcschr(wide + 7, L'\n');
             if (e) *e = 0;

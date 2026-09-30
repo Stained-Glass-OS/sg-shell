@@ -288,6 +288,68 @@ set -- $(deb_cases "$T/mut-nocheck")
 # shellcheck disable=SC2046
 set -- $(deb_cases "$T/mut-noowner")
 [ "${3:-}" != refuses-foreign ] && pass "MUTANT NOOWNER installs a file that is not SYSTEM's own (gate catches it)" || fail "NOOWNER not detected"
+# Steam's kind of package: it asks for 32-bit libraries (steam-libs-i386) and
+# brings its own apt source, where those libraries are. i386 goes on first;
+# after the package, its missing Recommends come from the new source.
+cat > "$B/dpkg" <<EOF
+#!/bin/sh
+case "\$1" in
+--print-architecture) echo amd64 ;;
+--print-foreign-architectures) cat "$T/foreign" 2>/dev/null ;;
+--add-architecture) printf 'dpkg --add-architecture %s\n' "\$2" >> "$CALLS"; echo "\$2" >> "$T/foreign" ;;
+esac
+EOF
+chmod +x "$B/dpkg"
+P="$T/steampkg"; mkdir -p "$P/DEBIAN" "$P/etc/apt/sources.list.d"
+printf 'Package: sg-gate-steam\nVersion: 1:1.0-1\nArchitecture: amd64\nMaintainer: Gate <g@example.org>\nDepends: curl, python3 (>= 3.4)\nRecommends: sg-gate-libs-amd64, sg-gate-libs-i386, sudo, xdg-utils | sg-gate-other\nDescription: gate\n' > "$P/DEBIAN/control"
+echo 'deb https://repo.example.org stable main' > "$P/etc/apt/sources.list.d/sg-gate-steam.list"
+dpkg-deb --root-owner-group --build "$P" "$T/steam.deb" >/dev/null 2>&1 || fail "the gate's Steam-like .deb does not build"
+steam_request() { # ADMIND -- prints the reply
+    id=$(next_id); cp "$T/steam.deb" "$DEBS/$id.deb"
+    printf 'deb-install\n%s\nsg-gate-steam\n1:1.0-1\n' "$id.deb" > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; cat "$S/replies/$id.rep" 2>/dev/null
+}
+steam_cases() { # ADMIND -- one word per case
+    : > "$CALLS"; printf 'sudo 1.9\nxdg-utils 1.2\n' > "$T/installed"; : > "$T/foreign"
+    r=$(steam_request "$1")
+    add=$(grep -n 'add-architecture i386' "$CALLS" | cut -d: -f1 | head -1)
+    deb=$(grep -n ' install .*/package.deb$' "$CALLS" | cut -d: -f1 | head -1)
+    { [ "$(first "$r")" = OK ] && [ -n "$add" ] && [ -n "$deb" ] && [ "$add" -lt "$deb" ]; } && echo i386-first || echo no-i386
+    { [ -n "$deb" ] && grep -q ' install sg-gate-libs-amd64$' "$CALLS" && grep -q ' install sg-gate-libs-i386:i386$' "$CALLS" \
+      && [ "$(sed -n "$deb,\$p" "$CALLS" | grep -c ' update$')" -ge 1 ] && ! grep -q ' install sudo$\| install sg-gate-other$' "$CALLS"; } \
+        && echo recommends || echo no-recommends
+    : > "$CALLS"; printf 'sudo 1.9\nxdg-utils 1.2\n' > "$T/installed"
+    r=$(steam_request "$1")
+    { [ "$(first "$r")" = OK ] && ! grep -q add-architecture "$CALLS"; } && echo once || echo twice
+}
+# shellcheck disable=SC2046
+set -- $(steam_cases "$ADMIND")
+[ "${1:-}" = i386-first ] && pass "a package that asks for i386 libraries turns i386 on before it installs" || fail "i386: ${1:-} $(cat "$CALLS")"
+[ "${2:-}" = recommends ] && pass "then its missing Recommends come from the source it added (the i386 one as :i386; ones met are left)" || fail "recommends: ${2:-} $(cat "$CALLS")"
+[ "${3:-}" = once ] && pass "i386 already on: left as it is" || fail "turned on twice: $(cat "$CALLS")"
+: > "$CALLS"; : > "$T/installed"
+id=$(next_id); r=$(deb_request "$ADMIND" "$id" 1.2-3)
+{ [ "$(first "$r")" = OK ] && ! grep -q 'add-architecture' "$CALLS" && [ "$(grep -c ' install ' "$CALLS")" = 1 ]; } \
+    && pass "a plain package: no i386, nothing more installed" || fail "plain: $(cat "$CALLS")"
+# a recommended library that cannot be had: the package is still installed, and the answer says what is missing
+cp "$B/apt-get" "$T/apt-get.store"
+awk '{print} /^case " \$\* " in \*" update "\*\) exit 0 ;; esac$/ {print "case \" $* \" in *\" sg-gate-libs-i386:i386 \"*) exit 100 ;; esac"}' "$T/apt-get.store" > "$B/apt-get"
+grep -q 'exit 100' "$B/apt-get" || fail "the failing apt-get stand-in did not apply"
+printf 'sudo 1.9\nxdg-utils 1.2\n' > "$T/installed"; : > "$T/foreign"
+r=$(steam_request "$ADMIND")
+{ [ "$(first "$r")" = OK ] && printf '%s\n' "$r" | grep -qx 'Not installed: sg-gate-libs-i386'; } \
+    && pass "a recommended library that fails is named, the package still installed" || fail "failed recommend: $r"
+cp "$T/apt-get.store" "$B/apt-get"
+sed 's/^        if wants_i386(rel) and "i386" not in foreign_archs():$/        if False:/' "$ADMIND" > "$T/mut-noi386"
+sed 's/^    failed = install_recommends(rel, 60, 38) if sources else \[\]$/    failed = []/' "$ADMIND" > "$T/mut-norec"
+[ "$(grep -c 'if False:' "$T/mut-noi386")" = 1 ] && ! grep -q 'failed = install_recommends' "$T/mut-norec" || fail "the i386 mutants did not apply"
+# shellcheck disable=SC2046
+set -- $(steam_cases "$T/mut-noi386")
+[ "${1:-}" != i386-first ] && pass "MUTANT NOI386 leaves i386 off (gate catches it)" || fail "NOI386 not detected"
+# shellcheck disable=SC2046
+set -- $(steam_cases "$T/mut-norec")
+[ "${2:-}" != recommends ] && pass "MUTANT NORECOMMENDS skips Steam's libraries (gate catches it)" || fail "NORECOMMENDS not detected"
+rm -f "$B/dpkg"
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"
 
 # --- what is not a request ---

@@ -698,12 +698,74 @@ def deb_fields(path):
     return f[0], f[1], f[2]
 
 
+def foreign_archs():
+    return run(["dpkg", "--print-foreign-architectures"]).stdout.split()
+
+
 def arch_ok(arch):
     if arch == "all":
         return True
     native = run(["dpkg", "--print-architecture"]).stdout.strip()
-    foreign = run(["dpkg", "--print-foreign-architectures"]).stdout.split()
-    return arch == native or arch in foreign
+    return arch == native or arch in foreign_archs()
+
+
+def deb_relations(path):
+    """the package's Pre-Depends, Depends and Recommends as lists of
+    alternatives [(name, arch)], and whether it brings apt sources of its own
+    (Steam's: its libraries come from there)"""
+    r = run(["dpkg-deb", "-f", path, "Pre-Depends", "Depends", "Recommends"])
+    fields, cur = {}, None
+    for line in r.stdout.splitlines():
+        if line[:1] in (" ", "\t") and cur:
+            fields[cur] += " " + line.strip()
+        elif ":" in line:
+            cur, _, v = line.partition(":")
+            fields[cur.strip()] = v.strip()
+    rel = {}
+    for key, value in fields.items():
+        groups = []
+        for group in value.split(","):
+            alts = []
+            for alt in group.split("|"):
+                name = re.sub(r"\(.*?\)|\[.*?\]|<.*?>", "", alt).strip()
+                name, _, arch = name.partition(":")
+                if name:
+                    alts.append((name, arch))
+            if alts:
+                groups.append(alts)
+        rel[key] = groups
+    listing = run(["dpkg-deb", "-c", path]).stdout
+    sources = bool(re.search(r" \./etc/apt/sources\.list\.d/[^/\s]+\.(list|sources)$", listing, re.M))
+    return rel, sources
+
+
+def wants_i386(rel):
+    """a package that asks for 32-bit x86 libraries (Steam: steam-libs-i386)"""
+    return any(name.endswith("-i386") or arch == "i386"
+               for groups in rel.values() for alts in groups for name, arch in alts)
+
+
+def install_recommends(rel, base, span):
+    """the Recommends apt could not see when the package went in: ones from
+    the sources the package itself added (Steam's steam-libs-amd64 and
+    steam-libs-i386). Each on its own, and a failure is only noted -- the
+    package is installed. Answers the names that did not install."""
+    missing = [alts[0][0] for alts in rel.get("Recommends", [])
+               if not any(installed_version(n) for n, _ in alts) and PKG_RE.fullmatch(alts[0][0])]
+    if not missing:
+        return []
+    refresh_lists()
+    i386 = "i386" in foreign_archs()
+    failed = []
+    for i, name in enumerate(missing):
+        target = name + ":i386" if i386 and name.endswith("-i386") else name
+        try:
+            apt_get(["install", target], "%s could not be installed" % name,
+                    base + span * i / len(missing), span / len(missing))
+        except Refused as e:
+            log("recommended %s: %s" % (name, e))
+            failed.append(name)
+    return failed
 
 
 def take_staged(name):
@@ -764,15 +826,23 @@ def op_deb_install(args):
                           % (pkg, ver, want_pkg, want_ver))
         if not arch_ok(arch):
             raise Refused("%s is built for another kind of processor (%s)." % (pkg, arch))
+        rel, sources = deb_relations(deb)
+        if wants_i386(rel) and "i386" not in foreign_archs():
+            # Steam and other 32-bit games: their libraries are i386 packages,
+            # which apt installs only with the architecture turned on
+            progress(2, "Turning on support for 32-bit programs...")
+            must(["dpkg", "--add-architecture", "i386"], "Support for 32-bit programs could not be turned on")
+            log("%s asks for 32-bit libraries: i386 packages turned on" % pkg)
         refresh_lists()
-        apt_get(["install", deb], "%s could not be installed" % pkg, 5, 95)
+        apt_get(["install", deb], "%s could not be installed" % pkg, 5, 55 if sources else 95)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     got = installed_version(pkg)
     if got != ver:
         raise Refused("%s %s was not installed." % (pkg, ver))
+    failed = install_recommends(rel, 60, 38) if sources else []
     progress(100, "Done")
-    return ["%s %s" % (pkg, ver)]
+    return ["%s %s" % (pkg, ver)] + (["Not installed: %s" % " ".join(failed)] if failed else [])
 
 
 OPS = {
