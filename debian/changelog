@@ -1,3 +1,17 @@
+sg-shell (0.1.0-75) unstable; urgency=medium
+
+  * Settings > Personalization > Effects: "Show animations in Windows"
+    (Windows' own switch, kept in UserPreferencesMask) and "Slide between
+    virtual desktops" (wine-sg 0521); Task View's windows fly into place
+    (0520) while animations are on. The page reads the switch from the
+    registry: Wine caches system parameters per process, so a change made
+    elsewhere went unseen. sg-settings --set effects animations|slide on|off.
+  * Settings' categories hold up to eleven pages (Personalization's ninth
+    entry overran the list, and search found nothing).
+    Gate: make test (settings-check).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 04:00:00 +0000
+
 sg-shell (0.1.0-74) unstable; urgency=medium
 
   * Run with debugging: a mode an app is started in, as Run as administrator

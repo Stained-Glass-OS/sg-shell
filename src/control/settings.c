@@ -36,7 +36,7 @@ static WCHAR g_status[256];
 static enum page_id g_status_page = PG_COUNT;
 
 /* ---- categories ----------------------------------------------------------------------- */
-struct category { const WCHAR *name, *sub; int icon; enum page_id pages[8]; const WCHAR *keywords; };
+struct category { const WCHAR *name, *sub; int icon; enum page_id pages[12]; const WCHAR *keywords; };
 static const struct category CATS[] = {
     { L"System", L"Display, sound, notifications, power", IC_G_SYSTEM,
       { PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_COUNT } },
@@ -45,7 +45,7 @@ static const struct category CATS[] = {
     { L"Network & Internet", L"Wi-Fi, Ethernet, proxy", IC_G_NETWORK,
       { PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY, PG_COUNT } },
     { L"Personalization", L"Background, lock screen, colors", IC_G_PERSONAL,
-      { PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_LOOKSHARE, PG_COUNT } },
+      { PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_EFFECTS, PG_S_LOOKSHARE, PG_COUNT } },
     { L"Apps", L"Uninstall, defaults, startup", IC_G_APPS,
       { PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP, PG_COUNT } },
     { L"Accounts", L"Your account, sign-in, other users", IC_G_ACCOUNTS,
@@ -134,7 +134,7 @@ static const struct { const WCHAR *uri; enum page_id page; } URIS[] = {
     { L"personalization", PG_S_BACKGROUND }, { L"personalization-background", PG_S_BACKGROUND },
     { L"personalization-colors", PG_S_COLORS }, { L"colors", PG_S_COLORS }, { L"lockscreen", PG_S_LOCKSCREEN },
     { L"themes", PG_S_THEMES }, { L"fonts", PG_S_THEMES }, { L"personalization-start", PG_S_START },
-    { L"personalization-start-places", PG_S_START }, { L"taskbar", PG_S_TASKBAR }, { L"personalization-share", PG_S_LOOKSHARE },
+    { L"personalization-start-places", PG_S_START }, { L"taskbar", PG_S_TASKBAR }, { L"personalization-share", PG_S_LOOKSHARE }, { L"personalization-effects", PG_S_EFFECTS },
     { L"appsfeatures", PG_S_APPS }, { L"appsfeatures-app", PG_S_APPS }, { L"optionalfeatures", PG_S_APPS },
     { L"appsforwebsites", PG_S_DEFAULTAPPS }, { L"defaultapps", PG_S_DEFAULTAPPS }, { L"startupapps", PG_S_STARTUP },
     { L"yourinfo", PG_S_YOURINFO }, { L"accounts", PG_S_YOURINFO }, { L"emailandaccounts", PG_S_YOURINFO },

@@ -541,3 +541,53 @@ BOOL set_cmd_lookshare(int id, int code, HWND ctl)
     }
     return FALSE;
 }
+
+/* ---- Effects ---------------------------------------------------------------------------------- */
+/* Animations to set up and play with (David 2026-09-29). "Show animations in
+ * Windows" is Windows' own switch (SPI_SETCLIENTAREAANIMATION, kept in
+ * UserPreferencesMask): with it off nothing below moves. */
+#define SG_EFFECTS L"Software\\Stained Glass\\Effects"
+enum { CMD_ANIMATIONS = CMD_PAGE_FIRST + 1, CMD_SLIDE };
+
+BOOL effects_animations(void)
+{
+    /* read where Windows keeps it (UserPreferencesMask, byte 4, 0x02), not
+     * SPI_GETCLIENTAREAANIMATION: Wine caches parameters per process, and a
+     * change made by another process (sg-settings --set, a second window)
+     * stayed unseen here */
+    BYTE mask[16];
+    DWORD size = sizeof(mask);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"UserPreferencesMask", RRF_RT_REG_BINARY,
+                     NULL, mask, &size) || size < 5)
+        return TRUE;
+    return (mask[4] & 0x02) != 0;
+}
+
+const WCHAR *effects_set(const WCHAR *what, BOOL on)
+{
+    if (!lstrcmpW(what, L"animations")) {
+        if (!SystemParametersInfoW(SPI_SETCLIENTAREAANIMATION, 0, (void *)(INT_PTR)on, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
+            return L"the setting could not be saved";
+        return NULL;
+    }
+    if (!lstrcmpW(what, L"slide")) return reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", on) ? NULL : L"the setting could not be saved";
+    return L"unknown effect";
+}
+
+void set_build_effects(void)
+{
+    int y = st_title(L"Effects");
+    y = st_para(y, L"How things move. With animations off, windows and desktops change at once.");
+    st_toggle(&y, L"Show animations in Windows", effects_animations(), CMD_ANIMATIONS);
+    y = st_head(y, L"Animations");
+    st_toggle(&y, L"Slide between virtual desktops", reg_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", 1) != 0, CMD_SLIDE);
+    y = st_para(y, L"Task View's windows fly into place when it opens, while animations are on.");
+}
+
+BOOL set_cmd_effects(int id, int code, HWND ctl)
+{
+    (void)code;
+    if (id == CMD_ANIMATIONS) { failed(effects_set(L"animations", st_checked(ctl))); return TRUE; }
+    if (id == CMD_SLIDE) { failed(effects_set(L"slide", st_checked(ctl))); return TRUE; }
+    return FALSE;
+}

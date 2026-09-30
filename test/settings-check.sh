@@ -433,6 +433,23 @@ sleep 0.5
 has "Save my look..." && has "Use a saved look..." && has "Reset to the default look" \
     && pass "Personalization > Share & reset: save, use and reset" || fail "Share & reset page: $(tr -d '\r' < "$DUMP" | grep -c '^control')"
 
+# --- Effects: Show animations (Windows' own switch) and the desktop slide (David 2026-09-29) --------
+EFK='HKCU\Software\Stained Glass\Effects'
+upm() { wine reg query 'HKCU\Control Panel\Desktop' /v UserPreferencesMask 2>/dev/null | tr -d '\r' | awk '/UserPreferencesMask/{print substr($3,9,2)}'; }
+[ "$(sgset effects slide off)" = OK ] && [ "$(regq "$EFK" SlideDesktops)" = 0x0 ] && [ "$(sgset effects slide on)" = OK ] && [ "$(regq "$EFK" SlideDesktops)" = 0x1 ] \
+    && pass "Effects: sliding between desktops is kept (Effects\\SlideDesktops)" || fail "effects slide: $(regq "$EFK" SlideDesktops)"
+sgset effects animations off >/dev/null
+b=$(upm)
+wine start ms-settings:personalization-effects >/dev/null 2>&1
+page_is Effects "ms-settings:personalization-effects"
+sleep 0.5
+anim=$(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | grep -F ': Show animations in Windows' | sed -n 's/.* state=\([0-9]*\).*/\1/p')
+[ -n "$b" ] && [ $((0x$b & 2)) -eq 0 ] && [ "$anim" = 0 ] && has "Slide between virtual desktops" \
+    && pass "Show animations off is Windows' own setting (UserPreferencesMask), and the page shows it off" \
+    || fail "effects animations: mask byte $b, toggle $anim"
+sgset effects animations on >/dev/null
+b=$(upm); [ -n "$b" ] && [ $((0x$b & 2)) -ne 0 ] && pass "and back on" || fail "animations did not come back on (mask byte $b)"
+
 # --- Start layout: Tiles is the default, the Centred option is not 'Recommended' (David 2026-09-29) ---
 # the combo dump shows only the selected item, so check each selection in turn
 wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1
