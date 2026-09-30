@@ -1,0 +1,10 @@
+#!/bin/sh
+# Linux Terminal: the user's own shell on Linux itself, in their home folder.
+# Started from the Start menu by sg-rootterm64.exe; its "Run as administrator"
+# opens sg-root-terminal instead.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+cd "${HOME:-/}" 2>/dev/null || cd /
+exec xterm -class SgLinuxTerminal -title 'Linux Terminal' \
+    -fa 'Cascadia Mono' -fs 11 -bg '#0c0c0c' -fg '#cccccc' -cr '#cccccc' \
+    -geometry 110x30 -sl 5000 -xrm 'XTerm*selectToClipboard: true' -ls

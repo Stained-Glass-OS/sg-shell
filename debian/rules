@@ -23,7 +23,7 @@ override_dh_auto_install:
 	    build/sg-sticky64.exe \
 	    build/sg-snip64.exe \
 	    build/sg-charmap64.exe \
-	    build/sg-rootterm64.exe src/rootterm/sg-root-terminal src/sg-rdp-connect \
+	    build/sg-rootterm64.exe src/rootterm/sg-root-terminal src/rootterm/sg-linux-terminal src/sg-rdp-connect \
 	    build/sg-linuxapp64.exe \
 	    build/sg-bugreport64.exe src/bugreport/sg-bugreport-info src/bugreport/sg-debug-run \
 	    build/sg-wordpad64.exe \

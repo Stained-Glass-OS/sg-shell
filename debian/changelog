@@ -27,6 +27,12 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     a blue band at the foot; typing searches. Our own drawing. Test:
     test/start-check.sh (mutant: the old layout). Also: switching looks no
     longer leaves Start cut to the previous look's shape.
+  * One Linux Terminal (David): started from Start it is the user's own
+    shell in their home folder; Start's "Run as administrator" opens the
+    root one after the user's password, as "Linux Terminal
+    (Administrator)" did (not through the elevation broker: its SYSTEM
+    account is not Linux's root). Test: test/rootterm-check.sh (the
+    launcher run with stand-in scripts; mutant: --admin ignored).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

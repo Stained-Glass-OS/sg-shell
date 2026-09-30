@@ -1,9 +1,9 @@
 #!/bin/sh
-# Linux Terminal (Administrator): a root shell on the machine, for what only
+# Linux Terminal, run as administrator: a root shell on the machine, for what only
 # Linux itself can do -- installing a driver, a kernel module, a Debian
 # package. Opening it asks for the user's own password (sudo), and only an
 # administrator (sg-admins) gets in. Started from the Start menu by
-# sg-rootterm64.exe.
+# sg-rootterm64.exe --admin (Start's "Run as administrator" on Linux Terminal).
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # shellcheck disable=SC2016  # $1 is the inner shell's

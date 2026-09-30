@@ -322,7 +322,7 @@ static const struct { const WCHAR *name, *words; } app_keywords[] = {
     { L"Photos", L"picture pictures image images photo jpg jpeg png gif viewer" },
     { L"Media Player", L"music video movie audio mp3 mp4 mkv player" },
     { L"Calculator", L"calc math sums" },
-    { L"Linux Terminal (Administrator)", L"linux terminal root bash shell sudo console driver" },
+    { L"Linux Terminal", L"linux terminal root bash shell sudo console driver xterm command line" },
     { L"Report a problem", L"bug report feedback debug log crash tester issue help" },
     { L"Command Prompt", L"cmd console dos shell terminal" },
     { L"Terminal", L"console shell cmd powershell prompt" },
@@ -511,7 +511,7 @@ static void build_list(void)
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
     add_beside(L"Get a web browser", L"sg-browser64.exe");
     add_beside(L"SG Store", L"sg-store64.exe");
-    add_beside(L"Linux Terminal (Administrator)", L"sg-rootterm64.exe");
+    add_beside(L"Linux Terminal", L"sg-rootterm64.exe");
     add_beside(L"Report a problem", L"sg-bugreport64.exe");
     qsort(g_apps, g_napps, sizeof(*g_apps), app_cmp);
     for (i = 0; i < g_napps; i++)
@@ -883,6 +883,13 @@ static void run_entry(const struct entry *e, const WCHAR *verb)
     _snwprintf(g_launched, ARRAYSIZE(g_launched), L"%ls%ls", verb ? L"runas " : L"", e->name);
     if (e->kind == K_APP) count_launch(e->name);
     show_panel(FALSE);
+    /* Linux Terminal as administrator is Linux's root, after the user's own
+     * password (sudo): the terminal itself asks, not the elevation broker */
+    if (verb && !lstrcmpW(verb, L"runas") && wcsstr(e->path, L"sg-rootterm64.exe"))
+    {
+        ShellExecuteW(NULL, NULL, e->path, L"--admin", NULL, SW_SHOWNORMAL);
+        return;
+    }
     ShellExecuteW(NULL, verb, e->path, e->args[0] ? e->args : NULL, NULL, SW_SHOWNORMAL);
 }
 
