@@ -68,6 +68,10 @@ def q(s):
 def programs():
     out = [HEADER, "; Stained Glass OS -- SG Office: its programs and file types (office/gen-reg.py).\n"
                    "; Which program a type opens with by default is 89-sg-office-types.reg.\n"]
+    # Get SG Office, under the name SG Store's SG Office entry runs it by
+    # (defaults/85-sg-store.reg: Source=ours:setup:sg-office-setup.exe)
+    out.append('[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\sg-office-setup.exe]\n@="%s"\n'
+               % (DIR + "sg-office-setup64.exe"))
     for kind, exe in EXE.items():
         path = DIR + exe
         out.append('[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s]\n@="%s"\n'

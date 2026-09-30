@@ -16,12 +16,19 @@
 #     the installer; the app is then detected as installed with its version
 #   - --install of a pinned entry downloads, checks the catalogue's SHA-256 and
 #     installs
+#   - an "ours" app whose setup program comes in a system package (SG Office:
+#     sg-office) that this machine does not have -- a machine made before the
+#     package was in the image -- is installed anyway: the store elevates, the
+#     elevated copy has sg-admind (run here in its test mode, with stand-ins
+#     for apt-get and runuser) install the package and register it, then runs
+#     the setup program; a package not on sg-admind's list is refused
 #   - the window opens, hides the Linux tier, and the Advanced disclosure shows
 #     it
 #
 # Mutants (built here from source): -DSG_MUTANT_NOHASH installs an unverified
 # download; -DSG_MUTANT_SHOWLINUX shows the Linux tier by default;
-# -DSG_MUTANT_NOUPDATE never notices a newer version -- each must turn it red.
+# -DSG_MUTANT_NOUPDATE never notices a newer version; -DSG_MUTANT_NOPACKAGE
+# never has the missing package installed -- each must turn it red.
 #
 # Needs wine-sg, mingw, gcc, Xvfb, xdotool, ImageMagick, python3; skips (77)
 # without them. SG_STORE_EXE tests another build.
@@ -44,6 +51,7 @@ cleanup() {
     WINEPREFIX="$T/pfx" "$WINE_DIR/bin/wineserver" -k 2>/dev/null
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     [ -n "$HP" ] && kill "$HP" 2>/dev/null
+    rm -f "$T/admind-run"; [ -n "${AP:-}" ] && kill "$AP" 2>/dev/null
     [ -n "${SG_KEEP:-}" ] || rm -rf "$T"
 }
 trap cleanup EXIT INT TERM
@@ -58,6 +66,7 @@ build_mut() { # define outfile
 build_mut SG_MUTANT_NOHASH   "$T/mut-nohash.exe"   || { fail "mutant NOHASH does not build: $(tail -3 "$T/cc.log")"; }
 build_mut SG_MUTANT_SHOWLINUX "$T/mut-showlinux.exe" || fail "mutant SHOWLINUX does not build"
 build_mut SG_MUTANT_NOUPDATE "$T/mut-noupdate.exe"  || fail "mutant NOUPDATE does not build"
+build_mut SG_MUTANT_NOPACKAGE "$T/mut-nopackage.exe" || fail "mutant NOPACKAGE does not build"
 
 # the stand-ins
 "$MINGW" -municode -O1 -o "$T/store-fake.exe" "$HERE/test/sg-store-fake.c" || { fail "the stand-ins do not build"; exit 1; }
@@ -205,6 +214,76 @@ SG_FAKE_KEY=PinnedApp SG_FAKE_DISPLAY='Pinned App' SG_FAKE_VERSION=3.0 SG_FAKE_D
     wine "$EXE" --install 02 >/dev/null 2>&1; ec=$?
 [ "$ec" = 0 ] && pass "a pinned entry installs (SHA-256 checked from the catalogue)" || fail "install 02 exit $ec: $(cat "$D.result" 2>/dev/null)"
 [ -f "$WINEPREFIX/drive_c/Program Files/Pinned App/app.exe" ] && pass "the pinned app is installed" || fail "pinned app.exe not installed"
+
+# --- E2. an "ours" app whose setup program is in a system package this machine lacks -------------
+# sg-admind in its test mode, watching a spool of the gate's, with stand-ins:
+# apt-get records its calls; dpkg-query lists the package's registry
+# defaults; runuser (the registration step: importing them as the machine
+# account) records its call and registers the setup program (App Paths), as
+# the real import does.
+S="$T/spool"; AB="$T/abin"; CALLS="$T/admind-calls"
+mkdir -p "$S/requests" "$S/replies" "$AB"; chmod 700 "$S/requests"; : > "$CALLS"
+fakewin=$(wine winepath -w "$T/store-fake.exe" 2>/dev/null | tr -d '\r')
+cat > "$AB/apt-get" <<EOF
+#!/bin/sh
+printf 'apt-get %s\n' "\$*" >> "$CALLS"
+EOF
+cat > "$AB/runuser" <<EOF
+#!/bin/sh
+printf 'runuser %s\n' "\$*" >> "$CALLS"
+WINEPREFIX="$WINEPREFIX" WINEDEBUG=-all DISPLAY="$DISPLAY" "$WINE_DIR/bin/wine" reg add \
+    'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\gate-setup.exe' /ve /d '$fakewin' /f >/dev/null 2>&1
+EOF
+cat > "$AB/dpkg-query" <<'EOF'
+#!/bin/sh
+printf '/usr/share/stained-glass/defaults.d/89-sg-office.reg\n'
+EOF
+chmod +x "$AB"/*
+: > "$T/admind-run"
+( while [ -e "$T/admind-run" ]; do
+      SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$AB" SG_ADMIN_SYSTEM_UID="$(id -u)" \
+          python3 "$HERE/admin/sg-admind" 2>>"$T/admind.log"
+      sleep 0.3
+  done ) & AP=$!
+reg "$K\\05" /v Name /d 'Our Suite'
+reg "$K\\05" /v Publisher /d 'Stained Glass OS'
+reg "$K\\05" /v Tier /d ours
+reg "$K\\05" /v Source /d 'ours:setup:gate-setup.exe'
+reg "$K\\05" /v Package /d 'sg-office'
+reg "$K\\05" /v DetectName /d 'Our Suite'
+reg "$K\\06" /v Name /d 'Not Ours'
+reg "$K\\06" /v Tier /d ours
+reg "$K\\06" /v Source /d 'ours:setup:other-setup.exe'
+reg "$K\\06" /v Package /d 'openssh-server'
+# a removed package leaves its keys: App Paths naming a file that is gone
+reg 'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\gate-setup.exe' /ve /d 'C:\gone\gate-setup.exe'
+wineserver -w
+ours() { SG_ADMIN_SPOOL="$S" SG_FAKE_KEY=OurSuite SG_FAKE_DISPLAY='Our Suite' SG_FAKE_VERSION=26.8 SG_FAKE_DIR='Our Suite' \
+         wine "${SG_MUT:-$EXE}" --install "$1" >/dev/null 2>&1; }
+# the mutant first (it must leave nothing behind): the package is never installed
+rm -f "$G/setup.log"; : > "$CALLS"
+SG_MUT="$T/mut-nopackage.exe" ours 05; ec=$?
+[ "$ec" != 0 ] && ! grep -q 'install sg-office' "$CALLS" \
+    && pass "MUTANT NOPACKAGE fails without the package (gate catches it)" || fail "NOPACKAGE not detected (exit $ec)"
+rm -f "$G/setup.log"; : > "$CALLS"
+ours 05; ec=$?
+[ "$ec" = 0 ] && pass "an app whose programs are a missing system package installs (its stale App Paths entry ignored)" || fail "install 05 exit $ec: $(cat "$D.result" 2>/dev/null)"
+grep -q '^apt-get .*install sg-office$' "$CALLS" && pass "the package was installed through sg-admind" || fail "apt-get calls: $(tr '\n' '|' < "$CALLS")"
+grep -q '^runuser -u sgsystem -- .*sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg$' "$CALLS" \
+    && pass "and registered (its registry defaults, imported as the machine account)" || fail "no registration: $(tr '\n' '|' < "$CALLS")"
+grep -q '/install /quiet' "$G/setup.log" 2>/dev/null && pass "then its setup program ran (/install /quiet)" || fail "setup.log '$(cat "$G/setup.log" 2>/dev/null)'"
+run --list
+[ "$(kv "$(appline 05)" state)" = installed ] && pass "and it is detected as installed" || fail "after install: $(appline 05)"
+: > "$CALLS"
+ours 06; ec=$?
+[ "$ec" != 0 ] && ! grep -q 'openssh-server' "$CALLS" \
+    && pass "a package not on sg-admind's list is refused and never reaches apt" || fail "not-ours: exit $ec, calls $(tr '\n' '|' < "$CALLS")"
+grep -q 'the system package failed' "$D.result" 2>/dev/null \
+    && pass "and the person is told the package was not installed" || fail "result '$(cat "$D.result" 2>/dev/null)'"
+rm -f "$T/admind-run"
+wine reg delete "$K\\05" /f >/dev/null 2>&1; wine reg delete "$K\\06" /f >/dev/null 2>&1
+wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\OurSuite' /f >/dev/null 2>&1
+rm -rf "$WINEPREFIX/drive_c/Program Files/Our Suite"; wineserver -w
 
 # --- F. the window --------------------------------------------------------------------------------
 # reset the installs from D/E so every catalogue card shows Install

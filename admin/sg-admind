@@ -42,6 +42,11 @@
 #   source-add NAME URI SUITES COMPONENTS   where updates come from: a deb822
 #   source-remove NAME                     /etc/apt/sources.list.d/sg-user-NAME.sources
 #   source-enable FILE yes|no              any .sources file there: Enabled:
+#   package-install NAME     one of Stained Glass OS's own packages (a fixed
+#                            list: SG Store's "ours" apps), from the machine's
+#                            apt sources, then registered in the Windows side
+#                            (its registry defaults, imported as the machine
+#                            account, as sg-prefix-init does at the boot)
 #   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
@@ -92,8 +97,9 @@ def log(msg):
     sys.stderr.flush()
 
 
-def run(argv, stdin=None, timeout=120):
+def run(argv, stdin=None, timeout=120, extra_env=None):
     env = {"PATH": PATH, "LANG": "C.UTF-8"}
+    env.update(extra_env or {})
     try:
         r = subprocess.run(argv, input=stdin, capture_output=True, text=True,
                            timeout=timeout, env=env,
@@ -105,8 +111,8 @@ def run(argv, stdin=None, timeout=120):
     return r
 
 
-def must(argv, what, stdin=None, timeout=120):
-    r = run(argv, stdin, timeout)
+def must(argv, what, stdin=None, timeout=120, extra_env=None):
+    r = run(argv, stdin, timeout, extra_env)
     if r.returncode != 0:
         why = (r.stderr or r.stdout).strip().splitlines()
         log("%s failed (%d): %s" % (argv[0], r.returncode, why[-1] if why else ""))
@@ -364,6 +370,44 @@ def op_update_check(args):
     return []
 
 
+# SG Store's "ours" apps whose Windows-side programs come in a system package
+# (SG Office's are in sg-office): the only packages this installs. Anything
+# else is installed the administrator's way, not through the store.
+OUR_PACKAGES = ("sg-office", "sg-office-editors")
+APT_ENV = {"DEBIAN_FRONTEND": "noninteractive", "APT_LISTCHANGES_FRONTEND": "none"}
+
+
+def op_package_install(args):
+    name = args[0]
+    if name not in OUR_PACKAGES:
+        raise Refused("Only Stained Glass OS's own apps can be installed this way.")
+    # fresh lists when the network allows; the ones there are will do otherwise
+    run(["apt-get", "-q", "update"], timeout=600, extra_env=APT_ENV)
+    must(["apt-get", "-q", "-y", "-o", "DPkg::Lock::Timeout=600", "-o", "Dpkg::Options::=--force-confold",
+          "install", name], "%s could not be installed" % name, timeout=1800, extra_env=APT_ENV)
+    # its App Paths, file types and Start entries into the Windows side now,
+    # not at the next start: the package's registry defaults, imported as the
+    # machine account into the running shared server, with the stamps
+    # sg-prefix-init keeps (so the boot does not import them again). Not
+    # sg-prefix-init itself: it ends by waiting for the server to exit, which
+    # it never does while anyone is signed in.
+    files = [f for f in must(["dpkg-query", "-L", name], "%s's files could not be listed" % name).split("\n")
+             if f.startswith(DEFAULTS_DIR + "/") and f.endswith(".reg")]
+    if files:
+        must(["runuser", "-u", SYSTEM_USER, "--", "env", "HOME=/var/lib/stained-glass",
+              "XDG_RUNTIME_DIR=/run/stained-glass", "sh", "-c", REGISTER_SH, "sg-register"] + files,
+             "%s was installed, but could not be registered; it will be at the next start" % name,
+             timeout=600)
+    return []
+
+
+DEFAULTS_DIR = "/usr/share/stained-glass/defaults.d"
+# as sg-prefix-init's import_defaults does, without its final wait
+REGISTER_SH = (". /usr/lib/stained-glass/sg-common.sh && sg_wine_env && mkdir -p \"$SG_STATE/defaults\" && "
+               "for f; do timeout 300 wine reg import \"$(winepath -w \"$f\")\" >/dev/null 2>&1 || exit 1; "
+               "sha256sum < \"$f\" | cut -d' ' -f1 > \"$SG_STATE/defaults/$(basename \"$f\").sha256\"; done")
+
+
 APT_SOURCES = os.environ.get("SG_APT_SOURCES", "/etc/apt/sources.list.d")
 SOURCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 SOURCE_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.sources$")
@@ -532,6 +576,7 @@ OPS = {
     "source-add": (op_source_add, 4),
     "source-remove": (op_source_remove, 1),
     "source-enable": (op_source_enable, 2),
+    "package-install": (op_package_install, 1),
     "font-install": (op_font_install, 1),
     "font-remove": (op_font_remove, 1),
 }

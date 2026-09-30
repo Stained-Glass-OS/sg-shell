@@ -7,6 +7,9 @@
  *                                  available version first
  *   sg-store64.exe --install ID    install (or update) one app by ordinal,
  *                                  name or winget id (headless), then exit
+ *   sg-store64.exe --install-elevated ID   the elevated (SYSTEM) copy's part of
+ *                                  installing an "ours" app whose programs are
+ *                                  a system package (catalog.c); exit code only
  *
  * SG_STORE_DUMP=<file> (a Windows path) receives the catalogue, each app's
  * tier/state/versions and, while the window is open, every clickable thing's
@@ -478,6 +481,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         }
         if (!lstrcmpiW(argv[i], L"--check-updates")) {
             load_all(TRUE); dump(); LocalFree(argv); return 0;
+        }
+        if (!lstrcmpiW(argv[i], L"--install-elevated") && i + 1 < argc) {
+            int k;
+            WCHAR err[512];
+            load_all(FALSE);
+            k = find_app(argv[i + 1]);
+            rc = k < 0 ? 2 : app_install_elevated(&g_apps[k], err, ARRAYSIZE(err));
+            LocalFree(argv);
+            return rc;
         }
         if (!lstrcmpiW(argv[i], L"--install") && i + 1 < argc) {
             int k;

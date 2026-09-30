@@ -34,7 +34,7 @@ sudo:x:27:owner
 EOF
 
 # every stand-in records its name, arguments and stdin
-for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join; do
+for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join apt-get runuser; do
     cat > "$B/$tool" <<EOF
 #!/bin/sh
 in=\$(cat 2>/dev/null)
@@ -59,6 +59,11 @@ cat > "$B/loginctl" <<'EOF'
 # carol is signed in
 [ "$2" = carol ] && { echo active; exit 0; }
 exit 1
+EOF
+# dpkg-query -L: the package's files, one of them its registry defaults
+cat > "$B/dpkg-query" <<'EOF'
+#!/bin/sh
+printf '/usr/share/doc/%s\n/usr/share/stained-glass/defaults.d/89-sg-office.reg\n/usr/share/stained-glass/defaults.d/README\n/usr/libexec/stained-glass/shell/sg-office-setup64.exe\n' "$2"
 EOF
 chmod +x "$B"/*
 
@@ -192,6 +197,22 @@ r=$(ask source-remove debian); case "$(first "$r")" in "FAILED "*) pass "and onl
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac
 r=$(ask hostname a b); case "$(first "$r")" in "FAILED Malformed"*) pass "refuses the wrong number of fields";; *) fail "arity: $r";; esac
+# package-install: our own packages only; installed, then registered as SYSTEM
+: > "$CALLS"
+r=$(ask package-install sg-office)
+reg_call=$(grep '^runuser ' "$CALLS")
+if [ "$(first "$r")" = OK ] && grep -q '^apt-get -q -y .* install sg-office' "$CALLS" \
+    && printf '%s' "$reg_call" | grep -q '^runuser -u sgsystem -- env HOME=/var/lib/stained-glass XDG_RUNTIME_DIR=/run/stained-glass sh -c .*wine reg import.* sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg |' \
+    && ! printf '%s' "$reg_call" | grep -q 'README\|sg-office-setup64\|sg-prefix-init'; then
+    pass "package-install installs one of our packages, then imports its registry defaults as the machine account"
+else fail "package-install sg-office: $r / $(tr '\n' '|' < "$CALLS")"; fi
+: > "$CALLS"
+for p in openssh-server 'sg-office extra' '-o=foo' ''; do
+    r=$(ask package-install "$p")
+    case "$(first "$r")" in "FAILED "*) ;; *) fail "package-install '$p' was not refused: $r";; esac
+done
+[ ! -s "$CALLS" ] && pass "refuses any other package, a second word or an option, and apt never runs" || fail "apt ran: $(tr '\n' '|' < "$CALLS")"
+
 # not SYSTEM's: the file's owner is checked
 : > "$CALLS"
 id=$(next_id); printf 'update-check\n' > "$S/requests/$id.req"

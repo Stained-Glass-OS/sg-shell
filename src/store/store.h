@@ -53,7 +53,8 @@ typedef struct {
     int   method;                 /* SRC_* */
     WCHAR winget_id[128];         /* SRC_WINGET */
     WCHAR setup_exe[128];         /* SRC_OURS_SETUP: an App Paths name, e.g. sg-office-setup.exe */
-    WCHAR apt_pkg[128];           /* SRC_OURS_APT / SRC_LINUX_APT */
+    WCHAR apt_pkg[128];           /* SRC_OURS_APT / SRC_LINUX_APT; SRC_OURS_SETUP: the system
+                                   * package its setup program comes in ("Package") */
     /* SRC_PIN: a vendor download pinned in the catalogue */
     WCHAR pin_url[2048], pin_type[32], pin_silent[512], pin_version[64];
     BYTE  pin_sha[32];
@@ -75,6 +76,7 @@ void app_detect(app_t *a);                        /* installed? + installed_vers
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 BOOL app_shown_by_default(const app_t *a);        /* windows/ours: yes; linux: no */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
+int  app_install_elevated(app_t *a, WCHAR *err, int cch);   /* the elevated (SYSTEM) copy's part (--install-elevated) */
 const WCHAR *tier_name(int tier);
 
 #endif

@@ -72,6 +72,26 @@ grep -o 'sg-[a-z]*64\.exe' "$R" | sort -u | while read -r exe; do
     grep -q "build/$exe" "$HERE/debian/rules" || echo "FAIL  $exe is registered but not packaged"
 done | grep FAIL && RC=1 || pass "every registered program is packaged"
 grep -q '"SG Office"="Software\\\\Stained Glass\\\\SG Office\\\\Capabilities"' "$R" && pass "SG Office is a registered application (Default apps)" || fail "no RegisteredApplications entry"
+# SG Store's "ours" entries run a setup program by its App Paths name: each
+# must be registered by a .reg this source ships, pointing at a program the
+# packages install (the SG Office entry named one nothing registered, so it
+# could never install -- 2026-09-30)
+"$PY" - "$HERE" <<'PY' && pass "every SG Store setup program is registered (App Paths) and packaged" || fail "an SG Store setup program is not registered or not packaged"
+import glob, os, re, sys
+here = sys.argv[1]
+store = open(os.path.join(here, "defaults/85-sg-store.reg"), encoding="utf-8").read()
+regs = "".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(here, "defaults/*.reg")) + glob.glob(os.path.join(here, "office/defaults/*.reg")))
+rules = open(os.path.join(here, "debian/rules"), encoding="utf-8").read()
+bad = 0
+for name in re.findall(r'"Source"="ours:setup:([^"]+)"', store):
+    m = re.search(r'\[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s\]\n@="([^"]+)"' % re.escape(name), regs, re.I)
+    if not m:
+        print("  %s: no App Paths entry" % name); bad += 1; continue
+    exe = m.group(1).replace("\\\\", "\\").split("\\")[-1]
+    if ("build/" + exe) not in rules:
+        print("  %s -> %s: not packaged" % (name, exe)); bad += 1
+sys.exit(1 if bad else 0)
+PY
 
 # 4. the programs: built, with the program's and its files' icons, named as ours
 for k in documents spreadsheets presentations; do

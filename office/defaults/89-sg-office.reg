@@ -4,6 +4,9 @@ Windows Registry Editor Version 5.00
 ; Stained Glass OS -- SG Office: its programs and file types (office/gen-reg.py).
 ; Which program a type opens with by default is 89-sg-office-types.reg.
 
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-office-setup.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-office-setup64.exe"
+
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-documents.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe"
 

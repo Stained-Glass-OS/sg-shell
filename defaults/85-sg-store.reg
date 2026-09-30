@@ -23,6 +23,8 @@ Windows Registry Editor Version 5.00
 ;          | pin:<Url>|<Sha256>|<Type>|<Silent>
 ;          | ours:setup:<AppPathsExe>
 ;          | ours:apt:<package> | linux:apt:<package>   (installed from Settings)
+;   Package = (ours:setup) the system package the setup program comes in; a
+;             machine without it has sg-admind install it first (one consent)
 ;   DetectName = matched against installed programs to read the installed version
 ;   PinVersion = the available version for a pin: entry (update checks)
 ;
@@ -82,6 +84,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00107c41
 "Tier"="ours"
 "Source"="ours:setup:sg-office-setup.exe"
+"Package"="sg-office"
 "DetectName"="LibreOffice"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\90]

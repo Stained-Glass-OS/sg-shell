@@ -1,3 +1,32 @@
+sg-shell (0.1.0-80) unstable; urgency=medium
+
+  * SG Store installs SG Office again (David, on real hardware: "SG Office
+    fails to install from the Store"). Three causes, all fixed:
+    - The store runs Get SG Office by its App Paths name,
+      sg-office-setup.exe, which sg-office never registered: SG Office could
+      not install from the store on any machine. office/gen-reg.py registers
+      it now, and test/office-check.sh checks that every setup program the
+      store names is registered and packaged.
+    - A machine made before sg-office was in the image, and only updated
+      since, has the store's entry but not the package (updates upgrade;
+      they install nothing new). The store now asks for elevation, and the
+      elevated copy has sg-admind install the package -- package-install, a
+      fixed list of our own packages -- and import its registry defaults as
+      the machine account; then Get SG Office runs as before. (Two consent
+      prompts in this case, one for the package and one for LibreOffice's
+      installer: downloading as SYSTEM breaks off in wine-sg, reported
+      separately, so the download stays the person's.)
+    - An App Paths entry whose program is gone (a removed package leaves its
+      keys) counted as installed; now it does not.
+    The catalogue links the entry to its package ("Package"="sg-office").
+    Gates: test/store-check.sh (a missing package installed through
+    sg-admind in its test mode, a stale App Paths entry ignored, a package
+    not on the list refused, mutant NOPACKAGE caught), test/admind-check.sh
+    (package-install), test/office-check.sh (the registration). Verified on
+    qa3: Store > SG Office > Install, with and without the package.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:30:00 +0000
+
 sg-shell (0.1.0-79) unstable; urgency=medium
 
   * SG Office's programs (SG Office Documents, Spreadsheets, Presentations)
