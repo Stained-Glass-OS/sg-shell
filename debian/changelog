@@ -1,3 +1,11 @@
+sg-shell (0.1.0-78) unstable; urgency=medium
+
+  * The trademark gate reads JavaScript, C++ and JSON strings too (it passed
+    over the office add-in's JavaScript). No change to what is installed; a
+    new version so the packages built from this source are published.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 17:45:00 +0000
+
 sg-shell (0.1.0-77) unstable; urgency=medium
 
   * Settings > Updates shows the download of each update: a progress bar and
