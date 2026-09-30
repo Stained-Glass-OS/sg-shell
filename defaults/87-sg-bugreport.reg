@@ -20,3 +20,11 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shell\sgdebugreport\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe\" --run \"%1\""
+
+; an installer package too (David: "so you can debug an installer")
+[HKEY_LOCAL_MACHINE\Software\Classes\Msi.Package\shell\sgdebugreport]
+@="Run with debugging"
+"Icon"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Msi.Package\shell\sgdebugreport\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe\" --run \"C:\\windows\\system32\\msiexec.exe\" /i \"%1\""

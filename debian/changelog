@@ -10,6 +10,10 @@ sg-shell (0.1.0-79) unstable; urgency=medium
     sg-office-editors. Gate: test/office-native-check.sh (in make test), with
     three mutant builds it fails (test/office-native-mutants.sh).
 
+  * "Run with debugging" on an installer package (.msi) in File Explorer
+    too, run by msiexec (David: "so you can debug an installer"). With
+    wine-sg 10.0-123 the verb shows by its name, not "sgdebugreport".
+
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 19:30:00 +0000
 
 sg-shell (0.1.0-78) unstable; urgency=medium
