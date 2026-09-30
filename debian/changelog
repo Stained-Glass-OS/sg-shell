@@ -1,3 +1,15 @@
+sg-shell (0.1.0-77) unstable; urgency=medium
+
+  * Settings > Updates shows the download of each update: a progress bar and
+    "Downloading - 25% of 3.8 MB" per update, the total in the card, and the
+    page follows it by itself; when the download is done it says "Restart
+    required" and offers Restart now (David: "show the download progress of
+    each update, and when they are ready to be installed offer a reboot
+    button"). Needs sg-session 0.1.0-67 (sg-settingsctl updates progress).
+    Gate: test/settings-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 05:30:00 +0000
+
 sg-shell (0.1.0-76) unstable; urgency=medium
 
   * sg-settings --set desktop WxH: the shell desktop takes a new output size

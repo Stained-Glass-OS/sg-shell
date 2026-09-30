@@ -95,7 +95,13 @@ nightlight) printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
 display) echo 'ERROR unsupported the display is not the compositor' ;;
 power) printf 'POWER 10\t0\tyes\tno\nOK\n' ;;
 lockscreen) printf 'LOCKSCREEN yes\tyes\nOK\n' ;;
-updates) printf 'UPDATE libfoo1\t1.0-1\t1.0-2\nUPDATE wine-sg\t10.0-37\t10.0-38\nSTAGED no\nOK\n' ;;
+updates) st=\$(cat "$T/upd-state" 2>/dev/null)
+    [ "\${2:-}" = progress ] || printf 'UPDATE libfoo1\t1.0-1\t1.0-2\nUPDATE wine-sg\t10.0-37\t10.0-38\n'
+    case "\$st" in
+    downloading) printf 'DOWNLOAD libfoo1\t1000\t1000\nDOWNLOAD wine-sg\t4000000\t1000000\nDOWNLOADING yes\nSTAGED no\n' ;;
+    staged) printf 'DOWNLOAD libfoo1\t1000\t1000\nDOWNLOAD wine-sg\t4000000\t4000000\nDOWNLOADING no\nSTAGED yes\n' ;;
+    *) printf 'STAGED no\n' ;;
+    esac; echo OK ;;
 bluetooth) printf 'BLUETOOTH yes\nPOWERED yes\nDEVICE AA:BB:CC:DD:EE:01\tyes\tyes\tTravel Mouse\n'
     [ "\${2:-}" = scan ] && printf 'DEVICE AA:BB:CC:DD:EE:02\tno\tno\tKeyboard K2\n'
     echo OK ;;
@@ -306,6 +312,17 @@ wine start ms-settings:windowsupdate >/dev/null 2>&1
 page_is "Updates" "ms-settings:windowsupdate"
 has "text Updates available" && has "wine-sg 10.0-38 (installed: 10.0-37)" && pass "Update lists the pending updates" || fail "Update page: $(tr -d '\r' < "$DUMP" | grep '^text' | head -8)"
 shot update
+# David: "it should show the download progress of each update. and when they
+# are ready to be installed offer a reboot button"
+echo downloading > "$T/upd-state"
+wine start ms-settings:windowsupdate >/dev/null 2>&1; sleep 2.5
+has "text Downloading updates" && has "text Downloading - 25% of 3.8 MB" && has "text Downloaded" \
+    && pass "Update shows each update's download" || fail "downloading: $(tr -d '\r' < "$DUMP" | grep '^text' | head -12)"
+shot update-downloading
+echo staged > "$T/upd-state"; sleep 3.5       # the page's own timer notices the end
+has "text Restart required" && [ -n "$(ctl_at Button 'Restart now')" ] && has "text Ready to install" \
+    && pass "a finished download offers Restart now, by itself" || fail "staged: $(tr -d '\r' < "$DUMP" | grep -E '^(text|control)' | head -12)"
+rm -f "$T/upd-state"
 
 wine start SystemSettings.exe >/dev/null 2>&1
 page_is Home "SystemSettings.exe (App Paths)"

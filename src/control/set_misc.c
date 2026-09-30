@@ -368,22 +368,86 @@ BOOL set_cmd_privacy(int id, int code, HWND ctl)
 enum { CMD_CHECK = CMD_PAGE_FIRST + 1, CMD_RESTART = CMD_PAGE_FIRST + 2, CMD_REFRESH = CMD_PAGE_FIRST + 3,
        CMD_SOURCES = SHIELD_ID(CMD_PAGE_FIRST + 4) };
 
+/* "12.5 MB", "830 KB" */
+static void fmt_bytes(double b, WCHAR *out, int cch)
+{
+    if (b >= 1024.0 * 1024 * 1024) _snwprintf(out, cch, L"%.1f GB", b / (1024.0 * 1024 * 1024));
+    else if (b >= 1024.0 * 1024) _snwprintf(out, cch, L"%.1f MB", b / (1024.0 * 1024));
+    else _snwprintf(out, cch, L"%.0f KB", b / 1024.0);
+}
+
+/* the download of each update (David: "it should show the download progress
+ * of each update. and when they are ready to be installed offer a reboot
+ * button"): sg-update-prepare publishes it, sg-settingsctl reads it. While it
+ * downloads the page re-reads only that ("updates progress") each second and
+ * a half; the list of updates (apt, slower) is kept from the last full read. */
+static char *g_upd_list;        /* the last full "updates" answer */
+static BOOL g_upd_fast;         /* this rebuild is the timer's: progress only */
+static int g_upd_watch;         /* ticks left to watch after "Check for updates" */
+
+static BOOL upd_download(const char *prog, const WCHAR *pkg, double *size, double *done)
+{
+    const char *pos = NULL;
+    char buf[512];
+    WCHAR name[128], f[32];
+    while (prog && ctl_line(prog, "DOWNLOAD", &pos, buf, sizeof(buf))) {
+        ctl_field(buf, 0, name, ARRAYSIZE(name));
+        if (lstrcmpW(name, pkg)) continue;
+        ctl_field(buf, 1, f, ARRAYSIZE(f)); *size = _wtof(f);
+        ctl_field(buf, 2, f, ARRAYSIZE(f)); *done = _wtof(f);
+        return *size > 0;
+    }
+    return FALSE;
+}
+
+static void upd_bar(int y, double frac)
+{
+    int w = st_w();
+    if (frac < 0) frac = 0;
+    if (frac > 1) frac = 1;
+    pg_fill(st_x(), y, w, S(4), COL_RULE);
+    if (frac > 0) pg_fill(st_x(), y, (int)(w * frac + 0.5), S(4), COL_LINK);
+}
+
 void set_build_update(void)
 {
     struct ufacts u;
     struct hentry h[8];
     WCHAR line[400], err[256] = L"";
-    BOOL ok, staged = FALSE;
-    char *ans, buf[512];
+    BOOL ok = TRUE, staged = FALSE, downloading = FALSE;
+    char *ans, *prog = NULL, buf[512];
     const char *pos = NULL;
+    double all = 0, here = 0;
     int y = st_title(L"Updates"), n = 0, i, nh;
     update_gather(&u);
-    ans = ctl_run(L"updates", &ok, err, ARRAYSIZE(err), 60000);
-    if (ans && ctl_line(ans, "STAGED", NULL, buf, sizeof(buf))) staged = !strcmp(buf, "yes");
+    if (g_upd_fast && g_upd_list) {
+        ans = g_upd_list;
+        prog = ctl_run(L"updates progress", &ok, NULL, 0, 10000);
+    } else {
+        free(g_upd_list);
+        g_upd_list = ans = ctl_run(L"updates", &ok, err, ARRAYSIZE(err), 60000);
+        prog = NULL;
+    }
+    g_upd_fast = FALSE;
+    if (!prog) prog = ans;              /* a full answer carries the progress too */
+    if (prog && ctl_line(prog, "STAGED", NULL, buf, sizeof(buf))) staged = !strcmp(buf, "yes");
+    if (prog && ctl_line(prog, "DOWNLOADING", NULL, buf, sizeof(buf))) downloading = !strcmp(buf, "yes");
     staged = staged || u.pending;
-    while (ans && ctl_line(ans, "UPDATE", &pos, buf, sizeof(buf))) n++;
-    if (staged) y = st_card(y, IC_G_UPDATE, L"Restart required", L"Updates are downloaded and will install when you restart.");
-    else if (n) {
+    while (ans && ctl_line(ans, "UPDATE", &pos, buf, sizeof(buf))) {
+        WCHAR pkg[128];
+        double size, done;
+        ctl_field(buf, 0, pkg, ARRAYSIZE(pkg));
+        if (upd_download(prog, pkg, &size, &done)) { all += size; here += done; }
+        n++;
+    }
+    if (staged) y = st_card(y, IC_G_UPDATE, L"Restart required", L"Updates are downloaded and ready. Restart to install them.");
+    else if (downloading) {
+        WCHAR a[32], b[32];
+        fmt_bytes(here, a, ARRAYSIZE(a)); fmt_bytes(all, b, ARRAYSIZE(b));
+        if (all > 0) _snwprintf(line, ARRAYSIZE(line), L"%ls of %ls (%d%%)", a, b, (int)(here * 100 / all));
+        else lstrcpyW(line, L"Preparing the download");
+        y = st_card(y, IC_G_UPDATE, L"Downloading updates", line);
+    } else if (n) {
         _snwprintf(line, ARRAYSIZE(line), L"%d update%ls available", n, n == 1 ? L" is" : L"s are");
         y = st_card(y, IC_G_UPDATE, L"Updates available", line);
     } else y = st_card(y, IC_G_UPDATE, L"You're up to date", u.checked ? u.last : L"Stained Glass OS checks for updates every day.");
@@ -391,21 +455,36 @@ void set_build_update(void)
     if (u.managed) y = st_para(y, L"*Some settings are managed by your organization.");
     y += S(4);
     if (staged) st_button(&y, L"Restart now", CMD_RESTART);
-    st_button(&y, L"Check for updates", CMD_CHECK);
+    if (!downloading) st_button(&y, L"Check for updates", CMD_CHECK);
     st_button(&y, L"Advanced options", CMD_SOURCES);
     if (n) {
-        y = st_head(y, L"Available updates");
+        y = st_head(y, staged ? L"Ready to install" : L"Available updates");
         pos = NULL;
         for (i = 0; i < 12 && ctl_line(ans, "UPDATE", &pos, buf, sizeof(buf)); i++) {
-            WCHAR pkg[128], from[64], to[64];
+            WCHAR pkg[128], from[64], to[64], state[80], b[32];
+            double size = 0, done = 0;
+            BOOL known;
             ctl_field(buf, 0, pkg, ARRAYSIZE(pkg)); ctl_field(buf, 1, from, ARRAYSIZE(from)); ctl_field(buf, 2, to, ARRAYSIZE(to));
             _snwprintf(line, ARRAYSIZE(line), L"%ls %ls (installed: %ls)", pkg, to, from);
-            y = st_text(y, line);
+            known = upd_download(prog, pkg, &size, &done);
+            if (staged || (known && done >= size)) lstrcpyW(state, staged ? L"Ready to install" : L"Downloaded");
+            else if (known && downloading) {
+                fmt_bytes(size, b, ARRAYSIZE(b));
+                _snwprintf(state, ARRAYSIZE(state), L"Downloading - %d%% of %ls", (int)(done * 100 / size), b);
+            } else if (downloading) lstrcpyW(state, L"Waiting to download");
+            else lstrcpyW(state, known ? L"Download pending" : L"");
+            pg_text(st_x(), y, st_w() - S(170), S(22), g_font_body, COL_TEXT, line, DT_SINGLELINE | DT_END_ELLIPSIS);
+            if (state[0])
+                pg_text(st_x() + st_w() - S(160), y, S(160), S(22), g_font_small, COL_SUBTLE, state, DT_SINGLELINE | DT_RIGHT);
+            if (downloading || staged || known) { upd_bar(y + S(24), staged ? 1.0 : known ? done / size : 0.0); y += S(36); }
+            else y += S(26);
         }
         if (n > 12) { _snwprintf(line, ARRAYSIZE(line), L"... and %d more", n - 12); y = st_text(y, line); }
-        y = st_para(y, L"Updates download in the background and install the next time you restart.");
+        y = st_para(y, staged ? L"The updates install the next time you restart, before anyone signs in."
+                              : L"Updates download in the background and install the next time you restart.");
     } else if (!ok && err[0]) y = st_para(y, err);
-    free(ans);
+    if (prog != ans) free(prog);
+    if (downloading || g_upd_watch > 0) pg_timer(1500);
     y = st_head(y, L"Update history");
     nh = update_history(h, ARRAYSIZE(h));
     for (i = 0; i < nh; i++) {
@@ -420,11 +499,30 @@ void set_build_update(void)
     }
 }
 
+/* each tick while downloading (or just after a check): the progress again;
+ * the whole list when the download starts or ends */
+void set_timer_update(void)
+{
+    BOOL ok = FALSE;
+    char *prog = ctl_run(L"updates progress", &ok, NULL, 0, 10000), buf[64];
+    BOOL downloading = prog && ctl_line(prog, "DOWNLOADING", NULL, buf, sizeof(buf)) && !strcmp(buf, "yes");
+    static BOOL was;
+    free(prog);
+    if (g_upd_watch > 0) g_upd_watch--;
+    if (!downloading && !was) {         /* nothing started yet: no rebuild */
+        if (!g_upd_watch) KillTimer(g_page, 1);
+        return;
+    }
+    g_upd_fast = downloading && was;    /* a start or an end re-reads the list */
+    was = downloading;
+    refresh_page();
+}
+
 BOOL set_cmd_update(int id, int code, HWND ctl)
 {
     (void)code; (void)ctl;
     switch (id) {
-    case CMD_CHECK: update_check_now(); return TRUE;
+    case CMD_CHECK: g_upd_watch = 20; update_check_now(); return TRUE;   /* watch the download start */
     case CMD_SOURCES: if (run_elevated(L"/admin update-sources")) refresh_when_back(); return TRUE;
     case CMD_RESTART:
         if (MessageBoxW(g_main, L"Restart now to install the updates? Save your work first.", L"Updates",

@@ -57,7 +57,7 @@
     [PG_S_PRIV_MIC]     = { L"Microphone",                   PG_S_HOME, set_build_priv_mic,  set_cmd_privacy }, \
     [PG_S_PRIV_CAMERA]  = { L"Camera",                       PG_S_HOME, set_build_priv_camera, set_cmd_privacy }, \
     [PG_S_PRIV_LOCATION]= { L"Location",                     PG_S_HOME, set_build_priv_location, set_cmd_privacy }, \
-    [PG_S_UPDATE]       = { L"Updates",                      PG_S_HOME, set_build_update,    set_cmd_update }, \
+    [PG_S_UPDATE]       = { L"Updates",                      PG_S_HOME, set_build_update,    set_cmd_update, NULL, set_timer_update }, \
     [PG_S_RECOVERY]     = { L"Recovery",                     PG_S_HOME, set_build_recovery,  set_cmd_recovery },
 
 /* ---- building a Settings page (settings.c) ----------------------------------------------- */
@@ -121,7 +121,7 @@ void set_build_region(void);    BOOL set_cmd_region(int, int, HWND);
 void set_build_eoa_display(void); void set_build_eoa_keyboard(void); void set_build_eoa_mouse(void); void set_build_eoa_magnifier(void); BOOL set_cmd_eoa(int, int, HWND);
 void set_build_priv_general(void); void set_build_priv_mic(void); void set_build_priv_camera(void);
 void set_build_priv_location(void); BOOL set_cmd_privacy(int, int, HWND);
-void set_build_update(void);    BOOL set_cmd_update(int, int, HWND);
+void set_build_update(void);    BOOL set_cmd_update(int, int, HWND);    void set_timer_update(void);
 void set_build_recovery(void);  BOOL set_cmd_recovery(int, int, HWND);
 
 /* the microphone switch voice typing honours (privacy) */
