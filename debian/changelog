@@ -19,6 +19,14 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     desktop) opens the app. The system's own plumbing is listed in
     /usr/share/stained-glass/linux-apps-hidden. Test: make test-linuxapps
     (mutants: no NoDisplay filter, no removal, no hidden list, no launch).
+  * Start in the Horizon look is laid out as that era's menus were (David:
+    "the Horizon theme menu look more XP"): the user on a blue band; pinned
+    and most used programs on white, All Programs (and Back) under them;
+    Documents, Pictures, Music, This PC, Control Panel, Settings, Devices
+    and Printers and Run... on pale blue; Log Off and Turn Off Computer on
+    a blue band at the foot; typing searches. Our own drawing. Test:
+    test/start-check.sh (mutant: the old layout). Also: switching looks no
+    longer leaves Start cut to the previous look's shape.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

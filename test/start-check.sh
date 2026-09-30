@@ -115,8 +115,21 @@ shot light
 # the taskbar's looks (Taskbar Style, wine-sg 0600): Start takes their colours and a frame in the bar's
 TBSTYLE() { "$WINE" reg add 'HKCU\Software\Stained Glass\Taskbar' /v Style /t REG_DWORD /d "$1" /f >/dev/null 2>&1; }
 TBSTYLE 1; poke; poke; shot horizon
-[ "$(val look)" = horizon ] && [ "$(px horizon 1 $((panel_y + 300)))" = "42,98,214" ] && [ "$(px horizon 700 $((H - BAR - 12)))" = "246,249,254" ] \
-    && pass "Horizon: a light panel in a blue frame" || fail "Horizon Start: $(val look) frame $(px horizon 1 $((panel_y + 300))) panel $(px horizon 700 $((H - BAR - 12)))"
+# Horizon's Start is laid out as that era's was: the user on a blue band, the
+# programs on white at the left, places on pale blue at the right, Log Off and
+# Turn Off on a blue band at the foot; All Programs opens the list
+hr=$(val rect); hx=$(echo "$hr" | cut -d, -f1); hy=$(echo "$hr" | cut -d, -f2); hr2=$(echo "$hr" | cut -d, -f3); hb=$(echo "$hr" | cut -d, -f4)
+blue() { echo "$1" | awk -F, '{ exit !($3 > $1 + 80 && $3 > 150) }'; }
+[ "$(val look)" = horizon ] && [ "$(val xp)" = 1 ] && [ $((hr2 - hx)) = 470 ] && [ $((hb - hy)) = 520 ] \
+    && pass "Horizon: Start of that era, 470 x 520 ($hr)" || fail "Horizon Start: look $(val look) xp $(val xp) rect $hr"
+blue "$(px horizon $((hx + 300)) $((hy + 20)))" && blue "$(px horizon $((hx + 20)) $((hb - 6)))" \
+    && [ "$(px horizon $((hx + 440)) $((hy + 450)))" = "211,229,250" ] && [ "$(px horizon $((hx + 200)) $((hy + 440)))" = "255,255,255" ] \
+    && pass "a blue band above and below, programs on white, places on pale blue" \
+    || fail "Horizon Start colours: head $(px horizon $((hx + 300)) $((hy + 20))) foot $(px horizon $((hx + 20)) $((hb - 6))) right $(px horizon $((hx + 440)) $((hy + 450))) left $(px horizon $((hx + 200)) $((hy + 440)))"
+click $((hx + 150)) $((hb - 44 - 20))
+[ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists every app" || fail "All Programs: $(val list)"
+click $((hx + 150)) $((hb - 44 - 20))
+[ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Back: $(val list)"
 TBSTYLE 2; poke; poke; shot glass
 [ "$(val look)" = glass ] && [ "$(px glass 1 $((panel_y + 300)))" = "138,154,176" ] && [ "$(px glass 700 $((H - BAR - 12)))" = "30,39,51" ] \
     && pass "Glass: a dark blue-grey panel with a light rim" || fail "Glass Start: $(val look) frame $(px glass 1 $((panel_y + 300))) panel $(px glass 700 $((H - BAR - 12)))"

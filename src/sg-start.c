@@ -69,6 +69,22 @@
 #define C_REC_H    52
 #define C_BAR_H    64
 enum { C_SEARCH = 1, C_MORE, C_USER, C_POWER, C_PIN = 100, C_REC = 200 };
+/* the Horizon look's Start (Taskbar Style 1), laid out as the menus of that
+ * era were: the user on a blue band; pinned and most used programs on white
+ * at the left, "All Programs" under them; places on pale blue at the right;
+ * Log Off and Turn Off on a blue band at the foot. Our own drawing. */
+#define X_W        470
+#define X_H        520
+#define X_HEAD     64
+#define X_FOOT     44
+#define X_LEFT_W   236
+#define X_ALL_H    40
+#define X_PIN_H    40
+#define X_MFU_H    34
+#define X_PLACE_H  30
+#define X_NPINS    6
+#define X_NMFU     5
+enum { X_USER = 1, X_ALL, X_LOGOFF, X_TURNOFF, X_PIN = 100, X_MFU = 200, X_PLACE = 300 };
 
 
 /* Start follows the Windows mode (SystemUsesLightTheme, sg-mode.h), as
@@ -141,6 +157,9 @@ static int g_tile_cols = 3;         /* "Show more tiles on Start": 4 */
  * bottom; search and All apps show the list in it. The tiles are the
  * default. */
 static BOOL g_centered;
+static BOOL g_xp;                  /* the Horizon look's Start (see X_W) */
+static int g_hot_x = -1;           /* its part under the pointer */
+static int g_mfu[X_NMFU], g_nmfu;  /* its most used programs */
 static int g_hot_c = -1;           /* the centred layout's part under the pointer */
 static int g_rec[6], g_nrec;       /* its Recommended: the most used apps */
 
@@ -646,11 +665,13 @@ static int hit_cmp(const void *a, const void *b)
     return lstrcmpiW(entry_of(x->id)->name, entry_of(y->id)->name);
 }
 
+static int list_top(void);
+
 static void build_rows(void)
 {
     int i;
     g_nrows = 0;
-    g_content_h = g_centered ? S(C_BODY_Y) : S(TOP_PAD);
+    g_content_h = g_centered || g_xp ? list_top() : S(TOP_PAD);
 
     if (g_search[0])
     {
@@ -660,7 +681,7 @@ static void build_rows(void)
 
         for (i = 0; g_search[i]; i++) q[i] = towlower(g_search[i]);
         q[i] = 0;
-        if (!g_centered) g_content_h += S(SEARCH_H) + S(8);   /* the centred layout's box is above the list */
+        if (!g_centered) g_content_h += S(SEARCH_H) + S(8);   /* the centred layout's box is above the list; Horizon's is its first row */
         for (i = 0; i < g_napps && n < 1000; i++)
             if ((hits[n].score = score(&g_apps[i], q))) { hits[n].id = i; n++; }
         for (i = 0; i < NSETTINGS && n < 1024; i++)
@@ -762,10 +783,10 @@ static WCHAR g_launched[160];
 enum { RAIL_MENU, RAIL_USER, RAIL_DOCS, RAIL_PICS, RAIL_SETTINGS, RAIL_POWER, RAIL_COUNT };
 static const WCHAR *const rail_labels[RAIL_COUNT] = { L"Start", L"", L"Documents", L"Pictures", L"Settings", L"Power" };
 
-static int list_left(void) { return g_centered ? S(24) : S(RAIL_W); }
-static int list_top(void) { return g_centered ? S(C_BODY_Y) : 0; }
-static int list_bottom(void) { return g_centered ? g_panel_h - S(C_BAR_H) : g_panel_h; }
-static int list_w(void) { return !g_show_list ? 0 : g_centered ? g_panel_w - S(48) : S(LIST_W); }
+static int list_left(void) { return g_xp ? 0 : g_centered ? S(24) : S(RAIL_W); }
+static int list_top(void) { return g_xp ? S(X_HEAD) + S(8) : g_centered ? S(C_BODY_Y) : 0; }
+static int list_bottom(void) { return g_xp ? g_panel_h - S(X_FOOT) - S(X_ALL_H) : g_centered ? g_panel_h - S(C_BAR_H) : g_panel_h; }
+static int list_w(void) { return !g_show_list ? 0 : g_xp ? S(X_LEFT_W) : g_centered ? g_panel_w - S(48) : S(LIST_W); }
 static int tiles_left(void) { return S(RAIL_W) + list_w() + S(GAP); }
 static int tiles_top(void) { return S(TOP_PAD) + S(32); }
 
@@ -826,6 +847,8 @@ static void dump(void)
     dprint(f, L"look=%ls\n", g_pal == &horizon_palette ? L"horizon" : g_pal == &glass_palette ? L"glass" : L"flat");
     dprint(f, L"list=%d tile_cols=%d fullscreen=%d\n", g_show_list, g_tile_cols, g_fullscreen);
     dprint(f, L"centered=%d\n", g_centered);
+    dprint(f, L"xp=%d\n", g_xp);
+    if (g_xp) for (i = 0; i < g_nmfu; i++) dprint(f, L"mfu %ls\n", g_apps[g_mfu[i]].name);
     dprint(f, L"search=%ls\n", g_search);
     dprint(f, L"rail_open=%d\n", g_rail_open);
     dprint(f, L"open_ms=%d\n", (int)g_open_ms);
@@ -1400,7 +1423,8 @@ static void draw_list(HDC dc)
     if (g_search[0] && !g_centered)
     {
         /* the search field, where the typing goes */
-        RECT field = { list_left() + S(12), S(TOP_PAD), list_left() + list_w() - S(12), S(TOP_PAD) + S(SEARCH_H) }, t;
+        int ft = g_xp ? list_top() : S(TOP_PAD);
+        RECT field = { list_left() + S(12), ft, list_left() + list_w() - S(12), ft + S(SEARCH_H) }, t;
         SIZE sz;
         fill(dc, &field, COL_FIELD);
         frame(dc, &field, COL_ACCENT_BR, S(1) + (g_dpi >= 144));
@@ -1418,7 +1442,7 @@ static void draw_list(HDC dc)
         RECT r = { list_left() + S(4), y, list_left() + list_w() - S(8), y + rw->h }, t;
 
         if (r.bottom < list_top() || r.top > list_bottom()) continue;
-        if (g_search[0] && !g_centered && r.top < S(TOP_PAD) + S(SEARCH_H)) continue;
+        if (g_search[0] && !g_centered && r.top < (g_xp ? list_top() : S(TOP_PAD)) + S(SEARCH_H)) continue;
         if (rw->type == R_HEADER)
         {
             t = r; t.left += S(12);
@@ -1659,6 +1683,303 @@ static void draw_centered(HDC dc)
     draw_glyph(dc, RAIL_POWER, (r.left + r.right) / 2, (r.top + r.bottom) / 2, COL_TEXT);
 }
 
+static HFONT make_font(int pt10, int weight);
+
+/* ---- the Horizon look's Start (X_W) ------------------------------------------------ */
+
+struct x_place { const WCHAR *label; int csidl; const WCHAR *cmd, *args; BOOL bold; };
+static const struct x_place x_places[] = {
+    { L"Documents",  CSIDL_PERSONAL,    NULL, NULL, TRUE },
+    { L"Pictures",   CSIDL_MYPICTURES,  NULL, NULL, TRUE },
+    { L"Music",      CSIDL_MYMUSIC,     NULL, NULL, TRUE },
+    { L"This PC",    -1, L"explorer.exe", L"::{20D04FE0-3AEA-1069-A2D8-08002B30309D}", TRUE },
+    { NULL },
+    { L"Control Panel", -1, L"control.exe", NULL, FALSE },
+    { L"Settings",   -1, L"ms-settings:", NULL, FALSE },
+    { L"Devices and Printers", -1, L"control.exe", L"printers", FALSE },
+    { NULL },
+    { L"Run...",     -1, L"run", NULL, FALSE },
+};
+#define X_NPLACES ((int)ARRAYSIZE(x_places))
+
+static RECT x_head_rect(void) { RECT r = { 0, 0, g_panel_w, S(X_HEAD) }; return r; }
+static RECT x_foot_rect(void) { RECT r = { 0, g_panel_h - S(X_FOOT), g_panel_w, g_panel_h }; return r; }
+static RECT x_right_rect(void) { RECT r = { S(X_LEFT_W), S(X_HEAD) + S(2), g_panel_w, g_panel_h - S(X_FOOT) }; return r; }
+static RECT x_all_rect(void) { RECT r = { S(8), g_panel_h - S(X_FOOT) - S(X_ALL_H), S(X_LEFT_W) - S(8), g_panel_h - S(X_FOOT) - S(4) }; return r; }
+static RECT x_pin_rect(int i)
+{
+    RECT r = { S(4), S(X_HEAD) + S(8) + i * S(X_PIN_H), S(X_LEFT_W) - S(4), S(X_HEAD) + S(8) + (i + 1) * S(X_PIN_H) };
+    return r;
+}
+static int x_npins(void) { int i, n = 0; for (i = 0; i < g_npins && n < X_NPINS; i++) if (tile_app(i) >= 0) n++; return n; }
+static int x_pin_app(int k) { int i, n = 0; for (i = 0; i < g_npins; i++) if (tile_app(i) >= 0 && n++ == k) return tile_app(i); return -1; }
+static int x_mfu_top(void) { return S(X_HEAD) + S(8) + x_npins() * S(X_PIN_H) + (x_npins() ? S(13) : 0); }
+static RECT x_mfu_rect(int i)
+{
+    RECT r = { S(4), x_mfu_top() + i * S(X_MFU_H), S(X_LEFT_W) - S(4), x_mfu_top() + (i + 1) * S(X_MFU_H) };
+    return r;
+}
+static RECT x_place_rect(int i)
+{
+    int j, y = S(X_HEAD) + S(10);
+    RECT r;
+    for (j = 0; j < i; j++) y += x_places[j].label ? S(X_PLACE_H) : S(11);
+    SetRect(&r, S(X_LEFT_W) + S(6), y, g_panel_w - S(6), y + S(X_PLACE_H));
+    return r;
+}
+static RECT x_logoff_rect(void) { RECT f = x_foot_rect(), r = { g_panel_w - S(292), f.top + S(8), g_panel_w - S(186), f.bottom - S(8) }; return r; }
+static RECT x_turnoff_rect(void) { RECT f = x_foot_rect(), r = { g_panel_w - S(180), f.top + S(8), g_panel_w - S(6), f.bottom - S(8) }; return r; }
+
+/* the most used programs (Start's count of launches) not pinned; with none
+ * counted yet, the first programs by name, so the column is never empty */
+static void x_most_used(void)
+{
+    int i, j, k;
+    DWORD best[X_NMFU];
+    g_nmfu = 0;
+    for (i = 0; i < g_napps; i++)
+    {
+        DWORD u = track_progs() ? usage_of(g_apps[i].name) : 0;
+        if (!u || pin_index(g_apps[i].name) >= 0) continue;
+        for (j = 0; j < g_nmfu && best[j] >= u; j++);
+        if (j >= X_NMFU) continue;
+        for (k = min(g_nmfu, X_NMFU - 1); k > j; k--) { best[k] = best[k - 1]; g_mfu[k] = g_mfu[k - 1]; }
+        best[j] = u; g_mfu[j] = i;
+        if (g_nmfu < X_NMFU) g_nmfu++;
+    }
+}
+
+static int x_hit(POINT pt)
+{
+    RECT r;
+    int i;
+    r = x_head_rect(); if (PtInRect(&r, pt)) return X_USER;
+    r = x_logoff_rect(); if (PtInRect(&r, pt)) return X_LOGOFF;
+    r = x_turnoff_rect(); if (PtInRect(&r, pt)) return X_TURNOFF;
+    r = x_all_rect(); if (PtInRect(&r, pt)) return X_ALL;
+    for (i = 0; i < X_NPLACES; i++)
+    {
+        r = x_place_rect(i);
+        if (x_places[i].label && PtInRect(&r, pt)) return X_PLACE + i;
+    }
+    if (g_show_list) return -1;
+    for (i = 0; i < x_npins(); i++) { r = x_pin_rect(i); if (PtInRect(&r, pt)) return X_PIN + i; }
+    for (i = 0; i < g_nmfu; i++) { r = x_mfu_rect(i); if (PtInRect(&r, pt)) return X_MFU + i; }
+    return -1;
+}
+
+static void x_gradient(HDC dc, const RECT *r, COLORREF top, COLORREF bottom)
+{
+    TRIVERTEX v[2] = {
+        { r->left, r->top, (COLOR16)(GetRValue(top) << 8), (COLOR16)(GetGValue(top) << 8), (COLOR16)(GetBValue(top) << 8), 0 },
+        { r->right, r->bottom, (COLOR16)(GetRValue(bottom) << 8), (COLOR16)(GetGValue(bottom) << 8), (COLOR16)(GetBValue(bottom) << 8), 0 } };
+    GRADIENT_RECT gr = { 0, 1 };
+    GdiGradientFill(dc, v, 2, &gr, 1, GRADIENT_FILL_RECT_V);
+}
+
+static void x_place_icon(HDC dc, int i, int x, int y, int size)
+{
+    SHFILEINFOW sfi = { 0 };
+    WCHAR path[MAX_PATH];
+    const struct x_place *p = &x_places[i];
+    if (p->csidl >= 0 && SHGetFolderPathW(NULL, p->csidl, NULL, 0, path) == S_OK &&
+        SHGetFileInfoW(path, 0, &sfi, sizeof(sfi), SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+    {
+        DrawIconEx(dc, x, y, sfi.hIcon, size, size, 0, NULL, DI_NORMAL);
+        DestroyIcon(sfi.hIcon);
+        return;
+    }
+    if (p->cmd && !lstrcmpW(p->cmd, L"explorer.exe"))
+    {
+        GetWindowsDirectoryW(path, MAX_PATH);
+        path[3] = 0;   /* a drive, for the computer */
+        if (SHGetFileInfoW(path, 0, &sfi, sizeof(sfi), SHGFI_ICON | SHGFI_LARGEICON) && sfi.hIcon)
+        {
+            DrawIconEx(dc, x, y, sfi.hIcon, size, size, 0, NULL, DI_NORMAL);
+            DestroyIcon(sfi.hIcon);
+            return;
+        }
+    }
+    draw_badge(dc, x, y + size / 2, size);
+}
+
+static void x_button(HDC dc, RECT r, const WCHAR *label, int glyph, BOOL hot)
+{
+    RECT box = { r.left, r.top + (r.bottom - r.top - S(22)) / 2, r.left + S(22), r.top + (r.bottom - r.top + S(22)) / 2 }, t = r;
+    if (hot) { fill(dc, &r, RGB(0x4A, 0x88, 0xE8)); }
+    x_gradient(dc, &box, glyph == RAIL_POWER ? RGB(0xF0, 0x80, 0x50) : RGB(0xF4, 0xC4, 0x40),
+               glyph == RAIL_POWER ? RGB(0xC0, 0x3A, 0x10) : RGB(0xD0, 0x8C, 0x10));
+    frame(dc, &box, RGB(0xFF, 0xFF, 0xFF), S(1));
+    if (glyph == RAIL_POWER) draw_glyph(dc, glyph, (box.left + box.right) / 2, (box.top + box.bottom) / 2, RGB(0xFF, 0xFF, 0xFF));
+    else
+    {
+        /* log off: a door, and an arrow going out of it */
+        RECT door = { box.left + S(5), box.top + S(4), box.left + S(12), box.bottom - S(4) }, shaft;
+        POINT tip[3];
+        HBRUSH w = CreateSolidBrush(RGB(0xFF, 0xFF, 0xFF)), ob = SelectObject(dc, w);
+        HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
+        frame(dc, &door, RGB(0xFF, 0xFF, 0xFF), S(1));
+        SetRect(&shaft, door.left + S(4), (box.top + box.bottom) / 2 - S(1), box.right - S(7), (box.top + box.bottom) / 2 + S(1));
+        fill(dc, &shaft, RGB(0xFF, 0xFF, 0xFF));
+        tip[0].x = box.right - S(8); tip[0].y = (box.top + box.bottom) / 2 - S(4);
+        tip[1].x = box.right - S(8); tip[1].y = (box.top + box.bottom) / 2 + S(4);
+        tip[2].x = box.right - S(3); tip[2].y = (box.top + box.bottom) / 2;
+        Polygon(dc, tip, 3);
+        SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(w);
+    }
+    t.left = box.right + S(6);
+    text(dc, label, t, g_font, RGB(0xFF, 0xFF, 0xFF), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+}
+
+static void draw_xp(HDC dc)
+{
+    RECT head = x_head_rect(), foot = x_foot_rect(), right = x_right_rect(), r, t, line;
+    int i;
+
+    /* the user, on a blue band lit at the top, an orange rule under it */
+    x_gradient(dc, &head, RGB(0x1C, 0x60, 0xDC), RGB(0x10, 0x46, 0xB8));
+    line = head; line.bottom = line.top + S(3); x_gradient(dc, &line, RGB(0x7C, 0xB4, 0xF8), RGB(0x2C, 0x70, 0xE2));
+    if (g_hot_x == X_USER) { r = head; InflateRect(&r, 0, -S(3)); fill(dc, &r, RGB(0x2C, 0x70, 0xE8)); }
+    { RECT pic = { S(10), S(10), S(10) + S(44), S(10) + S(44) }; fill(dc, &pic, RGB(0xFF, 0xFF, 0xFF));
+      InflateRect(&pic, -S(2), -S(2)); fill(dc, &pic, RGB(0x1C, 0x60, 0xDC)); draw_avatar(dc, S(32), S(32)); }
+    t = head; t.left = S(64); t.right -= S(8);
+    { HFONT big = make_font(140, FW_BOLD);
+      RECT sh = t; OffsetRect(&sh, 1, 1);
+      text(dc, user_name(), sh, big, RGB(0x0C, 0x30, 0x80), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+      text(dc, user_name(), t, big, RGB(0xFF, 0xFF, 0xFF), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+      DeleteObject(big); }
+    line = head; line.top = head.bottom; line.bottom = line.top + S(2);
+    x_gradient(dc, &line, RGB(0xF0, 0xA8, 0x60), RGB(0xE0, 0x80, 0x30));
+
+    /* the places, on pale blue with a blue edge */
+    fill(dc, &right, RGB(0xD3, 0xE5, 0xFA));
+    line = right; line.right = line.left + S(1); fill(dc, &line, RGB(0x95, 0xBD, 0xEE));
+    for (i = 0; i < X_NPLACES; i++)
+    {
+        r = x_place_rect(i);
+        if (!x_places[i].label)
+        {
+            line = r; line.top = r.top + S(5); line.bottom = line.top + S(1); line.left += S(6); line.right -= S(6);
+            fill(dc, &line, RGB(0xA8, 0xC8, 0xF0));
+            continue;
+        }
+        if (g_hot_x == X_PLACE + i) { fill(dc, &r, RGB(0x31, 0x6A, 0xC5)); }
+        x_place_icon(dc, i, r.left + S(4), r.top + (r.bottom - r.top - S(24)) / 2, S(24));
+        t = r; t.left += S(34);
+        text(dc, x_places[i].label, t, x_places[i].bold ? g_font_bold : g_font,
+             g_hot_x == X_PLACE + i ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x0A, 0x24, 0x6A), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    /* the programs, on white */
+    r.left = 0; r.top = S(X_HEAD) + S(2); r.right = S(X_LEFT_W); r.bottom = foot.top;
+    fill(dc, &r, RGB(0xFF, 0xFF, 0xFF));
+    if (g_show_list)
+    {
+        draw_list(dc);
+        if (!g_search[0])
+        {
+            RECT hint = { S(12), list_top() - S(6), S(X_LEFT_W), list_top() + S(2) };
+            (void)hint;
+        }
+    }
+    else
+    {
+        for (i = 0; i < x_npins(); i++)
+        {
+            const struct entry *e = &g_apps[x_pin_app(i)];
+            r = x_pin_rect(i);
+            if (g_hot_x == X_PIN + i) fill(dc, &r, RGB(0x31, 0x6A, 0xC5));
+            draw_entry_icon(dc, e, r.left + S(6), r.top + (r.bottom - r.top - S(32)) / 2, S(32));
+            t = r; t.left += S(46);
+            text(dc, e->name, t, g_font_bold, g_hot_x == X_PIN + i ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x10, 0x10, 0x10),
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        }
+        if (x_npins())
+        {
+            line.left = S(10); line.right = S(X_LEFT_W) - S(10); line.top = x_mfu_top() - S(7); line.bottom = line.top + S(1);
+            fill(dc, &line, RGB(0xD6, 0xD6, 0xD6));
+        }
+        for (i = 0; i < g_nmfu; i++)
+        {
+            const struct entry *e = &g_apps[g_mfu[i]];
+            r = x_mfu_rect(i);
+            if (g_hot_x == X_MFU + i) fill(dc, &r, RGB(0x31, 0x6A, 0xC5));
+            draw_entry_icon(dc, e, r.left + S(6), r.top + (r.bottom - r.top - S(24)) / 2, S(24));
+            t = r; t.left += S(38);
+            text(dc, e->name, t, g_font, g_hot_x == X_MFU + i ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x10, 0x10, 0x10),
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        }
+    }
+    /* All Programs (or Back from them), under a rule, with a green arrow */
+    r = x_all_rect();
+    line = r; line.top = r.top - S(4); line.bottom = line.top + S(1); fill(dc, &line, RGB(0xD6, 0xD6, 0xD6));
+    if (g_hot_x == X_ALL) fill(dc, &r, RGB(0x31, 0x6A, 0xC5));
+    {
+        RECT arrow = { r.right - S(30), r.top + (r.bottom - r.top - S(20)) / 2, r.right - S(10), r.top + (r.bottom - r.top + S(20)) / 2 };
+        POINT tri[3];
+        HBRUSH w = CreateSolidBrush(RGB(0xFF, 0xFF, 0xFF)), ob;
+        HPEN np = GetStockObject(NULL_PEN), op;
+        BOOL back = g_show_list && !g_search[0];
+        x_gradient(dc, &arrow, RGB(0x5A, 0xC0, 0x4C), RGB(0x2A, 0x8A, 0x22));
+        if (back) { tri[0].x = arrow.right - S(6); tri[0].y = arrow.top + S(4); tri[1].x = arrow.right - S(6); tri[1].y = arrow.bottom - S(4); tri[2].x = arrow.left + S(6); tri[2].y = (arrow.top + arrow.bottom) / 2; }
+        else { tri[0].x = arrow.left + S(6); tri[0].y = arrow.top + S(4); tri[1].x = arrow.left + S(6); tri[1].y = arrow.bottom - S(4); tri[2].x = arrow.right - S(6); tri[2].y = (arrow.top + arrow.bottom) / 2; }
+        ob = SelectObject(dc, w); op = SelectObject(dc, np);
+        Polygon(dc, tri, 3);
+        SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(w);
+        t = r; t.right = arrow.left - S(8);
+        text(dc, back ? L"Back" : L"All Programs", t, g_font_bold, g_hot_x == X_ALL ? RGB(0xFF, 0xFF, 0xFF) : RGB(0x10, 0x10, 0x10),
+             DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    /* Log Off and Turn Off, on a blue band */
+    x_gradient(dc, &foot, RGB(0x2C, 0x70, 0xE2), RGB(0x14, 0x4C, 0xC0));
+    line = foot; line.bottom = line.top + S(1); fill(dc, &line, RGB(0x6C, 0xA4, 0xF4));
+    if (may_sign_out()) x_button(dc, x_logoff_rect(), L"Log Off", RAIL_USER, g_hot_x == X_LOGOFF);
+    x_button(dc, x_turnoff_rect(), L"Turn Off Computer", RAIL_POWER, g_hot_x == X_TURNOFF);
+}
+
+static void x_logoff_menu(POINT pt)
+{
+    enum { L_LOCK = 1, L_SIGNOUT };
+    HMENU m = menu_new();
+    int cmd;
+    menu_add(m, L_LOCK, L"&Lock");
+    if (may_sign_out()) menu_add(m, L_SIGNOUT, L"&Log off");
+    cmd = track(m, pt, L"logoff");
+    DestroyMenu(m);
+    if (!cmd) { dump(); return; }
+    show_panel(FALSE);
+    if (cmd == L_LOCK) LockWorkStation();
+    else if (cmd == L_SIGNOUT && may_sign_out()) ExitWindowsEx(EWX_LOGOFF, 0);
+}
+
+/* shell32's Run box (ordinal 61, RunFileDlg), as the shell's own Start opens it */
+static DWORD WINAPI x_run_thread(void *arg)
+{
+    void (WINAPI *run)(HWND, HICON, const WCHAR *, const WCHAR *, const WCHAR *, UINT) =
+        (void *)GetProcAddress(GetModuleHandleW(L"shell32.dll"), (const char *)61);
+    (void)arg;
+    if (run) run(NULL, NULL, NULL, NULL, NULL, 0);
+    return 0;
+}
+
+static void x_open_place(int i)
+{
+    const struct x_place *p = &x_places[i];
+    lstrcpynW(g_launched, p->label, ARRAYSIZE(g_launched));
+    show_panel(FALSE);
+    if (p->csidl >= 0) { open_folder(p->csidl); return; }
+    if (!lstrcmpW(p->cmd, L"run"))
+    {
+        /* the Run box, on a thread of its own: Start stays usable while it is open */
+        HANDLE t = CreateThread(NULL, 0, x_run_thread, NULL, 0, NULL);
+        if (t) CloseHandle(t);
+        return;
+    }
+    if (!lstrcmpW(p->cmd, L"ms-settings:") && (INT_PTR)ShellExecuteW(NULL, NULL, p->cmd, NULL, NULL, SW_SHOWNORMAL) > 32) return;
+    ShellExecuteW(NULL, NULL, !lstrcmpW(p->cmd, L"ms-settings:") ? L"control.exe" : p->cmd, p->args, NULL, SW_SHOWNORMAL);
+}
+
 static void on_paint(HWND hwnd)
 {
     PAINTSTRUCT ps;
@@ -1668,7 +1989,8 @@ static void on_paint(HWND hwnd)
 
     fill(mem, &all, COL_PANEL);
     SetBkMode(mem, TRANSPARENT);
-    if (g_centered) draw_centered(mem);
+    if (g_xp) draw_xp(mem);
+    else if (g_centered) draw_centered(mem);
     else
     {
         draw_list(mem);
@@ -1712,7 +2034,7 @@ static int row_at(POINT pt)
     int i, y = pt.y + g_scroll;
     if (pt.x < list_left() || pt.x >= list_left() + list_w()) return -1;
     if (pt.y < list_top() || pt.y >= list_bottom()) return -1;
-    if (g_search[0] && !g_centered && pt.y < S(TOP_PAD) + S(SEARCH_H)) return -1;
+    if (g_search[0] && !g_centered && pt.y < (g_xp ? list_top() : S(TOP_PAD)) + S(SEARCH_H)) return -1;
     for (i = 0; i < g_nrows; i++)
         if (g_rows[i].type != R_HEADER && y >= g_rows[i].y && y < g_rows[i].y + g_rows[i].h) return i;
     return -1;
@@ -1738,7 +2060,7 @@ static void scroll_to(int y)
 
 static void ensure_visible(int row)
 {
-    int top = g_centered ? list_top() : g_search[0] ? S(TOP_PAD) + S(SEARCH_H) + S(8) : 0;
+    int top = g_centered ? list_top() : g_search[0] ? (g_xp ? list_top() : S(TOP_PAD)) + S(SEARCH_H) + S(8) : g_xp ? list_top() : 0;
     if (row < 0) return;
     if (g_rows[row].y - g_scroll < top) scroll_to(g_rows[row].y - top);
     else if (g_rows[row].y + g_rows[row].h - g_scroll > list_bottom()) scroll_to(g_rows[row].y + g_rows[row].h - list_bottom() + S(8));
@@ -1773,6 +2095,13 @@ static void load_start_settings(void)
     g_fullscreen = reg_value(START_KEY, L"FullScreen", 0) != 0;
     g_tile_cols = reg_value(START_KEY, L"MoreTiles", 0) ? 4 : 3;
     g_centered = reg_value(START_KEY, L"Centered", 0) != 0;
+    g_xp = !g_centered && reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0) == 1;
+    if (g_xp)
+    {
+        g_app_list = FALSE;          /* the list shows for a search and All Programs */
+        g_show_list = FALSE;
+        g_fullscreen = FALSE;
+    }
     if (g_centered)
     {
         g_app_list = FALSE;          /* the list shows for a search and All apps */
@@ -1835,7 +2164,19 @@ static void layout_panel(void)
         SetWindowPos(g_panel, HWND_TOPMOST, x, y, g_panel_w, g_panel_h, SWP_NOACTIVATE);
         return;
     }
-    SetWindowRgn(g_panel, NULL, TRUE);
+    if (g_xp)
+    {
+        /* over the Start button, round at the top as those menus were */
+        HRGN round;
+        g_panel_w = min(S(X_W), work.right - work.left);
+        g_panel_h = min(S(X_H), work.bottom - work.top);
+        x = abd.uEdge == ABE_RIGHT ? work.right - g_panel_w : work.left;
+        y = abd.uEdge == ABE_TOP ? work.top : work.bottom - g_panel_h;
+        round = CreateRoundRectRgn(0, 0, g_panel_w + 1, g_panel_h + S(12), S(12), S(12));
+        SetWindowRgn(g_panel, round, TRUE);
+        SetWindowPos(g_panel, HWND_TOPMOST, x, y, g_panel_w, g_panel_h, SWP_NOACTIVATE);
+        return;
+    }
     if (g_fullscreen)
     {
         g_panel_w = work.right - work.left;
@@ -1850,6 +2191,9 @@ static void layout_panel(void)
         x = abd.uEdge == ABE_RIGHT ? work.right - g_panel_w : work.left;
         y = abd.uEdge == ABE_BOTTOM || abd.uEdge > ABE_BOTTOM ? work.bottom - g_panel_h : work.top;
     }
+    /* a whole rectangle, not none: a hidden window's region set to none kept
+     * the rounded one of the look before (Horizon's) and cut the panel short */
+    SetWindowRgn(g_panel, CreateRectRgn(0, 0, g_panel_w, g_panel_h), TRUE);
     SetWindowPos(g_panel, HWND_TOPMOST, x, y, g_panel_w, g_panel_h, SWP_NOACTIVATE);
 }
 
@@ -1888,7 +2232,8 @@ static void show_panel(BOOL show)
         g_launched[0] = 0;
         (void)work; (void)sh; (void)sw;
         if (g_centered) c_recommend();
-        g_hot_c = -1;
+        if (g_xp) x_most_used();
+        g_hot_c = g_hot_x = -1;
         layout_panel();
         ShowWindow(g_panel, SW_SHOW);
         SetForegroundWindow(g_panel);
@@ -1978,6 +2323,18 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_ERASEBKGND: return 1;
     case WM_PAINT: on_paint(hwnd); return 0;
     case WM_MOUSEMOVE:
+        if (g_xp)
+        {
+            int part = x_hit(pt), row = g_show_list ? row_at(pt) : -1;
+            if (part != g_hot_x || row != g_hot_row)
+            {
+                TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
+                g_hot_x = part; g_hot_row = row;
+                InvalidateRect(hwnd, NULL, FALSE);
+                TrackMouseEvent(&tme);
+            }
+            return 0;
+        }
         if (g_centered)
         {
             int part = c_hit(pt), row = g_show_list ? row_at(pt) : -1;
@@ -2004,7 +2361,7 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_MOUSELEAVE:
-        g_hot_row = g_hot_tile = g_hot_rail = g_hot_c = -1;
+        g_hot_row = g_hot_tile = g_hot_rail = g_hot_c = g_hot_x = -1;
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     case WM_MOUSEWHEEL:
@@ -2012,6 +2369,25 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     case WM_LBUTTONUP:
+        if (g_xp)
+        {
+            int part = x_hit(pt), row;
+            POINT screen = pt;
+            ClientToScreen(hwnd, &screen);
+            if (part == X_USER) rail_action(RAIL_USER, screen);
+            else if (part == X_LOGOFF && may_sign_out()) x_logoff_menu(screen);
+            else if (part == X_TURNOFF) power_menu(screen);
+            else if (part == X_ALL)
+            {
+                if (g_search[0]) { g_search[0] = 0; search_changed(); }
+                else { show_list(!g_show_list); build_rows(); g_scroll = 0; InvalidateRect(hwnd, NULL, FALSE); }
+            }
+            else if (part >= X_PLACE && part < X_PLACE + X_NPLACES) x_open_place(part - X_PLACE);
+            else if (part >= X_MFU && part < X_MFU + g_nmfu) run_entry(&g_apps[g_mfu[part - X_MFU]], NULL);
+            else if (part >= X_PIN && part < X_MFU) run_entry(&g_apps[x_pin_app(part - X_PIN)], NULL);
+            else if (g_show_list && (row = row_at(pt)) >= 0) run_entry(entry_of(g_rows[row].id), NULL);
+            return 0;
+        }
         if (g_centered)
         {
             int part = c_hit(pt), row;
@@ -2042,6 +2418,16 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_RBUTTONUP:
+        if (g_xp)
+        {
+            int part = x_hit(pt), row;
+            POINT screen = pt;
+            ClientToScreen(hwnd, &screen);
+            if (part >= X_MFU && part < X_MFU + g_nmfu) entry_menu(g_mfu[part - X_MFU], screen);
+            else if (part >= X_PIN && part < X_MFU) entry_menu(x_pin_app(part - X_PIN), screen);
+            else if (g_show_list && (row = row_at(pt)) >= 0) entry_menu(g_rows[row].id, screen);
+            return 0;
+        }
         if (g_centered)
         {
             int part = c_hit(pt), row;
