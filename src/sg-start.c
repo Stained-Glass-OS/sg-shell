@@ -1154,9 +1154,25 @@ static void taskbar_pin(const struct entry *e, BOOL on)
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, &r);
 }
 
+/* "Run with debugging" (David 2026-09-29: a mode the app is started in, as
+ * Run as administrator is): Report a problem runs it with Wine's debug log
+ * and, when it ends or crashes, shows what a developer needs, to be sent on */
+static void run_debugging(const struct entry *e)
+{
+    WCHAR tool[MAX_PATH], params[MAX_PATH + 160], *slash;
+
+    GetModuleFileNameW(NULL, tool, MAX_PATH);
+    if (!(slash = wcsrchr(tool, '\\'))) return;
+    lstrcpyW(slash + 1, L"sg-bugreport64.exe");
+    _snwprintf(params, ARRAYSIZE(params), L"--run \"%ls\"%ls%ls", e->path, e->args[0] ? L" " : L"", e->args);
+    _snwprintf(g_launched, ARRAYSIZE(g_launched), L"debug %ls", e->name);
+    show_panel(FALSE);
+    ShellExecuteW(NULL, NULL, tool, params, NULL, SW_SHOWNORMAL);
+}
+
 static void entry_menu(int id, POINT pt)
 {
-    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR };
+    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG };
     struct entry *e = entry_of(id);
     HMENU m;
     BOOL pinned, on_taskbar;
@@ -1172,6 +1188,7 @@ static void entry_menu(int id, POINT pt)
         menu_add(m, C_TASKBAR, on_taskbar ? L"Unpin from tas&kbar" : L"Pin to tas&kbar");
         menu_add(m, 0, NULL);
         menu_add(m, C_RUNAS, L"Run as &administrator");
+        menu_add(m, C_DEBUG, L"Run with &debugging");
         menu_add(m, C_LOCATION, L"Open file &location");
         menu_add(m, 0, NULL);
         menu_add(m, C_UNINSTALL, L"&Uninstall");
@@ -1184,6 +1201,7 @@ static void entry_menu(int id, POINT pt)
     case C_PIN:       pin(e->name, !pinned); InvalidateRect(g_panel, NULL, FALSE); break;
     case C_TASKBAR:   taskbar_pin(e, !on_taskbar); break;
     case C_RUNAS:     run_entry(e, e->kind == K_APP ? L"runas" : NULL); break;
+    case C_DEBUG:     run_debugging(e); break;
     case C_LOCATION:  open_location(e); break;
     case C_UNINSTALL: show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", L"appwiz.cpl", NULL, SW_SHOWNORMAL); break;
     default:          dump(); break;

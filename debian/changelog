@@ -1,3 +1,17 @@
+sg-shell (0.1.0-74) unstable; urgency=medium
+
+  * Run with debugging: a mode an app is started in, as Run as administrator
+    is -- Start's right-click menu (and File Explorer's, for programs and
+    shortcuts, renamed from "Run with a problem report") starts the app under
+    Report a problem's --run: Wine's debug log from the first instruction,
+    and when the app ends or crashes, a report of its crashes, errors,
+    missing pieces and DLLs that did not load, to copy, save or send. The
+    taskbar's "Report a problem" on a running window can only describe it
+    after the fact. Gate: make test (start-check, bugreport-check;
+    mutation-tested).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 29 Sep 2026 18:10:00 -0700
+
 sg-shell (0.1.0-73) unstable; urgency=medium
 
   * Settings > Personalization > Share & reset: save your look (the window

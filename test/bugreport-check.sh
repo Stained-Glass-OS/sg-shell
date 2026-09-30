@@ -39,7 +39,8 @@ fi
 
 R="$HERE/defaults/87-sg-bugreport.reg"
 grep -q 'exefile\\shell\\sgdebugreport\\command' "$R" && grep -q 'lnkfile\\shell\\sgdebugreport\\command' "$R" \
-    && pass "programs and shortcuts have 'Run with a problem report'" || fail "no right-click verb"
+    && [ "$(grep -c '^@="Run with debugging"' "$R")" = 2 ] \
+    && pass "programs and shortcuts have 'Run with debugging' (the name Start's menu uses)" || fail "no right-click verb"
 grep -q -- '--run \\"%1\\"' "$R" && pass "the verb runs the file under the report" || fail "verb command"
 grep -q 'add_beside(L"Report a problem", L"sg-bugreport64.exe")' "$HERE/src/sg-start.c" && pass "Start lists Report a problem" || fail "not in Start"
 grep -q 'mailto:" REPORT_TO' "$B/sg-bugreport.c" && ! grep -qiE 'smtp|sendmail|MAPISendMail' "$B/sg-bugreport.c" \

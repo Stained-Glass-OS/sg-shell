@@ -145,7 +145,7 @@ poke; xdotool type --delay 80 zeta; sleep 1.5
 # the best match row: below the search field and its header, at 96 DPI
 click 110 $((panel_y + 112)) 3
 [ "$(val menu)" = context ] && pass "right-click opens the app's menu: $(val menu_items)" || fail "no context menu: $(val menu)"
-case "$(val menu_items)" in "Pin to Start,Pin to taskbar,Run as administrator,Open file location,Uninstall") pass "Pin to Start, Pin to taskbar, Run as administrator, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
+case "$(val menu_items)" in "Pin to Start,Pin to taskbar,Run as administrator,Run with debugging,Open file location,Uninstall") pass "Pin to Start, Pin to taskbar, Run as administrator, Run with debugging, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
 shot context
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && pass "Pin to Start adds a tile" || fail "not pinned: $(d | grep '^tile')"
@@ -158,6 +158,17 @@ click $((384 + col * 104 + 50)) $((panel_y + 40 + row * 104 + 50)) 3
 case "$(val menu_items)" in "Unpin from Start,"*) pass "a tile's menu offers Unpin" ;; *) fail "tile menu: $(val menu_items)" ;; esac
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && fail "still pinned" || pass "Unpin from Start removes the tile"
+# Run with debugging: Report a problem runs the app with Wine's debug log (David 2026-09-29)
+[ "$(val visible)" = 1 ] || poke
+xdotool key Escape; sleep 0.5; [ "$(val visible)" = 1 ] || poke
+xdotool type --delay 80 zeta; sleep 1.5
+click 110 $((panel_y + 112)) 3
+xdotool key d; sleep 3
+dbg=$(pgrep -af 'sg-bugreport64[.]exe --run' | head -1)
+[ "$(val launched)" = "debug Zeta Test App" ] && [ -n "$dbg" ] \
+    && pass "Run with debugging starts Report a problem's --run on the app" || fail "debugging: launched '$(val launched)', run '$dbg'"
+pkill -f 'sg-bugreport64[.]exe' 2>/dev/null; pkill -f '[s]g-debug-run' 2>/dev/null; sleep 1
+[ "$(val visible)" = 1 ] || poke
 # Pin to taskbar: a shortcut where the taskbar keeps its pins (wine-sg 0485), in its order
 TBPINS="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar"
 [ "$(val visible)" = 1 ] || poke

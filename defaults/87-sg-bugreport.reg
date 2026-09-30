@@ -1,21 +1,21 @@
 Windows Registry Editor Version 5.00
 
 ; Stained Glass OS -- Report a problem (sg-bugreport64.exe), for testers:
-; right-click a program or its shortcut > "Run with a problem report" starts it
+; right-click a program or its shortcut > "Run with debugging" starts it
 ; with Wine's debug logging and, when it ends, opens a report to copy, save or
 ; email (the tester's own mail program; nothing is sent by itself).
 ;
 ; The path is the package's install location reached through Z:.
 
 [HKEY_LOCAL_MACHINE\Software\Classes\exefile\shell\sgdebugreport]
-@="Run with a problem report"
+@="Run with debugging"
 "Icon"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\exefile\shell\sgdebugreport\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe\" --run \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shell\sgdebugreport]
-@="Run with a problem report"
+@="Run with debugging"
 "Icon"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-bugreport64.exe"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shell\sgdebugreport\command]
