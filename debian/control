@@ -28,6 +28,7 @@ Package: sg-office
 Architecture: all
 Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine,
          fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-liberation
+Suggests: sg-office-editors
 Description: SG Office for Stained Glass OS (documents, spreadsheets, presentations)
  The office suite's place in Stained Glass OS: SG Office Documents,
  Spreadsheets and Presentations in the Start menu, the default programs for

@@ -245,7 +245,7 @@ office:
 	    t="SG Office $$(echo $$n | sed 's/^./\U&/')"; \
 	    $(WINDRES64) -I $(BUILD)/office/icons -DSG_ICON="\\\"sg-$$n.ico\\\"" -DSG_FILE_ICON="\\\"sg-$$n-file.ico\\\"" \
 	        -DSG_TITLE_A="\\\"$$t\\\"" office/launcher/launcher.rc -O coff -o $(BUILD)/office/$$n-res64.o && \
-	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_KIND="L\"--$$lo\"" -DSG_TITLE="L\"$$t\"" \
+	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_KIND="L\"--$$lo\"" -DSG_NATIVE_KIND="L\"$$n\"" -DSG_TITLE="L\"$$t\"" \
 	        -o $(BUILD)/sg-$${n}64.exe office/launcher/launcher.c $(BUILD)/office/$$n-res64.o -lshell32 -ladvapi32 -luser32 \
 	        && echo "built sg-$$n (64-bit)"; done
 	@$(WINDRES64) -I $(BUILD)/office/icons office/setup/setup.rc -O coff -o $(BUILD)/office/setup-res64.o
@@ -258,6 +258,13 @@ office:
 # the registrations, the payload, the launchers (test/office-check.sh).
 test-office: office
 	@sh test/office-check.sh
+	@sh test/office-native-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
+# SG Office's programs starting SG Office's own editors, under Wine
+# (test/office-native-check.sh), and the broken builds it must fail.
+.PHONY: test-office-native-mutants
+test-office-native-mutants: office
+	@sh test/office-native-mutants.sh
 
 # The whole of SG Office under Wine: Get SG Office installs LibreOffice from
 # its MSI (SG_OFFICE_MSI: a local copy of the pinned file), the Excel formula
@@ -301,6 +308,7 @@ test: build
 	@sh test/gpresult-check.sh
 	@sh test/net-ui-check.sh
 	@sh test/office-check.sh
+	@sh test/office-native-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
 # The taskbar's battery icon (sg-battery). Needs sudo -n (a mount namespace for fake batteries).
 .PHONY: test-battery

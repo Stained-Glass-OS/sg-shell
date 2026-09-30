@@ -1,3 +1,17 @@
+sg-shell (0.1.0-79) unstable; urgency=medium
+
+  * SG Office's programs (SG Office Documents, Spreadsheets, Presentations)
+    start SG Office's own editors -- based on ONLYOFFICE, built from source
+    (the sg-office repository, package sg-office-editors) -- when they are
+    installed: files given as Windows paths reach them as Unix paths, and no
+    file opens a new document of the program's kind. Without them, or with
+    Editors = "LibreOffice" under HKLM Software\Stained Glass\SG Office, or
+    to print (/p), LibreOffice as before. sg-office suggests
+    sg-office-editors. Gate: test/office-native-check.sh (in make test), with
+    three mutant builds it fails (test/office-native-mutants.sh).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 19:30:00 +0000
+
 sg-shell (0.1.0-78) unstable; urgency=medium
 
   * The trademark gate reads JavaScript, C++ and JSON strings too (it passed
