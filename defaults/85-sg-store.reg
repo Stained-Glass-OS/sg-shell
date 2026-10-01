@@ -945,16 +945,6 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Telegram.TelegramDesktop"
 "DetectName"="Telegram Desktop"
 
-[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\87]
-"Name"="Steam"
-"Publisher"="Valve"
-"Description"="Buy, download and play games."
-"Category"="Games"
-"Colour"=dword:00171a21
-"Tier"="windows"
-"Source"="winget:Valve.Steam"
-"DetectName"="Steam"
-
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\88]
 "Name"="GOG GALAXY"
 "Publisher"="GOG.com"
@@ -2844,3 +2834,313 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-sound-recorder"
 "Run"="/usr/share/applications/org.gnome.SoundRecorder.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L184]
+"Name"="Steam"
+"Publisher"="Valve"
+"Description"="Buy, download and play games. The Linux client: it plays most games through Proton."
+"Category"="Games"
+"Colour"=dword:00171a21
+"Tier"="linux"
+"Source"="linux:apt:steam-launcher"
+"Run"="/usr/share/applications/steam.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\94]
+"Name"="Microsoft Edge"
+"Publisher"="Microsoft"
+"Description"="Microsoft's web browser."
+"Category"="Browsers"
+"Colour"=dword:000078d4
+"Tier"="windows"
+"Source"="winget:Microsoft.Edge"
+"DetectName"="Microsoft Edge"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\95]
+"Name"="Trillian"
+"Publisher"="Cerulean Studios"
+"Description"="Chat with your friends on many networks, in one place."
+"Category"="Internet"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:CeruleanStudios.Trillian"
+"DetectName"="Trillian"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\96]
+"Name"="iTunes"
+"Publisher"="Apple"
+"Description"="Play and organize music, and sync an iPhone or iPod."
+"Category"="Media"
+"Colour"=dword:00e91e63
+"Tier"="windows"
+"Source"="winget:Apple.iTunes"
+"DetectName"="iTunes"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\97]
+"Name"="GOM Player"
+"Publisher"="GOM & Company"
+"Description"="Play videos in almost any format, with subtitles."
+"Category"="Media"
+"Colour"=dword:00ffb300
+"Tier"="windows"
+"Source"="winget:GOMLab.GOMPlayer"
+"DetectName"="GOM Player"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\98]
+"Name"="Spotify"
+"Publisher"="Spotify"
+"Description"="Stream music and podcasts."
+"Category"="Media"
+"Colour"=dword:001db954
+"Tier"="windows"
+"Source"="winget:Spotify.Spotify"
+"DetectName"="Spotify"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\99]
+"Name"=".NET Desktop Runtime 8"
+"Publisher"="Microsoft"
+"Description"="Runs desktop programs made with .NET 8."
+"Category"="Development"
+"Colour"=dword:00512bd4
+"Tier"="windows"
+"Source"="winget:Microsoft.DotNet.DesktopRuntime.8"
+"DetectName"="Microsoft *Desktop Runtime - 8"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\100]
+"Name"=".NET Desktop Runtime 9"
+"Publisher"="Microsoft"
+"Description"="Runs desktop programs made with .NET 9."
+"Category"="Development"
+"Colour"=dword:00512bd4
+"Tier"="windows"
+"Source"="winget:Microsoft.DotNet.DesktopRuntime.9"
+"DetectName"="Microsoft *Desktop Runtime - 9"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\101]
+"Name"=".NET Desktop Runtime 10"
+"Publisher"="Microsoft"
+"Description"="Runs desktop programs made with .NET 10."
+"Category"="Development"
+"Colour"=dword:00512bd4
+"Tier"="windows"
+"Source"="winget:Microsoft.DotNet.DesktopRuntime.10"
+"DetectName"="Microsoft *Desktop Runtime - 10"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\102]
+"Name"="Java 8 (Temurin JRE)"
+"Publisher"="Eclipse Adoptium"
+"Description"="Runs Java 8 programs."
+"Category"="Development"
+"Colour"=dword:00ff1464
+"Tier"="windows"
+"Source"="winget:EclipseAdoptium.Temurin.8.JRE"
+"DetectName"="Eclipse Temurin JRE with Hotspot 8"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\103]
+"Name"="Java 17 (Temurin JDK)"
+"Publisher"="Eclipse Adoptium"
+"Description"="Write and run Java 17 programs."
+"Category"="Development"
+"Colour"=dword:00ff1464
+"Tier"="windows"
+"Source"="winget:EclipseAdoptium.Temurin.17.JDK"
+"DetectName"="Eclipse Temurin JDK with Hotspot 17"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\104]
+"Name"="Java 25 (Temurin JDK)"
+"Publisher"="Eclipse Adoptium"
+"Description"="Write and run Java 25 programs."
+"Category"="Development"
+"Colour"=dword:00ff1464
+"Tier"="windows"
+"Source"="winget:EclipseAdoptium.Temurin.25.JDK"
+"DetectName"="Eclipse Temurin JDK with Hotspot 25"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\105]
+"Name"="Amazon Corretto 21"
+"Publisher"="Amazon"
+"Description"="A no-cost Java 21 development kit."
+"Category"="Development"
+"Colour"=dword:00ff9900
+"Tier"="windows"
+"Source"="winget:Amazon.Corretto.21.JDK"
+"DetectName"="Amazon Corretto 21"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\106]
+"Name"="Bambu Studio"
+"Publisher"="Bambu Lab"
+"Description"="Slice models for Bambu Lab 3D printers."
+"Category"="Productivity"
+"Colour"=dword:0000ae42
+"Tier"="windows"
+"Source"="winget:Bambulab.Bambustudio"
+"DetectName"="Bambu Studio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\107]
+"Name"="UltiMaker Cura"
+"Publisher"="UltiMaker"
+"Description"="Prepare 3D models for printing."
+"Category"="Productivity"
+"Colour"=dword:00196ef0
+"Tier"="windows"
+"Source"="winget:Ultimaker.Cura"
+"DetectName"="UltiMaker Cura"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\108]
+"Name"="CutePDF Writer"
+"Publisher"="Acro Software"
+"Description"="Print anything to a PDF file."
+"Category"="Productivity"
+"Colour"=dword:00c62828
+"Tier"="windows"
+"Source"="winget:AcroSoftware.CutePDFWriter"
+"DetectName"="CutePDF Writer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\109]
+"Name"="LibreOffice"
+"Publisher"="The Document Foundation"
+"Description"="Documents, spreadsheets and presentations."
+"Category"="Productivity"
+"Colour"=dword:0018a303
+"Tier"="windows"
+"Source"="winget:TheDocumentFoundation.LibreOffice"
+"DetectName"="LibreOffice"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\110]
+"Name"="Dropbox"
+"Publisher"="Dropbox"
+"Description"="Keep files in sync across your devices."
+"Category"="Internet"
+"Colour"=dword:000061fe
+"Tier"="windows"
+"Source"="winget:Dropbox.Dropbox"
+"DetectName"="Dropbox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\111]
+"Name"="Evernote"
+"Publisher"="Evernote"
+"Description"="Notes, lists and web clips in one place."
+"Category"="Productivity"
+"Colour"=dword:0000a82d
+"Tier"="windows"
+"Source"="winget:Evernote.Evernote"
+"DetectName"="Evernote"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\112]
+"Name"="Google Earth Pro"
+"Publisher"="Google"
+"Description"="Explore the world in 3D."
+"Category"="Utilities"
+"Colour"=dword:004285f4
+"Tier"="windows"
+"Source"="winget:Google.EarthPro"
+"DetectName"="Google Earth Pro"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\113]
+"Name"="NVDA"
+"Publisher"="NV Access"
+"Description"="A free screen reader for people who are blind or have low vision."
+"Category"="Utilities"
+"Colour"=dword:00673ab7
+"Tier"="windows"
+"Source"="winget:NVAccess.NVDA"
+"DetectName"="NVDA"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\114]
+"Name"="Wireshark"
+"Publisher"="Wireshark Foundation"
+"Description"="See what is on your network, packet by packet."
+"Category"="Development"
+"Colour"=dword:001679a7
+"Tier"="windows"
+"Source"="winget:WiresharkFoundation.Wireshark"
+"DetectName"="Wireshark"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\115]
+"Name"="AnyDesk"
+"Publisher"="AnyDesk"
+"Description"="Remote desktop: help others or reach your own PC."
+"Category"="Internet"
+"Colour"=dword:00ef443b
+"Tier"="windows"
+"Source"="winget:AnyDesk.AnyDesk"
+"DetectName"="AnyDesk"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\116]
+"Name"="TeamViewer"
+"Publisher"="TeamViewer"
+"Description"="Remote control and support."
+"Category"="Internet"
+"Colour"=dword:000e8ee9
+"Tier"="windows"
+"Source"="winget:TeamViewer.TeamViewer"
+"DetectName"="TeamViewer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\117]
+"Name"="ImgBurn"
+"Publisher"="Lightning UK!"
+"Description"="Burn and make CD, DVD and Blu-ray images."
+"Category"="Utilities"
+"Colour"=dword:00ff6f00
+"Tier"="windows"
+"Source"="winget:LIGHTNINGUK.ImgBurn"
+"DetectName"="ImgBurn"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\118]
+"Name"="TightVNC"
+"Publisher"="GlavSoft"
+"Description"="Control another computer over the network (VNC)."
+"Category"="Internet"
+"Colour"=dword:00546e7a
+"Tier"="windows"
+"Source"="winget:GlavSoft.TightVNC"
+"DetectName"="TightVNC"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\119]
+"Name"="TeraCopy"
+"Publisher"="Code Sector"
+"Description"="Copy files faster and verify them."
+"Category"="Utilities"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:CodeSector.TeraCopy"
+"DetectName"="TeraCopy"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\120]
+"Name"="Revo Uninstaller"
+"Publisher"="VS Revo Group"
+"Description"="Uninstall programs and clean up what they leave."
+"Category"="Utilities"
+"Colour"=dword:00d32f2f
+"Tier"="windows"
+"Source"="winget:RevoUninstaller.RevoUninstaller"
+"DetectName"="Revo Uninstaller"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\121]
+"Name"="CCleaner"
+"Publisher"="Piriform"
+"Description"="Clean up temporary files and browser data."
+"Category"="Utilities"
+"Colour"=dword:00009688
+"Tier"="windows"
+"Source"="winget:Piriform.CCleaner"
+"DetectName"="CCleaner"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\122]
+"Name"="Visual Studio Code"
+"Publisher"="Microsoft"
+"Description"="A code editor for every language."
+"Category"="Development"
+"Colour"=dword:000078d7
+"Tier"="windows"
+"Source"="winget:Microsoft.VisualStudioCode"
+"DetectName"="Microsoft Visual Studio Code"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\123]
+"Name"="Cursor"
+"Publisher"="Anysphere"
+"Description"="A code editor with AI built in."
+"Category"="Development"
+"Colour"=dword:00212121
+"Tier"="windows"
+"Source"="winget:Anysphere.Cursor"
+"DetectName"="Cursor"

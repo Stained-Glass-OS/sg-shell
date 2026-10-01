@@ -369,13 +369,55 @@ r=$(steam_request "$ADMIND")
 cp "$T/apt-get.store" "$B/apt-get"
 sed 's/^        if wants_i386(rel) and "i386" not in foreign_archs():$/        if False:/' "$ADMIND" > "$T/mut-noi386"
 sed 's/^    failed = install_recommends(rel, 60, 38) if sources else \[\]$/    failed = []/' "$ADMIND" > "$T/mut-norec"
-[ "$(grep -c 'if False:' "$T/mut-noi386")" = 1 ] && ! grep -q 'failed = install_recommends' "$T/mut-norec" || fail "the i386 mutants did not apply"
+[ "$(grep -c 'if False:' "$T/mut-noi386")" = 1 ] && ! grep -q 'failed = install_recommends(rel, 60, 38) if sources' "$T/mut-norec" || fail "the i386 mutants did not apply"
 # shellcheck disable=SC2046
 set -- $(steam_cases "$T/mut-noi386")
 [ "${1:-}" != i386-first ] && pass "MUTANT NOI386 leaves i386 off (gate catches it)" || fail "NOI386 not detected"
 # shellcheck disable=SC2046
 set -- $(steam_cases "$T/mut-norec")
 [ "${2:-}" != recommends ] && pass "MUTANT NORECOMMENDS skips Steam's libraries (gate catches it)" || fail "NORECOMMENDS not detected"
+# Steam from SG Store (apt-install steam-launcher): Valve's apt source and key
+# go in first (identical to the files Valve's package ships), i386 before the
+# install, then the 32-bit libraries the launcher recommends
+cat > "$B/apt-cache" <<'EOF'
+#!/bin/sh
+[ "$1" = show ] || exit 1
+eval "pkg=\${$#}"
+case "$pkg" in
+steam-launcher) printf 'Package: steam-launcher\nVersion: 1:1.0.0.87\nDepends: apt (>= 1.1), curl, python3 (>= 3.4)\nRecommends: steam-libs-amd64, steam-libs-i386, sudo, xdg-utils | steamos-base-files\nDescription: Launcher for the Steam software distribution service\n' ;;
+*) printf 'Package: %s\nVersion: 9.9\nDepends: libc6\nDescription: x\n' "$pkg" ;;
+esac
+EOF
+chmod +x "$B/apt-cache"
+mkdir -p "$T/keyrings"; export SG_ADMIN_VENDORS="$HERE/admin/apt-vendors" SG_ADMIN_KEYRINGS="$T/keyrings"
+store_steam() { # ADMIND -- one word per case
+    : > "$CALLS"; printf 'sudo 1.9\nxdg-utils 1.2\n' > "$T/installed"; : > "$T/foreign"
+    rm -f "$A/steam-stable.list" "$T/keyrings/steam.gpg"
+    id=$(next_id); printf 'apt-install\nsteam-launcher\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    cmp -s "$A/steam-stable.list" "$HERE/admin/apt-vendors/steam-stable.list" && cmp -s "$T/keyrings/steam.gpg" "$HERE/admin/apt-vendors/steam.gpg" \
+        && echo source || echo no-source
+    add=$(grep -n 'add-architecture i386' "$CALLS" | cut -d: -f1 | head -1)
+    ins=$(grep -n ' install steam-launcher$' "$CALLS" | cut -d: -f1 | head -1)
+    { [ "$(first "$r")" = OK ] && [ -n "$add" ] && [ -n "$ins" ] && [ "$add" -lt "$ins" ]; } && echo i386-first || echo no-i386
+    { grep -q ' install steam-libs-amd64$' "$CALLS" && grep -q ' install steam-libs-i386:i386$' "$CALLS" && ! grep -q ' install sudo$' "$CALLS"; } \
+        && echo libs || echo no-libs
+}
+# shellcheck disable=SC2046
+set -- $(store_steam "$ADMIND")
+[ "${1:-}" = source ] && pass "Steam from SG Store: Valve's apt source and key are put in place (Valve's own files)" || fail "steam source: ${1:-} $(ls "$A" "$T/keyrings")"
+[ "${2:-}" = i386-first ] && pass "and i386 turned on before the launcher installs" || fail "steam i386: ${2:-} $(tr '\n' '|' < "$CALLS")"
+[ "${3:-}" = libs ] && pass "and its 32-bit libraries come with it" || fail "steam libs: ${3:-} $(tr '\n' '|' < "$CALLS")"
+: > "$CALLS"; rm -f "$A/steam-stable.list"
+r=$(ask apt-install gimp)
+{ [ "$(first "$r")" = OK ] && [ ! -e "$A/steam-stable.list" ] && ! grep -q add-architecture "$CALLS"; } \
+    && pass "another package brings no source and no i386" || fail "gimp: $(tr '\n' '|' < "$CALLS")"
+sed 's/^    vendor = add_vendor_source(pkg)$/    vendor = False/' "$ADMIND" > "$T/mut-novendor"
+grep -q 'vendor = False' "$T/mut-novendor" || fail "the NOVENDOR mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(store_steam "$T/mut-novendor")
+[ "${1:-}" != source ] && [ "${3:-}" != libs ] && pass "MUTANT NOVENDOR: no Valve source, no libraries (gate catches it)" || fail "NOVENDOR not detected"
+rm -f "$B/apt-cache"
 rm -f "$B/dpkg"
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"
 

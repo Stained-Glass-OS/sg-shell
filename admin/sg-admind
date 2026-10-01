@@ -92,6 +92,11 @@ WORK_DIR = "/var/tmp"
 MAX_DEB = 4 << 30
 CURRENT_ID = None      # the request being answered (its progress file)
 
+# Apt sources some packages need from their makers, as the makers' own packages
+# ship them (identical files, which the package then takes over): Steam's
+# launcher and 32-bit libraries come from Valve's repository.
+VENDOR_DIR = "/usr/share/stained-glass/apt-vendors"
+KEYRINGS = "/usr/share/keyrings"
 TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
 if TEST:
     # The gate runs this unprivileged against a spool of its own, with stand-ins
@@ -103,6 +108,8 @@ if TEST:
     FONTS_DST = os.environ.get("SG_ADMIN_FONTS_DST", FONTS_DST)
     DEBS_SRC = os.environ.get("SG_ADMIN_DEBS", DEBS_SRC)
     WORK_DIR = os.environ.get("SG_ADMIN_WORK", WORK_DIR)
+    VENDOR_DIR = os.environ.get("SG_ADMIN_VENDORS", VENDOR_DIR)
+    KEYRINGS = os.environ.get("SG_ADMIN_KEYRINGS", KEYRINGS)
 
 
 class Refused(Exception):
@@ -661,20 +668,55 @@ def installed_version(pkg):
     return parts[1] if r.returncode == 0 and len(parts) == 2 and parts[0] == "installed" else None
 
 
+VENDOR_SOURCES = {
+    # the package: its maker's files, and where they go
+    "steam-launcher": [("steam-stable.list", "sources"), ("steam.gpg", "keyrings")],
+}
+
+
+def add_vendor_source(pkg):
+    """the maker's apt source for a package that comes from it (Steam), put
+    in place before apt looks for the package; True if it has one"""
+    if pkg not in VENDOR_SOURCES:
+        return False
+    for name, where in VENDOR_SOURCES[pkg]:
+        dst = os.path.join(APT_SOURCES if where == "sources" else KEYRINGS, name)
+        if not os.path.exists(dst):
+            shutil.copyfile(os.path.join(VENDOR_DIR, name), dst)
+            os.chmod(dst, 0o644)
+            log("%s: %s put in place for it" % (pkg, dst))
+    return True
+
+
+def apt_relations(pkg):
+    """what apt's candidate for pkg depends on and recommends"""
+    r = run(["apt-cache", "show", "--no-all-versions", pkg])
+    return parse_relations(r.stdout) if r.returncode == 0 else {}
+
+
 def op_apt_install(args):
     (pkg,) = args
     if not PKG_RE.fullmatch(pkg):
         raise Refused("'%s' is not a package name." % pkg)
+    vendor = add_vendor_source(pkg)
     refresh_lists()
-    apt_get(["install", pkg], "%s could not be installed" % pkg, 5, 95)
+    rel = apt_relations(pkg)
+    if wants_i386(rel) and "i386" not in foreign_archs():
+        # Steam: its 32-bit libraries are i386 packages
+        progress(3, "Turning on support for 32-bit programs...")
+        must(["dpkg", "--add-architecture", "i386"], "Support for 32-bit programs could not be turned on")
+        log("%s asks for 32-bit libraries: i386 packages turned on" % pkg)
+        refresh_lists()
+    apt_get(["install", pkg], "%s could not be installed" % pkg, 5, 55 if vendor else 95)
     ver = installed_version(pkg)
     if not ver:
         raise Refused("%s was not installed." % pkg)
     if pkg in OUR_PACKAGES:
         progress(97, "Registering %s..." % pkg)
         register_defaults(pkg)
+    failed = install_recommends(rel, 60, 38) if vendor else []
     progress(100, "Done")
-    return ["%s %s" % (pkg, ver)]
+    return ["%s %s" % (pkg, ver)] + (["Not installed: %s" % " ".join(failed)] if failed else [])
 
 
 def deb_fields(path):
@@ -698,13 +740,11 @@ def arch_ok(arch):
     return arch == native or arch in foreign_archs()
 
 
-def deb_relations(path):
-    """the package's Pre-Depends, Depends and Recommends as lists of
-    alternatives [(name, arch)], and whether it brings apt sources of its own
-    (Steam's: its libraries come from there)"""
-    r = run(["dpkg-deb", "-f", path, "Pre-Depends", "Depends", "Recommends"])
+def parse_relations(text):
+    """Pre-Depends, Depends and Recommends of control fields, as lists of
+    alternatives [(name, arch)]"""
     fields, cur = {}, None
-    for line in r.stdout.splitlines():
+    for line in text.splitlines():
         if line[:1] in (" ", "\t") and cur:
             fields[cur] += " " + line.strip()
         elif ":" in line:
@@ -712,6 +752,8 @@ def deb_relations(path):
             fields[cur.strip()] = v.strip()
     rel = {}
     for key, value in fields.items():
+        if key not in ("Pre-Depends", "Depends", "Recommends"):
+            continue
         groups = []
         for group in value.split(","):
             alts = []
@@ -723,6 +765,15 @@ def deb_relations(path):
             if alts:
                 groups.append(alts)
         rel[key] = groups
+    return rel
+
+
+def deb_relations(path):
+    """the package's Pre-Depends, Depends and Recommends as lists of
+    alternatives [(name, arch)], and whether it brings apt sources of its own
+    (Steam's: its libraries come from there)"""
+    r = run(["dpkg-deb", "-f", path, "Pre-Depends", "Depends", "Recommends"])
+    rel = parse_relations(r.stdout)
     listing = run(["dpkg-deb", "-c", path]).stdout
     sources = bool(re.search(r" \./etc/apt/sources\.list\.d/[^/\s]+\.(list|sources)$", listing, re.M))
     return rel, sources

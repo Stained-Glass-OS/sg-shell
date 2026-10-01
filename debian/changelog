@@ -12,6 +12,18 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     Tests: browser-manifest-test (TortoiseGit's and a root-level manifest),
     store-check G2 (dependency first, VC++ runtime never fetched, not twice;
     mutant NODEPINSTALL).
+  * SG Store: Steam is the Linux client now (L184, linux:apt:steam-launcher):
+    best game compatibility through Proton. sg-admind's apt-install puts
+    Valve's apt source and key in place for it (Valve's own files, shipped
+    in /usr/share/stained-glass/apt-vendors; the package takes them over),
+    turns on i386 first, and installs the 32-bit libraries it recommends.
+    Test: admind-check (mutant NOVENDOR). The Windows Steam entry is gone.
+  * SG Store: 30 more Windows apps, from what Ninite offers: Edge, Trillian,
+    iTunes, GOM Player, Spotify, .NET Desktop Runtime 8/9/10, Java 8/17/25
+    (Temurin), Corretto 21, Bambu Studio, UltiMaker Cura, CutePDF, LibreOffice,
+    Dropbox, Evernote, Google Earth Pro, NVDA, Wireshark, AnyDesk,
+    TeamViewer, ImgBurn, TightVNC, TeraCopy, Revo Uninstaller, CCleaner,
+    Visual Studio Code, Cursor (winget ids checked).
   * The taskbar's first pins: defaults/89-sg-taskbar-pins.reg names File
     Explorer and SG Store as HKLM\Software\Stained Glass\Taskbar
     DefaultPins, which the taskbar (wine-sg 0741) pins once for a user who

@@ -38,6 +38,8 @@ override_dh_auto_install:
 	# The Control Panel's privileged half: a fixed list of administrative
 	# operations for requests from SYSTEM (see admin/sg-admind).
 	install -D -m0755 admin/sg-admind debian/sg-shell/usr/libexec/stained-glass/sg-admind
+	install -D -m0644 admin/apt-vendors/steam-stable.list debian/sg-shell/usr/share/stained-glass/apt-vendors/steam-stable.list
+	install -D -m0644 admin/apt-vendors/steam.gpg debian/sg-shell/usr/share/stained-glass/apt-vendors/steam.gpg
 	install -D -m0644 admin/sg-admind.service debian/sg-shell/usr/lib/systemd/system/sg-admind.service
 	install -D -m0644 admin/sg-admind.path debian/sg-shell/usr/lib/systemd/system/sg-admind.path
 	install -D -m0644 admin/sg-admind.tmpfiles debian/sg-shell/usr/lib/tmpfiles.d/sg-admind.conf
