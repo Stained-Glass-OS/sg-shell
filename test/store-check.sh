@@ -49,6 +49,7 @@
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
+#   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -84,7 +85,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -406,6 +407,24 @@ rm -f "$G/launch.log"
 wine "$T/mut-nolaunch.exe" --open 01 >/dev/null 2>&1; sleep 3
 [ ! -e "$G/launch.log" ] && pass "MUTANT NOLAUNCH opens Apps & features, never the program (gate catches it)" \
     || fail "NOLAUNCH not detected: $(cat "$G/launch.log" 2>/dev/null)"
+# A Linux app whose Run is its desktop entry: gio launch starts it (the
+# Store's newer Linux apps name their .desktop, not a guessed program path)
+if [ -x /usr/bin/gio ]; then
+    printf '[Desktop Entry]\nType=Application\nName=Gate Linux\nExec=sh -c "echo linux-desktop >> %s/launch.log"\n' "$G" \
+        > "$T/gate-linux.desktop"
+    app L3 'Gate Linux' Utilities linux 'linux:apt:sg-gate-linux'
+    reg "$K\\L3" /v Run /d "$T/gate-linux.desktop"
+    rm -f "$G/launch.log"
+    run --open L3
+    launched 'linux-desktop' && pass "Open starts a Linux app by its desktop entry (gio launch)" \
+        || fail "Open L3 (desktop entry): $(cat "$G/launch.log" 2>/dev/null)"
+    rm -f "$G/launch.log"
+    wine "$T/mut-nodesktop.exe" --open L3 >/dev/null 2>&1; sleep 3
+    ! grep -q 'linux-desktop' "$G/launch.log" 2>/dev/null \
+        && pass "MUTANT NODESKTOP runs the .desktop file as a program (gate catches it)" || fail "NODESKTOP not detected"
+else
+    echo "SKIP  Open by desktop entry (no /usr/bin/gio)"
+fi
 wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
 rm -f "$G/setup.log"; ununinstall PickApp
 rm -f "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/"*Pick\ App*.lnk

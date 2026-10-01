@@ -96,9 +96,24 @@ static BOOL run_unix(const WCHAR *prog, const WCHAR *args, HANDLE *process)
     return TRUE;
 }
 
+/* A Linux app's Run: its program, or its desktop entry (a .desktop file),
+ * which gio launch starts as a Linux desktop would -- Exec, field codes and
+ * all, whichever program the package names (a metapackage's, a renamed one's). */
 void sys_run_linux(const WCHAR *unix_path)
 {
-    if (unix_path && unix_path[0] == L'/') run_unix(unix_path, NULL, NULL);
+    size_t n;
+    if (!unix_path || unix_path[0] != L'/') return;
+    n = wcslen(unix_path);
+#ifndef SG_MUTANT_NODESKTOP
+    if (n > 8 && !lstrcmpiW(unix_path + n - 8, L".desktop")) {
+        WCHAR args[MAX_PATH + 16];
+        _snwprintf(args, ARRAYSIZE(args), L"launch %ls", unix_path);
+        args[ARRAYSIZE(args) - 1] = 0;
+        run_unix(L"/usr/bin/gio", args, NULL);
+        return;
+    }
+#endif
+    run_unix(unix_path, NULL, NULL);
 }
 
 /* ---- elevation ---------------------------------------------------------------------------------- */

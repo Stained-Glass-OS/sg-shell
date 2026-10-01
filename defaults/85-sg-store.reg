@@ -2164,3 +2164,683 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:libreoffice"
 "Run"="/usr/bin/libreoffice"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L116]
+"Name"="Gpick"
+"Publisher"="Gpick"
+"Description"="Pick colours from anywhere on the screen."
+"Category"="Graphics"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:gpick"
+"Run"="/usr/share/applications/gpick.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L117]
+"Name"="SimpleScreenRecorder"
+"Publisher"="Maarten Baert"
+"Description"="Record the screen to a video."
+"Category"="Media"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:simplescreenrecorder"
+"Run"="/usr/share/applications/be.maartenbaert.simplescreenrecorder.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L118]
+"Name"="vokoscreenNG"
+"Publisher"="Volker Kohaupt"
+"Description"="Screencasts with a webcam and audio."
+"Category"="Media"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:vokoscreen-ng"
+"Run"="/usr/share/applications/vokoscreenNG.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L119]
+"Name"="Audacious"
+"Publisher"="Audacious"
+"Description"="A lightweight music player."
+"Category"="Media"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:audacious"
+"Run"="/usr/share/applications/audacious.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L120]
+"Name"="Kodi"
+"Publisher"="Kodi Foundation"
+"Description"="Media centre for films, music and TV."
+"Category"="Media"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:kodi"
+"Run"="/usr/share/applications/kodi.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L121]
+"Name"="Mixxx"
+"Publisher"="Mixxx"
+"Description"="DJ software with decks and effects."
+"Category"="Media"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:mixxx"
+"Run"="/usr/share/applications/org.mixxx.Mixxx.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L122]
+"Name"="Rosegarden"
+"Publisher"="Rosegarden"
+"Description"="MIDI and audio sequencer, notation editor."
+"Category"="Media"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:rosegarden"
+"Run"="/usr/share/applications/com.rosegardenmusic.rosegarden.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L123]
+"Name"="TuxGuitar"
+"Publisher"="TuxGuitar"
+"Description"="Guitar tablature editor and player."
+"Category"="Media"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:tuxguitar"
+"Run"="/usr/share/applications/tuxguitar.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L124]
+"Name"="Frescobaldi"
+"Publisher"="Frescobaldi"
+"Description"="Music score editor for LilyPond."
+"Category"="Media"
+"Colour"=dword:00283593
+"Tier"="linux"
+"Source"="linux:apt:frescobaldi"
+"Run"="/usr/share/applications/org.frescobaldi.Frescobaldi.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L125]
+"Name"="Sound Juicer"
+"Publisher"="The GNOME Project"
+"Description"="Rip audio CDs."
+"Category"="Media"
+"Colour"=dword:00558b2f
+"Tier"="linux"
+"Source"="linux:apt:sound-juicer"
+"Run"="/usr/share/applications/org.gnome.SoundJuicer.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L126]
+"Name"="Brasero"
+"Publisher"="The GNOME Project"
+"Description"="Burn CDs and DVDs."
+"Category"="Utilities"
+"Colour"=dword:00f9a825
+"Tier"="linux"
+"Source"="linux:apt:brasero"
+"Run"="/usr/share/applications/brasero.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L127]
+"Name"="K3b"
+"Publisher"="KDE"
+"Description"="Burn CDs, DVDs and Blu-ray discs."
+"Category"="Utilities"
+"Colour"=dword:0037474f
+"Tier"="linux"
+"Source"="linux:apt:k3b"
+"Run"="/usr/share/applications/org.kde.k3b.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L128]
+"Name"="gPodder"
+"Publisher"="gPodder"
+"Description"="Download and listen to podcasts."
+"Category"="Media"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:gpodder"
+"Run"="/usr/share/applications/gpodder.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L129]
+"Name"="Lollypop"
+"Publisher"="Cedric Bellegarde"
+"Description"="Music player for your collection."
+"Category"="Media"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:lollypop"
+"Run"="/usr/share/applications/org.gnome.Lollypop.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L130]
+"Name"="Quassel IRC"
+"Publisher"="Quassel"
+"Description"="IRC client that stays connected."
+"Category"="Internet"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:quassel"
+"Run"="/usr/share/applications/quassel.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L131]
+"Name"="Konversation"
+"Publisher"="KDE"
+"Description"="IRC client."
+"Category"="Internet"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:konversation"
+"Run"="/usr/share/applications/org.kde.konversation.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L132]
+"Name"="Polari"
+"Publisher"="The GNOME Project"
+"Description"="Chat on IRC."
+"Category"="Internet"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:polari"
+"Run"="/usr/share/applications/org.gnome.Polari.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L133]
+"Name"="KTorrent"
+"Publisher"="KDE"
+"Description"="BitTorrent client."
+"Category"="Internet"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:ktorrent"
+"Run"="/usr/share/applications/org.kde.ktorrent.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L134]
+"Name"="Dino"
+"Publisher"="Dino"
+"Description"="Modern XMPP chat."
+"Category"="Internet"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:dino-im"
+"Run"="/usr/share/applications/im.dino.Dino.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L135]
+"Name"="AbiWord"
+"Publisher"="AbiSource"
+"Description"="Word processor."
+"Category"="Productivity"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:abiword"
+"Run"="/usr/share/applications/abiword.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L136]
+"Name"="Gnumeric"
+"Publisher"="The GNOME Project"
+"Description"="Spreadsheet."
+"Category"="Productivity"
+"Colour"=dword:00283593
+"Tier"="linux"
+"Source"="linux:apt:gnumeric"
+"Run"="/usr/share/applications/org.gnumeric.gnumeric.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L137]
+"Name"="FocusWriter"
+"Publisher"="Graeme Gott"
+"Description"="Distraction-free writing."
+"Category"="Productivity"
+"Colour"=dword:00558b2f
+"Tier"="linux"
+"Source"="linux:apt:focuswriter"
+"Run"="/usr/share/applications/focuswriter.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L138]
+"Name"="ghostwriter"
+"Publisher"="KDE"
+"Description"="Markdown editor with a live preview."
+"Category"="Productivity"
+"Colour"=dword:00f9a825
+"Tier"="linux"
+"Source"="linux:apt:ghostwriter"
+"Run"="/usr/share/applications/org.kde.ghostwriter.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L139]
+"Name"="Qalculate!"
+"Publisher"="Qalculate!"
+"Description"="Powerful calculator with units."
+"Category"="Utilities"
+"Colour"=dword:0037474f
+"Tier"="linux"
+"Source"="linux:apt:qalculate-gtk"
+"Run"="/usr/share/applications/qalculate-gtk.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L140]
+"Name"="Clocks"
+"Publisher"="The GNOME Project"
+"Description"="World clocks, alarms, stopwatch, timer."
+"Category"="Utilities"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:gnome-clocks"
+"Run"="/usr/share/applications/org.gnome.clocks.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L141]
+"Name"="Weather"
+"Publisher"="The GNOME Project"
+"Description"="Weather where you are and around the world."
+"Category"="Utilities"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:gnome-weather"
+"Run"="/usr/share/applications/org.gnome.Weather.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L142]
+"Name"="Spyder"
+"Publisher"="Spyder Project"
+"Description"="Python IDE for science."
+"Category"="Development"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:spyder"
+"Run"="/usr/share/applications/spyder.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L143]
+"Name"="Thonny"
+"Publisher"="Thonny"
+"Description"="Python IDE for beginners."
+"Category"="Development"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:thonny"
+"Run"="/usr/share/applications/org.thonny.Thonny.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L144]
+"Name"="Neovim Qt"
+"Publisher"="Neovim"
+"Description"="Neovim with a window of its own."
+"Category"="Development"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:neovim-qt"
+"Run"="/usr/share/applications/nvim-qt.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L145]
+"Name"="KDiff3"
+"Publisher"="KDE"
+"Description"="Compare and merge files and folders."
+"Category"="Development"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:kdiff3"
+"Run"="/usr/share/applications/org.kde.kdiff3.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L146]
+"Name"="Umbrello"
+"Publisher"="KDE"
+"Description"="UML modeller."
+"Category"="Development"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:umbrello"
+"Run"="/usr/share/applications/org.kde.umbrello.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L147]
+"Name"="Glade"
+"Publisher"="The GNOME Project"
+"Description"="Design GTK user interfaces."
+"Category"="Development"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:glade"
+"Run"="/usr/share/applications/org.gnome.Glade.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L148]
+"Name"="GNU Octave"
+"Publisher"="GNU"
+"Description"="Numerical computing, MATLAB-compatible."
+"Category"="Development"
+"Colour"=dword:00283593
+"Tier"="linux"
+"Source"="linux:apt:octave"
+"Run"="/usr/share/applications/org.octave.Octave.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L149]
+"Name"="Builder"
+"Publisher"="The GNOME Project"
+"Description"="IDE for GNOME apps."
+"Category"="Development"
+"Colour"=dword:00558b2f
+"Tier"="linux"
+"Source"="linux:apt:gnome-builder"
+"Run"="/usr/share/applications/org.gnome.Builder.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L150]
+"Name"="Stellarium"
+"Publisher"="Stellarium"
+"Description"="Planetarium: the sky as it is."
+"Category"="Productivity"
+"Colour"=dword:00f9a825
+"Tier"="linux"
+"Source"="linux:apt:stellarium"
+"Run"="/usr/share/applications/org.stellarium.Stellarium.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L151]
+"Name"="KStars"
+"Publisher"="KDE"
+"Description"="Desktop planetarium and observatory."
+"Category"="Productivity"
+"Colour"=dword:0037474f
+"Tier"="linux"
+"Source"="linux:apt:kstars"
+"Run"="/usr/share/applications/org.kde.kstars.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L152]
+"Name"="Marble"
+"Publisher"="KDE"
+"Description"="Virtual globe and world atlas."
+"Category"="Productivity"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:marble"
+"Run"="/usr/share/applications/org.kde.marble.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L153]
+"Name"="Kalzium"
+"Publisher"="KDE"
+"Description"="Periodic table of the elements."
+"Category"="Productivity"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:kalzium"
+"Run"="/usr/share/applications/org.kde.kalzium.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L154]
+"Name"="KTouch"
+"Publisher"="KDE"
+"Description"="Learn to type."
+"Category"="Productivity"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:ktouch"
+"Run"="/usr/share/applications/org.kde.ktouch.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L155]
+"Name"="Tux Paint"
+"Publisher"="Tux Paint"
+"Description"="Drawing program for children."
+"Category"="Graphics"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:tuxpaint"
+"Run"="/usr/share/applications/tuxpaint.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L156]
+"Name"="GCompris"
+"Publisher"="KDE"
+"Description"="Educational activities for children."
+"Category"="Games"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:gcompris-qt"
+"Run"="/usr/share/applications/org.kde.gcompris.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L157]
+"Name"="The Battle for Wesnoth"
+"Publisher"="Wesnoth"
+"Description"="Turn-based fantasy strategy."
+"Category"="Games"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:wesnoth"
+"Run"="/usr/share/applications/org.wesnoth.Wesnoth-1.18.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L158]
+"Name"="PySol"
+"Publisher"="PySolFC"
+"Description"="More than a thousand solitaire games."
+"Category"="Games"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:pysolfc"
+"Run"="/usr/share/applications/pysol.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L159]
+"Name"="KPatience"
+"Publisher"="KDE"
+"Description"="Solitaire card games."
+"Category"="Games"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:kpat"
+"Run"="/usr/share/applications/org.kde.kpat.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L160]
+"Name"="Sudoku"
+"Publisher"="The GNOME Project"
+"Description"="Sudoku puzzles."
+"Category"="Games"
+"Colour"=dword:00283593
+"Tier"="linux"
+"Source"="linux:apt:gnome-sudoku"
+"Run"="/usr/share/applications/org.gnome.Sudoku.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L161]
+"Name"="Quadrapassel"
+"Publisher"="The GNOME Project"
+"Description"="Falling blocks."
+"Category"="Games"
+"Colour"=dword:00558b2f
+"Tier"="linux"
+"Source"="linux:apt:quadrapassel"
+"Run"="/usr/share/applications/org.gnome.Quadrapassel.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L162]
+"Name"="X-Moto"
+"Publisher"="X-Moto"
+"Description"="2D motocross platformer."
+"Category"="Games"
+"Colour"=dword:00f9a825
+"Tier"="linux"
+"Source"="linux:apt:xmoto"
+"Run"="/usr/share/applications/xmoto.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L163]
+"Name"="Naev"
+"Publisher"="Naev"
+"Description"="Space trading and combat."
+"Category"="Games"
+"Colour"=dword:0037474f
+"Tier"="linux"
+"Source"="linux:apt:naev"
+"Run"="/usr/share/applications/org.naev.naev.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L164]
+"Name"="Flare"
+"Publisher"="Flare"
+"Description"="Action role-playing game."
+"Category"="Games"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:flare-game"
+"Run"="/usr/share/applications/flare.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L165]
+"Name"="Widelands"
+"Publisher"="Widelands"
+"Description"="Build an economy and an empire."
+"Category"="Games"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:widelands"
+"Run"="/usr/share/applications/org.widelands.Widelands.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L166]
+"Name"="LinCity-NG"
+"Publisher"="LinCity-NG"
+"Description"="City simulation."
+"Category"="Games"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:lincity-ng"
+"Run"="/usr/share/applications/lincity-ng.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L167]
+"Name"="Simutrans"
+"Publisher"="Simutrans"
+"Description"="Transport simulation."
+"Category"="Games"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:simutrans"
+"Run"="/usr/share/applications/simutrans.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L168]
+"Name"="Armagetron Advanced"
+"Publisher"="Armagetron"
+"Description"="Light cycles in 3D."
+"Category"="Games"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:armagetronad"
+"Run"="/usr/share/applications/org.armagetronad.armagetronad.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L169]
+"Name"="Double Commander"
+"Publisher"="Double Commander"
+"Description"="Two-panel file manager."
+"Category"="Utilities"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:doublecmd-gtk"
+"Run"="/usr/share/applications/doublecmd.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L170]
+"Name"="Krusader"
+"Publisher"="KDE"
+"Description"="Two-panel file manager."
+"Category"="Utilities"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:krusader"
+"Run"="/usr/share/applications/org.kde.krusader.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L171]
+"Name"="Filelight"
+"Publisher"="KDE"
+"Description"="See what uses the disk."
+"Category"="Utilities"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:filelight"
+"Run"="/usr/share/applications/org.kde.filelight.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L172]
+"Name"="GSmartControl"
+"Publisher"="GSmartControl"
+"Description"="Disk health (S.M.A.R.T.)."
+"Category"="Utilities"
+"Colour"=dword:00283593
+"Tier"="linux"
+"Source"="linux:apt:gsmartcontrol"
+"Run"="/usr/share/applications/gsmartcontrol.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L173]
+"Name"="CPU-X"
+"Publisher"="CPU-X"
+"Description"="System information: CPU, memory, graphics."
+"Category"="Utilities"
+"Colour"=dword:00558b2f
+"Tier"="linux"
+"Source"="linux:apt:cpu-x"
+"Run"="/usr/share/applications/io.github.thetumultuousunicornofdarkness.cpu-x.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L174]
+"Name"="HardInfo2"
+"Publisher"="HardInfo2"
+"Description"="System information and benchmarks."
+"Category"="Utilities"
+"Colour"=dword:00f9a825
+"Tier"="linux"
+"Source"="linux:apt:hardinfo2"
+"Run"="/usr/share/applications/hardinfo2.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L175]
+"Name"="Deja Dup Backups"
+"Publisher"="The GNOME Project"
+"Description"="Simple backups of your files."
+"Category"="Utilities"
+"Colour"=dword:0037474f
+"Tier"="linux"
+"Source"="linux:apt:deja-dup"
+"Run"="/usr/share/applications/org.gnome.DejaDup.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L176]
+"Name"="Back In Time"
+"Publisher"="Back In Time"
+"Description"="Snapshots of your files."
+"Category"="Utilities"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:backintime-qt"
+"Run"="/usr/share/applications/backintime-qt.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L177]
+"Name"="Grsync"
+"Publisher"="Grsync"
+"Description"="Synchronise folders (rsync)."
+"Category"="Utilities"
+"Colour"=dword:00c62828
+"Tier"="linux"
+"Source"="linux:apt:grsync"
+"Run"="/usr/share/applications/grsync.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L178]
+"Name"="Recoll"
+"Publisher"="Recoll"
+"Description"="Search inside your documents."
+"Category"="Utilities"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:recollgui"
+"Run"="/usr/share/applications/recoll-searchgui.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L179]
+"Name"="KCalc"
+"Publisher"="KDE"
+"Description"="Scientific calculator."
+"Category"="Utilities"
+"Colour"=dword:00ef6c00
+"Tier"="linux"
+"Source"="linux:apt:kcalc"
+"Run"="/usr/share/applications/org.kde.kcalc.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L180]
+"Name"="Galculator"
+"Publisher"="Galculator"
+"Description"="Scientific calculator."
+"Category"="Utilities"
+"Colour"=dword:006a1b9a
+"Tier"="linux"
+"Source"="linux:apt:galculator"
+"Run"="/usr/share/applications/galculator.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L181]
+"Name"="Xarchiver"
+"Publisher"="Xfce"
+"Description"="Archive manager."
+"Category"="Utilities"
+"Colour"=dword:0000838f
+"Tier"="linux"
+"Source"="linux:apt:xarchiver"
+"Run"="/usr/share/applications/xarchiver.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L182]
+"Name"="Characters"
+"Publisher"="The GNOME Project"
+"Description"="Find and insert special characters and emoji."
+"Category"="Utilities"
+"Colour"=dword:00ad1457
+"Tier"="linux"
+"Source"="linux:apt:gnome-characters"
+"Run"="/usr/share/applications/org.gnome.Characters.desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L183]
+"Name"="Sound Recorder"
+"Publisher"="The GNOME Project"
+"Description"="Record sound."
+"Category"="Media"
+"Colour"=dword:004527a0
+"Tier"="linux"
+"Source"="linux:apt:gnome-sound-recorder"
+"Run"="/usr/share/applications/org.gnome.SoundRecorder.desktop"

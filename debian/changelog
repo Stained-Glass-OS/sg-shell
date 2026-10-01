@@ -14,6 +14,17 @@ sg-shell (0.1.0-85) unstable; urgency=medium
     test/linuxapps-check.sh (a stand-in helper; the helper on a package
     database of the gate's; mutants: no helper, no wrapper rule). qa3: four
     plumbing entries gone, GVim and KeePassXC kept.
+  * SG Store: 68 more Linux apps (183 in all): media (Kodi, Mixxx,
+    Audacious, Rosegarden, TuxGuitar, ...), chat (Quassel, Konversation,
+    Polari, Dino), office (AbiWord, Gnumeric, FocusWriter, ghostwriter),
+    science and learning (Stellarium, KStars, Marble, Kalzium, KTouch,
+    GCompris, Tux Paint), development (Spyder, Thonny, Neovim Qt, KDiff3,
+    Octave, Builder), games (Wesnoth, PySol, Naev, Widelands, ...), utilities
+    (Double Commander, Krusader, Filelight, GSmartControl, CPU-X, Deja Dup,
+    Back In Time, Recoll, ...). Each names its desktop entry as Run (each
+    checked in Debian 13's file lists); Open starts a .desktop with gio
+    launch. Test: test/store-check.sh (Open by desktop entry; mutant
+    NODESKTOP). VM: galculator installed, Open starts it.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 07:40:00 +0000
 
