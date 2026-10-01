@@ -12,6 +12,12 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     Tests: browser-manifest-test (TortoiseGit's and a root-level manifest),
     store-check G2 (dependency first, VC++ runtime never fetched, not twice;
     mutant NODEPINSTALL).
+  * The taskbar's first pins: defaults/89-sg-taskbar-pins.reg names File
+    Explorer and SG Store as HKLM\Software\Stained Glass\Taskbar
+    DefaultPins, which the taskbar (wine-sg 0741) pins once for a user who
+    has none yet -- David wanted the store pinned. Test:
+    test/taskbar-pins-check.sh (the list, SG Store's installed path, and
+    Wine's reg import reading it; mutant: UTF-16 hex(7) bytes).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 

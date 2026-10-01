@@ -1,0 +1,21 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the taskbar's first pins (wine-sg 0741).
+;
+; A new user's taskbar starts with these pinned, in this order: File Explorer
+; and SG Store (David wanted the store on the taskbar). The taskbar pins them
+; once, when the user has nothing in HKCU\Software\Stained Glass\Taskbar
+; PinOrder yet; a program that is not installed is left out, and pins the user
+; removes stay removed. The system's layout, as Windows' default taskbar
+; layout file. Each entry is "Name|program" (environment variables expanded):
+;   File Explorer|%SystemRoot%\explorer.exe
+;   SG Store|Z:\usr\libexec\stained-glass\shell\sg-store64.exe
+; (A REG_MULTI_SZ in hex(7). This file is ASCII, so reg import reads its
+; bytes as ANSI text, one per character.)
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Taskbar]
+"DefaultPins"=hex(7):46,69,6c,65,20,45,78,70,6c,6f,72,65,72,7c,25,53,79,73,\
+  74,65,6d,52,6f,6f,74,25,5c,65,78,70,6c,6f,72,65,72,2e,65,78,65,00,53,47,20,\
+  53,74,6f,72,65,7c,5a,3a,5c,75,73,72,5c,6c,69,62,65,78,65,63,5c,73,74,61,69,\
+  6e,65,64,2d,67,6c,61,73,73,5c,73,68,65,6c,6c,5c,73,67,2d,73,74,6f,72,65,36,\
+  34,2e,65,78,65,00,00
