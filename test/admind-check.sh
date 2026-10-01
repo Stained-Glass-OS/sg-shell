@@ -256,7 +256,7 @@ set -- $(reg_cases "$ADMIND")
     || fail "sg-office not registered: $(tr '\n' '|' < "$CALLS")"
 [ "${2:-}" = ours-only ] && pass "and only ours: another package is not registered" || fail "gimp was registered"
 sed 's/^        register_defaults(pkg)$/        pass/' "$ADMIND" > "$T/mut-noregister"
-grep -q 'register_defaults(pkg)' "$T/mut-noregister" && fail "the NOREGISTER mutant did not apply"
+grep -q '^        register_defaults(pkg)$' "$T/mut-noregister" && fail "the NOREGISTER mutant did not apply"
 # shellcheck disable=SC2046
 set -- $(reg_cases "$T/mut-noregister")
 [ "${1:-}" != registered ] && pass "MUTANT NOREGISTER leaves SG Office unregistered until a restart (gate catches it)" || fail "NOREGISTER not detected"
@@ -420,6 +420,102 @@ set -- $(store_steam "$T/mut-novendor")
 rm -f "$B/apt-cache"
 rm -f "$B/dpkg"
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"
+
+# --- SG Store: Uninstall (apt-remove) ---
+# stand-ins: apt-get (-s shows what would go, from $T/rdeps: "PKG REMOVED..."
+# lines; remove takes packages out of $T/installed), dpkg-query (status,
+# version, Essential/Priority, Depends, and -L: SG Office's real registry
+# files), runuser (keeps the unregistration .reg it is handed)
+cp "$B/apt-get" "$T/apt-get.others"; cp "$B/dpkg-query" "$T/dpkg-query.others"; cp "$B/runuser" "$T/runuser.others"
+mkdir -p "$T/defaults"; cp "$HERE"/office/defaults/89-sg-office*.reg "$T/defaults/"
+cat > "$B/apt-get" <<EOF
+#!/bin/sh
+printf 'apt-get %s\n' "\$*" >> "$CALLS"
+sim=; act=; pkgs=
+for a in "\$@"; do case \$a in -s) sim=1 ;; -*|*=*) ;; remove|autoremove|install|update) act=\$a ;; *) pkgs="\$pkgs \$a" ;; esac; done
+if [ -n "\$sim" ]; then
+    if [ "\$act" = autoremove ]; then for p in \$(cat "$T/auto" 2>/dev/null); do grep -q "^\$p " "$T/installed" && echo "Remv \$p [1.0]"; done; exit 0; fi
+    for p in \$pkgs; do echo "Remv \$p [1.0]"; sed -n "s/^\$p //p" "$T/rdeps" 2>/dev/null | tr ' ' '\n' | sed '/^$/d; s/^/Remv /; s/$/ [1.0]/'; done
+    exit 0
+fi
+[ "\$act" = remove ] && for p in \$pkgs; do grep -v "^\$p " "$T/installed" > "$T/installed.n"; mv "$T/installed.n" "$T/installed"; done
+exit 0
+EOF
+cat > "$B/dpkg-query" <<EOF
+#!/bin/sh
+[ "\$1" = -L ] && { ls "$T/defaults"/*.reg; echo /usr/share/doc/\$2; exit 0; }
+eval "pkg=\\\${\$#}"
+case "\$*" in
+  *Essential*) case \$pkg in base-files) echo "yes required" ;; *) echo "no optional" ;; esac; exit 0 ;;
+  *Depends*) sed -n "s/^\$pkg //p" "$T/deps" 2>/dev/null; exit 0 ;;
+esac
+v=\$(sed -n "s/^\$pkg //p" "$T/installed" 2>/dev/null | tail -1)
+[ -n "\$v" ] || exit 1
+printf 'installed %s' "\$v"
+EOF
+cat > "$B/runuser" <<EOF
+#!/bin/sh
+printf 'runuser %s\n' "\$*" >> "$CALLS"
+for a in "\$@"; do case \$a in *.reg) [ -f "\$a" ] && cp "\$a" "$T/unreg.reg" ;; esac; done
+exit 0
+EOF
+chmod +x "$B/apt-get" "$B/dpkg-query" "$B/runuser"
+export SG_ADMIN_DEFAULTS="$T/defaults"
+remove_cases() { # ADMIND -- one word per case
+    # a Linux app: removed, with the library it alone brought (auto, its dependency)
+    printf 'gimp 2.10\nlibgimp 2.10\nlibc6 2.41\nsg-shell 0.1.0-86\n' > "$T/installed"
+    printf 'gimp libgimp, libc6\n' > "$T/deps"; printf 'libgimp\n' > "$T/auto"; : > "$T/rdeps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* remove gimp$' "$CALLS" && grep -q '^apt-get .* remove libgimp$' "$CALLS" \
+      && ! grep -q 'libc6$' "$CALLS" && ! grep -q '^gimp ' "$T/installed"; } && echo removed || echo not-removed
+    # what would take the system with it: refused, apt never removes
+    printf 'tool 1.0\nsg-shell 0.1.0-86\n' > "$T/installed"; printf 'tool sg-shell\n' > "$T/rdeps"; : > "$T/deps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\ntool\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { case "$(first "$r")" in "FAILED "*"sg-shell"*) true ;; *) false ;; esac; } && ! grep -q '^apt-get [^-]*-y.* remove' "$CALLS" \
+      && echo guarded || echo unguarded
+    # SG Office: unregistered from the Windows side as the machine account first, then removed with its editors
+    printf 'sg-office 0.1.0-86\nsg-office-editors 8.2\nsg-shell 0.1.0-86\n' > "$T/installed"
+    printf 'sg-office sg-shell (= 0.1.0-86), wine-sg | wine, sg-office-editors\n' > "$T/deps"; printf 'sg-office-editors\n' > "$T/auto"
+    : > "$T/rdeps"; : > "$CALLS"; rm -f "$T/unreg.reg"
+    id=$(next_id); printf 'apt-remove\nsg-office\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    unreg_line=$(grep -n '^runuser -u sgsystem .*sg-unregister .*89-sg-office' "$CALLS" | head -1 | cut -d: -f1)
+    remove_line=$(grep -n '^apt-get -y .* remove sg-office$' "$CALLS" | head -1 | cut -d: -f1)
+    { [ "$(first "$r")" = OK ] && [ -n "$unreg_line" ] && [ -n "$remove_line" ] && [ "$unreg_line" -lt "$remove_line" ] \
+      && grep -q '^apt-get .* remove sg-office-editors$' "$CALLS" \
+      && grep -qF '[-HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12]' "$T/unreg.reg" \
+      && grep -qF '[-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-documents.exe]' "$T/unreg.reg" \
+      && grep -qF '"SG Office"=-' "$T/unreg.reg" && grep -qF '"SGOffice.Document.12"=-' "$T/unreg.reg" \
+      && ! grep -qF '[-HKEY_LOCAL_MACHINE\Software\Classes\.docx]' "$T/unreg.reg"; } && echo unregistered || echo not-unregistered
+}
+# shellcheck disable=SC2046
+set -- $(remove_cases "$ADMIND")
+[ "${1:-}" = removed ] && pass "apt-remove uninstalls a Linux app, with the dependency it alone brought (not shared libraries)" \
+    || fail "apt-remove gimp: ${1:-} $(tr '\n' '|' < "$CALLS")"
+[ "${2:-}" = guarded ] && pass "apt-remove refuses what would remove the system's own packages (sg-shell); apt removes nothing" \
+    || fail "apt-remove guard: ${2:-} $(tr '\n' '|' < "$CALLS")"
+[ "${3:-}" = unregistered ] && pass "apt-remove of SG Office takes its ProgIDs, App Paths and values out of the Windows side (not .docx itself), then it and its editors go" \
+    || fail "apt-remove sg-office: ${3:-} $(tr '\n' '|' < "$CALLS") $(head -c 600 "$T/unreg.reg" 2>/dev/null)"
+: > "$CALLS"; printf 'base-files 13\nsg-shell 0.1.0-86\nwine-sg 10.0-133\n' > "$T/installed"; : > "$T/rdeps"
+for bad in 'gimp; reboot' '-oAPT::X=1' 'base-files' 'sg-shell' 'wine-sg' 'notinstalled'; do
+    r=$(ask apt-remove "$bad"); case "$(first "$r")" in "FAILED "*) ;; *) fail "apt-remove '$bad': $r" ;; esac
+done
+grep ' remove ' "$CALLS" | grep -qv -- ' -s ' && fail "a refused removal reached apt: $(cat "$CALLS")" \
+    || pass "refuses names, the base system (essential, ours, Wine) and what is not installed; apt removes nothing"
+sed 's/^    for name in \[pkg\] + gone:$/    for name in []:/' "$ADMIND" > "$T/mut-noguard"
+grep -q 'for name in \[\]:' "$T/mut-noguard" || fail "the NOGUARD mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$T/mut-noguard")
+[ "${2:-}" = unguarded ] && pass "MUTANT NOGUARD removes sg-shell with a tool (gate catches it)" || fail "NOGUARD not detected"
+sed 's/^        unregister_defaults(pkg)$/        pass/' "$ADMIND" > "$T/mut-nounreg"
+grep -q '^        unregister_defaults(pkg)$' "$T/mut-nounreg" && fail "the NOUNREG mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$T/mut-nounreg")
+[ "${3:-}" != unregistered ] && pass "MUTANT NOUNREG leaves SG Office's file types behind (gate catches it)" || fail "NOUNREG not detected"
+unset SG_ADMIN_DEFAULTS
+cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"; cp "$T/runuser.others" "$B/runuser"
 
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac

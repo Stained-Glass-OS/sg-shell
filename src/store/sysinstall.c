@@ -11,6 +11,9 @@
  *   sg-store64.exe --deb FILE                  what the file is, and Install
  *                                              (File Explorer's .deb verb)
  *   sg-store64.exe --elevated-apt PKG NAME     (runas) apt-get install PKG
+ *   sg-store64.exe --elevated-apt-remove PKG NAME
+ *                                              (runas) Uninstall: apt-get remove
+ *                                              PKG (sg-admind apt-remove)
  *   sg-store64.exe --elevated-deb FILE PKG VER (runas) install FILE, which
  *                                              must be PKG at version VER --
  *                                              what the person was shown
@@ -155,12 +158,13 @@ static int elevate_wait(const WCHAR *args)
     return (int)code;
 }
 
-static void outcome_text(int code, const WCHAR *what, WCHAR *err, int cch)
+static void outcome_text(int code, const WCHAR *what, BOOL removing, WCHAR *err, int cch)
 {
+    const WCHAR *verb = removing ? L"uninstalled" : L"installed";
     if (code == SYS_OK) err[0] = 0;
-    else if (code == SYS_DENIED) swprintf(err, cch, L"%ls was not installed: an administrator did not allow it.", what);
-    else if (code == SYS_CANCELLED) swprintf(err, cch, L"%ls was not installed.", what);
-    else swprintf(err, cch, L"%ls was not installed. The installer window said why.", what);
+    else if (code == SYS_DENIED) swprintf(err, cch, L"%ls was not %ls: an administrator did not allow it.", what, verb);
+    else if (code == SYS_CANCELLED) swprintf(err, cch, L"%ls was not %ls.", what, verb);
+    else swprintf(err, cch, L"%ls was not %ls. The %ls window said why.", what, verb, removing ? L"uninstall" : L"installer");
 }
 
 static void quote_arg(WCHAR *dst, int cch, const WCHAR *s)
@@ -179,7 +183,21 @@ int sys_install_apt(const app_t *a, WCHAR *err, int cch)
     _snwprintf(args, ARRAYSIZE(args), L"--elevated-apt %ls %ls", q1, q2);
     args[ARRAYSIZE(args) - 1] = 0;
     code = elevate_wait(args);
-    outcome_text(code, a->name, err, cch);
+    outcome_text(code, a->name, FALSE, err, cch);
+    return code;
+}
+
+/* Uninstall: the same consent, sg-admind's apt-remove */
+int sys_remove_apt(const app_t *a, WCHAR *err, int cch)
+{
+    WCHAR args[1024], q1[200], q2[300];
+    int code;
+    quote_arg(q1, ARRAYSIZE(q1), a->apt_pkg);
+    quote_arg(q2, ARRAYSIZE(q2), a->name);
+    _snwprintf(args, ARRAYSIZE(args), L"--elevated-apt-remove %ls %ls", q1, q2);
+    args[ARRAYSIZE(args) - 1] = 0;
+    code = elevate_wait(args);
+    outcome_text(code, a->name, TRUE, err, cch);
     return code;
 }
 
@@ -213,8 +231,10 @@ static char *read_small(const WCHAR *path, DWORD max)
 
 /* the job the elevated window runs */
 typedef struct {
-    WCHAR title[160];             /* "Installing GIMP" */
-    const WCHAR *verb;            /* apt-install | deb-install */
+    WCHAR title[160];             /* "Installing GIMP" / "Uninstalling GIMP" */
+    WCHAR name[128];              /* "GIMP" */
+    BOOL  removing;               /* apt-remove: an uninstall */
+    const WCHAR *verb;            /* apt-install | apt-remove | deb-install */
     WCHAR arg[3][MAX_PATH];
     int   nargs;
     WCHAR deb_src[MAX_PATH];      /* deb-install: the file to stage */
@@ -309,7 +329,7 @@ static DWORD WINAPI job_thread(void *arg)
     BOOL ok = FALSE;
 
     j->code = SYS_FAILED;
-    set_status(j, -1, L"Asking the system to install it...");
+    set_status(j, -1, j->removing ? L"Asking the system to uninstall it..." : L"Asking the system to install it...");
     if (!random_id(id)) { lstrcpynW(j->result, L"The request could not be made.", ARRAYSIZE(j->result)); goto out; }
     if (!env_dir(L"SG_ADMIN_SPOOL", "/run/stained-glass-admin", "requests", reqdir, MAX_PATH) ||
         !env_dir(L"SG_ADMIN_SPOOL", "/run/stained-glass-admin", "replies", repdir, MAX_PATH)) {
@@ -375,7 +395,9 @@ static DWORD WINAPI job_thread(void *arg)
             ok = TRUE;
             /* the package, and what it recommends that could not be had
              * (Steam's libraries, from Steam's own server) */
-            if (extra && *extra)
+            if (j->removing)
+                _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is uninstalled. Your documents and settings are kept.", j->name);
+            else if (extra && *extra)
                 _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is installed, without %ls.", detail[0] ? detail : j->title + 11, extra);
             else
                 _snwprintf(j->result, ARRAYSIZE(j->result), L"%ls is installed.", detail[0] ? detail : j->title + 11);
@@ -512,7 +534,9 @@ static LRESULT CALLBACK job_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             WCHAR head[200];
             /* "Installing GIMP", then "GIMP is installed" / "GIMP was not installed" */
-            if (j->done) _snwprintf(head, ARRAYSIZE(head), j->code == SYS_OK ? L"%ls is installed" : L"%ls was not installed", j->title + 11);
+            if (j->done && j->removing)
+                _snwprintf(head, ARRAYSIZE(head), j->code == SYS_OK ? L"%ls is uninstalled" : L"%ls was not uninstalled", j->name);
+            else if (j->done) _snwprintf(head, ARRAYSIZE(head), j->code == SYS_OK ? L"%ls is installed" : L"%ls was not installed", j->title + 11);
             else lstrcpynW(head, j->title, ARRAYSIZE(head));
             head[ARRAYSIZE(head) - 1] = 0;
             draw_text(dc, f_head, C_TEXT, r, head, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -589,7 +613,14 @@ int sys_elevated_main(int argc, WCHAR **argv, int i)
 {
     static job_t j;
     memset(&j, 0, sizeof(j));
-    if (!lstrcmpiW(argv[i], L"--elevated-apt") && i + 2 < argc) {
+    if (!lstrcmpiW(argv[i], L"--elevated-apt-remove") && i + 2 < argc) {
+        j.verb = L"apt-remove";
+        j.removing = TRUE;
+        lstrcpynW(j.arg[0], argv[i + 1], MAX_PATH);
+        lstrcpynW(j.name, argv[i + 2], ARRAYSIZE(j.name));
+        j.nargs = 1;
+        _snwprintf(j.title, ARRAYSIZE(j.title), L"Uninstalling %ls", argv[i + 2]);
+    } else if (!lstrcmpiW(argv[i], L"--elevated-apt") && i + 2 < argc) {
         j.verb = L"apt-install";
         lstrcpynW(j.arg[0], argv[i + 1], MAX_PATH);
         j.nargs = 1;
@@ -756,7 +787,7 @@ static DWORD WINAPI deb_worker(void *arg)
     d->code = elevate_wait(args);
     _snwprintf(what, ARRAYSIZE(what), L"%ls %ls", d->pkg, d->version);
     if (d->code == SYS_OK) _snwprintf(d->result, ARRAYSIZE(d->result), L"%ls is installed.", what);
-    else outcome_text(d->code, what, d->result, ARRAYSIZE(d->result));
+    else outcome_text(d->code, what, FALSE, d->result, ARRAYSIZE(d->result));
     d->state = 2;
     PostMessageW(d->wnd, WM_APP, 0, 0);
     return 0;

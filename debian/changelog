@@ -1,5 +1,20 @@
 sg-shell (0.1.0-86) unstable; urgency=medium
 
+  * SG Store: Uninstall. An installed system package -- SG Office, a Linux
+    app -- has Uninstall beside Open (it could only be installed: neither
+    the Store nor Programs and Features could remove it). After a question,
+    the same consent as an install, and sg-admind's new apt-remove: apt-get
+    remove of the package and of the dependencies it alone brought (SG
+    Office's editors), never the system's own (sg-*, Wine, essential and
+    required packages: refused before apt runs). SG Office is taken out of
+    the Windows side first: its ProgIDs, Applications and App Paths keys,
+    Capabilities and its OpenWithProgids/RegisteredApplications values
+    (.docx keeps its default naming a ProgID that is gone, as Windows
+    leaves it after Office), and its import stamps, so a reinstall
+    registers it again. The progress window says "Uninstalling SG Office".
+    VM: uninstalled and reinstalled through the Store. Tests:
+    test/admind-check.sh (apt-remove; mutants NOGUARD, NOUNREG),
+    test/store-check.sh (--uninstall; mutant SG_MUTANT_NOUNINSTALL).
   * SG Store: a package's dependencies are installed first. The winget
     manifest reader (src/browser/manifest.c) reads Dependencies ->
     PackageDependencies, at the root or per installer (not Windows features

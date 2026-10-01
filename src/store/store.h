@@ -43,7 +43,7 @@ enum { TIER_WINDOWS, TIER_OURS, TIER_LINUX };
 enum { SRC_WINGET, SRC_PIN, SRC_OURS_APT, SRC_LINUX_APT, SRC_UNKNOWN };
 
 /* Per-app state. */
-enum { AST_NOT_INSTALLED, AST_INSTALLED, AST_UPDATE, AST_INSTALLING, AST_DONE, AST_FAILED };
+enum { AST_NOT_INSTALLED, AST_INSTALLED, AST_UPDATE, AST_INSTALLING, AST_DONE, AST_FAILED, AST_REMOVING };
 
 typedef struct {
     WCHAR ord[8];                 /* the catalogue ordinal ("01") */
@@ -68,6 +68,7 @@ typedef struct {
     WCHAR installed_version[64];
     WCHAR available_version[64];
     WCHAR msg[256];
+    BOOL  msg_error;              /* msg says what went wrong (an uninstall that failed) */
     BOOL  ran_elevated;           /* its installer was started as an administrator */
 } app_t;
 
@@ -92,7 +93,8 @@ const WCHAR *tier_name(int tier);
  * administrator's consent and sg-admind */
 enum { SYS_OK = 0, SYS_DENIED = 1, SYS_FAILED = 10, SYS_CANCELLED = 11 };
 int  sys_install_apt(const app_t *a, WCHAR *err, int cch);     /* from the store: elevate, wait */
-int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / --elevated-deb */
+int  sys_remove_apt(const app_t *a, WCHAR *err, int cch);      /* Uninstall: elevate, wait */
+int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / -apt-remove / -deb */
 int  sys_deb_window(HINSTANCE inst, const WCHAR *file);         /* --deb FILE */
 BOOL sys_unix_path(const WCHAR *dos, char *out, int cch);
 void sys_run_linux(const WCHAR *unix_path);

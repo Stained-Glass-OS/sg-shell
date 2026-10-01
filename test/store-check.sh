@@ -50,6 +50,7 @@
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
+#   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -85,7 +86,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -211,6 +212,15 @@ fd=; last=
 for a in "\$@"; do case \$a in APT::Status-Fd=*) fd=\${a#APT::Status-Fd=} ;; esac; last=\$a; done
 printf '%s\n' "\$*" >> "$T/apt.log"
 case " \$* " in *" update "*) exit 0 ;; esac
+# -s: what would go (only the package asked for); remove: out of dpkg's
+# status and the installed list
+case " \$* " in *" -s "*) case " \$* " in *" remove "*) echo "Remv \$last [9.9-gate]" ;; esac; exit 0 ;; esac
+case " \$* " in *" remove "*)
+    awk -v p="Package: \$last" 'BEGIN { RS = ""; ORS = "\\n\\n" } index(\$0 "\\n", p "\\n") != 1' "$T/dpkg-status" > "$T/dpkg-status.n"
+    mv "$T/dpkg-status.n" "$T/dpkg-status"; grep -v "^\$last " "$T/installed" > "$T/installed.n"; mv "$T/installed.n" "$T/installed"
+    [ -n "\$fd" ] && eval "printf 'pmstatus:x:50:Removing the gate package\n' >&\$fd"
+    exit 0 ;;
+esac
 [ -n "\$fd" ] && eval "printf 'dlstatus:x:40:Downloading the gate package\npmstatus:x:30:Unpacking the gate package\n' >&\$fd"
 sleep 1
 [ -n "\$fd" ] && eval "printf 'pmstatus:x:90:Setting up the gate package\n' >&\$fd"
@@ -581,6 +591,24 @@ launched 'app.exe' && pass "Open starts our suite's program by its App Paths nam
 rm -f "$G/launch.log"
 wine "$T/mut-nolaunch.exe" --open O5 >/dev/null 2>&1; sleep 3
 [ ! -e "$G/launch.log" ] && pass "MUTANT NOLAUNCH does not start it (gate catches it)" || fail "NOLAUNCH not detected for O5"
+# --- I3. Uninstall: our suite, through the consent and sg-admind's apt-remove ----------------------
+rm -f "$D" "$D.result" "$D.sys"; : > "$T/apt.log"
+wine "$EXE" --uninstall O5 >/dev/null 2>&1 & IP=$!
+if waitfor "$D.sys" '^result ' 120; then
+    grep -q '^result ok' "$D.sys" && pass "Uninstall goes through the elevated copy and sg-admind's apt-remove" || fail "O5 uninstall: $(grep '^result' "$D.sys")"
+else fail "the uninstall did not finish: $(cat "$D.sys" 2>/dev/null) / $(tail -3 "$T/admind.log")"; fi
+i=0; while kill -0 $IP 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+kill $IP 2>/dev/null; wait $IP 2>/dev/null
+grep -q '^uninstall O5 ok' "$D.result" 2>/dev/null && pass "the store's --uninstall succeeds" || fail "uninstall O5: $(cat "$D.result" 2>/dev/null)"
+# (taking its registrations out of the Windows side: test/admind-check.sh)
+grep -q -- '^-y .* remove sg-office$' "$T/apt.log" && pass "sg-admind ran apt-get remove sg-office" || fail "apt.log: $(cat "$T/apt.log")"
+run --list
+[ "$(kv "$(appline O5)" state)" = not-installed ] && pass "and it is then not installed (dpkg's status)" || fail "O5 after uninstall: $(appline O5)"
+# the mutant offers no Uninstall: the Linux app stays
+rm -f "$D.result"; : > "$T/apt.log"
+wine "$T/mut-nouninstall.exe" --uninstall L2 >/dev/null 2>&1
+grep -q '^uninstall L2 fail' "$D.result" 2>/dev/null && ! grep -q ' remove ' "$T/apt.log" \
+    && pass "MUTANT NOUNINSTALL cannot uninstall (gate catches it)" || fail "NOUNINSTALL not detected: $(cat "$D.result" 2>/dev/null)"
 wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
 wine reg delete "$K\\O5" /f >/dev/null 2>&1
 

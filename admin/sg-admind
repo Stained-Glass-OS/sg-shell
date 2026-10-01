@@ -46,6 +46,11 @@
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
 #   apt-install PACKAGE      SG Store's Linux apps: apt-get install PACKAGE
+#   apt-remove PACKAGE       SG Store's Uninstall: apt-get remove PACKAGE, and
+#                            what it alone brought in (its dependencies apt
+#                            installed for it, now needed by nothing); never
+#                            the system's own packages. Our own (SG Office)
+#                            are unregistered from the Windows side first.
 #   deb-install FILE PACKAGE VERSION
 #                            a .deb SYSTEM copied into /var/cache/stained-
 #                            glass-admin/debs (SG Store's "Install a Linux
@@ -417,6 +422,8 @@ def register_defaults(name):
 
 
 DEFAULTS_DIR = "/usr/share/stained-glass/defaults.d"
+if TEST:
+    DEFAULTS_DIR = os.environ.get("SG_ADMIN_DEFAULTS", DEFAULTS_DIR)
 # as sg-prefix-init's import_defaults does, without its final wait
 REGISTER_SH = (". /usr/lib/stained-glass/sg-common.sh && sg_wine_env && mkdir -p \"$SG_STATE/defaults\" && "
                "for f; do timeout 300 wine reg import \"$(winepath -w \"$f\")\" >/dev/null 2>&1 || exit 1; "
@@ -719,6 +726,145 @@ def op_apt_install(args):
     return ["%s %s" % (pkg, ver)] + (["Not installed: %s" % " ".join(failed)] if failed else [])
 
 
+# What an uninstall never removes, as asked or along the way: the system
+# itself (Stained Glass OS's own packages, Wine, the compositor, the image's
+# base) -- apt would take sg-shell away with a library it depends on.
+PROTECTED_PREFIXES = ("sg-", "stained-glass", "wine-sg", "linux-image", "systemd", "libc6", "apt", "dpkg",
+                      "greetd", "xwayland", "plymouth")
+REMOVABLE_OURS = ("sg-office", "sg-office-editors")
+
+
+def protected(pkg):
+    if pkg in REMOVABLE_OURS:
+        return False
+    if pkg.startswith(PROTECTED_PREFIXES):
+        return True
+    r = run(["dpkg-query", "-W", "-f", "${Essential} ${Priority}", pkg])
+    words = r.stdout.split() if r.returncode == 0 else []
+    return "yes" in words[:1] or any(w in ("required", "important") for w in words[1:])
+
+
+def simulated_removals(args):
+    """the packages apt-get -s would remove ("Remv NAME [version]")"""
+    r = run(["apt-get", "-s", "-q"] + args, extra_env=apt_env())
+    if r.returncode != 0:
+        errors = [l[3:].strip() for l in (r.stdout + r.stderr).splitlines() if l.startswith("E: ")]
+        raise Refused("It cannot be uninstalled%s" % ((": " + errors[0]) if errors else "."))
+    return [l.split()[1].split(":")[0] for l in r.stdout.splitlines() if l.startswith("Remv ") and len(l.split()) > 1]
+
+
+def installed_depends(pkg):
+    """the installed packages pkg depends on (each alternative), by name"""
+    r = run(["dpkg-query", "-W", "-f", "${Pre-Depends}, ${Depends}", pkg])
+    rel = parse_relations("Depends: " + r.stdout) if r.returncode == 0 else {}
+    return {name for alts in rel.get("Depends", []) for name, _ in alts}
+
+
+OUR_PROGIDS = re.compile(r"^HKEY_LOCAL_MACHINE\\Software\\Classes\\(?:[^\\]+\\)?SGOffice\.[^\\]+", re.I)
+OUR_KEYS = re.compile(r"^HKEY_LOCAL_MACHINE\\Software\\(?:Classes\\Applications\\sg-[a-z]+64\.exe|"
+                      r"Microsoft\\Windows\\CurrentVersion\\App Paths\\sg-[a-z]+\.exe|"
+                      r"Stained Glass\\SG Office)(?=\\|$)", re.I)
+
+
+def unregistration(reg_texts):
+    """A .reg that takes our own package's registrations back out of the
+    Windows side: its ProgIDs (SGOffice.*, also under an extension's key, its
+    ShellNew), its programs' Applications and App Paths keys, its
+    Capabilities, and its values in OpenWithProgids and
+    RegisteredApplications. An extension's default stays, naming a ProgID
+    that is gone, as Windows leaves it when Office is uninstalled."""
+    keys, values = [], []
+    for text in reg_texts:
+        key = None
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("[") and line.endswith("]"):
+                key = line[1:-1]
+                m = OUR_PROGIDS.match(key) or OUR_KEYS.match(key)
+                if m and m.group(0) not in keys:
+                    keys.append(m.group(0))
+                continue
+            if not key or OUR_PROGIDS.match(key) or OUR_KEYS.match(key):
+                continue
+            name = re.match(r'^"([^"]+)"=', line)
+            if name and (key.lower().endswith("\\openwithprogids") and name.group(1).lower().startswith("sgoffice.")
+                         or key.lower().endswith("\\software\\registeredapplications") and name.group(1) == "SG Office"):
+                values.append((key, name.group(1)))
+    out = ["Windows Registry Editor Version 5.00", ""]
+    out += ["[-%s]" % k for k in keys]
+    for k, v in values:
+        out += ["", "[%s]" % k, '"%s"=-' % v]
+    return "\r\n".join(out) + "\r\n"
+
+
+UNREGISTER_SH = (". /usr/lib/stained-glass/sg-common.sh && sg_wine_env && "
+                 "timeout 300 wine reg import \"$(winepath -w \"$1\")\" >/dev/null 2>&1 || exit 1; "
+                 "shift; for f; do rm -f \"$SG_STATE/defaults/$f.sha256\"; done")
+
+
+def unregister_defaults(name):
+    """take our own package's registrations out of the Windows side, as the
+    machine account, and forget that they were imported (so a reinstall
+    imports them again at the next start too)"""
+    files = [f for f in must(["dpkg-query", "-L", name], "%s's files could not be listed" % name).split("\n")
+             if f.startswith(DEFAULTS_DIR + "/") and f.endswith(".reg")]
+    texts = []
+    for f in files:
+        try:
+            with open(f, "rb") as fh:
+                raw = fh.read()
+        except OSError:
+            continue
+        texts.append(raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8", "replace"))
+    if not texts:
+        return
+    fd, path = tempfile.mkstemp(prefix="sg-unreg-", suffix=".reg", dir=WORK_DIR)
+    with os.fdopen(fd, "w", newline="") as f:
+        f.write(unregistration(texts))
+    os.chmod(path, 0o644)
+    try:
+        must(["runuser", "-u", SYSTEM_USER, "--", "env", "HOME=/var/lib/stained-glass",
+              "XDG_RUNTIME_DIR=/run/stained-glass", "sh", "-c", UNREGISTER_SH, "sg-unregister", path]
+             + [os.path.basename(f) for f in files],
+             "%s's registrations could not be removed" % name, timeout=600)
+    finally:
+        os.unlink(path)
+
+
+def op_apt_remove(args):
+    (pkg,) = args
+    if not PKG_RE.fullmatch(pkg):
+        raise Refused("'%s' is not a package name." % pkg)
+    if not installed_version(pkg):
+        raise Refused("%s is not installed." % pkg)
+    progress(2, "Checking what goes with it...")
+    gone = simulated_removals(["remove", pkg])
+    # what it brought in that nothing else needs: its dependencies apt put
+    # in for it, once it is gone (apt-get autoremove's own view, narrowed to
+    # this package's -- never every leftover on the system)
+    deps = installed_depends(pkg)
+    for name in [pkg] + gone:
+        if protected(name):
+            log("apt-remove %s: refused, it would remove %s" % (pkg, name))
+            raise Refused("%s cannot be uninstalled: it would remove %s, a part of the system." % (pkg, name)
+                          if name != pkg else "%s is a part of the system and cannot be uninstalled." % pkg)
+    if pkg in OUR_PACKAGES:
+        progress(5, "Removing %s from the file types and the Start menu..." % pkg)
+        unregister_defaults(pkg)
+    apt_get(["remove", pkg], "%s could not be uninstalled" % pkg, 10, 60)
+    if installed_version(pkg):
+        raise Refused("%s was not uninstalled." % pkg)
+    extra = [d for d in deps if d in simulated_removals(["autoremove"]) and not protected(d)]
+    if extra:
+        progress(75, "Removing what it brought with it...")
+        for d in extra:
+            if d in OUR_PACKAGES:
+                unregister_defaults(d)
+        apt_get(["remove"] + sorted(extra), "%s's parts could not be uninstalled" % pkg, 75, 24)
+    progress(100, "Done")
+    return ["%s" % pkg] + (["Also removed: %s" % " ".join(sorted(extra))] if extra else [])
+
+
 def deb_fields(path):
     r = run(["dpkg-deb", "--show", "--showformat=${Package}\\n${Version}\\n${Architecture}\\n", path])
     if r.returncode != 0:
@@ -903,6 +1049,7 @@ OPS = {
     "font-install": (op_font_install, 1),
     "font-remove": (op_font_remove, 1),
     "apt-install": (op_apt_install, 1),
+    "apt-remove": (op_apt_remove, 1),
     "deb-install": (op_deb_install, 3),
 }
 SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password

@@ -3,3 +3,4 @@
 src/terminal/main.c	^Windows PowerShell$	names Microsoft's own program, which the user installs; the profile says what it runs
 src/compat/sgcompat.c	^Windows (11|10|8\.1|8|7|Vista \(SP2\)|XP \(Service Pack 3\))$	the Compatibility tab's version list: which version a program is told it runs on (like winecfg), not a name for our product
 office/gen-reg.py	Windows Registry Editor Version 5\.00	the .reg file format header reg.exe requires, not a name for our product
+admin/sg-admind	Windows Registry Editor Version 5\.00	the .reg file format header reg.exe requires (the unregistration it imports), not a name for our product
