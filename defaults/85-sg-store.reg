@@ -11,8 +11,9 @@ Windows Registry Editor Version 5.00
 ; We ship no third-party or Microsoft binary: SG Store downloads the maker's
 ; installer at the user's request and runs it only if it is exactly the file
 ; the maker published -- a pinned SHA-256, or the winget community repository's,
-; the same engine as "Get a web browser". Our own suites run their own setup
-; program (which does its own pinned-hash download). See ADR 0017.
+; the same engine as "Get a web browser". Our own builds (SG Office) are our
+; apt packages, installed with apt like the Linux apps and registered in the
+; Windows side as they install. See ADR 0017.
 ;
 ; OS updates are NOT handled here: they keep their own path (Settings >
 ; Update & Security). SG Store never touches the system upgrade.
@@ -22,16 +23,14 @@ Windows Registry Editor Version 5.00
 ;   Tier   = windows | ours | linux         (inferred from Source if absent)
 ;   Source = winget:<PackageId>
 ;          | pin:<Url>|<Sha256>|<Type>|<Silent>
-;          | ours:setup:<AppPathsExe>
 ;          | ours:apt:<package> | linux:apt:<package>   (apt, via sg-admind)
-;   Package = (ours:setup) the system package the setup program comes in; a
-;             machine without it has sg-admind install it first (one consent)
 ;   DetectName = a Windows program's Uninstall DisplayName: "A|B|!C" -- the
 ;                name starts with A or B as a whole word ("Git" is not "GitHub
 ;                Desktop"), and not with C ("XnView|!XnView MP"); * is any run of
-;                characters ("Mozilla Firefox*ESR"). A Linux app
-;                is detected by dpkg's state of its package, never by name.
-;   Run        = a Linux app's program (Open), e.g. /usr/bin/gimp
+;                characters ("Mozilla Firefox*ESR"). A Linux app, or one of
+;                ours, is detected by dpkg's state of its package, never by name.
+;   Run        = what Open starts: a Linux app's program, e.g. /usr/bin/gimp;
+;                one of ours, its Windows program's App Paths name
 ;   PinVersion = the available version for a pin: entry (update checks)
 ;
 ; Every winget: id here exists in github.com/microsoft/winget-pkgs (checked
@@ -118,13 +117,13 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\04]
 "Name"="SG Office"
 "Publisher"="Stained Glass OS"
-"Description"="Documents, spreadsheets and presentations in Microsoft Office's formats. Our build of LibreOffice."
+"Description"="Documents, spreadsheets and presentations in Microsoft Office's formats. Based on ONLYOFFICE."
 "Category"="Productivity"
 "Colour"=dword:00107c41
 "Tier"="ours"
-"Source"="ours:setup:sg-office-setup.exe"
-"Package"="sg-office"
-"DetectName"="LibreOffice"
+"Source"="ours:apt:sg-office"
+"DetectName"="SG Office"
+"Run"="sg-documents.exe"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\05]
 "Name"="Vivaldi"

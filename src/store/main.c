@@ -9,9 +9,6 @@
  *                                  name or winget id (headless), then exit
  *   sg-store64.exe --open ID       Open, as the card's button: the program
  *                                  (headless), then exit
- *   sg-store64.exe --install-elevated ID   the elevated (SYSTEM) copy's part of
- *                                  installing an "ours" app whose programs are
- *                                  a system package (catalog.c); exit code only
  *   sg-store64.exe --deb FILE      "Install a Linux package": what a .deb is,
  *                                  and Install (File Explorer's .deb verb)
  *   --elevated-apt / --elevated-deb   the elevated half (sysinstall.c)
@@ -82,7 +79,6 @@ static const WCHAR *method_name(int m)
     switch (m) {
     case SRC_WINGET:     return L"winget";
     case SRC_PIN:        return L"pin";
-    case SRC_OURS_SETUP: return L"ours-setup";
     case SRC_OURS_APT:   return L"ours-apt";
     case SRC_LINUX_APT:  return L"linux-apt";
     default:             return L"unknown";
@@ -229,9 +225,10 @@ static void dump(void)
 static void open_app(app_t *a)
 {
     WCHAR target[MAX_PATH], dir[MAX_PATH], *slash;
-    if (a->method == SRC_OURS_SETUP) { ShellExecuteW(NULL, NULL, L"sg-documents.exe", NULL, NULL, SW_SHOWNORMAL); return; }
     if (a->tier == TIER_LINUX && a->run[0]) { sys_run_linux(a->run); return; }
 #ifndef SG_MUTANT_NOLAUNCH
+    /* our own: its program, by its App Paths name (SG Office: sg-documents.exe) */
+    if (a->tier == TIER_OURS && a->run[0]) { ShellExecuteW(NULL, NULL, a->run, NULL, NULL, SW_SHOWNORMAL); return; }
     /* the program itself (or its Start shortcut), started in its own folder */
     if (app_launch_target(a, target, MAX_PATH)) {
         lstrcpynW(dir, target, MAX_PATH);
@@ -833,15 +830,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         }
         if (!lstrcmpiW(argv[i], L"--check-updates")) {
             load_all(TRUE); dump(); LocalFree(argv); return 0;
-        }
-        if (!lstrcmpiW(argv[i], L"--install-elevated") && i + 1 < argc) {
-            int k;
-            WCHAR err[512];
-            load_all(FALSE);
-            k = find_app(argv[i + 1]);
-            rc = k < 0 ? 2 : app_install_elevated(&g_apps[k], err, ARRAYSIZE(err));
-            LocalFree(argv);
-            return rc;
         }
         if (!lstrcmpiW(argv[i], L"--deb") && i + 1 < argc) {
             rc = sys_deb_window(inst, argv[i + 1]);

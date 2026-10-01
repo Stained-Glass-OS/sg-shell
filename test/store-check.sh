@@ -22,6 +22,10 @@
 #      unpacked and run; H. a pinned install
 #   I. a Linux app installs through the elevated copy and sg-admind's
 #      apt-install, with the progress window, and is then detected
+#   I2. one of ours (SG Office: ours:apt:sg-office) installs the same way, is
+#      registered in the Windows side as it installs (sg-admind imports its
+#      registry defaults as the machine account), is detected from dpkg, and
+#      Open starts its program by its App Paths name (Run)
 #   J. a .deb: the "Install a Linux package" window says what it is (name,
 #      version, maker), Install stages it and sg-admind's deb-install installs
 #      it; a file that is not a package is refused; File Explorer's .deb verb
@@ -40,7 +44,6 @@
 #   SG_MUTANT_ANYTYPE     picks a portable zip over a runnable installer
 #   SG_MUTANT_NOZIP       does not unpack a zipped installer
 #   SG_MUTANT_NOSEARCH    the search box filters nothing
-#   SG_MUTANT_NOPACKAGE   never has the missing package installed
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
@@ -81,7 +84,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -217,10 +220,17 @@ printf '%s %s\n' "\$name" "\$ver" >> "$T/installed"
 EOF
 cat > "$B/dpkg-query" <<EOF
 #!/bin/sh
+[ "\$1" = -L ] && { printf '/usr/share/doc/%s\n/usr/share/stained-glass/defaults.d/89-sg-office.reg\n' "\$2"; exit 0; }
 eval "pkg=\\\${\$#}"
 v=\$(sed -n "s/^\$pkg //p" "$T/installed" | tail -1)
 [ -n "\$v" ] || exit 1
 printf 'installed %s' "\$v"
+EOF
+# runuser: the registration step (importing a package's registry defaults
+# as the machine account) -- recorded
+cat > "$B/runuser" <<EOF
+#!/bin/sh
+printf 'runuser %s\n' "\$*" >> "$T/apt.log"
 EOF
 chmod +x "$B"/*
 SG_ADMIN_SYSTEM_UID=$(id -u)
@@ -432,76 +442,6 @@ ununinstall FakeApp; ununinstall PinnedApp
 rm -rf "$WINEPREFIX/drive_c/Program Files/Plus App" "$WINEPREFIX/drive_c/Program Files/Fake App" "$WINEPREFIX/drive_c/Program Files/Pinned App" "$WINEPREFIX/drive_c/Program Files/Pick App" "$WINEPREFIX/drive_c/Program Files/Zip App"
 wineserver -w
 
-# --- E2. an "ours" app whose setup program is in a system package this machine lacks -------------
-# sg-admind in its test mode, watching a spool of the gate's, with stand-ins:
-# apt-get records its calls; dpkg-query lists the package's registry
-# defaults; runuser (the registration step: importing them as the machine
-# account) records its call and registers the setup program (App Paths), as
-# the real import does.
-S2="$T/spool2"; AB="$T/abin"; CALLS="$T/admind-calls"
-mkdir -p "$S2/requests" "$S2/replies" "$AB"; chmod 700 "$S2/requests"; : > "$CALLS"
-fakewin=$(wine winepath -w "$T/store-fake.exe" 2>/dev/null | tr -d '\r')
-cat > "$AB/apt-get" <<EOF
-#!/bin/sh
-printf 'apt-get %s\n' "\$*" >> "$CALLS"
-EOF
-cat > "$AB/runuser" <<EOF
-#!/bin/sh
-printf 'runuser %s\n' "\$*" >> "$CALLS"
-WINEPREFIX="$WINEPREFIX" WINEDEBUG=-all DISPLAY="$DISPLAY" "$WINE_DIR/bin/wine" reg add \
-    'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\gate-setup.exe' /ve /d '$fakewin' /f >/dev/null 2>&1
-EOF
-cat > "$AB/dpkg-query" <<'EOF'
-#!/bin/sh
-printf '/usr/share/stained-glass/defaults.d/89-sg-office.reg\n'
-EOF
-chmod +x "$AB"/*
-: > "$T/admind-run"
-( while [ -e "$T/admind-run" ]; do
-      SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S2" SG_ADMIN_PATH="$AB" SG_ADMIN_SYSTEM_UID="$(id -u)" \
-          python3 "$HERE/admin/sg-admind" 2>>"$T/admind.log"
-      sleep 0.3
-  done ) & AP2=$!
-reg "$K\\O5" /v Name /d 'Our Suite'
-reg "$K\\O5" /v Publisher /d 'Stained Glass OS'
-reg "$K\\O5" /v Tier /d ours
-reg "$K\\O5" /v Source /d 'ours:setup:gate-setup.exe'
-reg "$K\\O5" /v Package /d 'sg-office'
-reg "$K\\O5" /v DetectName /d 'Our Suite'
-reg "$K\\O6" /v Name /d 'Not Ours'
-reg "$K\\O6" /v Tier /d ours
-reg "$K\\O6" /v Source /d 'ours:setup:other-setup.exe'
-reg "$K\\O6" /v Package /d 'openssh-server'
-# a removed package leaves its keys: App Paths naming a file that is gone
-reg 'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\gate-setup.exe' /ve /d 'C:\gone\gate-setup.exe'
-wineserver -w
-ours() { SG_ADMIN_SPOOL="$S2" SG_FAKE_KEY=OurSuite SG_FAKE_DISPLAY='Our Suite' SG_FAKE_VERSION=26.8 SG_FAKE_DIR='Our Suite' \
-         wine "${SG_MUT:-$EXE}" --install "$1" >/dev/null 2>&1; }
-# the mutant first (it must leave nothing behind): the package is never installed
-rm -f "$G/setup.log"; : > "$CALLS"
-SG_MUT="$T/mut-nopackage.exe" ours O5; ec=$?
-[ "$ec" != 0 ] && ! grep -q 'install sg-office' "$CALLS" \
-    && pass "MUTANT NOPACKAGE fails without the package (gate catches it)" || fail "NOPACKAGE not detected (exit $ec)"
-rm -f "$G/setup.log"; : > "$CALLS"
-ours O5; ec=$?
-[ "$ec" = 0 ] && pass "an app whose programs are a missing system package installs (its stale App Paths entry ignored)" || fail "install O5 exit $ec: $(cat "$D.result" 2>/dev/null)"
-grep -q '^apt-get .*install sg-office$' "$CALLS" && pass "the package was installed through sg-admind" || fail "apt-get calls: $(tr '\n' '|' < "$CALLS")"
-grep -q '^runuser -u sgsystem -- .*sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg$' "$CALLS" \
-    && pass "and registered (its registry defaults, imported as the machine account)" || fail "no registration: $(tr '\n' '|' < "$CALLS")"
-grep -q '/install /quiet' "$G/setup.log" 2>/dev/null && pass "then its setup program ran (/install /quiet)" || fail "setup.log '$(cat "$G/setup.log" 2>/dev/null)'"
-run --list
-[ "$(kv "$(appline O5)" state)" = installed ] && pass "and it is detected as installed" || fail "after install: $(appline O5)"
-: > "$CALLS"
-ours O6; ec=$?
-[ "$ec" != 0 ] && ! grep -q 'openssh-server' "$CALLS" \
-    && pass "a package not on sg-admind's list is refused and never reaches apt" || fail "not-ours: exit $ec, calls $(tr '\n' '|' < "$CALLS")"
-grep -q 'the system package failed' "$D.result" 2>/dev/null \
-    && pass "and the person is told the package was not installed" || fail "result '$(cat "$D.result" 2>/dev/null)'"
-rm -f "$T/admind-run"; kill "$AP2" 2>/dev/null
-wine reg delete "$K\\O5" /f >/dev/null 2>&1; wine reg delete "$K\\O6" /f >/dev/null 2>&1
-wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\OurSuite' /f >/dev/null 2>&1
-rm -rf "$WINEPREFIX/drive_c/Program Files/Our Suite"; wineserver -w
-
 # the desktop the windows below live on
 reg 'HKCU\Software\Wine\Explorer' /v Desktop /d shell
 reg 'HKCU\Software\Wine\Explorer\Desktops' /v shell /d 1024x768
@@ -530,6 +470,43 @@ kill $IP 2>/dev/null; wait $IP 2>/dev/null; ec=$?
 run --list
 [ "$(kv "$(appline L2)" state)" = installed ] && [ "$(kv "$(appline L2)" installed)" = 9.9-gate ] \
     && pass "and it is then detected from dpkg's status" || fail "L2 after: $(appline L2)"
+
+# --- I2. one of ours: SG Office's way -------------------------------------------------------------
+reg "$K\\O5" /v Name /d 'Our Suite'
+reg "$K\\O5" /v Publisher /d 'Stained Glass OS'
+reg "$K\\O5" /v Tier /d ours
+reg "$K\\O5" /v Source /d 'ours:apt:sg-office'
+reg "$K\\O5" /v DetectName /d 'Our Suite'
+reg "$K\\O5" /v Run /d 'gate-suite.exe'
+cp "$T/store-fake.exe" "$G/app.exe"
+reg 'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\gate-suite.exe' /ve /d 'C:\gate\app.exe'
+sleep 0.5
+run --list
+[ "$(kv "$(appline O5)" tier)" = ours ] && [ "$(kv "$(appline O5)" state)" = not-installed ] \
+    && pass "our own suite (ours:apt) is listed, not installed" || fail "O5 before: $(appline O5)"
+rm -f "$D" "$D.result" "$D.sys"; : > "$T/apt.log"
+wine "$EXE" --install O5 >/dev/null 2>&1 & IP=$!
+if waitfor "$D.sys" '^result ' 120; then
+    grep -q '^result ok' "$D.sys" && pass "it installs through the elevated copy and sg-admind's apt-install" || fail "O5 result: $(grep '^result' "$D.sys")"
+    sleep 0.5; click "$D.sys" close
+else fail "the install of our suite did not finish: $(cat "$D.sys" 2>/dev/null) / $(tail -3 "$T/admind.log")"; fi
+i=0; while kill -0 $IP 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+kill $IP 2>/dev/null; wait $IP 2>/dev/null
+grep -q ' install sg-office$' "$T/apt.log" && pass "apt-get install sg-office (it brings the editors)" || fail "apt.log: $(cat "$T/apt.log")"
+grep -q '^runuser -u sgsystem -- .*sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg$' "$T/apt.log" \
+    && pass "registered as it installs (its registry defaults, imported as the machine account): no restart" \
+    || fail "not registered: $(cat "$T/apt.log")"
+run --list
+[ "$(kv "$(appline O5)" state)" = installed ] && pass "and it is detected from dpkg's status" || fail "O5 after: $(appline O5)"
+rm -f "$G/launch.log"
+run --open O5
+launched 'app.exe' && pass "Open starts our suite's program by its App Paths name (Run)" \
+    || fail "Open O5 started nothing: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+wine "$T/mut-nolaunch.exe" --open O5 >/dev/null 2>&1; sleep 3
+[ ! -e "$G/launch.log" ] && pass "MUTANT NOLAUNCH does not start it (gate catches it)" || fail "NOLAUNCH not detected for O5"
+wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
+wine reg delete "$K\\O5" /f >/dev/null 2>&1
 
 # --- J. a .deb file -------------------------------------------------------------------------------
 P="$T/pkg"; mkdir -p "$P/DEBIAN" "$P/usr/share/doc/sg-gate-hello"

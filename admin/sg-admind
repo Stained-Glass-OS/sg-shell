@@ -42,11 +42,6 @@
 #   source-add NAME URI SUITES COMPONENTS   where updates come from: a deb822
 #   source-remove NAME                     /etc/apt/sources.list.d/sg-user-NAME.sources
 #   source-enable FILE yes|no              any .sources file there: Enabled:
-#   package-install NAME     one of Stained Glass OS's own packages (a fixed
-#                            list: SG Store's "ours" apps), from the machine's
-#                            apt sources, then registered in the Windows side
-#                            (its registry defaults, imported as the machine
-#                            account, as sg-prefix-init does at the boot)
 #   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
@@ -392,27 +387,19 @@ def op_update_check(args):
     return []
 
 
-# SG Store's "ours" apps whose Windows-side programs come in a system package
-# (SG Office's are in sg-office): the only packages this installs. Anything
-# else is installed the administrator's way, not through the store.
+# SG Store's "ours" apps: Stained Glass OS's own packages with programs on
+# the Windows side (SG Office's: sg-office, with its editors). apt-install
+# installs them as any package, then registers them at once.
 OUR_PACKAGES = ("sg-office", "sg-office-editors")
-APT_ENV = {"DEBIAN_FRONTEND": "noninteractive", "APT_LISTCHANGES_FRONTEND": "none"}
 
 
-def op_package_install(args):
-    name = args[0]
-    if name not in OUR_PACKAGES:
-        raise Refused("Only Stained Glass OS's own apps can be installed this way.")
-    # fresh lists when the network allows; the ones there are will do otherwise
-    run(["apt-get", "-q", "update"], timeout=600, extra_env=APT_ENV)
-    must(["apt-get", "-q", "-y", "-o", "DPkg::Lock::Timeout=600", "-o", "Dpkg::Options::=--force-confold",
-          "install", name], "%s could not be installed" % name, timeout=1800, extra_env=APT_ENV)
-    # its App Paths, file types and Start entries into the Windows side now,
-    # not at the next start: the package's registry defaults, imported as the
-    # machine account into the running shared server, with the stamps
-    # sg-prefix-init keeps (so the boot does not import them again). Not
-    # sg-prefix-init itself: it ends by waiting for the server to exit, which
-    # it never does while anyone is signed in.
+def register_defaults(name):
+    """A package's App Paths, file types and Start entries into the Windows
+    side now, not at the next start: its registry defaults, imported as the
+    machine account into the running shared server, with the stamps
+    sg-prefix-init keeps (so the boot does not import them again). Not
+    sg-prefix-init itself: it ends by waiting for the server to exit, which it
+    never does while anyone is signed in."""
     files = [f for f in must(["dpkg-query", "-L", name], "%s's files could not be listed" % name).split("\n")
              if f.startswith(DEFAULTS_DIR + "/") and f.endswith(".reg")]
     if files:
@@ -420,7 +407,6 @@ def op_package_install(args):
               "XDG_RUNTIME_DIR=/run/stained-glass", "sh", "-c", REGISTER_SH, "sg-register"] + files,
              "%s was installed, but could not be registered; it will be at the next start" % name,
              timeout=600)
-    return []
 
 
 DEFAULTS_DIR = "/usr/share/stained-glass/defaults.d"
@@ -684,6 +670,9 @@ def op_apt_install(args):
     ver = installed_version(pkg)
     if not ver:
         raise Refused("%s was not installed." % pkg)
+    if pkg in OUR_PACKAGES:
+        progress(97, "Registering %s..." % pkg)
+        register_defaults(pkg)
     progress(100, "Done")
     return ["%s %s" % (pkg, ver)]
 
@@ -860,7 +849,6 @@ OPS = {
     "source-add": (op_source_add, 4),
     "source-remove": (op_source_remove, 1),
     "source-enable": (op_source_enable, 2),
-    "package-install": (op_package_install, 1),
     "font-install": (op_font_install, 1),
     "font-remove": (op_font_remove, 1),
     "apt-install": (op_apt_install, 1),

@@ -68,10 +68,6 @@ def q(s):
 def programs():
     out = [HEADER, "; Stained Glass OS -- SG Office: its programs and file types (office/gen-reg.py).\n"
                    "; Which program a type opens with by default is 89-sg-office-types.reg.\n"]
-    # Get SG Office, under the name SG Store's SG Office entry runs it by
-    # (defaults/85-sg-store.reg: Source=ours:setup:sg-office-setup.exe)
-    out.append('[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\sg-office-setup.exe]\n@="%s"\n'
-               % (DIR + "sg-office-setup64.exe"))
     for kind, exe in EXE.items():
         path = DIR + exe
         out.append('[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s]\n@="%s"\n'
@@ -89,9 +85,8 @@ def programs():
         out.append('[HKEY_LOCAL_MACHINE\\Software\\Classes\\%s\\shell\\open]\n@="&Open"\n' % progid)
         out.append('[HKEY_LOCAL_MACHINE\\Software\\Classes\\%s\\shell\\open\\command]\n@="\\"%s\\" \\"%%1\\""\n'
                    % (progid, path))
-        out.append('[HKEY_LOCAL_MACHINE\\Software\\Classes\\%s\\shell\\print]\n@="&Print"\n' % progid)
-        out.append('[HKEY_LOCAL_MACHINE\\Software\\Classes\\%s\\shell\\print\\command]\n@="\\"%s\\" /p \\"%%1\\""\n'
-                   % (progid, path))
+        # no Print verb: the editors print from their File menu, not from a
+        # command line (a /p from an older registration opens the file)
         for e in exts:
             # in "Open with" even when another program is the default
             out.append('[HKEY_LOCAL_MACHINE\\Software\\Classes\\%s\\OpenWithProgids]\n"%s"=""\n' % (e, progid))

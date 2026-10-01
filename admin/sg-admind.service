@@ -8,7 +8,7 @@ Type=oneshot
 ExecStart=/usr/libexec/stained-glass/sg-admind
 # Root, because renaming the computer, managing accounts and setting the time
 # zone are root's; every operation is on a fixed, validated list.
-# No PrivateTmp: package-install registers a package in the running Windows
+# No PrivateTmp: apt-install registers our own packages in the running Windows
 # side with "wine reg import" as the machine account, and the shared
 # wineserver's socket is under /tmp (/tmp/.wine-sg-*). A private /tmp hid it,
 # so the import started a second wineserver on the same prefix: the running

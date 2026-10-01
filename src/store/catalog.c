@@ -40,7 +40,7 @@ static int parse_tier(const WCHAR *s, int method)
     if (!lstrcmpiW(s, L"ours")) return TIER_OURS;
     if (!lstrcmpiW(s, L"linux")) return TIER_LINUX;
     /* inferred from the method */
-    if (method == SRC_OURS_SETUP || method == SRC_OURS_APT) return TIER_OURS;
+    if (method == SRC_OURS_APT) return TIER_OURS;
     if (method == SRC_LINUX_APT) return TIER_LINUX;
     return TIER_WINDOWS;
 }
@@ -84,9 +84,6 @@ static void parse_source(app_t *a, const WCHAR *src)
     } else if (!_wcsnicmp(src, L"pin:", 4)) {
         a->method = SRC_PIN;
         parse_pin(a, src + 4);
-    } else if (!_wcsnicmp(src, L"ours:setup:", 11)) {
-        a->method = SRC_OURS_SETUP;
-        lstrcpynW(a->setup_exe, src + 11, ARRAYSIZE(a->setup_exe));
     } else if (!_wcsnicmp(src, L"ours:apt:", 9)) {
         a->method = SRC_OURS_APT;
         lstrcpynW(a->apt_pkg, src + 9, ARRAYSIZE(a->apt_pkg));
@@ -129,8 +126,6 @@ int catalog_load(app_t *apps, int max)
         a->colour = colour;
         reg_str(item, L"Source", src, ARRAYSIZE(src));
         parse_source(a, src);
-        if (a->method == SRC_OURS_SETUP)
-            reg_str(item, L"Package", a->apt_pkg, ARRAYSIZE(a->apt_pkg));
         reg_str(item, L"Tier", tier, ARRAYSIZE(tier));
         a->tier = parse_tier(tier, a->method);
         if (!a->category[0]) lstrcpyW(a->category, L"Apps");
@@ -281,54 +276,10 @@ BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch)
     return found;
 }
 
-/* The path an App Paths name resolves to (e.g. sg-office-setup.exe) -- only
- * when that file is there: a removed package leaves its registry keys. */
-static BOOL app_path(const WCHAR *exe, WCHAR *out, int cch)
-{
-    WCHAR key[256];
-    DWORD cb = cch * sizeof(WCHAR);
-    out[0] = 0;
-    swprintf(key, ARRAYSIZE(key), L"Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%ls", exe);
-    if (!RegGetValueW(HKEY_LOCAL_MACHINE, key, NULL, RRF_RT_REG_SZ, NULL, out, &cb) && out[0]
-        && GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES) return TRUE;
-    cb = cch * sizeof(WCHAR);
-    if (!RegGetValueW(HKEY_CURRENT_USER, key, NULL, RRF_RT_REG_SZ, NULL, out, &cb) && out[0]
-        && GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES) return TRUE;
-    out[0] = 0;
-    return FALSE;
-}
-
-static DWORD run_status(const WCHAR *file, const WCHAR *args)
-{
-    SHELLEXECUTEINFOW sei = { sizeof(sei) };
-    DWORD code = (DWORD)-1;
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-    sei.lpFile = file;
-    sei.lpParameters = args;
-    sei.nShow = SW_HIDE;
-    if (!ShellExecuteExW(&sei) || !sei.hProcess) return code;
-    WaitForSingleObject(sei.hProcess, INFINITE);
-    GetExitCodeProcess(sei.hProcess, &code);
-    CloseHandle(sei.hProcess);
-    return code;
-}
-
 void app_detect(app_t *a)
 {
     a->installed_version[0] = 0;
     a->state = AST_NOT_INSTALLED;
-    if (a->method == SRC_OURS_SETUP) {
-        WCHAR exe[MAX_PATH];
-        if (app_path(a->setup_exe, exe, MAX_PATH)) {
-            DWORD code = run_status(exe, L"/status");
-            /* /status: 0 = installed with the current payload; non-zero = not,
-             * or an older payload (an update). (DWORD)-1 = could not run. */
-            if (code == 0) a->state = AST_INSTALLED;
-            else if (code != (DWORD)-1 && find_installed(a->detect_name, a->installed_version, 64))
-                a->state = AST_UPDATE;
-        }
-        return;
-    }
     if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) {
         /* a system package: dpkg says, never a Windows program's name -- the
          * Windows GIMP installed made "GIMP (Linux)" look installed */
@@ -410,7 +361,7 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
     int best_len = 0;
     unsigned i;
     out[0] = 0;
-    if (a->method == SRC_OURS_SETUP || a->tier == TIER_LINUX) return FALSE;
+    if (a->tier == TIER_OURS || a->tier == TIER_LINUX) return FALSE;
     if (find_installed_entry(a->detect_name, version, ARRAYSIZE(version), icon, ARRAYSIZE(icon))
         && icon[0] && icon_program(icon, out, cch)) return TRUE;
     for (i = 0; i < ARRAYSIZE(folders); i++)
@@ -432,8 +383,8 @@ BOOL app_check_update(app_t *a, WCHAR *err, int cch)
     } else if (a->method == SRC_PIN) {
         lstrcpynW(a->available_version, a->pin_version, ARRAYSIZE(a->available_version));
     } else {
-        /* ours:setup update is decided by app_detect (/status); apt tiers are
-         * update-checked by the OS's own package tools, not the store. */
+        /* apt tiers are update-checked by the OS's own package tools, not
+         * the store. */
         return TRUE;
     }
     if (a->state == AST_INSTALLED && a->installed_version[0] && a->available_version[0]) {
@@ -532,173 +483,17 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     return ok ? 0 : 1;
 }
 
-/* ---- our own apps whose programs are a system package ----------------------------------------------
- *
- * SG Office's setup program comes in the sg-office package. A machine made
- * before that package was in the image, and only updated since (updates
- * upgrade what is there; they install nothing new), has the store's SG
- * Office entry but not the package. Then the store asks for elevation the
- * Windows way (ShellExecute "runas" on itself); the elevated copy -- SYSTEM
- * -- has sg-admind install the package (package-install, a fixed list of our
- * own) and register it. The store then runs the setup program as the person,
- * as when the package is there: it downloads as them and elevates only to
- * run the installer. (Not all from the elevated copy: in wine-sg an HTTPS
- * download made as SYSTEM breaks off after its first 64 KB -- reported.) */
-
-static void spool_path(const char *sub, const WCHAR *file, WCHAR *out, int cch)
-{
-    typedef WCHAR *(CDECL *dos_name_fn)(const char *);
-    static dos_name_fn fn;
-    char unix_path[600];
-    WCHAR env[400], *dos;
-    char base[400] = "/run/stained-glass-admin";
-    /* the gate's own spool; the broker passes no such variable to elevated programs */
-    if (GetEnvironmentVariableW(L"SG_ADMIN_SPOOL", env, ARRAYSIZE(env)))
-        WideCharToMultiByte(CP_UTF8, 0, env, -1, base, sizeof(base), NULL, NULL);
-    _snprintf(unix_path, sizeof(unix_path), "%s/%s", base, sub);
-    unix_path[sizeof(unix_path) - 1] = 0;
-    if (!fn) fn = (dos_name_fn)(void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
-    out[0] = 0;
-    if (fn && (dos = fn(unix_path))) {
-        swprintf(out, cch, L"%ls\\%ls", dos, file);
-        HeapFree(GetProcessHeap(), 0, dos);
-    }
-}
-
-/* One request to sg-admind (verb + one argument); TRUE on OK. */
-static BOOL admind(const WCHAR *verb, const WCHAR *arg, WCHAR *err, int cch, DWORD timeout_ms)
-{
-    typedef BOOLEAN (WINAPI *rtlgenrandom_t)(PVOID, ULONG);
-    rtlgenrandom_t gen = (rtlgenrandom_t)(void *)GetProcAddress(LoadLibraryW(L"advapi32.dll"), "SystemFunction036");
-    WCHAR id[40], name[64], tmp[MAX_PATH], req[MAX_PATH], rep[MAX_PATH];
-    char body[512], ans[4096];
-    BYTE b[16];
-    HANDLE h;
-    DWORD n, start, got = 0;
-    int i;
-    if (!gen || !gen(b, sizeof(b))) { lstrcpynW(err, L"The request could not be made.", cch); return FALSE; }
-    for (i = 0; i < 16; i++) _snwprintf(id + i * 2, 3, L"%02x", b[i]);
-    id[32] = 0;
-    n = (DWORD)_snprintf(body, sizeof(body), "%ls\n%ls\n", verb, arg);
-    if (n >= sizeof(body)) { lstrcpynW(err, L"The request could not be made.", cch); return FALSE; }
-    swprintf(name, ARRAYSIZE(name), L".%ls", id);      spool_path("requests", name, tmp, MAX_PATH);
-    swprintf(name, ARRAYSIZE(name), L"%ls.req", id);   spool_path("requests", name, req, MAX_PATH);
-    swprintf(name, ARRAYSIZE(name), L"%ls.rep", id);   spool_path("replies", name, rep, MAX_PATH);
-    h = CreateFileW(tmp, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-        lstrcpynW(err, L"The administration service is not available.", cch);
-        return FALSE;
-    }
-    if (!WriteFile(h, body, n, &got, NULL) || got != n) { CloseHandle(h); DeleteFileW(tmp); lstrcpynW(err, L"The request could not be made.", cch); return FALSE; }
-    CloseHandle(h);
-    if (!MoveFileExW(tmp, req, 0)) { DeleteFileW(tmp); lstrcpynW(err, L"The request could not be made.", cch); return FALSE; }
-    for (start = GetTickCount(); GetFileAttributesW(rep) == INVALID_FILE_ATTRIBUTES; Sleep(250))
-        if (GetTickCount() - start > timeout_ms) { lstrcpynW(err, L"The install did not finish in time.", cch); return FALSE; }
-    h = CreateFileW(rep, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) { lstrcpynW(err, L"The answer could not be read.", cch); return FALSE; }
-    got = 0;
-    ReadFile(h, ans, sizeof(ans) - 1, &got, NULL);
-    CloseHandle(h);
-    DeleteFileW(rep);
-    ans[got] = 0;
-    if (!strncmp(ans, "OK", 2)) return TRUE;
-    {
-        char *line = !strncmp(ans, "FAILED ", 7) ? ans + 7 : ans, *nl = strchr(line, '\n');
-        if (nl) *nl = 0;
-        MultiByteToWideChar(CP_UTF8, 0, line[0] ? line : "The install failed.", -1, err, cch);
-    }
-    return FALSE;
-}
-
-static DWORD run_setup(const WCHAR *exe)
-{
-    /* the setup program downloads its own pinned installer, self-elevates
-     * (or, elevated already, installs in place) and installs silently */
-    return run_status(exe, L"/install /quiet");
-}
-
-/* The elevated copy's part: the package, installed and registered. */
-int app_install_elevated(app_t *a, WCHAR *err, int cch)
-{
-    WCHAR exe[MAX_PATH];
-    err[0] = 0;
-    if (a->method != SRC_OURS_SETUP || !a->apt_pkg[0]) { lstrcpynW(err, L"This app is not installed this way.", cch); return 1; }
-    if (app_path(a->setup_exe, exe, MAX_PATH)) return 0;
-#ifndef SG_MUTANT_NOPACKAGE
-    if (!admind(L"package-install", a->apt_pkg, err, cch, 45 * 60 * 1000)) return 20;
-#endif
-    if (!app_path(a->setup_exe, exe, MAX_PATH)) {
-        swprintf(err, cch, L"%ls was installed, but its setup program is not registered yet. Restart, then install again.", a->name);
-        return 21;
-    }
-    return 0;
-}
-
-/* The elevated copy's exit codes, as the person is told them. */
-static void elevated_failure(app_t *a, DWORD code, WCHAR *err, int cch)
-{
-    switch (code) {
-    case 20: swprintf(err, cch, L"%ls could not be installed: the system package failed.", a->name); break;
-    case 21: swprintf(err, cch, L"%ls was installed; restart, then install it again to finish.", a->name); break;
-    default: swprintf(err, cch, L"%ls was not installed (code %lu).", a->name, code); break;
-    }
-}
-
-static int install_package_elevated(app_t *a, WCHAR *err, int cch)
-{
-    WCHAR self[MAX_PATH], args[128];
-    SHELLEXECUTEINFOW sei = { sizeof(sei) };
-    DWORD code = (DWORD)-1;
-    GetModuleFileNameW(NULL, self, MAX_PATH);
-    swprintf(args, ARRAYSIZE(args), L"--install-elevated %ls", a->ord);
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-    sei.lpVerb = L"runas";
-    sei.lpFile = self;
-    sei.lpParameters = args;
-    sei.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&sei)) {
-        if (GetLastError() == ERROR_CANCELLED) swprintf(err, cch, L"%ls was not installed: an administrator did not allow it.", a->name);
-        else swprintf(err, cch, L"%ls could not be installed: elevation failed (%lu).", a->name, GetLastError());
-        return 1;
-    }
-    if (!sei.hProcess) { swprintf(err, cch, L"%ls: the install could not be followed.", a->name); return 1; }
-    WaitForSingleObject(sei.hProcess, INFINITE);
-    GetExitCodeProcess(sei.hProcess, &code);
-    CloseHandle(sei.hProcess);
-    if (code == 0) return 0;
-    elevated_failure(a, code, err, cch);
-    return (int)code;
-}
-
-static int install_ours_setup(app_t *a, WCHAR *err, int cch)
-{
-    WCHAR exe[MAX_PATH];
-    DWORD code;
-    if (!app_path(a->setup_exe, exe, MAX_PATH)) {
-        int rc;
-        if (!a->apt_pkg[0]) { swprintf(err, cch, L"%ls is not available.", a->setup_exe); return 1; }
-        /* its programs are not on this machine yet: the system package first */
-        if ((rc = install_package_elevated(a, err, cch))) return rc;
-        if (!app_path(a->setup_exe, exe, MAX_PATH)) { swprintf(err, cch, L"%ls is still not available.", a->setup_exe); return 1; }
-    }
-    code = run_setup(exe);
-    if (code == 0) return 0;
-    if (code == (DWORD)-1) { swprintf(err, cch, L"%ls could not be started.", a->setup_exe); return 1; }
-    swprintf(err, cch, L"%ls stopped with code %lu.", a->name, code);
-    return (int)code;
-}
-
 int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
 {
     err[0] = 0;
     switch (a->method) {
     case SRC_WINGET:     return install_winget(a, progress, ctx, cancel, err, cch);
     case SRC_PIN:        return install_pin(a, progress, ctx, cancel, err, cch);
-    case SRC_OURS_SETUP: return install_ours_setup(a, err, cch);
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
         /* a system package: apt, as root, through the administrator's
-         * consent and sg-admind (sysinstall.c) */
+         * consent and sg-admind (sysinstall.c); our own (SG Office's) are
+         * registered in the Windows side as they install */
         return sys_install_apt(a, err, cch);
     default:
         lstrcpynW(err, L"This app's source is not understood.", cch);

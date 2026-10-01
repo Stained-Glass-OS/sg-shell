@@ -236,44 +236,39 @@ build:
 	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
 	done
 
-# SG Office (package sg-office, office/): its three programs and Get SG Office
-# (Windows programs, each with its icons drawn by office/gen-icons.py), and the
-# payload Get SG Office puts on top of LibreOffice (office/build-payload.sh).
-OFFICE_KINDS = documents:writer spreadsheets:calc presentations:impress
-.PHONY: office test-office test-office-wine
+# SG Office (package sg-office, office/): its three programs (Windows
+# programs, each with its icons drawn by office/gen-icons.py) that start SG
+# Office's editors, the native program of package sg-office-editors.
+OFFICE_KINDS = documents spreadsheets presentations
+.PHONY: office test-office
 office:
 	@mkdir -p $(BUILD)/office
 	@python3 office/gen-icons.py $(BUILD)/office/icons
-	@for k in $(OFFICE_KINDS); do n=$${k%%:*}; lo=$${k##*:}; \
+	@for n in $(OFFICE_KINDS); do \
 	    t="SG Office $$(echo $$n | sed 's/^./\U&/')"; \
 	    $(WINDRES64) -I $(BUILD)/office/icons -DSG_ICON="\\\"sg-$$n.ico\\\"" -DSG_FILE_ICON="\\\"sg-$$n-file.ico\\\"" \
 	        -DSG_TITLE_A="\\\"$$t\\\"" office/launcher/launcher.rc -O coff -o $(BUILD)/office/$$n-res64.o && \
-	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_KIND="L\"--$$lo\"" -DSG_NATIVE_KIND="L\"$$n\"" -DSG_TITLE="L\"$$t\"" \
-	        -o $(BUILD)/sg-$${n}64.exe office/launcher/launcher.c $(BUILD)/office/$$n-res64.o -lshell32 -ladvapi32 -luser32 \
+	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_NATIVE_KIND="L\"$$n\"" -DSG_TITLE="L\"$$t\"" \
+	        -o $(BUILD)/sg-$${n}64.exe office/launcher/launcher.c $(BUILD)/office/$$n-res64.o -lshell32 -luser32 \
 	        && echo "built sg-$$n (64-bit)"; done
-	@$(WINDRES64) -I $(BUILD)/office/icons office/setup/setup.rc -O coff -o $(BUILD)/office/setup-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-office-setup64.exe office/setup/setup.c \
-	    $(BUILD)/office/setup-res64.o -lwininet -lbcrypt -lshell32 -lcomctl32 -ladvapi32 -luser32 -lgdi32 -lole32 \
-	    && echo "built sg-office-setup (64-bit)"
-	@sh office/build-payload.sh $(BUILD)/office/payload
 
-# SG Office's gates that need no Windows LibreOffice: the functions' logic,
-# the registrations, the payload, the launchers (test/office-check.sh).
+# SG Office's gates: the registrations, the programs, Start and Default apps,
+# the Store's entry (test/office-check.sh); the programs starting the editors
+# under Wine (test/office-native-check.sh).
 test-office: office
 	@sh test/office-check.sh
 	@sh test/office-native-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
 # SG Office's programs starting SG Office's own editors, under Wine
 # (test/office-native-check.sh), and the broken builds it must fail.
-.PHONY: test-office-native-mutants
+.PHONY: test-office-native-mutants test-office-mutants
 test-office-native-mutants: office
 	@sh test/office-native-mutants.sh
 
-# The whole of SG Office under Wine: Get SG Office installs LibreOffice from
-# its MSI (SG_OFFICE_MSI: a local copy of the pinned file), the Excel formula
-# corpus runs against it, VBA macros run (test/office-wine-check.sh).
-test-office-wine: office
-	@sh test/office-wine-check.sh
+# Both of SG Office's gates against the broken builds and sources they must fail.
+test-office-mutants: office
+	@sh test/office-check-mutants.sh
+	@sh test/office-native-mutants.sh
 
 # Our apps follow the app mode, live (needs a wine-sg with dark title bars, 0162:
 # SG_WINE=<wine> SG_WINESERVER=<wineserver> for a build tree).

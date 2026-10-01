@@ -63,7 +63,7 @@ EOF
 # dpkg-query -L: the package's files, one of them its registry defaults
 cat > "$B/dpkg-query" <<'EOF'
 #!/bin/sh
-printf '/usr/share/doc/%s\n/usr/share/stained-glass/defaults.d/89-sg-office.reg\n/usr/share/stained-glass/defaults.d/README\n/usr/libexec/stained-glass/shell/sg-office-setup64.exe\n' "$2"
+printf '/usr/share/doc/%s\n/usr/share/stained-glass/defaults.d/89-sg-office.reg\n/usr/share/stained-glass/defaults.d/README\n' "$2"
 EOF
 chmod +x "$B"/*
 
@@ -213,6 +213,8 @@ else printf '%s 9.9\n' "\$last" >> "$T/installed"; fi
 EOF
 cat > "$B/dpkg-query" <<EOF
 #!/bin/sh
+# -L: the package's files, one of them its registry defaults
+[ "\$1" = -L ] && { printf '/usr/share/doc/%s\n/usr/share/stained-glass/defaults.d/89-sg-office.reg\n/usr/share/stained-glass/defaults.d/README\n' "\$2"; exit 0; }
 eval "pkg=\\\${\$#}"
 v=\$(sed -n "s/^\$pkg //p" "$T/installed" 2>/dev/null | tail -1)
 [ -n "\$v" ] || exit 1
@@ -233,6 +235,31 @@ for bad in 'gimp; reboot' '-oAPT::X=1' '../gimp' 'Gimp' ''; do
     r=$(ask apt-install "$bad"); case "$(first "$r")" in "FAILED "*) ;; *) fail "apt-install '$bad': $r" ;; esac
 done
 [ ! -s "$CALLS" ] && pass "refuses what is not a package name, apt never runs" || fail "a bad name reached apt: $(cat "$CALLS")"
+grep -q '^runuser ' "$CALLS" && fail "a package not ours was registered in the Windows side" || true
+# one of our own (SG Office): installed, then registered as SYSTEM at once
+reg_cases() { # ADMIND -- one word per case
+    : > "$CALLS"; : > "$T/installed"
+    id=$(next_id); printf 'apt-install\nsg-office\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    reg_call=$(grep '^runuser ' "$CALLS")
+    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* install sg-office$' "$CALLS" \
+      && printf '%s' "$reg_call" | grep -q '^runuser -u sgsystem -- env HOME=/var/lib/stained-glass XDG_RUNTIME_DIR=/run/stained-glass sh -c .*wine reg import.* sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg |' \
+      && ! printf '%s' "$reg_call" | grep -q 'README\|sg-prefix-init'; } && echo registered || echo not-registered
+    : > "$CALLS"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"
+    grep -q '^runuser ' "$CALLS" && echo registers-others || echo ours-only
+}
+# shellcheck disable=SC2046
+set -- $(reg_cases "$ADMIND")
+[ "${1:-}" = registered ] && pass "apt-install of our own package (sg-office) imports its registry defaults as the machine account" \
+    || fail "sg-office not registered: $(tr '\n' '|' < "$CALLS")"
+[ "${2:-}" = ours-only ] && pass "and only ours: another package is not registered" || fail "gimp was registered"
+sed 's/^        register_defaults(pkg)$/        pass/' "$ADMIND" > "$T/mut-noregister"
+grep -q 'register_defaults(pkg)' "$T/mut-noregister" && fail "the NOREGISTER mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(reg_cases "$T/mut-noregister")
+[ "${1:-}" != registered ] && pass "MUTANT NOREGISTER leaves SG Office unregistered until a restart (gate catches it)" || fail "NOREGISTER not detected"
 
 P="$T/pkg"; mkdir -p "$P/DEBIAN"
 printf 'Package: sg-gate-hello\nVersion: 1.2-3\nArchitecture: all\nMaintainer: Gate <g@example.org>\nDescription: gate\n' > "$P/DEBIAN/control"
@@ -355,29 +382,14 @@ cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac
 r=$(ask hostname a b); case "$(first "$r")" in "FAILED Malformed"*) pass "refuses the wrong number of fields";; *) fail "arity: $r";; esac
-# package-install: our own packages only; installed, then registered as SYSTEM
-: > "$CALLS"
-r=$(ask package-install sg-office)
-reg_call=$(grep '^runuser ' "$CALLS")
-if [ "$(first "$r")" = OK ] && grep -q '^apt-get -q -y .* install sg-office' "$CALLS" \
-    && printf '%s' "$reg_call" | grep -q '^runuser -u sgsystem -- env HOME=/var/lib/stained-glass XDG_RUNTIME_DIR=/run/stained-glass sh -c .*wine reg import.* sg-register /usr/share/stained-glass/defaults.d/89-sg-office.reg |' \
-    && ! printf '%s' "$reg_call" | grep -q 'README\|sg-office-setup64\|sg-prefix-init'; then
-    pass "package-install installs one of our packages, then imports its registry defaults as the machine account"
-else fail "package-install sg-office: $r / $(tr '\n' '|' < "$CALLS")"; fi
 # ... into the RUNNING shared wineserver: its socket is under /tmp, so the
 # service must not have a private /tmp (it had: the import went to a second
 # server of its own, and SG Store said "restart, then install it again")
 private_tmp() { grep -Eiq '^[[:space:]]*PrivateTmp[[:space:]]*=[[:space:]]*(yes|true|on|1|disconnected)' "$1"; }
-private_tmp "$HERE/admin/sg-admind.service" && fail "sg-admind.service has a private /tmp: package-install's registration misses the running wineserver" \
+private_tmp "$HERE/admin/sg-admind.service" && fail "sg-admind.service has a private /tmp: apt-install's registration misses the running wineserver" \
     || pass "sg-admind shares /tmp, so its registration reaches the running shared wineserver"
 sed 's/^TimeoutStartSec=/PrivateTmp=yes\nTimeoutStartSec=/' "$HERE/admin/sg-admind.service" > "$T/mut-privtmp.service"
 private_tmp "$T/mut-privtmp.service" && pass "MUTANT PRIVATETMP (the old unit) is caught" || fail "PRIVATETMP mutant not detected"
-: > "$CALLS"
-for p in openssh-server 'sg-office extra' '-o=foo' ''; do
-    r=$(ask package-install "$p")
-    case "$(first "$r")" in "FAILED "*) ;; *) fail "package-install '$p' was not refused: $r";; esac
-done
-[ ! -s "$CALLS" ] && pass "refuses any other package, a second word or an option, and apt never runs" || fail "apt ran: $(tr '\n' '|' < "$CALLS")"
 
 # not SYSTEM's: the file's owner is checked
 : > "$CALLS"

@@ -1,5 +1,26 @@
 sg-shell (0.1.0-83) unstable; urgency=medium
 
+  * SG Office is our own suite now, based on ONLYOFFICE (David: "keep
+    pushing on Onlyoffice based SG office, the old libreoffice one can be
+    removed"). Package sg-office depends on sg-office-editors (built from
+    the sg-office repository: /usr/bin/sg-office and its engine) and keeps
+    the Windows side: SG Office Documents, Spreadsheets and Presentations,
+    which start the editors (a file as its Unix path; no file: a new
+    document of their kind; /p opens the file -- the editors print from
+    their menu), the file types, Start and Default apps. Gone: Get SG Office
+    (the LibreOffice download), its payload (settings, templates, the
+    spreadsheet ribbon, SG Office Functions), the formula and VBA corpora
+    that ran against LibreOffice (the sg-office repository has its own), the
+    Editors = LibreOffice policy and the types' Print verb.
+  * SG Store installs SG Office as our apt package (ours:apt:sg-office):
+    the elevated copy and sg-admind's apt-install, which registers our own
+    packages in the running Windows side as they install -- no setup
+    program, no "restart, then install again". Open starts SG Office
+    Documents (the entry's Run). sg-admind's package-install and the
+    Store's setup-program path are gone. Tests: test/office-check.sh
+    (mutants: test/office-check-mutants.sh), test/office-native-check.sh
+    (mutants nonew, dospath, printarg), test/store-check.sh (I2),
+    test/admind-check.sh (mutant NOREGISTER).
   * SG Store: Kdenlive and BleachBit said "Installed." and stayed
     "Install". Their 32-bit installers write the per-user Uninstall entry,
     and Wine files a 32-bit program's HKCU\Software keys under

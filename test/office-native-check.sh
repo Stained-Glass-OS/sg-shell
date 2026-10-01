@@ -8,9 +8,8 @@
 #     editors on a new document of their kind (--new documents|spreadsheets)
 #   - a file given as a Windows path (C:\..., with a space in its name)
 #     reaches the editors as its Unix path, as one argument
-#   - Editors = "LibreOffice" (HKLM Software\Stained Glass\SG Office) keeps
-#     LibreOffice: the native program is not started
-#   - /p (print) stays with LibreOffice: the native program is not started
+#   - /p (a Print verb an older registration left) opens the file: the
+#     editors print from their own menu
 #
 # Needs wine-sg; skips (77) without it. SG_OFFICE_LAUNCHER_DIR runs another
 # build of the programs (test/office-native-mutants.sh).
@@ -38,7 +37,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# the programs alone (no Get SG Office beside them: the LibreOffice path ends there)
+# the programs alone
 mkdir -p "$T/bin"
 cp "$L/sg-documents64.exe" "$L/sg-spreadsheets64.exe" "$T/bin/"
 # the fake editors: one line per argument, a blank line after each start
@@ -80,13 +79,7 @@ run sg-documents64.exe 'C:\users\Public\Documents\Q3 report.docx'
     || fail "C:\\users\\Public\\Documents\\Q3 report.docx reached the editors as: [$(calls | tr '\n' '|')]"
 
 run sg-documents64.exe /p 'C:\users\Public\Documents\Q3 report.docx'
-[ -z "$(calls)" ] && pass "printing (/p) stays with LibreOffice" || fail "/p started the editors: [$(calls | tr '\n' '|')]"
-
-"$WINE_DIR/bin/wine" reg add 'HKLM\Software\Stained Glass\SG Office' /v Editors /t REG_SZ /d LibreOffice /f >/dev/null 2>&1
-run sg-documents64.exe 'C:\users\Public\Documents\Q3 report.docx'
-[ -z "$(calls)" ] && pass "Editors = LibreOffice keeps LibreOffice" || fail "Editors = LibreOffice still started the editors"
-"$WINE_DIR/bin/wine" reg delete 'HKLM\Software\Stained Glass\SG Office' /v Editors /f >/dev/null 2>&1
-run sg-documents64.exe 'C:\users\Public\Documents\Q3 report.docx'
-[ "$(one_file)" = "$(readlink -f "$DOC")" ] && pass "without the policy, the editors again" || fail "without the policy: [$(calls | tr '\n' '|')]"
+[ "$(one_file)" = "$(readlink -f "$DOC")" ] && pass "/p opens the file in the editors (they print from their own menu)" \
+    || fail "/p reached the editors as: [$(calls | tr '\n' '|')]"
 
 exit $RC

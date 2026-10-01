@@ -40,7 +40,7 @@
 enum { TIER_WINDOWS, TIER_OURS, TIER_LINUX };
 
 /* How an entry is installed and update-checked. */
-enum { SRC_WINGET, SRC_PIN, SRC_OURS_SETUP, SRC_OURS_APT, SRC_LINUX_APT, SRC_UNKNOWN };
+enum { SRC_WINGET, SRC_PIN, SRC_OURS_APT, SRC_LINUX_APT, SRC_UNKNOWN };
 
 /* Per-app state. */
 enum { AST_NOT_INSTALLED, AST_INSTALLED, AST_UPDATE, AST_INSTALLING, AST_DONE, AST_FAILED };
@@ -52,9 +52,7 @@ typedef struct {
     int   tier;                   /* TIER_* */
     int   method;                 /* SRC_* */
     WCHAR winget_id[128];         /* SRC_WINGET */
-    WCHAR setup_exe[128];         /* SRC_OURS_SETUP: an App Paths name, e.g. sg-office-setup.exe */
-    WCHAR apt_pkg[128];           /* SRC_OURS_APT / SRC_LINUX_APT; SRC_OURS_SETUP: the system
-                                   * package its setup program comes in ("Package") */
+    WCHAR apt_pkg[128];           /* SRC_OURS_APT / SRC_LINUX_APT: the system package */
     /* SRC_PIN: a vendor download pinned in the catalogue */
     WCHAR pin_url[2048], pin_type[32], pin_silent[512], pin_version[64];
     BYTE  pin_sha[32];
@@ -63,7 +61,8 @@ typedef struct {
      * by the Uninstall entries' DisplayName (detect_name), a Linux one by
      * dpkg's state of apt_pkg -- never the other way round */
     WCHAR detect_name[128];       /* "Name|Other|!Not this" -- see name_matches() */
-    WCHAR run[260];               /* SRC_LINUX_APT: the Unix program Open starts */
+    WCHAR run[260];               /* what Open starts: SRC_LINUX_APT, a Unix program;
+                                   * SRC_OURS_APT, a Windows program (App Paths name) */
     /* runtime */
     int   state;                  /* AST_* */
     WCHAR installed_version[64];
@@ -87,7 +86,6 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or 
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
-int  app_install_elevated(app_t *a, WCHAR *err, int cch);   /* the elevated (SYSTEM) copy's part (--install-elevated) */
 const WCHAR *tier_name(int tier);
 
 /* sysinstall.c: system packages (Linux apps, .deb files) through the

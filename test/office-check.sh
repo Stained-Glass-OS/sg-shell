@@ -1,11 +1,12 @@
 #!/bin/sh
 # shellcheck disable=SC2015  # pass/fail one-liners: both only print
-# SG Office -- the gate that needs no Windows LibreOffice: SG Office
-# Functions' logic, the registrations (and that the file-type defaults file
-# never changes once shipped), the programs and their resources, the payload
-# Get SG Office applies, the templates (read back by a LibreOffice when one is
-# installed here), Start and Default apps, and no Microsoft product names as
-# ours. The whole suite under Wine is test/office-wine-check.sh.
+# SG Office -- the shell's side of the suite: the registrations (and that the
+# file-type defaults file never changes once shipped), the three programs and
+# their resources, Start and Default apps, the package (it brings SG Office's
+# editors, package sg-office-editors), SG Store's entry (installed with apt as
+# our own package, opened by its program), no LibreOffice left, and no
+# Microsoft product names as ours. The programs starting the editors under
+# Wine are test/office-native-check.sh.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 B="$HERE/build"
@@ -14,39 +15,6 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 PY=/usr/bin/python3
 [ -x "$PY" ] || PY=python3
-
-# 1. the functions' logic (Excel's documented results)
-if "$PY" "$HERE/office/functions/test_functions.py" > "$B/office-functions.log" 2>&1; then
-    pass "SG Office Functions: $(grep -c '^PASS' "$B/office-functions.log") cases match Excel"
-else
-    grep '^FAIL' "$B/office-functions.log"; fail "SG Office Functions' logic"
-fi
-
-# 2. the add-in: IDL identifiers LibreOffice accepts, and every function
-#    under the name Excel writes into its files
-X="$B/office/payload/extensions/sg-office-functions"
-if [ -f "$X/XSgFunctions.idl" ] && ! grep -E '\[in\] [a-z< >]+ [A-Za-z0-9]*_' "$X/XSgFunctions.idl" >/dev/null; then
-    pass "the type library's parameters are IDL identifiers (no underscores)"
-else fail "XSgFunctions.idl missing or has an underscore identifier"; fi
-"$PY" - "$HERE" "$X" <<'PY' && pass "every function has Excel's file name (compatibility name), prefixed as Excel prefixes it" || fail "compatibility names"
-import sys, re, os
-here, x = sys.argv[1], sys.argv[2]
-sys.path.insert(0, os.path.join(here, "office/functions")); sys.path.insert(0, os.path.join(here, "office/parity"))
-from sgoffice_spec import FUNCTIONS
-import corpus
-xcu = open(os.path.join(x, "CalcAddIn.xcu")).read()
-bad = 0
-for m, name, excel, *_ in FUNCTIONS:
-    want = ("_xlfn." + name) if name in corpus.FUTURE else name
-    if excel != want or ('<value xml:lang="en-US">%s</value>' % excel) not in xcu:
-        print("  %s: %s (want %s)" % (name, excel, want)); bad += 1
-    if not hasattr(__import__("sgoffice_functions"), m):
-        print("  %s: no logic" % m); bad += 1
-sys.exit(1 if bad else 0)
-PY
-for f in META-INF/manifest.xml description.xml component.py pythonpath/sgoffice_functions.py pythonpath/sgoffice_spec.py; do
-    [ -f "$X/$f" ] || fail "the extension lacks $f"
-done
 
 # 3. registrations: generated as committed; the types file frozen
 T=$(mktemp -d "${TMPDIR:-/var/tmp}/office-check.XXXXXX")
@@ -72,26 +40,41 @@ grep -o 'sg-[a-z]*64\.exe' "$R" | sort -u | while read -r exe; do
     grep -q "build/$exe" "$HERE/debian/rules" || echo "FAIL  $exe is registered but not packaged"
 done | grep FAIL && RC=1 || pass "every registered program is packaged"
 grep -q '"SG Office"="Software\\\\Stained Glass\\\\SG Office\\\\Capabilities"' "$R" && pass "SG Office is a registered application (Default apps)" || fail "no RegisteredApplications entry"
-# SG Store's "ours" entries run a setup program by its App Paths name: each
-# must be registered by a .reg this source ships, pointing at a program the
-# packages install (the SG Office entry named one nothing registered, so it
-# could never install -- 2026-09-30)
-"$PY" - "$HERE" <<'PY' && pass "every SG Store setup program is registered (App Paths) and packaged" || fail "an SG Store setup program is not registered or not packaged"
+# SG Store's SG Office: our own apt package (sg-office, which brings the
+# editors), installed through sg-admind -- which registers it at once -- and
+# opened by a program this source registers and packages. No setup program.
+"$PY" - "$HERE" <<'PY' && pass "SG Store installs SG Office as our apt package (sg-office), registered as it installs, opened by sg-documents.exe" || fail "SG Store's SG Office entry"
 import glob, os, re, sys
 here = sys.argv[1]
 store = open(os.path.join(here, "defaults/85-sg-store.reg"), encoding="utf-8").read()
 regs = "".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(here, "defaults/*.reg")) + glob.glob(os.path.join(here, "office/defaults/*.reg")))
 rules = open(os.path.join(here, "debian/rules"), encoding="utf-8").read()
+admind = open(os.path.join(here, "admin/sg-admind"), encoding="utf-8").read()
 bad = 0
-for name in re.findall(r'"Source"="ours:setup:([^"]+)"', store):
-    m = re.search(r'\[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s\]\n@="([^"]+)"' % re.escape(name), regs, re.I)
-    if not m:
-        print("  %s: no App Paths entry" % name); bad += 1; continue
-    exe = m.group(1).replace("\\\\", "\\").split("\\")[-1]
-    if ("build/" + exe) not in rules:
-        print("  %s -> %s: not packaged" % (name, exe)); bad += 1
+m = re.search(r'"Name"="SG Office"\n(?:"[^"]+"=[^\n]*\n)*', store)
+entry = m.group(0) if m else ""
+if '"Source"="ours:apt:sg-office"' not in entry:
+    print("  the entry's Source is not ours:apt:sg-office"); bad += 1
+if "ours:setup" in store or '"Package"=' in entry or "LibreOffice" in entry:
+    print("  a setup-program entry is left"); bad += 1
+if not re.search(r'OUR_PACKAGES = \([^)]*"sg-office"', admind) or "if pkg in OUR_PACKAGES:" not in admind:
+    print("  sg-admind does not register sg-office as it installs"); bad += 1
+run = re.search(r'"Run"="([^"]+)"', entry)
+if not run:
+    print("  no Run (what Open starts)"); bad += 1
+else:
+    a = re.search(r'\[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\%s\]\n@="([^"]+)"' % re.escape(run.group(1)), regs, re.I)
+    if not a or ("build/" + a.group(1).replace("\\\\", "\\").split("\\")[-1]) not in rules:
+        print("  Run %s is not a registered, packaged program" % run.group(1)); bad += 1
 sys.exit(1 if bad else 0)
 PY
+# the package brings the editors
+sed -n '/^Package: sg-office$/,/^$/p' "$HERE/debian/control" | grep -q '^Depends:.*sg-office-editors' \
+    && pass "package sg-office depends on sg-office-editors (the editors come with it)" || fail "sg-office does not depend on sg-office-editors"
+# no LibreOffice path left: no download, no soffice.exe, no LibreOffice policy
+if grep -rIl 'LibreOffice\|soffice\|sg-office-setup' "$HERE/office" "$HERE/src/store" "$HERE/debian/control" "$HERE/debian/rules" 2>/dev/null; then
+    fail "LibreOffice is still named in SG Office's sources (above)"
+else pass "no LibreOffice left: SG Office is our own suite"; fi
 
 # 4. the programs: built, with the program's and its files' icons, named as ours
 for k in documents spreadsheets presentations; do
@@ -103,7 +86,6 @@ for k in documents spreadsheets presentations; do
         [ "$desc" = "SG Office $(echo $k | sed 's/^./\U&/')" ] && pass "sg-$k is '$desc' (Default apps and Open with show it)" || fail "sg-$k's FileDescription is '$desc'"
     fi
 done
-[ -f "$B/sg-office-setup64.exe" ] && pass "Get SG Office is built" || fail "sg-office-setup64.exe was not built"
 for n in Documents Spreadsheets Presentations; do
     grep -q "add_beside(L\"SG Office $n\", L\"sg-$(echo $n | tr A-Z a-z)64.exe\")" "$HERE/src/sg-start.c" || fail "Start does not list SG Office $n"
     grep -q "{ L\"$n\", { L\"" "$HERE/src/control/set_apps.c" || fail "Default apps has no $n row"
@@ -114,60 +96,6 @@ pass "Start lists the three programs (when installed); Default apps has a row fo
 if grep -E '"(FriendlyAppName|FriendlyTypeName|ApplicationName)"="[^"]*(Word|Excel|PowerPoint|Microsoft|Office 365|Windows)' \
         "$R" >/dev/null; then fail "a name of ours uses a Microsoft product name"
 else pass "our names are our own (SG Office ..., Document, Spreadsheet, Presentation)"; fi
-
-# 6. the payload
-P="$B/office/payload"
-"$PY" - "$P/office.ini" <<'PY' && pass "office.ini pins an https download from The Document Foundation and its SHA-256" || fail "office.ini"
-import configparser, re, sys
-c = configparser.ConfigParser(); c.read(sys.argv[1]); s = c["LibreOffice"]
-ok = s["Url"].startswith("https://download.documentfoundation.org/") and re.fullmatch("[0-9a-f]{64}", s["Sha256"]) \
-    and s["Version"] in s["Url"] and "REGISTER_NO_MSO_TYPES=1" in s["MsiProperties"] and s["Payload"].isdigit()
-sys.exit(0 if ok else 1)
-PY
-if command -v xmllint >/dev/null; then
-    sed 's|@TEMPLATEDIR@|/t|' "$P/sg-office.xcd.in" | xmllint --noout - && xmllint --noout "$P/sg-office-user.xcu" \
-        && pass "the defaults (.xcd) and the new user's settings (.xcu) are well-formed" || fail "the payload's XML"
-fi
-grep -q '<dependency file="main"/>' "$P/sg-office.xcd.in" && grep -q 'file://@TEMPLATEDIR@/normal.ott' "$P/sg-office.xcd.in" \
-    && pass "the defaults are read after LibreOffice's own, and name the templates" || fail "the .xcd's dependencies or templates"
-X2="$P/sg-office.xcd.in"
-grep -q '<prop oor:name="ooSetupFactoryDefaultFilter"><value>MS Word 2007 XML</value>' "$X2" \
-    && grep -q '<value>Calc MS Excel 2007 XML</value>' "$X2" && grep -q '<value>Impress MS PowerPoint 2007 XML</value>' "$X2" \
-    && grep -q '<prop oor:name="WarnAlienFormat"><value>false</value>' "$X2" \
-    && pass "Office's formats are the default formats, with no keep-format question" || fail "default formats"
-grep -q '<prop oor:name="Executable"><value>true</value>' "$X2" && grep -q '<prop oor:name="MacroSecurityLevel"><value>1</value>' "$X2" \
-    && pass "a document's VBA runs (asked about first, as Excel's Enable content)" || fail "VBA settings"
-grep -q '<prop oor:name="AutoPilot"><value>false</value>' "$X2" \
-    && pass "a new presentation opens on its first slide (no template chooser)" || fail "Impress starts in the template chooser"
-for t in normal.ott book.ots blank.otp; do
-    [ "$(unzip -Z1 "$P/templates/$t" 2>/dev/null | head -1)" = mimetype ] || fail "template $t is not an ODF package"
-done
-pass "the templates are ODF packages"
-
-R2="$P/ui/scalc/notebookbar_sgoffice.ui"
-if [ -f "$R2" ] && grep -q '\.uno:InsertCalcTable' "$R2" && grep -q 'gdSGHomeStyles' "$R2" && grep -q 'gdSGHomeEditing' "$R2" \
-        && grep -q '<value>notebookbar_sgoffice.ui</value>' "$P/sg-office.xcd.in"; then
-    "$PY" - "$R2" <<'PY' && pass "the spreadsheet ribbon's Home tab: Clipboard, Font, Alignment, Number, Styles (Format as Table), Cells, Editing -- and it is the default" || fail "the Home tab's groups"
-import sys, xml.etree.ElementTree as ET
-r = ET.parse(sys.argv[1]).getroot()
-home = [o for o in r.iter("object") if o.get("id") == "pmhbHome"][0]
-ids = [c.find("object").get("id") for c in home if c.tag == "child"]
-want = ["gdHomeClipboard", "gdHomeFont", "gdHomeAlignment", "gdHomeNumber", "gdSGHomeStyles", "gdSGHomeCells", "gdSGHomeEditing"]
-styles = [o for o in r.iter("object") if o.get("id") == "gdSGHomeStyles"][0]
-acts = [p.text for p in styles.iter("property") if p.get("name") == "action-name"]
-sys.exit(0 if ids == want and ".uno:InsertCalcTable" in acts and ".uno:ConditionalFormatMenu" in acts else 1)
-PY
-else fail "no SG Office spreadsheet ribbon in the payload, or it is not the default"; fi
-grep -q '<node oor:name=".uno:InsertCalcTable" oor:op="fuse"><prop oor:name="Label" oor:type="xs:string"><value xml:lang="en-US">Format as Table</value>' "$P/sg-office.xcd.in" \
-    && pass "the button reads Format as Table (menus keep LibreOffice's wording)" || fail "no Format as Table label"
-
-# 7. the templates as LibreOffice reads them (a native LibreOffice, when this machine has one)
-if command -v soffice >/dev/null && "$PY" -c "import uno" 2>/dev/null; then
-    "$PY" "$HERE/test/office-templates.py" "$HERE" "$P" && pass "new documents, spreadsheets and presentations start as Office's do" \
-        || fail "the templates, as LibreOffice reads them"
-else
-    echo "SKIP  templates in LibreOffice (no soffice/python3-uno here)"
-fi
 
 rm -rf "$T"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"

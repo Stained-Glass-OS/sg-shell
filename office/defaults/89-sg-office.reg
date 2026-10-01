@@ -4,9 +4,6 @@ Windows Registry Editor Version 5.00
 ; Stained Glass OS -- SG Office: its programs and file types (office/gen-reg.py).
 ; Which program a type opens with by default is 89-sg-office-types.reg.
 
-[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-office-setup.exe]
-@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-office-setup64.exe"
-
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-documents.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe"
 
@@ -85,12 +82,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.12\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.docx\OpenWithProgids]
 "SGOffice.Document.12"=""
 
@@ -113,12 +104,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Document.8\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.doc\OpenWithProgids]
 "SGOffice.Document.8"=""
 
@@ -137,12 +122,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.DocumentTemplate\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.dotx\OpenWithProgids]
 "SGOffice.DocumentTemplate"=""
@@ -169,12 +148,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentText\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-documents64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.odt\OpenWithProgids]
 "SGOffice.OpenDocumentText"=""
 
@@ -196,12 +169,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.12\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.xlsx\OpenWithProgids]
 "SGOffice.Sheet.12"=""
@@ -228,12 +195,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Sheet.8\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.xls\OpenWithProgids]
 "SGOffice.Sheet.8"=""
 
@@ -252,12 +213,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SheetTemplate\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.xltx\OpenWithProgids]
 "SGOffice.SheetTemplate"=""
@@ -284,12 +239,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentSpreadsheet\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.ods\OpenWithProgids]
 "SGOffice.OpenDocumentSpreadsheet"=""
 
@@ -312,12 +261,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.CSV\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-spreadsheets64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.csv\OpenWithProgids]
 "SGOffice.CSV"=""
 
@@ -336,12 +279,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.12\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.pptx\OpenWithProgids]
 "SGOffice.Show.12"=""
@@ -365,12 +302,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.Show.8\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.ppt\OpenWithProgids]
 "SGOffice.Show.8"=""
 
@@ -389,12 +320,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.SlideShow\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.ppsx\OpenWithProgids]
 "SGOffice.SlideShow"=""
@@ -421,12 +346,6 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
 
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.ShowTemplate\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
-
 [HKEY_LOCAL_MACHINE\Software\Classes\.potx\OpenWithProgids]
 "SGOffice.ShowTemplate"=""
 
@@ -451,12 +370,6 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" \"%1\""
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\print]
-@="&Print"
-
-[HKEY_LOCAL_MACHINE\Software\Classes\SGOffice.OpenDocumentPresentation\shell\print\command]
-@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-presentations64.exe\" /p \"%1\""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.odp\OpenWithProgids]
 "SGOffice.OpenDocumentPresentation"=""

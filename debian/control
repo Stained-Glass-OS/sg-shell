@@ -26,17 +26,10 @@ Description: Stained Glass OS shell panels (Start menu, Control Panel, Task Mana
 
 Package: sg-office
 Architecture: all
-Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine,
-         fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-liberation
-Suggests: sg-office-editors
+Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine, sg-office-editors
 Description: SG Office for Stained Glass OS (documents, spreadsheets, presentations)
  The office suite's place in Stained Glass OS: SG Office Documents,
  Spreadsheets and Presentations in the Start menu, the default programs for
- Microsoft Office's file types (until the user installs another suite),
- Settings > Default apps rows, and "Get SG Office", which downloads The
- Document Foundation's LibreOffice for Windows at the user's request, checks
- its published SHA-256 and installs it for all users with SG Office's
- settings on top: Microsoft's formats by default, Excel's formula syntax,
- the tabbed ribbon, Calibri-sized templates, and SG Office Functions (the
- Excel functions LibreOffice's engine lacks). No LibreOffice binary is in
- this package.
+ Microsoft Office's file types (until the user installs another suite) and
+ Settings > Default apps rows. They start SG Office's editors, our own suite
+ based on ONLYOFFICE (package sg-office-editors).
