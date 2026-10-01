@@ -1175,3 +1175,993 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:calibre"
 "Run"="/usr/bin/calibre"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L17]
+"Name"="RawTherapee"
+"Publisher"="RawTherapee"
+"Description"="Raw photo developer."
+"Category"="Graphics"
+"Colour"=dword:008a3b12
+"Tier"="linux"
+"Source"="linux:apt:rawtherapee"
+"Run"="/usr/bin/rawtherapee"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L18]
+"Name"="digiKam"
+"Publisher"="KDE"
+"Description"="Photo manager."
+"Category"="Graphics"
+"Colour"=dword:002b6aa8
+"Tier"="linux"
+"Source"="linux:apt:digikam"
+"Run"="/usr/bin/digikam"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L19]
+"Name"="Shotwell"
+"Publisher"="GNOME"
+"Description"="Photo organizer."
+"Category"="Graphics"
+"Colour"=dword:003b7a3b
+"Tier"="linux"
+"Source"="linux:apt:shotwell"
+"Run"="/usr/bin/shotwell"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L20]
+"Name"="gThumb"
+"Publisher"="GNOME"
+"Description"="Image viewer and browser."
+"Category"="Graphics"
+"Colour"=dword:0055606a
+"Tier"="linux"
+"Source"="linux:apt:gthumb"
+"Run"="/usr/bin/gthumb"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L21]
+"Name"="MyPaint"
+"Publisher"="MyPaint"
+"Description"="Painting program for digital artists."
+"Category"="Graphics"
+"Colour"=dword:007a3fa0
+"Tier"="linux"
+"Source"="linux:apt:mypaint"
+"Run"="/usr/bin/mypaint"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L22]
+"Name"="Scribus"
+"Publisher"="Scribus"
+"Description"="Desktop publishing."
+"Category"="Graphics"
+"Colour"=dword:002a2f6e
+"Tier"="linux"
+"Source"="linux:apt:scribus"
+"Run"="/usr/bin/scribus"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L23]
+"Name"="Xournal++"
+"Publisher"="Xournal++"
+"Description"="Handwritten notes and PDF annotation."
+"Category"="Productivity"
+"Colour"=dword:001f5f9e
+"Tier"="linux"
+"Source"="linux:apt:xournalpp"
+"Run"="/usr/bin/xournalpp"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L24]
+"Name"="LibreCAD"
+"Publisher"="LibreCAD"
+"Description"="2D CAD drawing."
+"Category"="Graphics"
+"Colour"=dword:002c5a8c
+"Tier"="linux"
+"Source"="linux:apt:librecad"
+"Run"="/usr/bin/librecad"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L25]
+"Name"="OpenSCAD"
+"Publisher"="OpenSCAD"
+"Description"="Script-based 3D CAD."
+"Category"="Graphics"
+"Colour"=dword:00d9a400
+"Tier"="linux"
+"Source"="linux:apt:openscad"
+"Run"="/usr/bin/openscad"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L26]
+"Name"="KolourPaint"
+"Publisher"="KDE"
+"Description"="Simple paint program."
+"Category"="Graphics"
+"Colour"=dword:00c0392b
+"Tier"="linux"
+"Source"="linux:apt:kolourpaint"
+"Run"="/usr/bin/kolourpaint"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L27]
+"Name"="Image Viewer (Eye of GNOME)"
+"Publisher"="GNOME"
+"Description"="Image viewer."
+"Category"="Graphics"
+"Colour"=dword:003465a4
+"Tier"="linux"
+"Source"="linux:apt:eog"
+"Run"="/usr/bin/eog"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L28]
+"Name"="mpv"
+"Publisher"="mpv"
+"Description"="Minimal media player."
+"Category"="Media"
+"Colour"=dword:006a2e7a
+"Tier"="linux"
+"Source"="linux:apt:mpv"
+"Run"="/usr/bin/mpv"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L29]
+"Name"="Celluloid"
+"Publisher"="Celluloid"
+"Description"="Video player (mpv)."
+"Category"="Media"
+"Colour"=dword:003f4fa8
+"Tier"="linux"
+"Source"="linux:apt:celluloid"
+"Run"="/usr/bin/celluloid"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L30]
+"Name"="Rhythmbox"
+"Publisher"="GNOME"
+"Description"="Music player and podcasts."
+"Category"="Media"
+"Colour"=dword:00e8a300
+"Tier"="linux"
+"Source"="linux:apt:rhythmbox"
+"Run"="/usr/bin/rhythmbox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L31]
+"Name"="Strawberry"
+"Publisher"="Strawberry"
+"Description"="Music player and collection organizer."
+"Category"="Media"
+"Colour"=dword:00c9242f
+"Tier"="linux"
+"Source"="linux:apt:strawberry"
+"Run"="/usr/bin/strawberry"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L32]
+"Name"="Ardour"
+"Publisher"="Ardour"
+"Description"="Digital audio workstation."
+"Category"="Media"
+"Colour"=dword:002b2b2b
+"Tier"="linux"
+"Source"="linux:apt:ardour"
+"Run"="/usr/bin/ardour"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L33]
+"Name"="LMMS"
+"Publisher"="LMMS"
+"Description"="Music production studio."
+"Category"="Media"
+"Colour"=dword:002a9d4a
+"Tier"="linux"
+"Source"="linux:apt:lmms"
+"Run"="/usr/bin/lmms"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L34]
+"Name"="MuseScore"
+"Publisher"="MuseScore"
+"Description"="Music notation."
+"Category"="Media"
+"Colour"=dword:001a5ca8
+"Tier"="linux"
+"Source"="linux:apt:musescore3"
+"Run"="/usr/bin/mscore3"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L35]
+"Name"="Hydrogen"
+"Publisher"="Hydrogen"
+"Description"="Drum machine."
+"Category"="Media"
+"Colour"=dword:003b3b8f
+"Tier"="linux"
+"Source"="linux:apt:hydrogen"
+"Run"="/usr/bin/hydrogen"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L36]
+"Name"="Shotcut"
+"Publisher"="Meltytech"
+"Description"="Video editor."
+"Category"="Media"
+"Colour"=dword:001e7f4f
+"Tier"="linux"
+"Source"="linux:apt:shotcut"
+"Run"="/usr/bin/shotcut"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L37]
+"Name"="OpenShot"
+"Publisher"="OpenShot Studios"
+"Description"="Video editor."
+"Category"="Media"
+"Colour"=dword:00d6551e
+"Tier"="linux"
+"Source"="linux:apt:openshot-qt"
+"Run"="/usr/bin/openshot-qt"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L38]
+"Name"="Pitivi"
+"Publisher"="GNOME"
+"Description"="Video editor."
+"Category"="Media"
+"Colour"=dword:008a4fc2
+"Tier"="linux"
+"Source"="linux:apt:pitivi"
+"Run"="/usr/bin/pitivi"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L39]
+"Name"="MusicBrainz Picard"
+"Publisher"="MetaBrainz"
+"Description"="Music tagger."
+"Category"="Media"
+"Colour"=dword:006b3d9a
+"Tier"="linux"
+"Source"="linux:apt:picard"
+"Run"="/usr/bin/picard"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L40]
+"Name"="Kid3"
+"Publisher"="KDE"
+"Description"="Audio tag editor."
+"Category"="Media"
+"Colour"=dword:002d6f9c
+"Tier"="linux"
+"Source"="linux:apt:kid3"
+"Run"="/usr/bin/kid3"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L41]
+"Name"="Sound Converter"
+"Publisher"="GNOME"
+"Description"="Audio file converter."
+"Category"="Media"
+"Colour"=dword:004a7f2c
+"Tier"="linux"
+"Source"="linux:apt:soundconverter"
+"Run"="/usr/bin/soundconverter"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L42]
+"Name"="Cheese"
+"Publisher"="GNOME"
+"Description"="Webcam photos and videos."
+"Category"="Media"
+"Colour"=dword:00d4a017
+"Tier"="linux"
+"Source"="linux:apt:cheese"
+"Run"="/usr/bin/cheese"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L43]
+"Name"="guvcview"
+"Publisher"="guvcview"
+"Description"="Webcam viewer and recorder."
+"Category"="Media"
+"Colour"=dword:005a6a7a
+"Tier"="linux"
+"Source"="linux:apt:guvcview"
+"Run"="/usr/bin/guvcview"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L44]
+"Name"="Firefox ESR"
+"Publisher"="Mozilla"
+"Description"="Web browser, extended support release."
+"Category"="Browsers"
+"Colour"=dword:00e66000
+"Tier"="linux"
+"Source"="linux:apt:firefox-esr"
+"Run"="/usr/bin/firefox-esr"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L45]
+"Name"="Chromium"
+"Publisher"="The Chromium Project"
+"Description"="Web browser."
+"Category"="Browsers"
+"Colour"=dword:004285f4
+"Tier"="linux"
+"Source"="linux:apt:chromium"
+"Run"="/usr/bin/chromium"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L46]
+"Name"="qBittorrent"
+"Publisher"="qBittorrent"
+"Description"="BitTorrent client."
+"Category"="Internet"
+"Colour"=dword:002f67ba
+"Tier"="linux"
+"Source"="linux:apt:qbittorrent"
+"Run"="/usr/bin/qbittorrent"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L47]
+"Name"="Deluge"
+"Publisher"="Deluge"
+"Description"="BitTorrent client."
+"Category"="Internet"
+"Colour"=dword:002e5f99
+"Tier"="linux"
+"Source"="linux:apt:deluge"
+"Run"="/usr/bin/deluge"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L48]
+"Name"="HexChat"
+"Publisher"="HexChat"
+"Description"="IRC chat."
+"Category"="Internet"
+"Colour"=dword:005a2d82
+"Tier"="linux"
+"Source"="linux:apt:hexchat"
+"Run"="/usr/bin/hexchat"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L49]
+"Name"="Pidgin"
+"Publisher"="Pidgin"
+"Description"="Chat client for many networks."
+"Category"="Internet"
+"Colour"=dword:007a5ca8
+"Tier"="linux"
+"Source"="linux:apt:pidgin"
+"Run"="/usr/bin/pidgin"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L50]
+"Name"="Evolution"
+"Publisher"="GNOME"
+"Description"="Mail, calendar and contacts."
+"Category"="Internet"
+"Colour"=dword:002c6db5
+"Tier"="linux"
+"Source"="linux:apt:evolution"
+"Run"="/usr/bin/evolution"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L51]
+"Name"="Geary"
+"Publisher"="GNOME"
+"Description"="Email."
+"Category"="Internet"
+"Colour"=dword:003d85c6
+"Tier"="linux"
+"Source"="linux:apt:geary"
+"Run"="/usr/bin/geary"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L52]
+"Name"="Liferea"
+"Publisher"="Liferea"
+"Description"="News and feed reader."
+"Category"="Internet"
+"Colour"=dword:00e07a1f
+"Tier"="linux"
+"Source"="linux:apt:liferea"
+"Run"="/usr/bin/liferea"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L53]
+"Name"="Gajim"
+"Publisher"="Gajim"
+"Description"="XMPP chat."
+"Category"="Internet"
+"Colour"=dword:004b9e4b
+"Tier"="linux"
+"Source"="linux:apt:gajim"
+"Run"="/usr/bin/gajim"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L54]
+"Name"="Nicotine+"
+"Publisher"="Nicotine+"
+"Description"="Soulseek file sharing."
+"Category"="Internet"
+"Colour"=dword:00c04040
+"Tier"="linux"
+"Source"="linux:apt:nicotine"
+"Run"="/usr/bin/nicotine"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L55]
+"Name"="Mumble"
+"Publisher"="Mumble"
+"Description"="Voice chat."
+"Category"="Internet"
+"Colour"=dword:002b2b2b
+"Tier"="linux"
+"Source"="linux:apt:mumble"
+"Run"="/usr/bin/mumble"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L56]
+"Name"="Okular"
+"Publisher"="KDE"
+"Description"="Document and PDF viewer."
+"Category"="Productivity"
+"Colour"=dword:003a7bd5
+"Tier"="linux"
+"Source"="linux:apt:okular"
+"Run"="/usr/bin/okular"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L57]
+"Name"="Document Viewer (Evince)"
+"Publisher"="GNOME"
+"Description"="PDF and document viewer."
+"Category"="Productivity"
+"Colour"=dword:00c0392b
+"Tier"="linux"
+"Source"="linux:apt:evince"
+"Run"="/usr/bin/evince"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L58]
+"Name"="GnuCash"
+"Publisher"="GnuCash"
+"Description"="Personal and small-business accounting."
+"Category"="Productivity"
+"Colour"=dword:002e7d32
+"Tier"="linux"
+"Source"="linux:apt:gnucash"
+"Run"="/usr/bin/gnucash"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L59]
+"Name"="HomeBank"
+"Publisher"="HomeBank"
+"Description"="Personal finance."
+"Category"="Productivity"
+"Colour"=dword:002a6f97
+"Tier"="linux"
+"Source"="linux:apt:homebank"
+"Run"="/usr/bin/homebank"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L60]
+"Name"="KMyMoney"
+"Publisher"="KDE"
+"Description"="Personal finance manager."
+"Category"="Productivity"
+"Colour"=dword:002f8f5b
+"Tier"="linux"
+"Source"="linux:apt:kmymoney"
+"Run"="/usr/bin/kmymoney"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L61]
+"Name"="Zim"
+"Publisher"="Zim"
+"Description"="Desktop wiki and notes."
+"Category"="Productivity"
+"Colour"=dword:006d6d2a
+"Tier"="linux"
+"Source"="linux:apt:zim"
+"Run"="/usr/bin/zim"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L62]
+"Name"="CherryTree"
+"Publisher"="CherryTree"
+"Description"="Hierarchical notes."
+"Category"="Productivity"
+"Colour"=dword:00b52a2a
+"Tier"="linux"
+"Source"="linux:apt:cherrytree"
+"Run"="/usr/bin/cherrytree"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L63]
+"Name"="Document Scanner"
+"Publisher"="GNOME"
+"Description"="Scan documents."
+"Category"="Productivity"
+"Colour"=dword:004a6fa5
+"Tier"="linux"
+"Source"="linux:apt:simple-scan"
+"Run"="/usr/bin/simple-scan"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L64]
+"Name"="Foliate"
+"Publisher"="Foliate"
+"Description"="E-book reader."
+"Category"="Productivity"
+"Colour"=dword:008a5a2b
+"Tier"="linux"
+"Source"="linux:apt:foliate"
+"Run"="/usr/bin/foliate"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L65]
+"Name"="Calendar"
+"Publisher"="GNOME"
+"Description"="Calendar."
+"Category"="Productivity"
+"Colour"=dword:003584e4
+"Tier"="linux"
+"Source"="linux:apt:gnome-calendar"
+"Run"="/usr/bin/gnome-calendar"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L66]
+"Name"="Geany"
+"Publisher"="Geany"
+"Description"="Lightweight IDE."
+"Category"="Development"
+"Colour"=dword:002f6b9a
+"Tier"="linux"
+"Source"="linux:apt:geany"
+"Run"="/usr/bin/geany"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L67]
+"Name"="Kate"
+"Publisher"="KDE"
+"Description"="Advanced text editor."
+"Category"="Development"
+"Colour"=dword:001d99f3
+"Tier"="linux"
+"Source"="linux:apt:kate"
+"Run"="/usr/bin/kate"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L68]
+"Name"="gedit"
+"Publisher"="GNOME"
+"Description"="Text editor."
+"Category"="Development"
+"Colour"=dword:006a8f2b
+"Tier"="linux"
+"Source"="linux:apt:gedit"
+"Run"="/usr/bin/gedit"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L69]
+"Name"="Meld"
+"Publisher"="Meld"
+"Description"="Visual diff and merge."
+"Category"="Development"
+"Colour"=dword:006b9a3a
+"Tier"="linux"
+"Source"="linux:apt:meld"
+"Run"="/usr/bin/meld"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L70]
+"Name"="gitg"
+"Publisher"="GNOME"
+"Description"="Git repository viewer."
+"Category"="Development"
+"Colour"=dword:00d94a2b
+"Tier"="linux"
+"Source"="linux:apt:gitg"
+"Run"="/usr/bin/gitg"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L71]
+"Name"="Git Cola"
+"Publisher"="Git Cola"
+"Description"="Git client."
+"Category"="Development"
+"Colour"=dword:002b6aa8
+"Tier"="linux"
+"Source"="linux:apt:git-cola"
+"Run"="/usr/bin/git-cola"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L72]
+"Name"="Qt Creator"
+"Publisher"="The Qt Company"
+"Description"="IDE for Qt and C++."
+"Category"="Development"
+"Colour"=dword:0041cd52
+"Tier"="linux"
+"Source"="linux:apt:qtcreator"
+"Run"="/usr/bin/qtcreator"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L73]
+"Name"="KDevelop"
+"Publisher"="KDE"
+"Description"="IDE."
+"Category"="Development"
+"Colour"=dword:002b5797
+"Tier"="linux"
+"Source"="linux:apt:kdevelop"
+"Run"="/usr/bin/kdevelop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L74]
+"Name"="Code::Blocks"
+"Publisher"="Code::Blocks"
+"Description"="C and C++ IDE."
+"Category"="Development"
+"Colour"=dword:005a8a2a
+"Tier"="linux"
+"Source"="linux:apt:codeblocks"
+"Run"="/usr/bin/codeblocks"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L75]
+"Name"="GNU Emacs"
+"Publisher"="GNU"
+"Description"="Extensible text editor."
+"Category"="Development"
+"Colour"=dword:007f5ab6
+"Tier"="linux"
+"Source"="linux:apt:emacs-gtk"
+"Run"="/usr/bin/emacs-gtk"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L76]
+"Name"="GVim"
+"Publisher"="Vim"
+"Description"="Vim with a window."
+"Category"="Development"
+"Colour"=dword:00019733
+"Tier"="linux"
+"Source"="linux:apt:vim-gtk3"
+"Run"="/usr/bin/vim.gtk3"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L77]
+"Name"="DB Browser for SQLite"
+"Publisher"="sqlitebrowser"
+"Description"="SQLite database editor."
+"Category"="Development"
+"Colour"=dword:002f6fa8
+"Tier"="linux"
+"Source"="linux:apt:sqlitebrowser"
+"Run"="/usr/bin/sqlitebrowser"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L78]
+"Name"="GHex"
+"Publisher"="GNOME"
+"Description"="Hex editor."
+"Category"="Development"
+"Colour"=dword:004a4a4a
+"Tier"="linux"
+"Source"="linux:apt:ghex"
+"Run"="/usr/bin/ghex"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L79]
+"Name"="Wireshark"
+"Publisher"="Wireshark"
+"Description"="Network protocol analyzer."
+"Category"="Development"
+"Colour"=dword:001679a7
+"Tier"="linux"
+"Source"="linux:apt:wireshark"
+"Run"="/usr/bin/wireshark"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L80]
+"Name"="Virtual Machine Manager"
+"Publisher"="virt-manager"
+"Description"="Virtual machines (KVM)."
+"Category"="Development"
+"Colour"=dword:00c0392b
+"Tier"="linux"
+"Source"="linux:apt:virt-manager"
+"Run"="/usr/bin/virt-manager"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L81]
+"Name"="Boxes"
+"Publisher"="GNOME"
+"Description"="Virtual machines made simple."
+"Category"="Development"
+"Colour"=dword:00e5a50a
+"Tier"="linux"
+"Source"="linux:apt:gnome-boxes"
+"Run"="/usr/bin/gnome-boxes"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L82]
+"Name"="Arduino IDE"
+"Publisher"="Arduino"
+"Description"="Arduino programming."
+"Category"="Development"
+"Colour"=dword:0000979d
+"Tier"="linux"
+"Source"="linux:apt:arduino"
+"Run"="/usr/bin/arduino"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L83]
+"Name"="BleachBit"
+"Publisher"="BleachBit"
+"Description"="Free disk space and protect privacy."
+"Category"="Utilities"
+"Colour"=dword:00c23b22
+"Tier"="linux"
+"Source"="linux:apt:bleachbit"
+"Run"="/usr/bin/bleachbit"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L84]
+"Name"="GParted"
+"Publisher"="GParted"
+"Description"="Partition editor."
+"Category"="Utilities"
+"Colour"=dword:00a52a2a
+"Tier"="linux"
+"Source"="linux:apt:gparted"
+"Run"="/usr/sbin/gparted"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L85]
+"Name"="Disk Usage Analyzer"
+"Publisher"="GNOME"
+"Description"="See what fills your disks."
+"Category"="Utilities"
+"Colour"=dword:003e8e41
+"Tier"="linux"
+"Source"="linux:apt:baobab"
+"Run"="/usr/bin/baobab"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L86]
+"Name"="Disks"
+"Publisher"="GNOME"
+"Description"="Disks and drives."
+"Category"="Utilities"
+"Colour"=dword:005e5c64
+"Tier"="linux"
+"Source"="linux:apt:gnome-disk-utility"
+"Run"="/usr/bin/gnome-disks"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L87]
+"Name"="Archive Manager"
+"Publisher"="GNOME"
+"Description"="Archives (zip, tar, 7z...)."
+"Category"="Utilities"
+"Colour"=dword:00986a44
+"Tier"="linux"
+"Source"="linux:apt:file-roller"
+"Run"="/usr/bin/file-roller"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L88]
+"Name"="Ark"
+"Publisher"="KDE"
+"Description"="Archive manager."
+"Category"="Utilities"
+"Colour"=dword:002a7fbf
+"Tier"="linux"
+"Source"="linux:apt:ark"
+"Run"="/usr/bin/ark"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L89]
+"Name"="Timeshift"
+"Publisher"="Timeshift"
+"Description"="System snapshots."
+"Category"="Utilities"
+"Colour"=dword:002b6a3f
+"Tier"="linux"
+"Source"="linux:apt:timeshift"
+"Run"="/usr/bin/timeshift"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L90]
+"Name"="System Monitor"
+"Publisher"="GNOME"
+"Description"="Processes and resources."
+"Category"="Utilities"
+"Colour"=dword:003a7a3a
+"Tier"="linux"
+"Source"="linux:apt:gnome-system-monitor"
+"Run"="/usr/bin/gnome-system-monitor"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L91]
+"Name"="Flameshot"
+"Publisher"="Flameshot"
+"Description"="Screenshots with annotation."
+"Category"="Utilities"
+"Colour"=dword:00c23b5a
+"Tier"="linux"
+"Source"="linux:apt:flameshot"
+"Run"="/usr/bin/flameshot"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L92]
+"Name"="KDE Connect"
+"Publisher"="KDE"
+"Description"="Phone and desktop together."
+"Category"="Utilities"
+"Colour"=dword:001d99f3
+"Tier"="linux"
+"Source"="linux:apt:kdeconnect"
+"Run"="/usr/bin/kdeconnect-app"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L93]
+"Name"="Font Manager"
+"Publisher"="Font Manager"
+"Description"="Install and preview fonts."
+"Category"="Utilities"
+"Colour"=dword:004a4a8a
+"Tier"="linux"
+"Source"="linux:apt:font-manager"
+"Run"="/usr/bin/font-manager"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L94]
+"Name"="Character Map"
+"Publisher"="GNOME"
+"Description"="Characters and symbols."
+"Category"="Utilities"
+"Colour"=dword:006a6a6a
+"Tier"="linux"
+"Source"="linux:apt:gucharmap"
+"Run"="/usr/bin/gucharmap"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L95]
+"Name"="Catfish"
+"Publisher"="Xfce"
+"Description"="File search."
+"Category"="Utilities"
+"Colour"=dword:008a6a2a
+"Tier"="linux"
+"Source"="linux:apt:catfish"
+"Run"="/usr/bin/catfish"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L96]
+"Name"="Syncthing"
+"Publisher"="Syncthing"
+"Description"="File synchronization."
+"Category"="Utilities"
+"Colour"=dword:000891d1
+"Tier"="linux"
+"Source"="linux:apt:syncthing-gtk"
+"Run"="/usr/bin/syncthing-gtk"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L97]
+"Name"="SuperTuxKart"
+"Publisher"="SuperTuxKart"
+"Description"="Kart racing."
+"Category"="Games"
+"Colour"=dword:002b6aa8
+"Tier"="linux"
+"Source"="linux:apt:supertuxkart"
+"Run"="/usr/games/supertuxkart"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L98]
+"Name"="0 A.D."
+"Publisher"="Wildfire Games"
+"Description"="Historical real-time strategy."
+"Category"="Games"
+"Colour"=dword:008a5a2b
+"Tier"="linux"
+"Source"="linux:apt:0ad"
+"Run"="/usr/games/0ad"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L99]
+"Name"="Luanti"
+"Publisher"="Luanti"
+"Description"="Voxel game engine (formerly Minetest)."
+"Category"="Games"
+"Colour"=dword:004a8a3a
+"Tier"="linux"
+"Source"="linux:apt:luanti"
+"Run"="/usr/games/luanti"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L100]
+"Name"="SuperTux"
+"Publisher"="SuperTux"
+"Description"="Platform game."
+"Category"="Games"
+"Colour"=dword:002b8ad0
+"Tier"="linux"
+"Source"="linux:apt:supertux"
+"Run"="/usr/games/supertux2"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L101]
+"Name"="Hedgewars"
+"Publisher"="Hedgewars"
+"Description"="Turn-based artillery."
+"Category"="Games"
+"Colour"=dword:00c04a2a
+"Tier"="linux"
+"Source"="linux:apt:hedgewars"
+"Run"="/usr/games/hedgewars"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L102]
+"Name"="OpenTTD"
+"Publisher"="OpenTTD"
+"Description"="Transport tycoon."
+"Category"="Games"
+"Colour"=dword:003a6a2a
+"Tier"="linux"
+"Source"="linux:apt:openttd"
+"Run"="/usr/games/openttd"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L103]
+"Name"="Freeciv"
+"Publisher"="Freeciv"
+"Description"="Civilization strategy."
+"Category"="Games"
+"Colour"=dword:002a5a8a
+"Tier"="linux"
+"Source"="linux:apt:freeciv-client-gtk3"
+"Run"="/usr/games/freeciv-gtk3.22"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L104]
+"Name"="Warzone 2100"
+"Publisher"="Warzone 2100"
+"Description"="Real-time strategy."
+"Category"="Games"
+"Colour"=dword:006a6a2a
+"Tier"="linux"
+"Source"="linux:apt:warzone2100"
+"Run"="/usr/games/warzone2100"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L105]
+"Name"="Extreme Tux Racer"
+"Publisher"="ETR"
+"Description"="Downhill racing."
+"Category"="Games"
+"Colour"=dword:002a8aca
+"Tier"="linux"
+"Source"="linux:apt:extremetuxracer"
+"Run"="/usr/games/etr"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L106]
+"Name"="Neverball"
+"Publisher"="Neverball"
+"Description"="Tilt the floor, roll the ball."
+"Category"="Games"
+"Colour"=dword:00d0a02a
+"Tier"="linux"
+"Source"="linux:apt:neverball"
+"Run"="/usr/games/neverball"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L107]
+"Name"="RetroArch"
+"Publisher"="Libretro"
+"Description"="Emulator front end."
+"Category"="Games"
+"Colour"=dword:002a2a2a
+"Tier"="linux"
+"Source"="linux:apt:retroarch"
+"Run"="/usr/bin/retroarch"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L108]
+"Name"="ScummVM"
+"Publisher"="ScummVM"
+"Description"="Classic adventure games."
+"Category"="Games"
+"Colour"=dword:005a8a2a
+"Tier"="linux"
+"Source"="linux:apt:scummvm"
+"Run"="/usr/games/scummvm"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L109]
+"Name"="DOSBox"
+"Publisher"="DOSBox"
+"Description"="DOS emulator."
+"Category"="Games"
+"Colour"=dword:006a6a6a
+"Tier"="linux"
+"Source"="linux:apt:dosbox"
+"Run"="/usr/bin/dosbox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L110]
+"Name"="Chess"
+"Publisher"="GNOME"
+"Description"="Chess."
+"Category"="Games"
+"Colour"=dword:005a4a3a
+"Tier"="linux"
+"Source"="linux:apt:gnome-chess"
+"Run"="/usr/games/gnome-chess"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L111]
+"Name"="AisleRiot Solitaire"
+"Publisher"="GNOME"
+"Description"="Solitaire card games."
+"Category"="Games"
+"Colour"=dword:002a7a3a
+"Tier"="linux"
+"Source"="linux:apt:aisleriot"
+"Run"="/usr/games/sol"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L112]
+"Name"="Mines"
+"Publisher"="GNOME"
+"Description"="Minesweeper."
+"Category"="Games"
+"Colour"=dword:006a6a6a
+"Tier"="linux"
+"Source"="linux:apt:gnome-mines"
+"Run"="/usr/games/gnome-mines"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L113]
+"Name"="Frozen Bubble"
+"Publisher"="Frozen Bubble"
+"Description"="Bubble shooter."
+"Category"="Games"
+"Colour"=dword:002a6aca
+"Tier"="linux"
+"Source"="linux:apt:frozen-bubble"
+"Run"="/usr/games/frozen-bubble"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L114]
+"Name"="Pingus"
+"Publisher"="Pingus"
+"Description"="Lead the penguins home."
+"Category"="Games"
+"Colour"=dword:002a8ada
+"Tier"="linux"
+"Source"="linux:apt:pingus"
+"Run"="/usr/games/pingus"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L115]
+"Name"="LibreOffice"
+"Publisher"="The Document Foundation"
+"Description"="Office suite, built for Linux."
+"Category"="Productivity"
+"Colour"=dword:0018a303
+"Tier"="linux"
+"Source"="linux:apt:libreoffice"
+"Run"="/usr/bin/libreoffice"

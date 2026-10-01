@@ -72,7 +72,7 @@ typedef struct {
     BOOL  ran_elevated;           /* its installer was started as an administrator */
 } app_t;
 
-#define MAX_APPS 256
+#define MAX_APPS 512   /* the catalogue: 200-odd apps, Linux ones among them */
 
 /* The categories, in the order the store shows them; Linux apps come last,
  * in a section of their own. */

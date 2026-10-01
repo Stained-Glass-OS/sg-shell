@@ -1,3 +1,18 @@
+sg-shell (0.1.0-82) unstable; urgency=medium
+
+  * SG Store: many more Linux apps (David: "include a LOT more linux apps
+    under the linux apps section") -- 99 more, 115 in all: graphics
+    (RawTherapee, digiKam, Scribus, LibreCAD, OpenSCAD...), media (mpv,
+    Ardour, LMMS, MuseScore, Shotcut, Pitivi...), internet (Firefox ESR,
+    Chromium, qBittorrent, Evolution, Mumble...), productivity (LibreOffice,
+    Okular, GnuCash...), development (Geany, Kate, Qt Creator, Wireshark,
+    Boxes...), utilities (GParted, BleachBit, Timeshift, Flameshot...) and
+    games (SuperTux, OpenTTD, 0 A.D., Luanti, RetroArch...). Each checked
+    against Debian trixie's package contents: the package exists and ships
+    the program the entry starts. The catalogue holds up to 512 apps.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 03:10:00 +0000
+
 sg-shell (0.1.0-81) unstable; urgency=medium
 
   * SG Store: Steam from its .deb starts without asking for more. Its
