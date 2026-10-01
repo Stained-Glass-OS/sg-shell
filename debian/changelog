@@ -30,6 +30,19 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     has none yet -- David wanted the store pinned. Test:
     test/taskbar-pins-check.sh (the list, SG Store's installed path, and
     Wine's reg import reading it; mutant: UTF-16 hex(7) bytes).
+  * Start, Horizon look: closer to that era's menu (David: "much more
+    faithful"). 384 x 506 like the menus then; the user with a picture of
+    our own on a blue band and an orange rule under it; "Internet" and
+    "E-mail" pinned in bold with the programs' names under them, then the
+    user's pins and the most used programs (a new user's: the everyday
+    ones) with large icons on white; "All Programs" and its green arrow at
+    the foot, opening the Start Menu's programs as cascading menus (folders
+    first, the Start Menu's own shortcuts on top; resting on it opens them
+    too); places on pale blue with bold first ones and shell icons; Log Off
+    and Turn Off Computer sized to their labels at the right of the blue
+    foot; 8 pt type. Test: start-check's Horizon section (proportions, head
+    band, orange rule, columns, All Programs and its arrow, the foot buttons,
+    the cascade; mutant: the old menu fails them).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 

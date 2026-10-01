@@ -14,7 +14,7 @@
 # the expanding rail, keyboard selection, click-away, and how fast it opens.
 # Start follows the Windows mode (SystemUsesLightTheme) and Settings >
 # Personalization > Start.
-# Screenshots: build/start-{open,light,search,context,power,rail,nolist,fullscreen}.png.
+# Screenshots: build/start-{open,light,search,context,power,rail,nolist,fullscreen,horizon,horizon-allprograms,glass}.png.
 #
 #   make test, or: sh test/start-check.sh
 #   SG_WINE=<wine> SG_WINESERVER=<wineserver> to use another Wine build.
@@ -117,23 +117,51 @@ shot light
 # the taskbar's looks (Taskbar Style, wine-sg 0600): Start takes their colours and a frame in the bar's
 TBSTYLE() { "$WINE" reg add 'HKCU\Software\Stained Glass\Taskbar' /v Style /t REG_DWORD /d "$1" /f >/dev/null 2>&1; }
 TBSTYLE 1; poke; poke; shot horizon
-# Horizon's Start is laid out as that era's was: the user on a blue band, the
-# programs on white at the left, places on pale blue at the right, Log Off and
-# Turn Off on a blue band at the foot; All Programs opens the list
+# Horizon's Start is laid out as that era's was (David: "much more faithful"):
+# the user and a picture on a blue band with an orange rule under it; pinned
+# and most used programs on white at the left with "All Programs" and its
+# green arrow at the foot; places on pale blue at the right; Log Off and
+# Turn Off Computer at the right of a blue band at the bottom. All Programs
+# opens the programs as cascading menus.
 hr=$(val rect); hx=$(echo "$hr" | cut -d, -f1); hy=$(echo "$hr" | cut -d, -f2); hr2=$(echo "$hr" | cut -d, -f3); hb=$(echo "$hr" | cut -d, -f4)
 blue() { echo "$1" | awk -F, '{ exit !($3 > $1 + 80 && $3 > 150) }'; }
-[ "$(val look)" = horizon ] && [ "$(val xp)" = 1 ] && [ $((hr2 - hx)) = 470 ] && [ $((hb - hy)) = 520 ] \
-    && pass "Horizon: Start of that era, 470 x 520 ($hr)" || fail "Horizon Start: look $(val look) xp $(val xp) rect $hr"
-blue "$(px horizon $((hx + 300)) $((hy + 20)))" && blue "$(px horizon $((hx + 20)) $((hb - 6)))" \
-    && [ "$(px horizon $((hx + 440)) $((hy + 450)))" = "211,229,250" ] && [ "$(px horizon $((hx + 200)) $((hy + 440)))" = "255,255,255" ] \
-    && pass "a blue band above and below, programs on white, places on pale blue" \
-    || fail "Horizon Start colours: head $(px horizon $((hx + 300)) $((hy + 20))) foot $(px horizon $((hx + 20)) $((hb - 6))) right $(px horizon $((hx + 440)) $((hy + 450))) left $(px horizon $((hx + 200)) $((hy + 440)))"
-click $((hx + 150)) $((hb - 44 - 20))
-[ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists every app" || fail "All Programs: $(val list)"
-has "item Root Level App" && pass "and a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)" \
-    || fail "the Start Menu folder's own shortcut is not listed (mutant NOSTARTROOT: SG_START_EXE=<built with -DSG_MUTANT_NOSTARTROOT>)"
-click $((hx + 150)) $((hb - 44 - 20))
-[ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Back: $(val list)"
+red() { echo "$1" | awk -F, '{ exit !($1 > $2 + 60 && $1 > $3 + 60) }'; }
+green() { echo "$1" | awk -F, '{ exit !($2 > $1 + 50 && $2 > $3 + 50) }'; }
+orange() { echo "$1" | awk -F, '{ exit !($1 > 200 && $2 > 110 && $2 < 200 && $3 < 140) }'; }
+geo() { val "$1" | cut -d, -f"$2"; }   # geo NAME FIELD: a part's rectangle in the panel (left,top,right,bottom)
+[ "$(val look)" = horizon ] && [ "$(val xp)" = 1 ] && [ $((hr2 - hx)) = 384 ] && [ $((hb - hy)) = 506 ] \
+    && pass "Horizon: Start of that era's proportions, 384 x 506 ($hr)" || fail "Horizon Start: look $(val look) xp $(val xp) rect $hr"
+[ "$(val xhead)" = "0,0,384,58" ] && blue "$(px horizon $((hx + 300)) $((hy + 30)))" \
+    && pass "the user on a blue band across the top ($(px horizon $((hx + 300)) $((hy + 30))))" || fail "head: $(val xhead) $(px horizon $((hx + 300)) $((hy + 30)))"
+orange "$(px horizon $((hx + 192)) $((hy + 58)))" && pass "an orange rule under it, brightest in the middle ($(px horizon $((hx + 192)) $((hy + 58))))" \
+    || fail "rule: $(px horizon $((hx + 192)) $((hy + 58)))"
+[ "$(geo xright 1)" = 192 ] && [ "$(px horizon $((hx + 100)) $((hb - 120)))" = "255,255,255" ] && [ "$(px horizon $((hx + 300)) $((hb - 60)))" = "211,229,250" ] \
+    && pass "two columns: programs on white at the left (192 px), places on pale blue at the right" \
+    || fail "columns: right $(val xright) left $(px horizon $((hx + 100)) $((hb - 120))) right $(px horizon $((hx + 300)) $((hb - 60)))"
+d | grep -q '^xpin ' && [ "$(d | grep -c '^mfu ')" -ge 1 ] && pass "pinned programs above the most used ($(d | grep -c '^xpin ') pinned, $(d | grep -c '^mfu ') most used)" \
+    || fail "left column: $(d | grep -E '^(xpin|mfu) ' | tr '\n' '|')"
+[ "$(geo xall 1)" -le 4 ] && [ "$(geo xall 3)" = 192 ] && [ "$(geo xall 4)" -le "$(geo xfoot 2)" ] && [ $(($(geo xfoot 2) - $(geo xall 4))) -le 6 ] \
+    && pass "All Programs at the foot of the left column ($(val xall))" || fail "All Programs: $(val xall) foot $(val xfoot)"
+ay=$((hy + ($(geo xall 2) + $(geo xall 4)) / 2)); ga=0
+for gx in $(seq $((hx + 100)) 4 $((hx + 188))); do green "$(px horizon "$gx" "$ay")" && ga=1; done
+[ $ga = 1 ] && pass "with its green arrow" || fail "no green arrow on the All Programs row"
+[ "$(geo xfoot 2)" = $((506 - 42)) ] && blue "$(px horizon $((hx + 20)) $((hb - 20)))" && [ "$(geo xturnoff 3)" = $((384 - 8)) ] \
+    && [ "$(geo xlogoff 3)" -lt "$(geo xturnoff 1)" ] && [ "$(geo xlogoff 2)" -gt "$(geo xfoot 2)" ] \
+    && pass "Log Off then Turn Off Computer at the right of the blue foot ($(val xlogoff) $(val xturnoff))" \
+    || fail "foot: $(val xfoot) logoff $(val xlogoff) turnoff $(val xturnoff) $(px horizon $((hx + 20)) $((hb - 20)))"
+tx=$((hx + $(geo xturnoff 1) + 6)); ty=$((hy + ($(geo xturnoff 2) + $(geo xturnoff 4)) / 2 - 8))
+red "$(px horizon $tx $ty)" && pass "Turn Off's red button ($(px horizon $tx $ty))" || fail "turn off button: $(px horizon $tx $ty)"
+click $((hx + 150)) "$ay"; shot horizon-allprograms
+[ "$(val menu)" = allprograms ] && val menu_items | tr ',' '\n' | grep -qx Tests && val menu_items | tr ',' '\n' | grep -qx Filler \
+    && val menu_items | tr ',' '\n' | grep -qx 'Root Level App' \
+    && pass "All Programs cascades: the Start Menu's own shortcuts, then the program folders ($(val menu_items | cut -c1-60))" \
+    || fail "All Programs: menu $(val menu) items $(val menu_items | cut -c1-120)"
+xdotool key Escape; sleep 1
+[ "$(val menu)" = "" ] && [ "$(val visible)" = 1 ] && pass "and Escape closes it, Start staying open" || fail "the menu stayed: $(val menu) (visible $(val visible))"
+xdotool type --delay 80 'Root Level'; sleep 1.5
+d | grep -qxE '(item|best) Root Level App' && pass "a search finds a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)" \
+    || fail "the Start Menu folder's own shortcut is not found (mutant NOSTARTROOT: SG_START_EXE=<built with -DSG_MUTANT_NOSTARTROOT>)"
+xdotool key Escape; sleep 1
 TBSTYLE 2; poke; poke; shot glass
 [ "$(val look)" = glass ] && [ "$(px glass 1 $((panel_y + 300)))" = "138,154,176" ] && [ "$(px glass 700 $((H - BAR - 12)))" = "30,39,51" ] \
     && pass "Glass: a dark blue-grey panel with a light rim" || fail "Glass Start: $(val look) frame $(px glass 1 $((panel_y + 300))) panel $(px glass 700 $((H - BAR - 12)))"
