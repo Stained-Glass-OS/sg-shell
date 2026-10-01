@@ -36,6 +36,9 @@ sg-shell (0.1.0-83) unstable; urgency=medium
     (StartupWMClass, the program's name), for the taskbar to show Linux
     windows with their own icon (wine-sg 0612). Depends: librsvg2-bin.
     Test: test/linuxapps-check.sh (mutant NOSVG).
+  * test/store-check.sh: the full-width step maximizes the Store by a
+    double-click on its title bar; Win+Up depended on the desktop's hotkeys
+    having the keyboard and the step failed (mutant: one column).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 03:30:00 +0000
 

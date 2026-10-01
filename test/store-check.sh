@@ -608,7 +608,9 @@ if [ "$v" != NOWINDOW ]; then
     xdotool key Escape; sleep 0.5
     [ "$(field focus)" = search ] && pass "Esc in the list goes back to the search box" || fail "focus '$(field focus)'"
     # full width: the cards take two columns, not one narrow one in the middle
-    xdotool key super+Up; sleep 1.5
+    # maximized by a double-click on its title bar (Win+Up depends on the
+    # desktop's hotkeys having the keyboard, which a gate cannot count on)
+    xdotool mousemove 300 16 click --repeat 2 --delay 120 1; sleep 1.5
     xdotool key Down; sleep 0.6
     [ "$(field columns)" = 2 ] && pass "a wide window shows the cards in two columns" || fail "columns '$(field columns)' at full width"
     import -window root "$OUT/store-wide.png" 2>/dev/null
