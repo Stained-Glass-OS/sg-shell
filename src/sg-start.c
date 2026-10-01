@@ -393,6 +393,30 @@ static void scan_programs(int csidl)
     if (SHGetSpecialFolderPathW(NULL, base, csidl, FALSE)) scan_dir(base, 0);
 }
 
+/* shortcuts at the top of a Start Menu folder, beside Programs (SumatraPDF
+ * puts its own there; Start lists them as it does Programs') -- the files
+ * only: Programs is scanned on its own */
+static void scan_start_root(int csidl)
+{
+#ifndef SG_MUTANT_NOSTARTROOT
+    WCHAR base[MAX_PATH], pattern[MAX_PATH], full[MAX_PATH], name[128], *ext;
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    if (!SHGetSpecialFolderPathW(NULL, base, csidl, FALSE) || _snwprintf(pattern, MAX_PATH, L"%s\\*", base) < 0) return;
+    if ((h = FindFirstFileW(pattern, &fd)) == INVALID_HANDLE_VALUE) return;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        if (!(ext = wcsrchr(fd.cFileName, '.')) || (lstrcmpiW(ext, L".lnk") && lstrcmpiW(ext, L".url"))) continue;
+        if (_snwprintf(full, MAX_PATH, L"%s\\%s", base, fd.cFileName) < 0) continue;
+        lstrcpynW(name, fd.cFileName, (int)min(128, ext - fd.cFileName + 1));
+        add_app(name, full, &fd.ftCreationTime);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+#else
+    (void)csidl;
+#endif
+}
+
 /* a program of ours installed beside this one */
 static void add_beside(const WCHAR *name, const WCHAR *file)
 {
@@ -485,6 +509,8 @@ static void build_list(void)
     g_napps = 0;
     scan_programs(CSIDL_PROGRAMS);
     scan_programs(CSIDL_COMMON_PROGRAMS);
+    scan_start_root(CSIDL_STARTMENU);
+    scan_start_root(CSIDL_COMMON_STARTMENU);
     add_app(L"Notepad", L"notepad.exe", NULL);
     add_app(L"File Explorer", L"explorer.exe", NULL);
     add_app(L"Command Prompt", L"cmd.exe", NULL);

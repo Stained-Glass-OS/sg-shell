@@ -73,6 +73,11 @@ sg-shell (0.1.0-81) unstable; urgency=medium
       never in the running registry; with the unit changed, package-install
       took 2 s and the store went on to SG Office's setup. Test:
       test/admind-check.sh (mutant PRIVATETMP: the old unit).
+    - SumatraPDF, installed from the store, was not in Start: it puts its
+      shortcut at the top of the Start Menu folder, beside Programs, where
+      Start did not look. Start now lists shortcuts there too (the user's
+      and all users'). Test: test/start-check.sh (mutant NOSTARTROOT, run
+      with SG_START_EXE=<a build with -DSG_MUTANT_NOSTARTROOT>).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

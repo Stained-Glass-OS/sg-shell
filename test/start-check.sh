@@ -24,7 +24,7 @@ WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
 WINE="${SG_WINE:-$WINE_DIR/bin/wine}"
 export WINESERVER="${SG_WINESERVER:-$(dirname "$WINE")/wineserver}"
 [ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
-START="$HERE/build/sg-start64.exe"
+START="${SG_START_EXE:-$HERE/build/sg-start64.exe}"
 RC=0; DPY=${SG_DISPLAY:-87}; T=$(mktemp -d); chmod 755 "$T"; XP=""
 W=1280; H=800; BAR=40
 export HOME="$T"
@@ -51,6 +51,8 @@ COMMONPROG='C:\ProgramData\Microsoft\Windows\Start Menu\Programs'
 "$WINESERVER" -w
 "$WINE" "$T/mklnk.exe" "$USERPROG\\Tests\\Deeper\\Deepest" "Zeta Test App" 'C:\windows\notepad.exe' >/dev/null 2>&1
 "$WINE" "$T/mklnk.exe" "$COMMONPROG\\Filler" "Filler" 'C:\windows\system32\winver.exe' 200 >/dev/null 2>&1
+# a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)
+"$WINE" "$T/mklnk.exe" "${USERPROG%\\Programs}" "Root Level App" 'C:\windows\notepad.exe' >/dev/null 2>&1
 "$WINESERVER" -w
 nlnk=$(find "$WINEPREFIX/drive_c" -path '*Start Menu/Programs*' -name '*.lnk' | wc -l)
 [ "$nlnk" -ge 201 ] || { fail "the test's shortcuts were not made ($nlnk)"; echo "RESULT: FAIL"; exit 1; }
@@ -128,6 +130,8 @@ blue "$(px horizon $((hx + 300)) $((hy + 20)))" && blue "$(px horizon $((hx + 20
     || fail "Horizon Start colours: head $(px horizon $((hx + 300)) $((hy + 20))) foot $(px horizon $((hx + 20)) $((hb - 6))) right $(px horizon $((hx + 440)) $((hy + 450))) left $(px horizon $((hx + 200)) $((hy + 440)))"
 click $((hx + 150)) $((hb - 44 - 20))
 [ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists every app" || fail "All Programs: $(val list)"
+has "item Root Level App" && pass "and a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)" \
+    || fail "the Start Menu folder's own shortcut is not listed (mutant NOSTARTROOT: SG_START_EXE=<built with -DSG_MUTANT_NOSTARTROOT>)"
 click $((hx + 150)) $((hb - 44 - 20))
 [ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Back: $(val list)"
 TBSTYLE 2; poke; poke; shot glass
