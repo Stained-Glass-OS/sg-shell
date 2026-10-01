@@ -166,8 +166,26 @@ d | grep -qxE '(item|best) Root Level App' && pass "a search finds a shortcut at
     || fail "the Start Menu folder's own shortcut is not found (mutant NOSTARTROOT: SG_START_EXE=<built with -DSG_MUTANT_NOSTARTROOT>)"
 xdotool key Escape; sleep 1
 TBSTYLE 2; poke; poke; shot glass
-[ "$(val look)" = glass ] && [ "$(px glass 1 $((panel_y + 300)))" = "138,154,176" ] && [ "$(px glass 700 $((H - BAR - 12)))" = "30,39,51" ] \
-    && pass "Glass: a dark blue-grey panel with a light rim" || fail "Glass Start: $(val look) frame $(px glass 1 $((panel_y + 300))) panel $(px glass 700 $((H - BAR - 12)))"
+# Glass's Start is laid out as that era's was: programs on white at the
+# left with All Programs (in place) and a search box under them; the user's
+# picture over a glass column of places at the right; Shut down at its foot
+gr=$(val rect); gx=$(echo "$gr" | cut -d, -f1); gy=$(echo "$gr" | cut -d, -f2); gr2=$(echo "$gr" | cut -d, -f3); gb=$(echo "$gr" | cut -d, -f4)
+glassblue() { echo "$1" | awk -F, '{ exit !($3 > $1 + 30 && $1 < 110) }'; }
+[ "$(val look)" = glass ] && [ "$(val seven)" = 1 ] && [ $((gr2 - gx)) = 430 ] && [ $((gb - gy)) = 520 ] \
+    && pass "Glass: Start of that era's proportions, 430 x 520 ($gr)" || fail "Glass Start: look $(val look) seven $(val seven) rect $gr"
+[ "$(px glass $((gx + 120)) $((gy + 400)))" = "255,255,255" ] && glassblue "$(px glass $((gx + 340)) $((gy + 470)))" \
+    && [ "$(geo gleft 3)" -le 260 ] && [ "$(geo xright 1)" -gt "$(geo gleft 3)" ] \
+    && pass "programs on white at the left, a glass column at the right ($(px glass $((gx + 340)) $((gy + 470))))" \
+    || fail "Glass columns: left $(px glass $((gx + 120)) $((gy + 400))) right $(px glass $((gx + 340)) $((gy + 470))) $(val gleft) $(val xright)"
+[ "$(geo gsearch 4)" -gt "$(geo gleft 4)" ] && [ "$(px glass $((gx + 200)) $((gy + ($(geo gsearch 2) + $(geo gsearch 4)) / 2)))" = "255,255,255" ] \
+    && [ "$(geo xall 4)" -le "$(geo gleft 4)" ] && [ "$(geo xturnoff 1)" -gt "$(geo gleft 3)" ] && [ "$(geo xturnoff 2)" -ge "$(geo gleft 4)" ] \
+    && pass "a search box under the programs, All Programs at their foot, Shut down under the glass column" \
+    || fail "Glass parts: search $(val gsearch) all $(val xall) shut down $(val xturnoff) left $(val gleft)"
+[ "$(val acrylic)" = 72 ] && pass "and it is frosted more, as glass (72)" || fail "Glass acrylic: $(val acrylic)"
+click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
+[ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists the programs in place" || fail "Glass All Programs: $(val list)"
+click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
+[ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Glass Back: $(val list)"
 TBSTYLE 0
 "$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v SystemUsesLightTheme /t REG_DWORD /d 0 /f >/dev/null 2>&1
 poke; poke

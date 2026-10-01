@@ -129,6 +129,13 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     settings-check (the taskbar's _SG_ACRYLIC off and on; mutant
     NOTRANSPARENCYNOTE), start-check (acrylic=88, Horizon 0; mutant
     NOSTARTFROST).
+  * Start, Glass look: that era's menu (430 x 520), our own drawing -- a
+    glass frame; programs on white at the left with All Programs opening
+    the list in place and a search box under them; the user's picture
+    over a glass column of places in plain text; Shut down and its arrow
+    at the column's foot; frosted. Test: start-check's Glass section
+    (proportions, columns, parts, All Programs and Back; the previous menu
+    fails it).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 
