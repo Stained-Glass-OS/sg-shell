@@ -888,6 +888,7 @@ static void dump(void)
     dprint(f, L"list=%d tile_cols=%d fullscreen=%d\n", g_show_list, g_tile_cols, g_fullscreen);
     dprint(f, L"centered=%d\n", g_centered);
     dprint(f, L"xp=%d\n", g_xp);
+    dprint(f, L"dropshadow=%d\n", (GetClassLongW(g_panel, GCL_STYLE) & CS_DROPSHADOW) != 0);
     if (g_xp)
     {
         RECT r;
@@ -2255,8 +2256,8 @@ static int __cdecl xc_compare(const void *a, const void *b)
 
 /* one level: the shortcuts and folders of up to two folders (the user's and
  * everyone's Programs), same-named folders as one */
-static HMENU xc_build(WCHAR dirs[2][MAX_PATH], int ndirs, int depth, BOOL root);
-static void xc_fill(HMENU menu, WCHAR dirs[2][MAX_PATH], int ndirs, int depth, BOOL root)
+static HMENU xc_build(WCHAR (*dirs)[MAX_PATH], int ndirs, int depth, BOOL root);
+static void xc_fill(HMENU menu, WCHAR (*dirs)[MAX_PATH], int ndirs, int depth, BOOL root)
 {
     struct xc_found *found = NULL, *grown;
     int nfound = 0, cap = 0, i, j, d;
@@ -2324,7 +2325,7 @@ static void xc_fill(HMENU menu, WCHAR dirs[2][MAX_PATH], int ndirs, int depth, B
     free(found);
 }
 
-static HMENU xc_build(WCHAR dirs[2][MAX_PATH], int ndirs, int depth, BOOL root)
+static HMENU xc_build(WCHAR (*dirs)[MAX_PATH], int ndirs, int depth, BOOL root)
 {
     HMENU menu = CreatePopupMenu();
     MENUINFO mi;
@@ -3039,6 +3040,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     RegisterClassW(&lc);
     pc.lpfnWndProc = panel_proc; pc.hInstance = inst; pc.lpszClassName = PANEL_CLASS;
     pc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+#ifndef SG_MUTANT_NOSTARTSHADOW
+    pc.style = CS_DROPSHADOW;   /* a shadow under it, drawn by the desktop's compositor (wine-sg 0744, sg-deskcomp) */
+#endif
     RegisterClassW(&pc);
 
     CreateWindowW(LISTENER_CLASS, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, inst, NULL);

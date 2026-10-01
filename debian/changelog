@@ -114,6 +114,13 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     --set effects shadows|wobbly|moving on|off, effects open|minimize KIND.
     Test: settings-check (the file, the page, Horizon's shadow; mutant
     NOEFFECTSCONF).
+  * The effects for the desktop's compositor reach a session's ~/.config:
+    Wine hands $HOME over only as WINEHOMEDIR, so without XDG_CONFIG_HOME
+    (a real session) effects.conf was never written. Test: settings-check
+    runs one without XDG_CONFIG_HOME (the previous build fails it).
+  * Start asks for a shadow (CS_DROPSHADOW), which the desktop's compositor
+    draws under it in every look. Test: start-check (dropshadow=1; the
+    previous build fails it).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 

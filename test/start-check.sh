@@ -94,6 +94,7 @@ click() { xdotool mousemove "$1" "$2" click "${3:-1}"; sleep 1.5; }
 # --- opening -------------------------------------------------------------------
 poke
 [ "$(val visible)" = 1 ] && pass "Start opens on SgStartPanel's WM_USER+10 (the Start button, the Windows key)" || { fail "did not open"; echo "RESULT: FAIL"; exit 1; }
+[ "$(val dropshadow)" = 1 ] && pass "Start's class asks for a shadow (CS_DROPSHADOW: the desktop's compositor draws it)" || fail "no CS_DROPSHADOW: $(val dropshadow)"
 P=$(xdotool search --name '^Start$' 2>/dev/null | head -1)
 [ "$(val rect)" = "0,$panel_y,708,$((H - BAR))" ] && pass "it stands on the taskbar at the left: $(val rect)" || fail "placement: $(val rect)"
 [ "$(val open_ms)" -ge 0 ] 2>/dev/null && [ "$(val open_ms)" -lt 200 ] && pass "it opens in $(val open_ms) ms with $(val apps) apps" || fail "slow to open: $(val open_ms) ms"

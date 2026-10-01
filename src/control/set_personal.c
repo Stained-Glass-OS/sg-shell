@@ -591,15 +591,21 @@ const WCHAR *effects_write_conf(void)
 #endif
     if (!to_dos) return NULL;   /* not under Wine: no compositor to tell */
     if (GetEnvironmentVariableW(L"XDG_CONFIG_HOME", home, MAX_PATH) && home[0])
+    {
         _snwprintf(dir, MAX_PATH, L"%ls/stained-glass", home);
-    else if (GetEnvironmentVariableW(L"HOME", home, MAX_PATH) && home[0])
-        _snwprintf(dir, MAX_PATH, L"%ls/.config/stained-glass", home);
+        dir[MAX_PATH - 1] = 0;
+        WideCharToMultiByte(CP_UTF8, 0, dir, -1, unix_dir, sizeof(unix_dir), NULL, NULL);
+        if (!(dos = to_dos(unix_dir))) return L"the effects' folder could not be found";
+        lstrcpynW(path, dos, MAX_PATH);
+        HeapFree(GetProcessHeap(), 0, dos);
+    }
+    /* Wine hands $HOME over as WINEHOMEDIR, a DOS path behind \??\ */
+    else if (GetEnvironmentVariableW(L"WINEHOMEDIR", home, MAX_PATH) && !wcsncmp(home, L"\\??\\", 4) && home[4])
+    {
+        _snwprintf(path, MAX_PATH, L"%ls\\.config\\stained-glass", home + 4);
+        path[MAX_PATH - 1] = 0;
+    }
     else return L"no home folder to keep the effects in";
-    dir[MAX_PATH - 1] = 0;
-    WideCharToMultiByte(CP_UTF8, 0, dir, -1, unix_dir, sizeof(unix_dir), NULL, NULL);
-    if (!(dos = to_dos(unix_dir))) return L"the effects' folder could not be found";
-    lstrcpynW(path, dos, MAX_PATH);
-    HeapFree(GetProcessHeap(), 0, dos);
     SHCreateDirectoryExW(NULL, path, NULL);
     lstrcatW(path, L"\\effects.conf");
     _snprintf(text, sizeof(text),

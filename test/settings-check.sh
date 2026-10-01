@@ -533,6 +533,13 @@ cv() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null; }
     || fail "window effects: wobbly $(regq "$EFK" Wobbly) open $(regq "$EFK" WindowOpen); conf: $(cat "$CONF" 2>&1 | tr '\n' ' ')"
 sgset effects animations off >/dev/null
 [ "$(cv animations)" = 0 ] && pass "Show animations off reaches the compositor too" || fail "conf animations: $(cv animations)"
+# a session has no XDG_CONFIG_HOME: the file goes to ~/.config (Wine hands $HOME over as WINEHOMEDIR)
+rm -f "$HOME/.config/stained-glass/effects.conf"
+env -u XDG_CONFIG_HOME wine "$T/sg-settings64.exe" --set effects wobbly off >/dev/null 2>&1
+grep -qx 'wobbly=0' "$HOME/.config/stained-glass/effects.conf" 2>/dev/null \
+    && pass "without XDG_CONFIG_HOME the effects go to ~/.config/stained-glass/effects.conf" \
+    || fail "no ~/.config effects.conf: $(ls "$HOME/.config/stained-glass" 2>&1)"
+sgset effects wobbly on >/dev/null
 sgset effects animations on >/dev/null
 wine start ms-settings:personalization-effects >/dev/null 2>&1
 page_is Effects "ms-settings:personalization-effects (windows)"
