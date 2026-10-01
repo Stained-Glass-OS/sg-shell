@@ -95,6 +95,8 @@ struct app {
     WCHAR name[128];
     WCHAR comment[256];
     char icon[256];
+    char wmclass[128];          /* StartupWMClass: its windows' class */
+    char exe[128];              /* Exec's program name: often its windows' class too */
 };
 
 static struct app *g_apps;
@@ -205,6 +207,13 @@ static void add_desktop_file(const char *unix_file, const char *id)
         a->comment[ARRAYSIZE(a->comment) - 1] = 0;
     }
     if (entry_value(text, "Icon", v, sizeof(v))) lstrcpynA(a->icon, v, sizeof(a->icon));
+    if (entry_value(text, "StartupWMClass", v, sizeof(v))) lstrcpynA(a->wmclass, v, sizeof(a->wmclass));
+    if (entry_value(text, "Exec", v, sizeof(v))) {
+        char *end = v + strcspn(v, " \t"), *base;
+        *end = 0;
+        base = strrchr(v, '/') ? strrchr(v, '/') + 1 : v;
+        if (strcmp(base, "env") && strcmp(base, "flatpak") && strcmp(base, "sh")) lstrcpynA(a->exe, base, sizeof(a->exe));
+    }
     g_napps++;
 out:
     free(text);
@@ -298,13 +307,68 @@ static int find_pngs(const char *icon, char found[][MAX_PATH], int max)
     return n;
 }
 
-/* the .ico for an app, written into DIR; FALSE if it has no PNG icon */
+/* Icon= as a scalable (SVG) theme icon or path: GNOME's apps ship only those */
+static BOOL find_svg(const char *icon, char *out)
+{
+    char dirs[16][MAX_PATH], name[256], *ext;
+    int nd, i;
+
+    if (!icon[0]) return FALSE;
+    if (icon[0] == '/') {
+        if ((ext = strrchr(icon, '.')) && !_stricmp(ext, ".svg") && exists(icon)) { lstrcpynA(out, icon, MAX_PATH); return TRUE; }
+        return FALSE;
+    }
+    lstrcpynA(name, icon, sizeof(name));
+    if ((ext = strrchr(name, '.')) && !_stricmp(ext, ".svg")) *ext = 0;
+    if (strchr(name, '/') || strstr(name, "..")) return FALSE;
+    nd = data_dirs(dirs, 16);
+    for (i = 0; i < nd; i++) {
+        if (_snprintf(out, MAX_PATH, "%s/icons/hicolor/scalable/apps/%s.svg", dirs[i], name) < 0) continue;
+        out[MAX_PATH - 1] = 0;
+        if (exists(out)) return TRUE;
+    }
+    if (_snprintf(out, MAX_PATH, "/usr/share/pixmaps/%s.svg", name) > 0 && exists(out)) return TRUE;
+    return FALSE;
+}
+
+/* the SVG drawn at 256 and 48 px by rsvg-convert, as PNGs in DIR (kept: made once) */
+static int svg_pngs(const char *icon, const WCHAR *dir, const char *id, char found[][MAX_PATH], int max)
+{
+    static const int px[] = { 256, 48 };
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char svg[MAX_PATH], *udir;
+    int i, n = 0;
+
+    if (!find_svg(icon, svg) || !p_unix_name) return 0;
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (!(udir = p_unix_name(dir))) return 0;
+    for (i = 0; i < (int)ARRAYSIZE(px) && n < max; i++) {
+        char out[MAX_PATH], size[8], tool[] = "/usr/bin/rsvg-convert", w[] = "-w", h[] = "-h", o[] = "-o";
+        char *argv[9];
+        if (_snprintf(out, sizeof(out), "%s/%s-%d.png", udir, id, px[i]) < 0) continue;
+        out[sizeof(out) - 1] = 0;
+        if (!exists(out) && spawnvp && exists(tool)) {
+            _snprintf(size, sizeof(size), "%d", px[i]);
+            argv[0] = tool; argv[1] = w; argv[2] = size; argv[3] = h; argv[4] = size;
+            argv[5] = o; argv[6] = out; argv[7] = svg; argv[8] = NULL;
+            spawnvp(argv, TRUE);
+        }
+        if (exists(out)) lstrcpynA(found[n++], out, MAX_PATH);
+    }
+    HeapFree(GetProcessHeap(), 0, udir);
+    return n;
+}
+
+/* the .ico for an app, written into DIR; FALSE if it has no PNG or SVG icon */
 static BOOL make_icon(const struct app *a, const WCHAR *dir, WCHAR *ico, int len)
 {
     char pngs[4][MAX_PATH];
     unsigned char *data[4];
     DWORD size[4], w[4], h[4], off, i, count = 0;
     int n = find_pngs(a->icon, pngs, 4);
+#ifndef SG_MUTANT_NOSVG
+    if (!n) n = svg_pngs(a->icon, dir, a->id, pngs, 4);
+#endif
     HANDLE f;
     BOOL ok = FALSE;
 
@@ -340,6 +404,23 @@ static BOOL make_icon(const struct app *a, const WCHAR *dir, WCHAR *ico, int len
     }
     for (i = 0; i < count; i++) free(data[i]);
     return ok;
+}
+
+/* copies of an app's .ico named after its windows' class (StartupWMClass,
+ * and Exec's program name: GTK's default class), for the taskbar: it shows a
+ * Linux window with the icon named after the window's class */
+static void icon_aliases(const struct app *a, const WCHAR *dir, const WCHAR *ico)
+{
+    const char *names[2] = { a->wmclass, a->exe };
+    int i;
+    for (i = 0; i < 2; i++) {
+        WCHAR alias[MAX_PATH];
+        if (!names[i][0] || !_stricmp(names[i], a->id) || strpbrk(names[i], "\\/:*?\"<>|")) continue;
+        if (i == 1 && !_stricmp(names[1], a->wmclass)) continue;
+        _snwprintf(alias, MAX_PATH, L"%ls\\%hs.ico", dir, names[i]);
+        alias[MAX_PATH - 1] = 0;
+        CopyFileW(ico, alias, FALSE);
+    }
 }
 
 /* ---- the shortcuts ----------------------------------------------------- */
@@ -443,6 +524,7 @@ static int sync_apps(void)
         _snwprintf(args, ARRAYSIZE(args), L"--run \"%ls\"", file);
         args[ARRAYSIZE(args) - 1] = 0;
         has_icon = make_icon(&g_apps[i], icons, ico, MAX_PATH);
+        if (has_icon) icon_aliases(&g_apps[i], icons, ico);
         write_link(lnk, self, args, has_icon ? ico : NULL, g_apps[i].comment);
         lstrcpynW(made[nmade++], lnk, MAX_PATH);
     }

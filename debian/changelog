@@ -30,6 +30,12 @@ sg-shell (0.1.0-83) unstable; urgency=medium
   * SG Store: Notepad++ did not install: "'Notepad++.Notepad++' is not a
     package name." -- the store refused a winget id with + in it. It takes
     them now. Test: test/store-check.sh (mutant NOPLUS).
+  * Linux apps: GNOME's apps (Calculator, Text Editor...) had no icon in
+    Start -- they ship only an SVG; rsvg-convert draws it (48, 256; made
+    once). Each app's .ico is also put under its window class's names
+    (StartupWMClass, the program's name), for the taskbar to show Linux
+    windows with their own icon (wine-sg 0612). Depends: librsvg2-bin.
+    Test: test/linuxapps-check.sh (mutant NOSVG).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 03:30:00 +0000
 

@@ -82,6 +82,31 @@ mkdir -p "$PROGS/../Tools"; cp "$PROGS/Plain Tool (mine).lnk" "$PROGS/../Tools/P
 list=$(ls "$PROGS" 2>/dev/null | sort | tr '\n' '|')
 [ "$list" = "Plain Tool (mine) (Linux).lnk|" ] && pass "beside a Windows program of the same name it is NAME (Linux)" || fail "same name: $list"
 
+# GNOME's apps ship only an SVG icon: drawn by rsvg-convert; copies named
+# after the app's window class (StartupWMClass, Exec's program) for the taskbar
+if [ -x /usr/bin/rsvg-convert ]; then
+    mkdir -p "$T/share/icons/hicolor/scalable/apps"
+    cat > "$T/share/icons/hicolor/scalable/apps/gate-svg.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="12" fill="#2080e0"/></svg>
+EOF
+    app gate-svg 'Type=Application' 'Name=Svg App' 'Icon=gate-svg' 'Exec=/usr/bin/gate-svg-prog --new' 'StartupWMClass=GateSvgClass'
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    icons="$T/pfx/drive_c/users/$(id -un)/AppData/Local/Stained Glass/Linux app icons"
+    if python3 - "$icons/gate-svg.ico" <<'EOF'
+import struct, sys
+try: b = open(sys.argv[1], "rb").read()
+except OSError: sys.exit(1)
+z, t, n = struct.unpack("<HHH", b[:6])
+sys.exit(0 if t == 1 and sorted(b[6 + 16 * i] or 256 for i in range(n)) == [48, 256] else 1)
+EOF
+    then pass "an app with only an SVG icon gets an .ico (48, 256)"; else fail "SVG icon: $(ls "$icons" 2>&1 | tr '\n' ' ')"; fi
+    cmp -s "$icons/gate-svg.ico" "$icons/GateSvgClass.ico" && cmp -s "$icons/gate-svg.ico" "$icons/gate-svg-prog.ico" \
+        && pass "copies named after its window class and program, for the taskbar" || fail "class copies: $(ls "$icons" | tr '\n' ' ')"
+    rm "$T/share/applications/gate-svg.desktop"
+else
+    echo "SKIP  SVG icons (no /usr/bin/rsvg-convert here)"
+fi
+
 if [ -x /usr/bin/gio ]; then
     app gate-game 'Type=Application' 'Name=Gate Game' "Exec=sh -c 'echo ran > $T/ran'"
     timeout 60 "$WINE" "$EXE" --run "Z:$(echo "$T" | tr / '\\')\\share\\applications\\gate-game.desktop"
