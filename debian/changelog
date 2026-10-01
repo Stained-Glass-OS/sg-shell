@@ -1,5 +1,17 @@
 sg-shell (0.1.0-86) unstable; urgency=medium
 
+  * SG Store: Chrome, Edge and Firefox in both builds (David
+    2026-10-01): each browser's card offers its Linux build in the
+    drop-down. Chrome and Edge suggest the Windows program (Windows sign-on;
+    athenaNet's device manager supports only them, on Windows); Firefox
+    suggests the Linux build. sg-admind puts each maker's apt source and
+    key in place first -- the very files the package writes on install
+    (Chrome's google-chrome.sources, Edge's microsoft-edge.list), so apt
+    never sees two Signed-By values -- and for Firefox Mozilla's
+    repository with a pin (apt preferences): only firefox from Mozilla,
+    Debian's firefox-esr stays Debian's. VM: Chrome 154 and Firefox 157
+    installed through the Store, apt-get update clean, Firefox runs.
+    Test: admind-check (the three browsers' files; NOVENDOR).
   * SG Store (David 2026-10-01): pictures, one card per app, a queue,
     Uninstall for Windows programs.
     - Every app shows its own icon, not a letter: the catalogue's Icon is

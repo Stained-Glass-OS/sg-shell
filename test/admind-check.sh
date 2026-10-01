@@ -417,6 +417,29 @@ grep -q 'vendor = False' "$T/mut-novendor" || fail "the NOVENDOR mutant did not 
 # shellcheck disable=SC2046
 set -- $(store_steam "$T/mut-novendor")
 [ "${1:-}" != source ] && [ "${3:-}" != libs ] && pass "MUTANT NOVENDOR: no Valve source, no libraries (gate catches it)" || fail "NOVENDOR not detected"
+# the browsers' Linux builds (SG Store's drop-down): the maker's source and key
+# (the files its package writes itself), and Mozilla's pin -- only firefox
+# from Mozilla's repository, so Debian's firefox-esr stays Debian's
+mkdir -p "$T/prefs"; export SG_ADMIN_PREFERENCES="$T/prefs"
+browser() { # ADMIND PACKAGE FILE:DIR... -- "ok" when the reply is OK and every file is the maker's
+    rm -f "$A"/google-chrome.sources "$A"/microsoft-edge.list "$A"/mozilla.list "$T"/keyrings/* "$T"/prefs/*
+    id=$(next_id); printf 'apt-install\n%s\n' "$2" > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    [ "$(first "$r")" = OK ] || { echo "reply:$(first "$r")"; return; }
+    pkg=$2; shift 2
+    for fd in "$@"; do cmp -s "${fd#*:}/${fd%%:*}" "$HERE/admin/apt-vendors/${fd%%:*}" || { echo "missing:${fd%%:*}"; return; }; done
+    echo ok
+}
+r=$(browser "$ADMIND" google-chrome-stable "google-chrome.sources:$A" "google-chrome.gpg:$T/keyrings")
+[ "$r" = ok ] && pass "Chrome for Linux: Google's source and key, as Chrome writes them" || fail "chrome: $r"
+r=$(browser "$ADMIND" microsoft-edge-stable "microsoft-edge.list:$A" "microsoft-edge.gpg:$T/keyrings")
+[ "$r" = ok ] && pass "Edge for Linux: Microsoft's source and key" || fail "edge: $r"
+r=$(browser "$ADMIND" firefox "mozilla.list:$A" "packages.mozilla.org.asc:$T/keyrings" "mozilla.pref:$T/prefs")
+[ "$r" = ok ] && pass "Firefox for Linux: Mozilla's source, key and pin" || fail "firefox: $r"
+grep -q '^Package: firefox firefox-l10n-\*$' "$HERE/admin/apt-vendors/mozilla.pref" && grep -q '^Pin-Priority: 100$' "$HERE/admin/apt-vendors/mozilla.pref" \
+    && pass "the pin takes only firefox from Mozilla (everything else at 100, below Debian's)" || fail "mozilla.pref"
+r=$(browser "$T/mut-novendor" firefox "mozilla.list:$A")
+[ "$r" != ok ] && pass "MUTANT NOVENDOR: no Mozilla source (gate catches it)" || fail "NOVENDOR not detected for firefox"
 rm -f "$B/apt-cache"
 rm -f "$B/dpkg"
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"

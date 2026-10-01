@@ -101,6 +101,7 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Mozilla.Firefox"
 "DetectName"="Mozilla Firefox|!Mozilla Firefox*ESR"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"
+"Linux"="L187"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\02]
 "Name"="Google Chrome"
@@ -112,6 +113,8 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Google.Chrome"
 "DetectName"="Google Chrome"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.google.Chrome.png"
+"Linux"="L185"
+"Prefer"="windows"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\03]
 "Name"="Brave"
@@ -3138,6 +3141,8 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Microsoft.Edge"
 "DetectName"="Microsoft Edge"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.microsoft.Edge.png"
+"Linux"="L186"
+"Prefer"="windows"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\95]
 "Name"="Trillian"
@@ -3477,3 +3482,36 @@ Windows Registry Editor Version 5.00
 "Source"="winget:DYMO.DYMOLabel"
 "DetectName"="DYMO Label"
 "Icon"="https://www.dymo.com/favicon.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L185]
+"Name"="Google Chrome"
+"Publisher"="Google"
+"Description"="The most used web browser, from Google: its Linux build."
+"Category"="Browsers"
+"Colour"=dword:00808080
+"Tier"="linux"
+"Source"="linux:apt:google-chrome-stable"
+"Run"="/usr/bin/google-chrome-stable"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.google.Chrome.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L186]
+"Name"="Microsoft Edge"
+"Publisher"="Microsoft"
+"Description"="Microsoft's web browser: its Linux build."
+"Category"="Browsers"
+"Colour"=dword:00808080
+"Tier"="linux"
+"Source"="linux:apt:microsoft-edge-stable"
+"Run"="/usr/bin/microsoft-edge"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.microsoft.Edge.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L187]
+"Name"="Mozilla Firefox"
+"Publisher"="Mozilla"
+"Description"="The independent web browser, from Mozilla: its Linux build, updated with the system."
+"Category"="Browsers"
+"Colour"=dword:00808080
+"Tier"="linux"
+"Source"="linux:apt:firefox"
+"Run"="/usr/bin/firefox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"

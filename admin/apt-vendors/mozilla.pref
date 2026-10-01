@@ -1,0 +1,9 @@
+# Firefox from Mozilla's repository (SG Store); everything else there only
+# when Debian has no such package -- Debian's firefox-esr stays Debian's.
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 100
+
+Package: firefox firefox-l10n-*
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000

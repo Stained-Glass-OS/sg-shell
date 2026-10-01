@@ -99,9 +99,11 @@ CURRENT_ID = None      # the request being answered (its progress file)
 
 # Apt sources some packages need from their makers, as the makers' own packages
 # ship them (identical files, which the package then takes over): Steam's
-# launcher and 32-bit libraries come from Valve's repository.
+# launcher and 32-bit libraries come from Valve's repository; the Linux builds
+# of Chrome, Edge and Firefox from Google's, Microsoft's and Mozilla's.
 VENDOR_DIR = "/usr/share/stained-glass/apt-vendors"
 KEYRINGS = "/usr/share/keyrings"
+PREFERENCES = "/etc/apt/preferences.d"
 TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
 if TEST:
     # The gate runs this unprivileged against a spool of its own, with stand-ins
@@ -115,6 +117,7 @@ if TEST:
     WORK_DIR = os.environ.get("SG_ADMIN_WORK", WORK_DIR)
     VENDOR_DIR = os.environ.get("SG_ADMIN_VENDORS", VENDOR_DIR)
     KEYRINGS = os.environ.get("SG_ADMIN_KEYRINGS", KEYRINGS)
+    PREFERENCES = os.environ.get("SG_ADMIN_PREFERENCES", PREFERENCES)
 
 
 class Refused(Exception):
@@ -678,6 +681,15 @@ def installed_version(pkg):
 VENDOR_SOURCES = {
     # the package: its maker's files, and where they go
     "steam-launcher": [("steam-stable.list", "sources"), ("steam.gpg", "keyrings")],
+    # the browsers' Linux builds: each package rewrites the same file with the
+    # same source on install (Chrome's postinst: google-chrome.sources; Edge's
+    # accepts a signed-by in microsoft-edge.list), so apt never sees two
+    # Signed-By values for one repository
+    "google-chrome-stable": [("google-chrome.sources", "sources"), ("google-chrome.gpg", "keyrings")],
+    "microsoft-edge-stable": [("microsoft-edge.list", "sources"), ("microsoft-edge.gpg", "keyrings")],
+    # Mozilla's repository has firefox-esr too: the pin takes only firefox
+    # from it, so Debian's firefox-esr stays Debian's
+    "firefox": [("mozilla.list", "sources"), ("packages.mozilla.org.asc", "keyrings"), ("mozilla.pref", "preferences")],
 }
 
 
@@ -687,7 +699,7 @@ def add_vendor_source(pkg):
     if pkg not in VENDOR_SOURCES:
         return False
     for name, where in VENDOR_SOURCES[pkg]:
-        dst = os.path.join(APT_SOURCES if where == "sources" else KEYRINGS, name)
+        dst = os.path.join({"sources": APT_SOURCES, "keyrings": KEYRINGS, "preferences": PREFERENCES}[where], name)
         if not os.path.exists(dst):
             shutil.copyfile(os.path.join(VENDOR_DIR, name), dst)
             os.chmod(dst, 0o644)
