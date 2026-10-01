@@ -45,6 +45,7 @@
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
+#   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -80,7 +81,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -90,7 +91,7 @@ done
 # --- the source: winget-pkgs' layout on this machine ---------------------------------------------
 W="$T/www"
 mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad/Hash/2.0" "$W/files" \
-         "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1"
+         "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
 SHA=$(sha256sum "$W/files/store-fake.exe" | cut -d' ' -f1)
 # a zip that holds the installer (and a readme), as Paint.NET's does
@@ -106,6 +107,19 @@ printf '[{"name": "1.9.0", "type": "dir"}, {"name": "1.10.0", "type": "dir"}]' >
 printf '[{"name": "2.0", "type": "dir"}]' > "$W/api/b/Bad/Hash"
 printf '[{"name": "2.0", "type": "dir"}]' > "$W/api/f/Fake/Pick"
 printf '[{"name": "5.1", "type": "dir"}]' > "$W/api/f/Fake/Zip"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Plus++"
+# an id with + in it, as Notepad++.Notepad++
+cat > "$W/raw/f/Fake/Plus++/1.0/Fake.Plus++.installer.yaml" <<EOF
+PackageIdentifier: Fake.Plus++
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /plus-id
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
 cat > "$W/raw/f/Fake/App/1.10.0/Fake.App.installer.yaml" <<EOF
 PackageIdentifier: Fake.App
 PackageVersion: 1.10.0
@@ -403,8 +417,19 @@ SG_FAKE_KEY=PinnedApp SG_FAKE_DISPLAY='Pinned App' SG_FAKE_VERSION=3.0 SG_FAKE_D
     wine "$EXE" --install 02 >/dev/null 2>&1; ec=$?
 [ "$ec" = 0 ] && pass "a pinned entry installs (SHA-256 checked from the catalogue)" || fail "install 02 exit $ec: $(cat "$D.result" 2>/dev/null)"
 [ -f "$WINEPREFIX/drive_c/Program Files/Pinned App/app.exe" ] && pass "the pinned app is installed" || fail "pinned app.exe not installed"
+# a winget id with + in it (Notepad++.Notepad++ was "not a package name")
+reg "$K\\04" /v Source /d 'winget:Fake.Plus++'
+rm -f "$G/setup.log"
+SG_FAKE_KEY=PlusApp SG_FAKE_DISPLAY='Bad' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Plus App' wine "$EXE" --install 04 >/dev/null 2>&1; ec=$?
+[ "$ec" = 0 ] && grep -q '/S /plus-id' "$G/setup.log" 2>/dev/null && pass "a winget id with + in it installs (Notepad++)" \
+    || fail "install of Fake.Plus++ exit $ec: $(cat "$D.result" "$G/setup.log" 2>/dev/null)"
+rm -f "$G/setup.log"
+SG_FAKE_KEY=PlusApp SG_FAKE_DISPLAY='Bad' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Plus App' wine "$T/mut-noplus.exe" --install 04 >/dev/null 2>&1
+grep -q 'not a package name' "$D.result" 2>/dev/null && [ ! -e "$G/setup.log" ] && pass "MUTANT NOPLUS refuses the id (gate catches it)" \
+    || fail "NOPLUS not detected: $(cat "$D.result" 2>/dev/null)"
+reg "$K\\04" /v Source /d 'winget:Bad.Hash'; ununinstall PlusApp
 ununinstall FakeApp; ununinstall PinnedApp
-rm -rf "$WINEPREFIX/drive_c/Program Files/Fake App" "$WINEPREFIX/drive_c/Program Files/Pinned App" "$WINEPREFIX/drive_c/Program Files/Pick App" "$WINEPREFIX/drive_c/Program Files/Zip App"
+rm -rf "$WINEPREFIX/drive_c/Program Files/Plus App" "$WINEPREFIX/drive_c/Program Files/Fake App" "$WINEPREFIX/drive_c/Program Files/Pinned App" "$WINEPREFIX/drive_c/Program Files/Pick App" "$WINEPREFIX/drive_c/Program Files/Zip App"
 wineserver -w
 
 # --- E2. an "ours" app whose setup program is in a system package this machine lacks -------------

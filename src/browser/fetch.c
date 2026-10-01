@@ -54,8 +54,13 @@ static BOOL id_path(const WCHAR *id, WCHAR *out, int cch)
     int n = 0;
     const WCHAR *p;
     if (!id[0] || cch < 4) return FALSE;
+    /* winget ids: letters, digits, . - _ and + (Notepad++.Notepad++) */
     for (p = id; *p; p++)
+#ifdef SG_MUTANT_NOPLUS
         if (!iswalnum(*p) && *p != '.' && *p != '-' && *p != '_') return FALSE;
+#else
+        if (!iswalnum(*p) && *p != '.' && *p != '-' && *p != '_' && *p != '+') return FALSE;
+#endif
     out[n++] = towlower(id[0]);
     out[n++] = '/';
     for (p = id; *p && n < cch - 1; p++) out[n++] = *p == '.' ? '/' : *p;

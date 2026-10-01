@@ -6,6 +6,9 @@ sg-shell (0.1.0-83) unstable; urgency=medium
     HKCU\Software\WOW6432Node (Windows shares HKCU\Software between 32
     and 64 bits), where the store did not look. It now looks there too.
     Test: test/store-check.sh (mutant NOWOWCU).
+  * SG Store: Notepad++ did not install: "'Notepad++.Notepad++' is not a
+    package name." -- the store refused a winget id with + in it. It takes
+    them now. Test: test/store-check.sh (mutant NOPLUS).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 03:30:00 +0000
 
