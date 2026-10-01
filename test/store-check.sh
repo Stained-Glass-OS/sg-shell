@@ -43,6 +43,7 @@
 #   SG_MUTANT_NOPACKAGE   never has the missing package installed
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
+#   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -78,7 +79,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -146,6 +147,7 @@ Installers:
   InstallerSwitches:
     Silent: /S /picked-nullsoft
     Custom: /gate-custom=1
+  ElevationRequirement: elevationRequired
   InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
   InstallerSha256: $SHA
 ManifestType: installer
@@ -317,6 +319,7 @@ SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DI
 [ "$ec" = 0 ] && pass "--install through the manifest succeeds" || fail "install 01 exit $ec: $(cat "$D.result" 2>/dev/null)"
 grep -q '/S /gate-silent' "$G/setup.log" 2>/dev/null && pass "run with the manifest's silent switches" || fail "setup.log '$(cat "$G/setup.log" 2>/dev/null)'"
 [ -f "$WINEPREFIX/drive_c/Program Files/Fake App/app.exe" ] && pass "the app is installed" || fail "app.exe not installed"
+grep -q '^elevated 01 0' "$D.result" 2>/dev/null && pass "as the user: its manifest asks for no administrator" || fail "01 elevated: $(cat "$D.result" 2>/dev/null)"
 run --list
 [ "$(kv "$(appline 01)" state)" = installed ] && [ "$(kv "$(appline 01)" installed)" = 1.10.0 ] \
     && pass "and is then detected as installed (1.10.0)" || fail "after install: $(appline 01)"
@@ -329,6 +332,14 @@ SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='
     && pass "the runnable installer is picked over a portable zip of the same arch" || fail "install 08 exit $ec: $(cat "$D.result" "$G/setup.log" 2>/dev/null)"
 grep -q '/S /picked-nullsoft /gate-custom=1' "$G/setup.log" 2>/dev/null \
     && pass "and run with its Custom switches after the silent ones (Opera's /allusers)" || fail "no Custom switches: $(cat "$G/setup.log" 2>/dev/null)"
+grep -q '^elevated 08 1' "$D.result" 2>/dev/null \
+    && pass "an installer whose manifest says elevationRequired is started as an administrator (foobar2000, Mp3tag)" \
+    || fail "elevationRequired not elevated: $(cat "$D.result" 2>/dev/null)"
+rm -f "$G/setup.log"; ununinstall PickApp
+SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
+    wine "$T/mut-noelevate.exe" --install 08 >/dev/null 2>&1
+grep -q '^elevated 08 0' "$D.result" 2>/dev/null \
+    && pass "MUTANT NOELEVATE runs it as the user (gate catches it)" || fail "NOELEVATE not detected: $(cat "$D.result" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall PickApp
 SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
     wine "$T/mut-nocustom.exe" --install 08 >/dev/null 2>&1

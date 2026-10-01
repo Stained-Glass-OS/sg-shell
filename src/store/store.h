@@ -69,6 +69,7 @@ typedef struct {
     WCHAR installed_version[64];
     WCHAR available_version[64];
     WCHAR msg[256];
+    BOOL  ran_elevated;           /* its installer was started as an administrator */
 } app_t;
 
 #define MAX_APPS 256

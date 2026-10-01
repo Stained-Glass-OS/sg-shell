@@ -112,6 +112,7 @@ static const char OPERA[] =
     "  InstallerSha256: 4F4593749F89C075F05A3D6102A970E866EB7DF2C964E34465F8939299EF24DD\n"
     "  InstallerSwitches:\n"
     "    Custom: /allusers=1\n"
+    "  ElevationRequirement: elevationRequired\n"
     "ManifestType: installer\n";
 
 /* Microsoft Edge: root scope and type, machine-wide MSIs only, three architectures */
@@ -187,6 +188,7 @@ int main(void)
     CHECK(n == 2, "Opera: 2 installers (%d)", n);
     CHECK(!strcmp(list[0].silent, "/silent") && !strcmp(list[0].custom, "/allusers=0"), "Opera: the root's Silent and the user installer's Custom (%s | %s)", list[0].silent, list[0].custom);
     CHECK(!strcmp(list[1].custom, "/allusers=1") && !strcmp(list[1].silent, "/silent"), "Opera: the machine installer's Custom (%s)", list[1].custom);
+    CHECK(!list[0].elevation[0] && !strcmp(list[1].elevation, "elevationRequired"), "an installer's own ElevationRequirement (%s | %s)", list[0].elevation, list[1].elevation);
 
     strcpy(buf, EDGE);
     n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);

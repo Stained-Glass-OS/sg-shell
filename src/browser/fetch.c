@@ -166,6 +166,7 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     MultiByteToWideChar(CP_UTF8, 0, best->arch, -1, p->arch, 16);
     MultiByteToWideChar(CP_UTF8, 0, best->nested, -1, p->nested, 32);
     MultiByteToWideChar(CP_UTF8, 0, best->custom, -1, p->custom, 512);
+    p->elevate = !_stricmp(best->elevation, "elevationRequired");
     free(list);
     if (!p->type[0]) { seterr(err, cch, L"%ls %ls does not say how to install it.", id, p->version); return FALSE; }
     return TRUE;
@@ -259,7 +260,7 @@ void pkg_cleanup(package_t *p)
 
 /* ---- running an installer ----------------------------------------------------------------------- */
 
-static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, WCHAR *err, int cch)
+static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, BOOL *elevated, WCHAR *err, int cch)
 {
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     int attempt;
@@ -269,7 +270,7 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
         sei.lpFile = file;
         sei.lpParameters = args;
         sei.nShow = SW_SHOWNORMAL;
-        if (ShellExecuteExW(&sei)) break;
+        if (ShellExecuteExW(&sei)) { if (elevated) *elevated = attempt != 0; break; }
         /* an installer that must run as an administrator: ask (the consent prompt) */
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) attempt = 2;
     }
@@ -307,8 +308,14 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     lstrcpynW(p->command, args, 1024);
     /* An MSI for all users (Edge's, Chrome's) needs an administrator: on
      * Windows the Installer service elevates it itself, here there is no such
-     * service, and as the user msiexec stopped with 1627. Ask first. */
-    if (!run_wait(file, args, file == msi, &code, err, cch)) return FALSE;
+     * service, and as the user msiexec stopped with 1627. Ask first -- and
+     * for an installer whose manifest says elevationRequired (foobar2000's,
+     * Mp3tag's): run as the user it put its files in Program Files but could
+     * not write its Uninstall entry, so it was never seen as installed. */
+#ifdef SG_MUTANT_NOELEVATE
+    p->elevate = FALSE;
+#endif
+    if (!run_wait(file, args, file == msi || p->elevate, &code, &p->elevated, err, cch)) return FALSE;
     p->exit_code = code;
     if (code != 0 && code != 3010 && code != 1641) {
         seterr(err, cch, L"The installer stopped with code %ld.", (long)code);

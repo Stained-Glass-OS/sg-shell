@@ -78,6 +78,14 @@ sg-shell (0.1.0-81) unstable; urgency=medium
       Start did not look. Start now lists shortcuts there too (the user's
       and all users'). Test: test/start-check.sh (mutant NOSTARTROOT, run
       with SG_START_EXE=<a build with -DSG_MUTANT_NOSTARTROOT>).
+    - foobar2000 and Mp3tag said "Installed." but stayed "Install": their
+      manifests say ElevationRequirement: elevationRequired, which the store
+      ignored, so their installers ran as the user -- the files reached
+      Program Files, the Uninstall entry (HKLM) did not, and the store (and
+      Apps & features) never saw them. Such an installer is now started as
+      an administrator (the consent prompt), as winget does. Test:
+      test/store-check.sh (mutant NOELEVATE);
+      test/browser-manifest-test.c.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

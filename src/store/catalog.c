@@ -506,6 +506,7 @@ static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LO
     if (!_wcsicmp(p.type, L"zip") && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
 #endif
     ok = pkg_install(&p, err, cch);
+    a->ran_elevated = p.elevated;
     pkg_cleanup(&p);
     return ok ? 0 : 1;
 }
