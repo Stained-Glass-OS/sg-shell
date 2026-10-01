@@ -1,5 +1,16 @@
 sg-shell (0.1.0-86) unstable; urgency=medium
 
+  * SG Store: SQL Server Compact 3.5 SP2 (David 2026-10-01: AmbirScan for
+    athenaNet keeps its settings in it). A new pinned installer type,
+    iexpress-msi: the package is unpacked (/Q /T:dir /C) and its MSIs
+    installed, x86 first, under one administrator's consent -- run quietly
+    as a whole it installed nothing. A pinned install now records whether
+    it ran as an administrator, as a winget one does. Test:
+    test/store-check.sh H2 (wixl-built MSIs; the x64 one may only install
+    after the x86 one; mutant SG_MUTANT_NOIEXPRESS).
+  * defaults: NDP\v4\Client and Full InstallPath (Wine Mono's .NET 4 path)
+    for prefixes made before our Wine Mono build writes them: SQL Server
+    Compact's installer stopped with 1603 without them.
   * SG Office's icons are installed as images too:
     /usr/share/icons/hicolor/<size>/apps/sg-office-documents.png
     (-spreadsheets, -presentations; 16-256 px, office/gen-icons.py), for

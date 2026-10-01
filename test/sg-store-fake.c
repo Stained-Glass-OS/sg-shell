@@ -18,6 +18,8 @@
  *                                   /ui, QuietUninstallString /quiet): logs its
  *                                   arguments to C:\gate\uninstall.log and
  *                                   deletes the Uninstall entry K
+ *   <any> /Q /T:"DIR" /C              an IExpress package, unpacking: copies
+ *                                   the files of %SG_FAKE_MSIS% into DIR
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -110,6 +112,28 @@ int wmain(int argc, WCHAR **argv)
     }
 
     logline(L"C:\\gate\\setup.log", args);
+    {
+        const WCHAR *t = wcsstr(args, L"/T:");
+        WCHAR from[MAX_PATH], to[MAX_PATH], pat[MAX_PATH], a[MAX_PATH], b[MAX_PATH];
+        WIN32_FIND_DATAW fd;
+        HANDLE find;
+        int n = 0;
+        if (t && wcsstr(args, L" /C") && GetEnvironmentVariableW(L"SG_FAKE_MSIS", from, MAX_PATH)) {
+            for (t += 3; *t == L'"'; t++);
+            while (*t && *t != L'"' && n < MAX_PATH - 1) to[n++] = *t++;
+            to[n] = 0;
+            swprintf(pat, MAX_PATH, L"%ls\\*", from);
+            if ((find = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return 4;
+            do {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                swprintf(a, MAX_PATH, L"%ls\\%ls", from, fd.cFileName);
+                swprintf(b, MAX_PATH, L"%ls\\%ls", to, fd.cFileName);
+                CopyFileW(a, b, FALSE);
+            } while (FindNextFileW(find, &fd));
+            FindClose(find);
+            return 0;
+        }
+    }
     {
         WCHAR ms[16];
         if (GetEnvironmentVariableW(L"SG_FAKE_SLEEP", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));

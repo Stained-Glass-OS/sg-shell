@@ -287,6 +287,69 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
     return TRUE;
 }
 
+/* An IExpress package of MSIs (SQL Server Compact's runtime: its x86 and
+ * x64 MSIs, both needed on a 64-bit system, x86 first). Run quietly it
+ * installs neither here; unpacked (/Q /T:dir /C), the MSIs install one after
+ * the other as an administrator, under one consent. */
+static BOOL install_iexpress_msi(package_t *p, WCHAR *err, int cch)
+{
+    WCHAR dir[MAX_PATH], args[1024], cmd[2048], sys[MAX_PATH], path[MAX_PATH], *slash;
+    WCHAR names[8][MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE find;
+    DWORD code = 1;
+    int n = 0, i, pass;
+    BOOL ok = FALSE;
+
+    lstrcpynW(dir, p->file, MAX_PATH);
+    if (!(slash = wcsrchr(dir, '\\'))) return FALSE;
+    lstrcpyW(slash, L"\\unpacked");
+    CreateDirectoryW(dir, NULL);
+    swprintf(args, ARRAYSIZE(args), L"/Q /T:\"%ls\" /C", dir);
+    if (!run_wait(p->file, args, FALSE, &code, NULL, err, cch)) return FALSE;
+    swprintf(path, MAX_PATH, L"%ls\\*.msi", dir);
+    if ((find = FindFirstFileW(path, &fd)) != INVALID_HANDLE_VALUE) {
+        do if (n < (int)ARRAYSIZE(names)) lstrcpynW(names[n++], fd.cFileName, MAX_PATH);
+        while (FindNextFileW(find, &fd));
+        FindClose(find);
+    }
+    if (code || !n) {
+        seterr(err, cch, L"The package could not be unpacked (code %ld).", (long)code);
+        goto done;
+    }
+    /* msiexec's path has no spaces, so cmd keeps the quotes that follow */
+    GetSystemDirectoryW(sys, MAX_PATH);
+    cmd[0] = 0;
+    for (pass = 0; pass < 2; pass++)
+        for (i = 0; i < n; i++) {
+            WCHAR lower[MAX_PATH];
+            lstrcpynW(lower, names[i], MAX_PATH);
+            _wcslwr(lower);
+            if ((wcsstr(lower, L"x86") != NULL) != !pass) continue;
+            if (cmd[0]) lstrcatW(cmd, L" && ");
+            swprintf(cmd + lstrlenW(cmd), ARRAYSIZE(cmd) - lstrlenW(cmd),
+                     L"%ls\\msiexec.exe /i \"%ls\\%ls\" /quiet /norestart", sys, dir, names[i]);
+        }
+    swprintf(args, ARRAYSIZE(args), L"/c %ls", cmd);
+    lstrcpynW(p->command, args, ARRAYSIZE(p->command));
+    swprintf(path, MAX_PATH, L"%ls\\cmd.exe", sys);
+    if (!run_wait(path, args, TRUE, &code, &p->elevated, err, cch)) goto done;
+    p->exit_code = code;
+    if (code != 0 && code != 3010 && code != 1641) seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
+    else ok = TRUE;
+done:
+    swprintf(path, MAX_PATH, L"%ls\\*", dir);
+    if ((find = FindFirstFileW(path, &fd)) != INVALID_HANDLE_VALUE) {
+        do {
+            swprintf(path, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) DeleteFileW(path);
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+    }
+    RemoveDirectoryW(dir);
+    return ok;
+}
+
 BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 {
     WCHAR args[1024], msi[MAX_PATH];
@@ -301,6 +364,9 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     else if (!_wcsicmp(t, L"inno")) lstrcpynW(args, p->silent[0] ? p->silent : L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-", 1024);
     else if (!_wcsicmp(t, L"burn")) lstrcpynW(args, p->silent[0] ? p->silent : L"/quiet /norestart", 1024);
     else if (!_wcsicmp(t, L"exe")) lstrcpynW(args, p->silent, 1024);
+#ifndef SG_MUTANT_NOIEXPRESS
+    else if (!_wcsicmp(t, L"iexpress-msi")) return install_iexpress_msi(p, err, cch);
+#endif
     else { seterr(err, cch, L"%ls installers (%ls) can't be run here yet.", t, p->id); return FALSE; }
 #ifndef SG_MUTANT_NOCUSTOM
     /* winget passes the Custom switches in every mode: Opera's installer

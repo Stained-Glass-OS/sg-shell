@@ -607,6 +607,7 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     memcpy(p.sha256, a->pin_sha, 32);
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
     ok = pkg_install(&p, err, cch);
+    a->ran_elevated = p.elevated;
     pkg_cleanup(&p);
     return ok ? 0 : 1;
 }

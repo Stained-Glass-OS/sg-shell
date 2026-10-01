@@ -96,7 +96,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -545,6 +545,54 @@ i=0; while ! grep -q 'desktop message loop starting' "$T/explorer.out" 2>/dev/nu
 click() { xy=$(grep "^hit $2 " "$1" 2>/dev/null | tail -1 | awk '{ print $(NF-1), $NF }'); [ -n "$xy" ] || return 1
           xdotool mousemove "${xy% *}" "${xy#* }" click 1; }
 waitfor() { i=0; while ! grep -q "$2" "$1" 2>/dev/null && [ $i -lt "${3:-80}" ]; do sleep 0.25; i=$((i + 1)); done; grep -q "$2" "$1" 2>/dev/null; }
+
+# --- H2. an IExpress package of MSIs (SQL Server Compact's runtime) -------------------------------
+# Two MSIs, x86 then x64, under one consent; the "x64" one may only install
+# after the x86 one (as SQL Server Compact's x64 MSI needs its x86 one).
+# (The desktop is up: wineserver -w would wait for it forever.)
+if command -v wixl >/dev/null; then
+    M="$WINEPREFIX/drive_c/gate/msis"; mkdir -p "$M"
+    gate_msi() { # file name condition
+        cat > "$T/$1.wxs" <<EOF2
+<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="$2" Language="1033" Version="1.0.0" Manufacturer="The gate" UpgradeCode="$(python3 -c 'import uuid; print(uuid.uuid4())')">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine"/>
+    <Media Id="1" Cabinet="g.cab" EmbedCab="yes"/>
+    $3
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Component Id="C" Guid="$(python3 -c 'import uuid; print(uuid.uuid4())')">
+        <RegistryValue Root="HKLM" Key="Software\SgGateCompact" Name="$1" Type="string" Value="1" KeyPath="yes"/>
+      </Component>
+    </Directory>
+    <Feature Id="F" Level="1"><ComponentRef Id="C"/></Feature>
+  </Product>
+</Wix>
+EOF2
+        wixl -o "$M/$1.msi" "$T/$1.wxs" 2>>"$T/cc.log"; }
+    gate_msi compact_x86 'Gate Compact x86' ''
+    gate_msi compact_x64 'Gate Compact x64' '<Property Id="X86"><RegistrySearch Id="S" Root="HKLM" Key="Software\SgGateCompact" Name="compact_x86" Type="raw"/></Property><Condition Message="the x86 one first">X86</Condition>'
+    reg "$K\\10" /v Name /d 'Gate Compact'; reg "$K\\10" /v Tier /d windows
+    reg "$K\\10" /v Source /d "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|iexpress-msi|"
+    reg "$K\\10" /v DetectName /d 'Gate Compact'
+    sleep 1
+    compact() { for v in x86 x64; do { wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall' /s /reg:32
+                wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall' /s /reg:64; } 2>/dev/null \
+                | grep -q "Gate Compact $v" || return 1; done; }
+    rm -f "$G/setup.log"
+    SG_FAKE_MSIS='C:\gate\msis' wine "$EXE" --install 10 >/dev/null 2>&1; ec=$?
+    grep -q '/Q /T:.* /C' "$G/setup.log" 2>/dev/null && pass "an IExpress package is unpacked (/Q /T: /C)" || fail "setup.log '$(cat "$G/setup.log" 2>/dev/null)'"
+    [ "$ec" = 0 ] && compact && pass "and its MSIs install, x86 first (the x64 one needs it)" \
+        || fail "install 10 exit $ec: $(cat "$D.result" 2>/dev/null)"
+    grep -q '^elevated 10 1' "$D.result" 2>/dev/null && pass "as an administrator" || fail "10 elevated: $(cat "$D.result" 2>/dev/null)"
+    for v in x64 x86; do wine msiexec /x "C:\\gate\\msis\\compact_$v.msi" /quiet >/dev/null 2>&1; done
+    sleep 1
+    SG_FAKE_MSIS='C:\gate\msis' wine "$T/mut-noiexpress.exe" --install 10 >/dev/null 2>&1
+    ! compact && pass "MUTANT NOIEXPRESS installs neither (gate catches it)" || fail "NOIEXPRESS not detected"
+    wine reg delete "$K\\10" /f >/dev/null 2>&1; sleep 1
+else
+    echo "NOTE  no wixl (msitools): the IExpress package install is not checked"
+fi
 
 # --- I. a Linux app, through the consent (direct here) and sg-admind ------------------------------
 rm -f "$D" "$D.result" "$D.sys"

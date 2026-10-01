@@ -22,7 +22,8 @@ Windows Registry Editor Version 5.00
 ;   Name, Publisher, Description, Category, Colour (0x00RRGGBB letter badge),
 ;   Tier   = windows | ours | linux         (inferred from Source if absent)
 ;   Source = winget:<PackageId>
-;          | pin:<Url>|<Sha256>|<Type>|<Silent>
+;          | pin:<Url>|<Sha256>|<Type>|<Silent>   (Type: msi, nullsoft, inno, burn, exe,
+;            or iexpress-msi -- a package of MSIs, unpacked and installed x86 first)
 ;          | ours:apt:<package> | linux:apt:<package>   (apt, via sg-admind)
 ;   DetectName = a Windows program's Uninstall DisplayName: "A|B|!C" -- the
 ;                name starts with A or B as a whole word ("Git" is not "GitHub
@@ -3482,6 +3483,18 @@ Windows Registry Editor Version 5.00
 "Source"="winget:DYMO.DYMOLabel"
 "DetectName"="DYMO Label"
 "Icon"="https://www.dymo.com/favicon.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\126]
+"Name"="SQL Server Compact 3.5 SP2"
+"Publisher"="Microsoft"
+"Description"="The small database programs keep their settings in (AmbirScan for athenaNet needs it). Its x86 and x64 runtimes."
+"Category"="Development"
+"Colour"=dword:00a4373a
+"Tier"="windows"
+"Source"="pin:https://download.microsoft.com/download/e/c/1/ec1b2340-67a0-4b87-85f0-74d987a27160/SSCERuntime-ENU.exe|2b15e1fab3533e9c3807184b741a24b4a66c24664432bf6b6177fefbd1bce6e3|iexpress-msi|"
+"PinVersion"="3.5.8080.0"
+"DetectName"="Microsoft SQL Server Compact 3.5 SP2"
+"Icon"="https://www.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L185]
 "Name"="Google Chrome"

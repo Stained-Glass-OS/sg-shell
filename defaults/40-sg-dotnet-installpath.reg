@@ -1,0 +1,21 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: where the .NET Framework 4 files are (Wine Mono's), as
+; NDP\v4\Client and Full's InstallPath say on a machine with .NET 4. Wine
+; Mono registers the version but not the path; SQL Server Compact 3.5 SP2's
+; installer edits [InstallPath]\CONFIG\machine.config and stopped with 1603
+; without it (the Ambir scanner's AmbirScan needs SQL Server Compact to keep
+; its settings). Our Wine Mono build's support installer writes these too;
+; this reaches prefixes made before it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\NET Framework Setup\NDP\v4\Client]
+"InstallPath"="C:\\windows\\Microsoft.NET\\Framework64\\v4.0.30319\\"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\NET Framework Setup\NDP\v4\Full]
+"InstallPath"="C:\\windows\\Microsoft.NET\\Framework64\\v4.0.30319\\"
+
+[HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\NET Framework Setup\NDP\v4\Client]
+"InstallPath"="C:\\windows\\Microsoft.NET\\Framework\\v4.0.30319\\"
+
+[HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\NET Framework Setup\NDP\v4\Full]
+"InstallPath"="C:\\windows\\Microsoft.NET\\Framework\\v4.0.30319\\"
