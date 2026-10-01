@@ -44,6 +44,7 @@
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
+#   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -79,7 +80,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -288,6 +289,18 @@ run --list
     && pass "Git and XnView are detected by their own names" || fail "06/07: $(appline 06) / $(appline 07)"
 : > "$T/dpkg-status"
 for k in GIMP_is1 GitHubDesktop XnViewMP Git_is1 XnView_is1; do ununinstall $k; done
+wineserver -w
+
+# a 32-bit installer's per-user entry: Wine files it under HKCU\Software\WOW6432Node
+# (Kdenlive, BleachBit said "Installed." and stayed "Install")
+reg 'HKCU\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Git' /v DisplayName /d 'Git'
+reg 'HKCU\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Git' /v DisplayVersion /d '2.55.0'
+wineserver -w
+run --list
+[ "$(kv "$(appline 06)" state)" = installed ] && pass "a per-user entry under HKCU\\Software\\WOW6432Node is seen (Kdenlive, BleachBit)" || fail "06 (HKCU WOW6432Node): $(appline 06)"
+SG_MUT="$T/mut-nowowcu.exe" run --list
+[ "$(kv "$(appline 06)" state)" = not-installed ] && pass "MUTANT NOWOWCU misses it (gate catches it)" || fail "NOWOWCU not detected: $(appline 06)"
+wine reg delete 'HKCU\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Git' /f >/dev/null 2>&1
 wineserver -w
 
 # --- C. update detection --------------------------------------------------------------------------

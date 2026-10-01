@@ -193,13 +193,17 @@ BOOL name_matches(const WCHAR *display, const WCHAR *patterns)
 
 /* Read the DisplayVersion (and, when icon is given, the DisplayIcon) of the
  * first Uninstall entry whose DisplayName is the app's (HKLM,
- * HKLM\WOW6432Node and HKCU). */
+ * HKLM\WOW6432Node, HKCU and HKCU\Software\WOW6432Node -- where Wine files a
+ * 32-bit installer's per-user entry: Kdenlive's, BleachBit's). */
 static BOOL find_installed_entry(const WCHAR *needle, WCHAR *version, int cch, WCHAR *icon, int icch)
 {
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
         { HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
         { HKEY_LOCAL_MACHINE, L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
         { HKEY_CURRENT_USER,  L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+#ifndef SG_MUTANT_NOWOWCU
+        { HKEY_CURRENT_USER,  L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+#endif
     };
     unsigned r;
     version[0] = 0;

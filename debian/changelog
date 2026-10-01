@@ -10,6 +10,12 @@ sg-shell (0.1.0-82) unstable; urgency=medium
     games (SuperTux, OpenTTD, 0 A.D., Luanti, RetroArch...). Each checked
     against Debian trixie's package contents: the package exists and ships
     the program the entry starts. The catalogue holds up to 512 apps.
+  * SG Store: Kdenlive and BleachBit said "Installed." and stayed
+    "Install". Their 32-bit installers write the per-user Uninstall entry,
+    and Wine files a 32-bit program's HKCU\Software keys under
+    HKCU\Software\WOW6432Node (Windows shares HKCU\Software between 32
+    and 64 bits), where the store did not look. It now looks there too.
+    Test: test/store-check.sh (mutant NOWOWCU).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 03:10:00 +0000
 
