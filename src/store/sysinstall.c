@@ -467,6 +467,7 @@ static LRESULT CALLBACK job_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         SetTimer(hwnd, 1, 60, NULL);
         return 0;
     case WM_TIMER:
+        if (wp == 2) { DestroyWindow(hwnd); return 0; }
         if (j && !j->done) InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     case WM_APP:
@@ -475,6 +476,11 @@ static LRESULT CALLBACK job_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         UpdateWindow(hwnd);
         write_screen_hit(j->dump, hwnd, L"close", close_rc(hwnd));
         SetForegroundWindow(hwnd);
+        /* installed: it goes by itself a moment later (the Store walk: it
+         * waited for a click); a failure stays to be read */
+#ifndef SG_MUTANT_STAYOPEN
+        if (j->code == SYS_OK) SetTimer(hwnd, 2, 1500, NULL);
+#endif
         return 0;
     case WM_PAINT: {
         PAINTSTRUCT ps;

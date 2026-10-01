@@ -1,3 +1,12 @@
+sg-shell (0.1.0-85) unstable; urgency=medium
+
+  * SG Store: a Linux app's progress window closes by itself a moment after
+    the app is installed (it waited for Close, and the Store with it; the
+    Store walk); a failure stays to be read. Test: test/store-check.sh (no
+    click: the elevated copy is gone within six seconds; mutant: it waits).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 07:40:00 +0000
+
 sg-shell (0.1.0-84) unstable; urgency=medium
 
   * test/store-check.sh: the full-width step maximizes the Store by a

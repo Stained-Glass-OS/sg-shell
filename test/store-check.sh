@@ -462,8 +462,13 @@ if waitfor "$D.sys" '^result ' 120; then
     grep -q '^progress [0-9]* .*gate package' "$D.sys" && pass "apt's progress reaches the progress window" || fail "no progress: $(cat "$D.sys")"
     import -window root "$OUT/store-apt-progress.png" 2>/dev/null
     grep -q 'install sg-gate-tool' "$T/apt.log" && pass "sg-admind ran apt-get install sg-gate-tool" || fail "apt.log: $(cat "$T/apt.log")"
-    sleep 0.5; click "$D.sys" close
 else fail "the elevated install did not finish: $(cat "$D.sys" 2>/dev/null) / $(tail -3 "$T/admind.log")"; fi
+# installed, the progress window goes by itself (no Close click: the Store
+# walk found it waiting for one), and the store's --install with it
+i=0; while pgrep -f -- '[-]-elevated-apt.*sg-gate-tool' >/dev/null && [ $i -lt 24 ]; do sleep 0.25; i=$((i + 1)); done
+pgrep -f -- '[-]-elevated-apt.*sg-gate-tool' >/dev/null && left=1 || left=0
+[ $left = 0 ] && pass "installed, the progress window closes by itself" || fail "the progress window waited for a click"
+[ $left = 0 ] || click "$D.sys" close
 i=0; while kill -0 $IP 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
 kill $IP 2>/dev/null; wait $IP 2>/dev/null; ec=$?
 [ "$ec" = 0 ] && grep -q '^result L2 ok' "$D.result" 2>/dev/null && pass "the store's --install of the Linux app succeeds" || fail "install L2 exit $ec: $(cat "$D.result" 2>/dev/null)"
@@ -488,7 +493,6 @@ rm -f "$D" "$D.result" "$D.sys"; : > "$T/apt.log"
 wine "$EXE" --install O5 >/dev/null 2>&1 & IP=$!
 if waitfor "$D.sys" '^result ' 120; then
     grep -q '^result ok' "$D.sys" && pass "it installs through the elevated copy and sg-admind's apt-install" || fail "O5 result: $(grep '^result' "$D.sys")"
-    sleep 0.5; click "$D.sys" close
 else fail "the install of our suite did not finish: $(cat "$D.sys" 2>/dev/null) / $(tail -3 "$T/admind.log")"; fi
 i=0; while kill -0 $IP 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
 kill $IP 2>/dev/null; wait $IP 2>/dev/null
