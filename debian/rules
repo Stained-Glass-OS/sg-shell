@@ -53,6 +53,7 @@ override_dh_auto_install:
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
 	# Linux apps Start does not list: the system's own plumbing (src/linuxapps)
 	install -m0644 src/linuxapps/linux-apps-hidden debian/sg-shell/usr/share/stained-glass/linux-apps-hidden
+	install -D -m0755 src/linuxapps/sg-linuxapp-deps debian/sg-shell/usr/libexec/stained-glass/sg-linuxapp-deps
 	# The shell's icon font (caption buttons of Windows 10/11-era programs):
 	# drawn by src/sg-icons-font.py; theme/52-sg-fonts.reg maps names to it.
 	install -d debian/sg-shell/usr/share/fonts/truetype/stained-glass

@@ -47,13 +47,18 @@ app gate-tryexec 'Type=Application' 'Name=Not Installed' 'TryExec=/nonexistent/p
 app gate-link 'Type=Link' 'Name=A Web Link' 'URL=https://example.org'
 app debian-gatexterm 'Type=Application' 'Name=GateXTerm' 'Exec=true'
 printf '# plumbing\ndebian-gate*\n' > "$T/hidden"
+# what came with something else: sg-linuxapp-deps' answer (a stand-in here;
+# the helper itself is checked below, on a package database of the gate's)
+app gate-dep 'Type=Application' 'Name=Came Along' 'Exec=true'
+printf '#!/bin/sh\nprintf "gate-dep\\n" > "$1"\n' > "$T/deps"; chmod 755 "$T/deps"
+export SG_LINUXAPP_DEPS="$T/deps"
 # the user's own copy of an app wins over the system's
 { echo '[Desktop Entry]'; echo 'Type=Application'; echo 'Name=Plain Tool (mine)'; echo 'Exec=true'; } > "$XDG_DATA_HOME/applications/gate-plain.desktop"
 
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
 PROGS="$T/pfx/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Linux apps"
 list=$(ls "$PROGS" 2>/dev/null | sort | tr '\n' '|')
-[ "$list" = "Gate Game.lnk|Plain Tool (mine).lnk|" ] && pass "shown apps get shortcuts; NoDisplay, OnlyShowIn, a missing TryExec, links and the hidden list do not; the user's copy wins" \
+[ "$list" = "Gate Game.lnk|Plain Tool (mine).lnk|" ] && pass "shown apps get shortcuts; NoDisplay, OnlyShowIn, a missing TryExec, links, the hidden list and what came with something else do not; the user's copy wins" \
     || fail "shortcuts: $list"
 ico="$T/pfx/drive_c/users/$(id -un)/AppData/Local/Stained Glass/Linux app icons/gate-game.ico"
 if [ -f "$ico" ] && python3 - "$ico" <<'EOF'
@@ -114,6 +119,34 @@ if [ -x /usr/bin/gio ]; then
     [ "$(cat "$T/ran" 2>/dev/null)" = ran ] && pass "--run starts the app (gio launch)" || fail "--run: nothing ran"
 else
     echo "SKIP  --run (no /usr/bin/gio here)"
+fi
+# sg-linuxapp-deps on a package database of the gate's: an app and the
+# plumbing it depends on, a wrapper the person installed and the app it wraps,
+# and a lone dependency.
+D="$T/dpkg"; A="$T/deps-apps"
+mkdir -p "$D/info" "$D/updates" "$A"
+for id in kapp kplumb wrapped alone; do app2="$A/$id.desktop"; printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true\n' "$id" > "$app2"; done
+pkg() { # NAME DEPENDS [DESKTOP]
+    printf 'Package: %s\nStatus: install ok installed\nPriority: optional\nSection: misc\nMaintainer: gate\nArchitecture: all\nVersion: 1\n' "$1" >> "$D/status"
+    [ -n "$2" ] && printf 'Depends: %s\n' "$2" >> "$D/status"
+    printf 'Description: gate\n\n' >> "$D/status"
+    if [ -n "${3:-}" ]; then printf '/.\n%s\n' "$A/$3.desktop" > "$D/info/$1.list"; else printf '/.\n' > "$D/info/$1.list"; fi
+}
+: > "$D/status"
+pkg kapp 'kplumb (>= 1), libc6 | libc7' kapp
+pkg kplumb '' kplumb
+pkg wrapper 'wrapped (>= 1)'
+pkg wrapped '' wrapped
+pkg alone '' alone
+printf 'Package: kplumb\nArchitecture: all\nAuto-Installed: 1\n\nPackage: wrapped\nArchitecture: all\nAuto-Installed: 1\n\nPackage: alone\nArchitecture: all\nAuto-Installed: 1\n' > "$T/extended_states"
+if command -v dpkg-query >/dev/null; then
+    SG_DPKG_ADMINDIR="$D" SG_LINUXAPP_APPS="$A" SG_APT_EXTENDED_STATES="$T/extended_states" \
+        sh "$HERE/src/linuxapps/sg-linuxapp-deps" "$T/deps.out"
+    got=$(tr '\n' ' ' < "$T/deps.out" 2>/dev/null)
+    [ "$got" = "alone kplumb " ] && pass "sg-linuxapp-deps: a dependency's entries are left out; an app the person's wrapper package is for stays" \
+        || fail "sg-linuxapp-deps: [$got]"
+else
+    echo "SKIP  sg-linuxapp-deps (no dpkg-query here)"
 fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

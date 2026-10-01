@@ -4,6 +4,16 @@ sg-shell (0.1.0-85) unstable; urgency=medium
     the app is installed (it waited for Close, and the Store with it; the
     Store walk); a failure stays to be read. Test: test/store-check.sh (no
     click: the elevated copy is gone within six seconds; mutant: it waits).
+  * Linux apps in Start leave out what came with something else: a
+    package apt installed only as a dependency brings desktop entries nobody
+    asked for (KDE System Settings with KDE Connect, Syncthing's launchers,
+    Freeciv's server; the Store walk). sg-linuxapp-deps (dpkg-query, apt's
+    auto marks) lists them for --sync -- unless a package the person
+    installed depends on it and has no entry of its own: then it is that
+    program (vim-gtk3's GVim, keepassxc's KeePassXC). Test:
+    test/linuxapps-check.sh (a stand-in helper; the helper on a package
+    database of the gate's; mutants: no helper, no wrapper rule). qa3: four
+    plumbing entries gone, GVim and KeePassXC kept.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 07:40:00 +0000
 

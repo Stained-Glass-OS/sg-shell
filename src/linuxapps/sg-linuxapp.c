@@ -12,7 +12,8 @@
  * Each app shown by a Linux desktop -- Type=Application, not NoDisplay or
  * Hidden, not for one desktop only (OnlyShowIn), its TryExec present, not
  * on the hidden list (SG_LINUXAPPS_HIDDEN, /usr/share/stained-glass/
- * linux-apps-hidden: the image's own plumbing, xterm and the like) -- gets
+ * linux-apps-hidden: the image's own plumbing, xterm and the like), not
+ * brought in as a dependency of another (sg-linuxapp-deps) -- gets
  * "Programs\Linux apps\NAME.lnk", which starts this program with --run, and
  * the app's own icon: its PNGs from the icon theme, put into an .ico.
  * Shortcuts in that folder whose app has gone are removed; the folder is ours.
@@ -149,9 +150,33 @@ static void load_hidden(void)
     if (dos_path(path, w, MAX_PATH)) g_hidden = read_file(w, 1 << 16, NULL);
 }
 
-static BOOL hidden_id(const char *id)
+/* What came with something else: the desktop ids sg-linuxapp-deps lists
+ * (a package apt installed as a dependency, not one a program the person
+ * installed is just a wrapper for -- KDE's System Settings with KDE Connect).
+ * Asked once a sync; without the helper nothing more is left out. */
+static char *g_dep_hidden;
+
+static void load_dep_hidden(void)
 {
-    const char *p = g_hidden;
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char helper[MAX_PATH], *uout = NULL, *argv[3];
+    WCHAR tmp[MAX_PATH], out[MAX_PATH];
+
+    free(g_dep_hidden);
+    g_dep_hidden = NULL;
+    if (!env_a("SG_LINUXAPP_DEPS", helper, sizeof(helper))) strcpy(helper, "/usr/libexec/stained-glass/sg-linuxapp-deps");
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (!spawnvp || !p_unix_name || !exists(helper) || !GetTempPathW(MAX_PATH, tmp) ||
+        !GetTempFileNameW(tmp, L"sgd", 0, out) || !(uout = p_unix_name(out))) return;
+    argv[0] = helper; argv[1] = uout; argv[2] = NULL;
+    if (!spawnvp(argv, TRUE)) g_dep_hidden = read_file(out, 1 << 16, NULL);
+    DeleteFileW(out);
+    HeapFree(GetProcessHeap(), 0, uout);
+}
+
+static BOOL in_list(const char *list, const char *id)
+{
+    const char *p = list;
     while (p && *p) {
         const char *eol = strchr(p, '\n');
         size_t n = eol ? (size_t)(eol - p) : strlen(p);
@@ -163,6 +188,14 @@ static BOOL hidden_id(const char *id)
         p = eol + 1;
     }
     return FALSE;
+}
+
+static BOOL hidden_id(const char *id)
+{
+#ifndef SG_MUTANT_NODEPS
+    if (in_list(g_dep_hidden, id)) return TRUE;
+#endif
+    return in_list(g_hidden, id);
 }
 
 /* TryExec: a program name found on the usual path, or an absolute path */
@@ -507,6 +540,7 @@ static int sync_apps(void)
     CreateDirectoryW(icons, NULL);
     GetModuleFileNameW(NULL, self, MAX_PATH);
 
+    load_dep_hidden();
     scan_apps();
     if (!(made = calloc(g_napps + 1, sizeof(*made)))) return 1;
     if (g_napps) CreateDirectoryW(folder, NULL);

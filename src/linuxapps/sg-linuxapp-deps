@@ -1,0 +1,44 @@
+#!/bin/sh
+# sg-linuxapp-deps OUT -- the Linux apps Start leaves out because they came
+# with something else (sg-linuxapp64.exe --sync asks this; the image's own
+# plumbing is on linux-apps-hidden instead).
+#
+# A package apt installed only as a dependency (apt's "auto" mark) brings
+# desktop entries nobody asked for: KDE's System Settings with KDE Connect,
+# Syncthing's launchers with Syncthing GTK, Freeciv's server with Freeciv.
+# Its entries are left out -- unless a package the person installed depends
+# on it and has no entry of its own: then it is that program (the Store's
+# vim-gtk3 is GVim, from vim-gui-common; keepassxc is keepassxc-full's).
+#
+# OUT gets one desktop id a line (the .desktop file's name without .desktop).
+# Copyright (C) 2026 Stained Glass OS contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -u
+OUT=${1:?usage: sg-linuxapp-deps OUT}
+APPS=${SG_LINUXAPP_APPS:-/usr/share/applications}
+STATES=${SG_APT_EXTENDED_STATES:-/var/lib/apt/extended_states}
+ADMIN=${SG_DPKG_ADMINDIR:-/var/lib/dpkg}   # a gate's own package database
+T=$(mktemp -d) || exit 1
+trap 'rm -rf "$T"' EXIT INT TERM
+
+# desktop id -> owning packages ("pkg[:arch][, pkg2]: path")
+dpkg-query --admindir="$ADMIN" -S "$APPS"/*.desktop 2>/dev/null | awk -F': ' '/^diversion/ { next } {
+    n = split($1, p, ", "); f = $2; sub(/.*\//, "", f); sub(/\.desktop$/, "", f)
+    for (i = 1; i <= n; i++) { q = p[i]; sub(/:.*/, "", q); print q "\t" f } }' > "$T/owners"
+# auto-installed packages
+awk '/^Package:/ { p = $2 } /^Auto-Installed: *1/ { print p }' "$STATES" 2>/dev/null | sort -u > "$T/auto"
+# installed packages and what they depend on (names only)
+dpkg-query --admindir="$ADMIN" -W -f='${db:Status-Abbrev}\t${Package}\t${Depends}, ${Pre-Depends}\n' 2>/dev/null |
+    awk -F'\t' '$1 ~ /^ii/ { n = split($3, d, /[,|]/); for (i = 1; i <= n; i++) {
+        x = d[i]; gsub(/\(.*\)|:any|^ +| +$/, "", x); sub(/ .*/, "", x); if (x != "") print x "\t" $2 } }' > "$T/rdeps"
+
+awk -F'\t' -v OFS='\t' '
+    FILENAME == ARGV[1] { owns[$1] = 1; ids[$1] = ids[$1] " " $2; next }
+    FILENAME == ARGV[2] { auto[$1] = 1; next }
+    { if ($1 in auto && !($2 in auto) && !($2 in owns)) wrapped[$1] = 1 }
+    END {
+        for (p in ids) if ((p in auto) && !(p in wrapped)) {
+            n = split(ids[p], f, " "); for (i = 1; i <= n; i++) print f[i]
+        }
+    }' "$T/owners" "$T/auto" "$T/rdeps" | sort -u > "$T/out"
+mv "$T/out" "$OUT"
