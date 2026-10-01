@@ -447,23 +447,107 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
     return TRUE;
 }
 
-static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
+/* What the system already provides, so a package's dependency on it is met:
+ * the Visual C++ runtimes are Wine's own (msvcp140, vcruntime140...), and
+ * installing Microsoft's over them would only replace them. */
+static BOOL dep_provided(const WCHAR *id)
+{
+    return !_wcsnicmp(id, L"Microsoft.VCRedist.", 19);
+}
+
+#define DEPS_KEY STORE_KEY L"\\Dependencies"
+
+/* Whether a dependency still has to be installed: not if the system
+ * provides it, not if SG Store installed it before (recorded), and not if
+ * the catalogue's app of that id is detected as installed. */
+static BOOL dep_needed(const WCHAR *id)
+{
+    static app_t apps[MAX_APPS];
+    WCHAR key[300];
+    HKEY h;
+    int n, i;
+    if (dep_provided(id)) return FALSE;
+    swprintf(key, ARRAYSIZE(key), L"%ls\\%ls", DEPS_KEY, id);
+    if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) || !RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h)) {
+        RegCloseKey(h);
+        return FALSE;
+    }
+    n = catalog_load(apps, MAX_APPS);
+    for (i = 0; i < n; i++)
+        if (apps[i].method == SRC_WINGET && !lstrcmpiW(apps[i].winget_id, id)) {
+            app_detect(&apps[i]);
+            return apps[i].state != AST_INSTALLED && apps[i].state != AST_UPDATE;
+        }
+    return TRUE;
+}
+
+static void dep_record(const WCHAR *id, const WCHAR *version)
+{
+    WCHAR key[300];
+    HKEY h;
+    swprintf(key, ARRAYSIZE(key), L"%ls\\%ls", DEPS_KEY, id);
+    if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, key, 0, NULL, 0, KEY_WRITE, NULL, &h, NULL) &&
+        RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_WRITE, NULL, &h, NULL)) return;
+    RegSetValueExW(h, L"Version", 0, REG_SZ, (const BYTE *)version, (lstrlenW(version) + 1) * sizeof(WCHAR));
+    RegCloseKey(h);
+}
+
+static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel,
+                      WCHAR *err, int cch);
+
+/* A package's dependencies (winget's PackageDependencies) first: TortoiseGit
+ * needs Git, and its installer failed without it ("can't find executable"). */
+static int install_deps(const package_t *p, int depth, progress_fn progress, void *ctx, volatile LONG *cancel,
+                        WCHAR *err, int cch)
+{
+    WCHAR list[512], *tok, *sp;
+#ifdef SG_MUTANT_NODEPINSTALL
+    return 0;
+#endif
+    lstrcpynW(list, p->deps, ARRAYSIZE(list));
+    for (tok = list; *tok; tok = sp) {
+        WCHAR why[400];
+        if (*tok == ' ') { sp = tok + 1; continue; }
+        if ((sp = wcschr(tok, ' '))) *sp++ = 0;
+        else sp = tok + lstrlenW(tok);
+        if (!dep_needed(tok)) continue;
+        if (depth >= 2) {   /* deeper chains are not followed */
+            swprintf(err, cch, L"%ls needs %ls, which needs still more; install %ls first.", p->id, tok, tok);
+            return 1;
+        }
+        if (install_id(tok, depth + 1, NULL, progress, ctx, cancel, why, ARRAYSIZE(why))) {
+            swprintf(err, cch, L"%ls needs %ls, which did not install: %ls", p->id, tok, why);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel,
+                      WCHAR *err, int cch)
 {
     package_t p;
     WCHAR winget[MAX_PATH];
     BOOL ok;
-    if (!pkg_resolve(a->winget_id, &p, err, cch)) return 1;
-    lstrcpynW(a->available_version, p.version, ARRAYSIZE(a->available_version));
-    if (winget_path(winget, MAX_PATH))
+    if (!pkg_resolve(id, &p, err, cch)) return 1;
+    if (a) lstrcpynW(a->available_version, p.version, ARRAYSIZE(a->available_version));
+    if (winget_path(winget, MAX_PATH))   /* winget installs the dependencies itself */
         return winget_install(winget, &p, err, cch) ? 0 : 1;
+    if (install_deps(&p, depth, progress, ctx, cancel, err, cch)) return 1;
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
 #ifndef SG_MUTANT_NOZIP
     if (!_wcsicmp(p.type, L"zip") && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
 #endif
     ok = pkg_install(&p, err, cch);
-    a->ran_elevated = p.elevated;
+    if (a) a->ran_elevated = p.elevated;
+    if (ok && depth) dep_record(id, p.version);
     pkg_cleanup(&p);
     return ok ? 0 : 1;
+}
+
+static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
+{
+    return install_id(a->winget_id, 0, a, progress, ctx, cancel, err, cch);
 }
 
 static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)

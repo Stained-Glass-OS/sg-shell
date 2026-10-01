@@ -85,7 +85,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -439,6 +439,59 @@ SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zi
 rm -f "$G/setup.log"; ununinstall ZipApp
 SG_MUT="$T/mut-nozip.exe" run --install 09
 [ ! -e "$G/setup.log" ] && pass "MUTANT NOZIP installs nothing (gate catches it)" || fail "NOZIP not detected"
+
+# --- G2. a package's dependencies first (TortoiseGit needs Git) ----------------------------------
+mkdir -p "$W/api/f/Fake" "$W/raw/f/Fake/Dep/1.0" "$W/raw/f/Fake/Needy/1.0"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Dep"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Needy"
+cat > "$W/raw/f/Fake/Dep/1.0/Fake.Dep.installer.yaml" <<EOF
+PackageIdentifier: Fake.Dep
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /dep-installed
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
+cat > "$W/raw/f/Fake/Needy/1.0/Fake.Needy.installer.yaml" <<EOF
+PackageIdentifier: Fake.Needy
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /needy
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+  Dependencies:
+    PackageDependencies:
+    - PackageIdentifier: Fake.Dep
+      MinimumVersion: 1.0
+    - PackageIdentifier: Microsoft.VCRedist.2015+.x64
+EOF
+app 10 'Needy App' Development windows 'winget:Fake.Needy' 'Needy App'
+wineserver -w
+needy() { SG_FAKE_KEY=NeedyApp SG_FAKE_DISPLAY='Needy App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Needy App' \
+              wine "${SG_MUT:-$EXE}" --install 10 >/dev/null 2>&1; }
+rm -f "$G/setup.log"; hl=$(wc -l < "$T/http.log")
+needy; ec=$?
+[ "$ec" = 0 ] && pass "--install of a package with dependencies succeeds" || fail "install 10 exit $ec: $(cat "$D.result" 2>/dev/null)"
+[ "$(grep -n -- '/dep-installed' "$G/setup.log" 2>/dev/null | head -1 | cut -d: -f1)" = 1 ] && grep -q -- '/needy' "$G/setup.log" \
+    && pass "its dependency is installed first, then the package" || fail "setup.log: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+tail -n +"$((hl + 1))" "$T/http.log" | grep -qi vcredist && fail "the Visual C++ runtime was fetched" \
+    || pass "the Visual C++ runtime, which the system provides, is not fetched"
+needy
+[ "$(grep -c -- '/dep-installed' "$G/setup.log" 2>/dev/null)" = 1 ] && [ "$(grep -c -- '/needy' "$G/setup.log")" = 2 ] \
+    && pass "installed again, the dependency is not installed twice" || fail "setup.log: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+rm -f "$G/setup.log"
+SG_MUT="$T/mut-nodepinstall.exe" needy
+! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && pass "MUTANT NODEPINSTALL skips the dependency (gate catches it)" \
+    || fail "NODEPINSTALL not detected"
+wine reg delete "$K\\10" /f >/dev/null 2>&1; ununinstall NeedyApp; rm -f "$G/setup.log"; wineserver -w
 
 # --- H. a pinned install --------------------------------------------------------------------------
 rm -f "$G/setup.log"

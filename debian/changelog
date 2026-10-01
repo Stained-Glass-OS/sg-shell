@@ -1,3 +1,20 @@
+sg-shell (0.1.0-86) unstable; urgency=medium
+
+  * SG Store: a package's dependencies are installed first. The winget
+    manifest reader (src/browser/manifest.c) reads Dependencies ->
+    PackageDependencies, at the root or per installer (not Windows features
+    or MinimumVersion); before a package installs, each package it needs
+    does, through the same path, two levels deep at most. A dependency is
+    skipped when the system provides it (Microsoft.VCRedist.*: Wine's own
+    runtime), when the catalogue's app of that id is detected, or when SG
+    Store installed it before (Software\Stained Glass\Store\Dependencies).
+    TortoiseGit needs Git: its installer failed without it in the walk.
+    Tests: browser-manifest-test (TortoiseGit's and a root-level manifest),
+    store-check G2 (dependency first, VC++ runtime never fetched, not twice;
+    mutant NODEPINSTALL).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
+
 sg-shell (0.1.0-85) unstable; urgency=medium
 
   * SG Store: a Linux app's progress window closes by itself a moment after

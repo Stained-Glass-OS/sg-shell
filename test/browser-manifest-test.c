@@ -141,6 +141,48 @@ static const char LISTING[] =
     " {\"name\": \"1.10.0\", \"type\": \"dir\"}, {\"name\":\"1.10.0-beta\",\"type\":\"dir\"},"
     " {\"name\": \"de\", \"type\": \"dir\"}, {\"name\": \"1.2.0\", \"type\": \"dir\"}]";
 
+/* TortoiseGit 2.19: each installer's own Dependencies (with MinimumVersion,
+ * and a Windows feature that is no package) */
+static const char TGIT[] =
+    "PackageIdentifier: TortoiseGit.TortoiseGit\n"
+    "InstallerType: wix\n"
+    "Scope: machine\n"
+    "Installers:\n"
+    "- Architecture: x86\n"
+    "  InstallerUrl: https://example.org/tgit32.msi\n"
+    "  InstallerSha256: 12DB1EFEFEC43832886911EE8D52F7EAC6D6FA53D1321B0BEC3ED726EB6F21D3\n"
+    "  Dependencies:\n"
+    "    PackageDependencies:\n"
+    "    - PackageIdentifier: Git.Git\n"
+    "      MinimumVersion: 2.24.1.2\n"
+    "    - PackageIdentifier: Microsoft.VCRedist.2015+.x86\n"
+    "  ProductCode: '{EE82B20F-643F-42CB-BB20-E84E759162FC}'\n"
+    "- Architecture: x64\n"
+    "  InstallerUrl: https://example.org/tgit64.msi\n"
+    "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
+    "  Dependencies:\n"
+    "    WindowsFeatures:\n"
+    "    - NetFx3\n"
+    "    PackageDependencies:\n"
+    "    - PackageIdentifier: Git.Git\n"
+    "      MinimumVersion: 2.24.1.2\n"
+    "    - PackageIdentifier: \"Microsoft.VCRedist.2015+.x64\"\n"
+    "  ProductCode: '{0B9A1B54-7D2E-4E4B-9C25-8BB2C7C3B0A1}'\n"
+    "ManifestType: installer\n";
+
+/* a package whose Dependencies sit at the root, for every installer */
+static const char ROOTDEPS[] =
+    "PackageIdentifier: Example.Tool\n"
+    "Dependencies:\n"
+    "  PackageDependencies:\n"
+    "  - PackageIdentifier: Example.Runtime\n"
+    "InstallerType: inno\n"
+    "Installers:\n"
+    "- Architecture: x64\n"
+    "  InstallerUrl: https://example.org/tool.exe\n"
+    "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
+    "ManifestType: installer\n";
+
 int main(void)
 {
     static char buf[16384];
@@ -200,6 +242,16 @@ int main(void)
     mf_newest_version("[{\"name\": \"153.0.4234.48\"}, {\"name\": \"154.0.4258.37\"}, {\"name\": \"Beta\"},"
                       " {\"name\": \"Canary\"}, {\"name\": \"Dev\"}]", v, sizeof(v));
     CHECK(!strcmp(v, "154.0.4258.37"), "Edge: the newest stable version, not Beta, Canary or Dev (%s)", v);
+
+    strcpy(buf, TGIT);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 2, "TortoiseGit: 2 installers, the dependency lists are not installers (%d)", n);
+    CHECK(!strcmp(list[0].deps, "Git.Git Microsoft.VCRedist.2015+.x86"), "TortoiseGit: the x86 installer's packages (%s)", list[0].deps);
+    CHECK(!strcmp(list[1].deps, "Git.Git Microsoft.VCRedist.2015+.x64"), "TortoiseGit: the x64 one's, quoted id unquoted, no Windows feature (%s)", list[1].deps);
+    CHECK(!strcmp(list[1].url, "https://example.org/tgit64.msi") && !strcmp(list[1].type, "wix"), "TortoiseGit: the installer's own fields still read");
+    strcpy(buf, ROOTDEPS);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 1 && !strcmp(list[0].deps, "Example.Runtime") && !strcmp(list[0].type, "inno"), "root Dependencies go to every installer (%s)", n == 1 ? list[0].deps : "-");
 
     CHECK(!mf_sha256("abc", sha), "a short SHA-256 is refused");
     CHECK(!mf_sha256("ZZ5D9B99F9C5B6AF88BA68E1063D576E889E218723ADCAEC687D147675BDD13", sha), "a SHA-256 with non-hex digits is refused");

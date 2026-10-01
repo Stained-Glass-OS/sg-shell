@@ -114,6 +114,8 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
     int n = -1, item_indent = -1, in_installers = 0;
     int sw_indent = -1;          /* InstallerSwitches' own indentation, while inside it */
     int sw_root = 0, i;
+    int dep_indent = -1;         /* Dependencies' own indentation, while inside it */
+    mf_entry *dep_to = NULL;
     memset(root, 0, sizeof(*root));
     for (line = text; line && *line; line = next) {
         char *colon, key[64], *body;
@@ -127,6 +129,27 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
 
         /* a switches block ends where the indentation comes back */
         if (sw_indent >= 0 && indent <= sw_indent) sw_indent = -1;
+        /* so does a Dependencies block; inside it, only the packages count
+         * (- PackageIdentifier: Git.Git) -- not Windows features, libraries
+         * or MinimumVersion */
+        if (dep_indent >= 0 && indent <= dep_indent) dep_indent = -1;
+        if (dep_indent >= 0) {
+#ifndef SG_MUTANT_NODEPS
+            char *k = item ? body + 1 : body, v[256];
+            size_t len;
+            while (*k == ' ') k++;
+            if (!strncmp(k, "PackageIdentifier:", 18)) {
+                copy(v, k + 18, sizeof(v));
+                unquote(v);
+                len = strlen(dep_to->deps);
+                if (v[0] && len + strlen(v) + 2 < sizeof(dep_to->deps)) {
+                    if (len) dep_to->deps[len++] = ' ';
+                    strcpy(dep_to->deps + len, v);
+                }
+            }
+#endif
+            continue;
+        }
         if (indent == 0 && !item) in_installers = 0;
 
         if (item) {
@@ -152,6 +175,10 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         while (*colon == ' ') colon++;
         if (!*colon || *colon == '\r') {
             if (indent == 0 && !strcmp(key, "Installers")) { in_installers = 1; item_indent = -1; }
+            else if (!strcmp(key, "Dependencies") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
+                dep_indent = indent;
+                dep_to = indent == 0 ? root : &list[n];
+            }
             else if (!strcmp(key, "InstallerSwitches") && (indent == 0 || (in_installers && n >= 0))) {
                 sw_indent = indent;
                 sw_root = indent == 0;
@@ -173,6 +200,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->url[0]) copy(e->url, root->url, sizeof(e->url));
         if (!e->sha[0]) copy(e->sha, root->sha, sizeof(e->sha));
         if (!e->nested[0]) copy(e->nested, root->nested, sizeof(e->nested));
+        if (!e->deps[0]) copy(e->deps, root->deps, sizeof(e->deps));
     }
     return n + 1;
 }
