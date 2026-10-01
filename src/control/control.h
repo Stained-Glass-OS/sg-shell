@@ -239,6 +239,8 @@ const WCHAR *look_reset(void);
 void desktop_follow(int w, int h);
 /* set_personal.c: Settings > Personalization > Effects */
 const WCHAR *effects_set(const WCHAR *what, BOOL on);
+const WCHAR *effects_set_kind(const WCHAR *what, const WCHAR *kind);   /* open|minimize none|fade|zoom|scale|lamp */
+const WCHAR *effects_write_conf(void);   /* the desktop compositor's effects.conf, from the choices */
 BOOL effects_animations(void);
 extern const COLORREF PERS_ACCENTS[20], PERS_BACKGROUNDS[12];
 extern const WCHAR *const PERS_FIT_NAMES[];

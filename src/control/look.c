@@ -107,6 +107,7 @@ const WCHAR *look_set_frame(int style)
         !reg_set_dword(HKEY_CURRENT_USER, STYLE, L"Frame", style == LOOK_HORIZON ? 1 : style == LOOK_GLASS ? 2 : 0))
         return L"the setting could not be saved";
     look_metrics(style);
+    effects_write_conf();              /* the compositor's shadows take the look's manner */
     broadcast(L"ImmersiveColorSet");   /* the taskbar takes the style's height and look */
     if (g_reframe) CloseHandle(g_reframe);
     g_reframe = CreateThread(NULL, 0, reframe_later, NULL, 0, NULL);

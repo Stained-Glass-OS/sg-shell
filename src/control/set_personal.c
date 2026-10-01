@@ -561,7 +561,62 @@ BOOL set_cmd_lookshare(int id, int code, HWND ctl)
  * Windows" is Windows' own switch (SPI_SETCLIENTAREAANIMATION, kept in
  * UserPreferencesMask): with it off nothing below moves. */
 #define SG_EFFECTS L"Software\\Stained Glass\\Effects"
-enum { CMD_ANIMATIONS = CMD_PAGE_FIRST + 1, CMD_SLIDE };
+enum { CMD_ANIMATIONS = CMD_PAGE_FIRST + 1, CMD_SLIDE, CMD_SHADOWS, CMD_OPEN, CMD_MINIMIZE, CMD_WOBBLY, CMD_MOVING };
+
+/* The window effects are drawn by the desktop's compositor (sg-compositor's
+ * sg-deskcomp), a Linux program: it reads them from
+ * $XDG_CONFIG_HOME/stained-glass/effects.conf, which this writes after every
+ * change -- the choices kept here (Software\Stained Glass\Effects), the
+ * look's shadow and "Show animations". */
+static const WCHAR *const OPEN_KEYS[] = { L"none", L"fade", L"zoom" };
+static const WCHAR *const MINIMIZE_KEYS[] = { L"none", L"scale", L"lamp" };
+
+static DWORD effects_choice(const WCHAR *name, DWORD def, DWORD max)
+{
+    DWORD v = reg_dword(HKEY_CURRENT_USER, SG_EFFECTS, name, def);
+    return v <= max ? v : def;
+}
+
+const WCHAR *effects_write_conf(void)
+{
+    WCHAR home[MAX_PATH] = L"", dir[MAX_PATH], path[MAX_PATH], *dos;
+    WCHAR *(CDECL *to_dos)(const char *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
+    char unix_dir[MAX_PATH * 3], text[512];
+    int frame = look_frame_style();
+    HANDLE f;
+    DWORD done;
+
+#ifdef SG_MUTANT_NOEFFECTSCONF
+    to_dos = NULL;
+#endif
+    if (!to_dos) return NULL;   /* not under Wine: no compositor to tell */
+    if (GetEnvironmentVariableW(L"XDG_CONFIG_HOME", home, MAX_PATH) && home[0])
+        _snwprintf(dir, MAX_PATH, L"%ls/stained-glass", home);
+    else if (GetEnvironmentVariableW(L"HOME", home, MAX_PATH) && home[0])
+        _snwprintf(dir, MAX_PATH, L"%ls/.config/stained-glass", home);
+    else return L"no home folder to keep the effects in";
+    dir[MAX_PATH - 1] = 0;
+    WideCharToMultiByte(CP_UTF8, 0, dir, -1, unix_dir, sizeof(unix_dir), NULL, NULL);
+    if (!(dos = to_dos(unix_dir))) return L"the effects' folder could not be found";
+    lstrcpynW(path, dos, MAX_PATH);
+    HeapFree(GetProcessHeap(), 0, dos);
+    SHCreateDirectoryExW(NULL, path, NULL);
+    lstrcatW(path, L"\\effects.conf");
+    _snprintf(text, sizeof(text),
+              "# Written by Settings > Personalization > Effects; read by sg-deskcomp.\n"
+              "shadows=%d\nshadow=%s\nanimations=%d\nopen=%ls\nminimize=%ls\nwobbly=%d\nmoving=%d\n",
+              effects_choice(L"Shadows", 1, 1) != 0,
+              frame == LOOK_HORIZON ? "horizon" : frame == LOOK_GLASS ? "glass" : "modern",
+              effects_animations(),
+              OPEN_KEYS[effects_choice(L"WindowOpen", 0, 2)], MINIMIZE_KEYS[effects_choice(L"WindowMinimize", 0, 2)],
+              effects_choice(L"Wobbly", 0, 1) != 0, effects_choice(L"MovingTranslucent", 0, 1) != 0);
+    text[sizeof(text) - 1] = 0;
+    f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return L"the effects could not be saved for the compositor";
+    WriteFile(f, text, (DWORD)strlen(text), &done, NULL);
+    CloseHandle(f);
+    return NULL;
+}
 
 BOOL effects_animations(void)
 {
@@ -582,10 +637,33 @@ const WCHAR *effects_set(const WCHAR *what, BOOL on)
     if (!lstrcmpW(what, L"animations")) {
         if (!SystemParametersInfoW(SPI_SETCLIENTAREAANIMATION, 0, (void *)(INT_PTR)on, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
             return L"the setting could not be saved";
-        return NULL;
+        return effects_write_conf();   /* the compositor's effects stop too */
     }
     if (!lstrcmpW(what, L"slide")) return reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", on) ? NULL : L"the setting could not be saved";
+    {
+        static const struct { const WCHAR *key, *value; } toggles[] = {
+            { L"shadows", L"Shadows" }, { L"wobbly", L"Wobbly" }, { L"moving", L"MovingTranslucent" },
+        };
+        int i;
+        for (i = 0; i < (int)ARRAYSIZE(toggles); i++)
+            if (!lstrcmpW(what, toggles[i].key))
+                return reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, toggles[i].value, on) ? effects_write_conf()
+                                                                                         : L"the setting could not be saved";
+    }
     return L"unknown effect";
+}
+
+/* the open/close and minimize animations: their kinds by name */
+const WCHAR *effects_set_kind(const WCHAR *what, const WCHAR *kind)
+{
+    const WCHAR *const *keys = !lstrcmpW(what, L"open") ? OPEN_KEYS : !lstrcmpW(what, L"minimize") ? MINIMIZE_KEYS : NULL;
+    int i;
+    if (!keys) return L"unknown effect";
+    for (i = 0; i < 3; i++)
+        if (!lstrcmpW(kind, keys[i]))
+            return reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, keys == OPEN_KEYS ? L"WindowOpen" : L"WindowMinimize", i)
+                   ? effects_write_conf() : L"the setting could not be saved";
+    return L"unknown kind";
 }
 
 void set_build_effects(void)
@@ -596,6 +674,18 @@ void set_build_effects(void)
     y = st_head(y, L"Animations");
     st_toggle(&y, L"Slide between virtual desktops", reg_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", 1) != 0, CMD_SLIDE);
     y = st_para(y, L"Task View's windows fly into place when it opens, while animations are on.");
+    y = st_head(y, L"Window effects");
+    {
+        static const WCHAR *const opens[] = { L"None", L"Fade", L"Zoom" };
+        static const WCHAR *const mins[] = { L"None", L"Shrink", L"Magic lamp" };
+        st_toggle(&y, L"Shadows under windows and menus", effects_choice(L"Shadows", 1, 1) != 0, CMD_SHADOWS);
+        st_combo(&y, L"Opening and closing windows", opens, 3, (int)effects_choice(L"WindowOpen", 0, 2), CMD_OPEN);
+        st_combo(&y, L"Minimizing windows", mins, 3, (int)effects_choice(L"WindowMinimize", 0, 2), CMD_MINIMIZE);
+        st_toggle(&y, L"Wobbly windows while dragging", effects_choice(L"Wobbly", 0, 1) != 0, CMD_WOBBLY);
+        st_toggle(&y, L"See-through windows while moving", effects_choice(L"MovingTranslucent", 0, 1) != 0, CMD_MOVING);
+    }
+    y = st_para(y, L"The shadows follow the look: soft for Classic and Rounded, small for Horizon, deep for Glass. "
+                   L"The window effects apply at once; with animations off they stay still.");
 }
 
 BOOL set_cmd_effects(int id, int code, HWND ctl)
@@ -603,5 +693,14 @@ BOOL set_cmd_effects(int id, int code, HWND ctl)
     (void)code;
     if (id == CMD_ANIMATIONS) { failed(effects_set(L"animations", st_checked(ctl))); return TRUE; }
     if (id == CMD_SLIDE) { failed(effects_set(L"slide", st_checked(ctl))); return TRUE; }
+    if (id == CMD_SHADOWS) { failed(effects_set(L"shadows", st_checked(ctl))); return TRUE; }
+    if (id == CMD_WOBBLY) { failed(effects_set(L"wobbly", st_checked(ctl))); return TRUE; }
+    if (id == CMD_MOVING) { failed(effects_set(L"moving", st_checked(ctl))); return TRUE; }
+    if ((id == CMD_OPEN || id == CMD_MINIMIZE) && code == CBN_SELCHANGE) {
+        LRESULT sel = SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+        if (sel >= 0 && sel < 3)
+            failed(effects_set_kind(id == CMD_OPEN ? L"open" : L"minimize", (id == CMD_OPEN ? OPEN_KEYS : MINIMIZE_KEYS)[sel]));
+        return TRUE;
+    }
     return FALSE;
 }

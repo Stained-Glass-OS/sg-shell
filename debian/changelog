@@ -67,6 +67,16 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     carry all four; Themes says Mixed when the frames do not match the
     taskbar. Test: settings-check (Frame, sizes and title weight per look,
     --set style glass; mutant NOMETRICS).
+  * Settings > Personalization > Effects: the window effects of the
+    desktop's compositor (sg-compositor's sg-deskcomp) -- shadows under
+    windows and menus (on), opening and closing (None, Fade, Zoom),
+    minimizing (None, Shrink, Magic lamp), wobbly windows while dragging,
+    see-through windows while moving (all off) -- kept in Software\Stained
+    Glass\Effects and written to $XDG_CONFIG_HOME/stained-glass/effects.conf
+    with the look's shadow and Show animations, applied at once.
+    --set effects shadows|wobbly|moving on|off, effects open|minimize KIND.
+    Test: settings-check (the file, the page, Horizon's shadow; mutant
+    NOEFFECTSCONF).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 

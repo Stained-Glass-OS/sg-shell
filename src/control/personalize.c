@@ -640,7 +640,7 @@ static BOOL parse_rgb(const WCHAR *s, COLORREF *c)
 int personalize_set(int argc, WCHAR **argv)
 {
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
-                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide on|off | desktop WxH";
+                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {
@@ -679,6 +679,8 @@ int personalize_set(int argc, WCHAR **argv)
     }
     else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[2], L"on") || !lstrcmpW(argv[2], L"off")))
         why = effects_set(argv[1], !lstrcmpW(argv[2], L"on"));
+    else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[1], L"open") || !lstrcmpW(argv[1], L"minimize")))
+        why = effects_set_kind(argv[1], argv[2]);
     else if (argc == 2 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"reset")) why = look_reset();
     else if (argc == 3 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"export")) why = look_export(argv[2]);
     else if (argc == 3 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"import")) why = look_import(argv[2]);

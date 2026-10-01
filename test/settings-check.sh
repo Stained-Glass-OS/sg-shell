@@ -433,6 +433,8 @@ has ": Horizon" && pass "Themes shows the Horizon look" || fail "Themes horizon:
 # the look's window frames (wine-sg 0742) and that era's title bar sizes
 WM='HKCU\Control Panel\Desktop\WindowMetrics'
 cfweight() { wine reg query "$WM" /v CaptionFont 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_BINARY *//p' | cut -c33-36; }
+grep -qx 'shadow=horizon' "${XDG_CONFIG_HOME:-$HOME/.config}/stained-glass/effects.conf" 2>/dev/null \
+    && pass "Horizon: the compositor's shadows are that era's (shadow=horizon)" || fail "Horizon shadow: $(cat "${XDG_CONFIG_HOME:-$HOME/.config}/stained-glass/effects.conf" 2>&1 | tr '\n' ' ')"
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Frame)" = 0x1 ] && [ "$(regq "$WM" CaptionHeight)" = 25 ] && [ "$(regq "$WM" BorderWidth)" = 2 ] \
     && [ "$(cfweight)" = BC02 ] \
     && pass "Horizon: its window frames (Style Frame 1), 25 px bold title bars, 2 px borders" \
@@ -518,6 +520,27 @@ anim=$(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | grep -F ': Show animat
     || fail "effects animations: mask byte $b, toggle $anim"
 sgset effects animations on >/dev/null
 b=$(upm); [ -n "$b" ] && [ $((0x$b & 2)) -ne 0 ] && pass "and back on" || fail "animations did not come back on (mask byte $b)"
+# the window effects, drawn by the desktop's compositor (sg-compositor's
+# sg-deskcomp): kept here, and written where it reads them
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/stained-glass/effects.conf"
+cv() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null; }
+[ "$(sgset effects wobbly on)" = OK ] && [ "$(sgset effects open zoom)" = OK ] && [ "$(sgset effects minimize lamp)" = OK ] \
+    && [ "$(sgset effects shadows off)" = OK ] && [ "$(sgset effects moving on)" = OK ] \
+    && [ "$(regq "$EFK" Wobbly)" = 0x1 ] && [ "$(regq "$EFK" WindowOpen)" = 0x2 ] && [ "$(regq "$EFK" WindowMinimize)" = 0x2 ] \
+    && [ "$(cv wobbly)" = 1 ] && [ "$(cv open)" = zoom ] && [ "$(cv minimize)" = lamp ] && [ "$(cv shadows)" = 0 ] \
+    && [ "$(cv moving)" = 1 ] && [ "$(cv animations)" = 1 ] \
+    && pass "the window effects are kept and written for the compositor ($(grep -v '^#' "$CONF" | tr '\n' ' '))" \
+    || fail "window effects: wobbly $(regq "$EFK" Wobbly) open $(regq "$EFK" WindowOpen); conf: $(cat "$CONF" 2>&1 | tr '\n' ' ')"
+sgset effects animations off >/dev/null
+[ "$(cv animations)" = 0 ] && pass "Show animations off reaches the compositor too" || fail "conf animations: $(cv animations)"
+sgset effects animations on >/dev/null
+wine start ms-settings:personalization-effects >/dev/null 2>&1
+page_is Effects "ms-settings:personalization-effects (windows)"
+sleep 0.5
+has ": Zoom" && has ": Magic lamp" && has "Wobbly windows while dragging" && has "Shadows under windows and menus" \
+    && pass "the Effects page shows the window effects" || fail "Effects page: $(tr -d '\r' < "$DUMP" | grep '^control' | grep -i 'combo\|wobbl\|shadow' | head -6)"
+sgset effects shadows on >/dev/null; sgset effects wobbly off >/dev/null; sgset effects open none >/dev/null
+sgset effects minimize none >/dev/null; sgset effects moving off >/dev/null
 
 # --- Start layout: Tiles is the default, the Centred option is not 'Recommended' (David 2026-09-29) ---
 # the combo dump shows only the selected item, so check each selection in turn
