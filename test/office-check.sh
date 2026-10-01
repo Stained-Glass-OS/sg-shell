@@ -69,6 +69,15 @@ else:
 sys.exit(1 if bad else 0)
 PY
 # the package brings the editors
+# the icons as image files (SG Store's card points at the 256 px one)
+I="$T/icons"; "$PY" "$HERE/office/gen-icons.py" "$I" >/dev/null 2>&1
+for k in documents spreadsheets presentations; do
+    f="$I/png/256x256/sg-office-$k.png"
+    [ "$(head -c 8 "$f" 2>/dev/null | od -An -tx1 | tr -d ' ')" = 89504e470d0a1a0a ] || fail "no 256 px icon image for $k"
+done
+grep -q 'usr/share/icons/hicolor/\$\$(basename \$\$d)/apps' "$HERE/debian/rules" \
+    && pass "the programs' icons are installed as images (hicolor sg-office-<kind>.png, 16-256 px)" \
+    || fail "debian/rules does not install the icon images"
 sed -n '/^Package: sg-office$/,/^$/p' "$HERE/debian/control" | grep -q '^Depends:.*sg-office-editors' \
     && pass "package sg-office depends on sg-office-editors (the editors come with it)" || fail "sg-office does not depend on sg-office-editors"
 # no LibreOffice path left: no download, no soffice.exe, no LibreOffice policy

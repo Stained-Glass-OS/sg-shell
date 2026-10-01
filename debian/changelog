@@ -1,5 +1,10 @@
 sg-shell (0.1.0-86) unstable; urgency=medium
 
+  * SG Office's icons are installed as images too:
+    /usr/share/icons/hicolor/<size>/apps/sg-office-documents.png
+    (-spreadsheets, -presentations; 16-256 px, office/gen-icons.py), for
+    SG Store's card and Linux menus. Test: test/office-check.sh (a rules
+    file without them fails it).
   * SG Store: Chrome, Edge and Firefox in both builds (David
     2026-10-01): each browser's card offers its Linux build in the
     drop-down. Chrome and Edge suggest the Windows program (Windows sign-on;
