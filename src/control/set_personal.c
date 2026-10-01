@@ -191,7 +191,7 @@ BOOL set_cmd_colors(int id, int code, HWND ctl)
     case CMD_APPS_MODE: case CMD_SYS_MODE:
         if (code == CBN_SELCHANGE) failed(pers_set_mode(id == CMD_APPS_MODE, SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 0));
         return TRUE;
-    case CMD_TRANSPARENCY: reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", st_checked(ctl)); return TRUE;
+    case CMD_TRANSPARENCY: failed(effects_set(L"transparency", st_checked(ctl))); return TRUE;
     case CMD_STYLE:
         if (code == CBN_SELCHANGE) failed(look_set_frame((int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)));
         return TRUE;
@@ -646,6 +646,16 @@ const WCHAR *effects_set(const WCHAR *what, BOOL on)
         return effects_write_conf();   /* the compositor's effects stop too */
     }
     if (!lstrcmpW(what, L"slide")) return reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"SlideDesktops", on) ? NULL : L"the setting could not be saved";
+    if (!lstrcmpW(what, L"transparency")) {
+        /* Colors > Transparency effects: the taskbar and Start frosted (wine-sg
+         * 0745); the taskbar reads it again on "ImmersiveColorSet" */
+        DWORD_PTR r;
+        if (!reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", on)) return L"the setting could not be saved";
+#ifndef SG_MUTANT_NOTRANSPARENCYNOTE
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"ImmersiveColorSet", SMTO_ABORTIFHUNG, 2000, &r);
+#endif
+        return NULL;
+    }
     {
         static const struct { const WCHAR *key, *value; } toggles[] = {
             { L"shadows", L"Shadows" }, { L"wobbly", L"Wobbly" }, { L"moving", L"MovingTranslucent" },

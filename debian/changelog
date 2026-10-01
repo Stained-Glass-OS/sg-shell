@@ -121,6 +121,14 @@ sg-shell (0.1.0-86) unstable; urgency=medium
   * Start asks for a shadow (CS_DROPSHADOW), which the desktop's compositor
     draws under it in every look. Test: start-check (dropshadow=1; the
     previous build fails it).
+  * Transparency effects work: Colors' switch (and --set effects
+    transparency) tells the taskbar at once ("ImmersiveColorSet"), which
+    frosts itself (wine-sg 0745), and Start frosts itself as it opens
+    (__wine_sg_acrylic 88, the Glass look 72, Horizon none) -- the desktop's
+    compositor blurs what is below. The switch did nothing before. Tests:
+    settings-check (the taskbar's _SG_ACRYLIC off and on; mutant
+    NOTRANSPARENCYNOTE), start-check (acrylic=88, Horizon 0; mutant
+    NOSTARTFROST).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 

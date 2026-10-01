@@ -640,7 +640,7 @@ static BOOL parse_rgb(const WCHAR *s, COLORREF *c)
 int personalize_set(int argc, WCHAR **argv)
 {
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
-                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH";
+                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving|transparency on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {

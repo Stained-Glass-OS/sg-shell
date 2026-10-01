@@ -520,6 +520,14 @@ anim=$(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | grep -F ': Show animat
     || fail "effects animations: mask byte $b, toggle $anim"
 sgset effects animations on >/dev/null
 b=$(upm); [ -n "$b" ] && [ $((0x$b & 2)) -ne 0 ] && pass "and back on" || fail "animations did not come back on (mask byte $b)"
+# Colors > Transparency effects: the taskbar frosted (wine-sg 0745), told at once
+PK='HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+TBW() { xwininfo -root -tree 2>/dev/null | awk '/"shell - Wine Desktop"/ { d = 1 } d && /x40\+0\+|x48\+0\+/ { print $1; exit }'; }
+[ "$(sgset effects transparency off)" = OK ] && [ "$(regq "$PK" EnableTransparency)" = 0x0 ] && sleep 1.5 \
+    && xprop -id "$(TBW)" _SG_ACRYLIC 2>&1 | grep -q 'not found' \
+    && [ "$(sgset effects transparency on)" = OK ] && sleep 1.5 && xprop -id "$(TBW)" _SG_ACRYLIC 2>&1 | grep -q '= 85' \
+    && pass "Transparency effects off and on reach the taskbar at once (_SG_ACRYLIC)" \
+    || fail "transparency: $(regq "$PK" EnableTransparency) taskbar $(TBW): $(xprop -id "$(TBW)" _SG_ACRYLIC 2>&1)"
 # the window effects, drawn by the desktop's compositor (sg-compositor's
 # sg-deskcomp): kept here, and written where it reads them
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/stained-glass/effects.conf"

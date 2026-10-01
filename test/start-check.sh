@@ -95,6 +95,7 @@ click() { xdotool mousemove "$1" "$2" click "${3:-1}"; sleep 1.5; }
 poke
 [ "$(val visible)" = 1 ] && pass "Start opens on SgStartPanel's WM_USER+10 (the Start button, the Windows key)" || { fail "did not open"; echo "RESULT: FAIL"; exit 1; }
 [ "$(val dropshadow)" = 1 ] && pass "Start's class asks for a shadow (CS_DROPSHADOW: the desktop's compositor draws it)" || fail "no CS_DROPSHADOW: $(val dropshadow)"
+[ "$(val acrylic)" = 88 ] && pass "Start is frosted with Transparency effects on (__wine_sg_acrylic 88)" || fail "Start acrylic: $(val acrylic)"
 P=$(xdotool search --name '^Start$' 2>/dev/null | head -1)
 [ "$(val rect)" = "0,$panel_y,708,$((H - BAR))" ] && pass "it stands on the taskbar at the left: $(val rect)" || fail "placement: $(val rect)"
 [ "$(val open_ms)" -ge 0 ] 2>/dev/null && [ "$(val open_ms)" -lt 200 ] && pass "it opens in $(val open_ms) ms with $(val apps) apps" || fail "slow to open: $(val open_ms) ms"
@@ -130,6 +131,7 @@ red() { echo "$1" | awk -F, '{ exit !($1 > $2 + 60 && $1 > $3 + 60) }'; }
 green() { echo "$1" | awk -F, '{ exit !($2 > $1 + 50 && $2 > $3 + 50) }'; }
 orange() { echo "$1" | awk -F, '{ exit !($1 > 200 && $2 > 110 && $2 < 200 && $3 < 140) }'; }
 geo() { val "$1" | cut -d, -f"$2"; }   # geo NAME FIELD: a part's rectangle in the panel (left,top,right,bottom)
+[ "$(val acrylic)" = 0 ] && pass "Horizon's Start is not frosted (its era had none)" || fail "Horizon acrylic: $(val acrylic)"
 [ "$(val look)" = horizon ] && [ "$(val xp)" = 1 ] && [ $((hr2 - hx)) = 384 ] && [ $((hb - hy)) = 506 ] \
     && pass "Horizon: Start of that era's proportions, 384 x 506 ($hr)" || fail "Horizon Start: look $(val look) xp $(val xp) rect $hr"
 [ "$(val xhead)" = "0,0,384,58" ] && blue "$(px horizon $((hx + 300)) $((hy + 30)))" \

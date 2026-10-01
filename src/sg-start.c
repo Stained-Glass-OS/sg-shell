@@ -166,6 +166,7 @@ static int g_tile_cols = 3;         /* "Show more tiles on Start": 4 */
  * default. */
 static BOOL g_centered;
 static BOOL g_xp;                  /* the Horizon look's Start (see X_W) */
+static UINT g_acrylic;             /* frosted, this opaque in percent (0: not) */
 static int g_hot_x = -1;           /* its part under the pointer */
 static int g_mfu[X_NMFU], g_nmfu;  /* its most used programs */
 static int g_hot_c = -1;           /* the centred layout's part under the pointer */
@@ -889,6 +890,7 @@ static void dump(void)
     dprint(f, L"centered=%d\n", g_centered);
     dprint(f, L"xp=%d\n", g_xp);
     dprint(f, L"dropshadow=%d\n", (GetClassLongW(g_panel, GCL_STYLE) & CS_DROPSHADOW) != 0);
+    dprint(f, L"acrylic=%u\n", (UINT)(UINT_PTR)GetPropW(g_panel, L"__wine_sg_acrylic"));
     if (g_xp)
     {
         RECT r;
@@ -2731,6 +2733,22 @@ static void show_panel(BOOL show)
         if (g_xp) { x_most_used(); x_load_pins(); }
         g_hot_c = g_hot_x = -1;
         layout_panel();
+        {
+            /* "Transparency effects" (Personalization > Colors): Start
+             * frosted, as Windows' is -- the desktop's compositor blurs what
+             * is below it (wine-sg 0745's __wine_sg_acrylic); the Glass look
+             * more, Horizon not at all */
+            DWORD on = 1, size = sizeof(on);
+            RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                         L"EnableTransparency", RRF_RT_REG_DWORD, NULL, &on, &size);
+            g_acrylic = !on || g_xp ? 0 : g_pal == &glass_palette ? 72 : 88;
+#ifdef SG_MUTANT_NOSTARTFROST
+            g_acrylic = 0;
+#endif
+            if (g_acrylic) SetPropW(g_panel, L"__wine_sg_acrylic", (HANDLE)(UINT_PTR)g_acrylic);
+            else RemovePropW(g_panel, L"__wine_sg_acrylic");
+            SetWindowPos(g_panel, 0, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         ShowWindow(g_panel, SW_SHOW);
         SetForegroundWindow(g_panel);
         SetFocus(g_panel);
