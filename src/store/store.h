@@ -82,6 +82,7 @@ BOOL name_matches(const WCHAR *display, const WCHAR *patterns);
 BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch);
 int  catalog_load(app_t *apps, int max);         /* reads HKLM Store\Apps\NN; returns count */
 void app_detect(app_t *a);                        /* installed? + installed_version; sets state */
+BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or its Start shortcut) Open starts */
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);

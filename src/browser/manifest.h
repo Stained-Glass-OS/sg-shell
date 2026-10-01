@@ -10,6 +10,7 @@
 typedef struct {
     char arch[16], scope[16], locale[24], type[24], url[2048], sha[80], silent[512];
     char nested[24];            /* NestedInstallerType, for a zip that holds the installer */
+    char custom[512];           /* InstallerSwitches Custom: passed as well, whatever the mode (Opera's /allusers=0) */
 } mf_entry;
 
 #define MF_MAX_ENTRIES 64

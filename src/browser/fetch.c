@@ -165,6 +165,7 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     MultiByteToWideChar(CP_UTF8, 0, best->silent, -1, p->silent, 512);
     MultiByteToWideChar(CP_UTF8, 0, best->arch, -1, p->arch, 16);
     MultiByteToWideChar(CP_UTF8, 0, best->nested, -1, p->nested, 32);
+    MultiByteToWideChar(CP_UTF8, 0, best->custom, -1, p->custom, 512);
     free(list);
     if (!p->type[0]) { seterr(err, cch, L"%ls %ls does not say how to install it.", id, p->version); return FALSE; }
     return TRUE;
@@ -294,6 +295,15 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     else if (!_wcsicmp(t, L"burn")) lstrcpynW(args, p->silent[0] ? p->silent : L"/quiet /norestart", 1024);
     else if (!_wcsicmp(t, L"exe")) lstrcpynW(args, p->silent, 1024);
     else { seterr(err, cch, L"%ls installers (%ls) can't be run here yet.", t, p->id); return FALSE; }
+#ifndef SG_MUTANT_NOCUSTOM
+    /* winget passes the Custom switches in every mode: Opera's installer
+     * (/allusers=0 or 1) cannot choose a folder without them ("The path is
+     * invalid"), and stopped with code 103 */
+    if (p->custom[0] && lstrlenW(args) + 1 + lstrlenW(p->custom) < 1024) {
+        if (args[0]) lstrcatW(args, L" ");
+        lstrcatW(args, p->custom);
+    }
+#endif
     lstrcpynW(p->command, args, 1024);
     /* An MSI for all users (Edge's, Chrome's) needs an administrator: on
      * Windows the Installer service elevates it itself, here there is no such

@@ -14,6 +14,7 @@
  */
 #include "store.h"
 #include <shellapi.h>
+#include <shlobj.h>
 #include "zipcore.h"
 
 const WCHAR *tier_name(int tier)
@@ -190,9 +191,10 @@ BOOL name_matches(const WCHAR *display, const WCHAR *patterns)
     return hit;
 }
 
-/* Read the DisplayVersion of the first Uninstall entry whose DisplayName is
- * the app's (HKLM, HKLM\WOW6432Node and HKCU). */
-static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
+/* Read the DisplayVersion (and, when icon is given, the DisplayIcon) of the
+ * first Uninstall entry whose DisplayName is the app's (HKLM,
+ * HKLM\WOW6432Node and HKCU). */
+static BOOL find_installed_entry(const WCHAR *needle, WCHAR *version, int cch, WCHAR *icon, int icch)
 {
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
         { HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
@@ -212,6 +214,7 @@ static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
             reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
             if (name_matches(name, needle)) {
                 reg_str(item, L"DisplayVersion", version, cch);
+                if (icon) reg_str(item, L"DisplayIcon", icon, icch);
                 RegCloseKey(item);
                 RegCloseKey(key);
                 return TRUE;
@@ -221,6 +224,11 @@ static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
         RegCloseKey(key);
     }
     return FALSE;
+}
+
+static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
+{
+    return find_installed_entry(needle, version, cch, NULL, 0);
 }
 
 /* Is a Debian package installed (dpkg's status file: a stanza with
@@ -329,6 +337,82 @@ void app_detect(app_t *a)
     }
     if (find_installed(a->detect_name, a->installed_version, 64))
         a->state = AST_INSTALLED;
+}
+
+/* ---- opening an installed program ------------------------------------------------------------------
+ *
+ * Open starts the program itself, as its Start menu entry would: the program
+ * its Uninstall entry shows as its icon (DisplayIcon, "C:\...\app.exe,0") when
+ * that is the program and not its uninstaller or setup; else its shortcut in
+ * Start (all users' or the person's Programs, a folder deep), named as the
+ * app is. FALSE: neither -- the store shows Apps & features instead. */
+
+static BOOL not_the_program(const WCHAR *base)
+{
+    static const WCHAR *const words[] = { L"unins", L"uninst", L"setup", L"install", L"update", L"maintenance" };
+    unsigned i;
+    for (i = 0; i < ARRAYSIZE(words); i++) if (StrStrIW(base, words[i])) return TRUE;
+    return FALSE;
+}
+
+static BOOL icon_program(const WCHAR *icon, WCHAR *out, int cch)
+{
+    WCHAR path[MAX_PATH], *comma, *base;
+    int n;
+    lstrcpynW(path, icon[0] == '"' ? icon + 1 : icon, MAX_PATH);
+    if ((comma = wcsrchr(path, ',')) && comma > wcsrchr(path, '\\')) *comma = 0;
+    if ((n = lstrlenW(path)) && path[n - 1] == '"') path[--n] = 0;
+    if (n < 5 || _wcsicmp(path + n - 4, L".exe")) return FALSE;
+    base = wcsrchr(path, '\\') ? wcsrchr(path, '\\') + 1 : path;
+    if (not_the_program(base) || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return FALSE;
+    lstrcpynW(out, path, cch);
+    return TRUE;
+}
+
+/* the best-named shortcut under dir (and its folders, depth levels down) */
+static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, WCHAR *best, int cch, int *best_len)
+{
+    WCHAR pat[MAX_PATH], base[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    swprintf(pat, MAX_PATH, L"%ls\\*", dir);
+    if ((h = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return;
+    do {
+        int n = lstrlenW(fd.cFileName);
+        if (fd.cFileName[0] == '.') continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (depth > 0 && lstrlenW(dir) + n + 2 < MAX_PATH) {
+                swprintf(base, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+                find_shortcut(a, base, depth - 1, best, cch, best_len);
+            }
+            continue;
+        }
+        if (n < 5 || _wcsicmp(fd.cFileName + n - 4, L".lnk")) continue;
+        lstrcpynW(base, fd.cFileName, n - 3);
+        if (not_the_program(base)) continue;
+        if (!name_matches(base, a->detect_name) && !name_matches(base, a->name)) continue;
+        if (*best_len && n >= *best_len) continue;      /* "OpenOffice" before "OpenOffice Calc" */
+        if (lstrlenW(dir) + n + 2 >= cch) continue;
+        swprintf(best, cch, L"%ls\\%ls", dir, fd.cFileName);
+        *best_len = n;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
+{
+    static const int folders[] = { CSIDL_COMMON_PROGRAMS, CSIDL_PROGRAMS };
+    WCHAR version[64], icon[MAX_PATH], dir[MAX_PATH];
+    int best_len = 0;
+    unsigned i;
+    out[0] = 0;
+    if (a->method == SRC_OURS_SETUP || a->tier == TIER_LINUX) return FALSE;
+    if (find_installed_entry(a->detect_name, version, ARRAYSIZE(version), icon, ARRAYSIZE(icon))
+        && icon[0] && icon_program(icon, out, cch)) return TRUE;
+    for (i = 0; i < ARRAYSIZE(folders); i++)
+        if (SUCCEEDED(SHGetFolderPathW(NULL, folders[i], NULL, 0, dir)))
+            find_shortcut(a, dir, 1, out, cch, &best_len);
+    return out[0] != 0;
 }
 
 /* ---- checking for updates -------------------------------------------------------------------------- */

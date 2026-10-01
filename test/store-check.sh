@@ -26,6 +26,8 @@
 #      version, maker), Install stages it and sg-admind's deb-install installs
 #      it; a file that is not a package is refused; File Explorer's .deb verb
 #      (defaults/85-sg-store.reg) opens that window
+#   E2. Open starts the installed program: its DisplayIcon program, else its
+#      Start shortcut (never its uninstaller's)
 #   K. the window: searching filters the whole catalogue; the Linux apps
 #      category; the keyboard (Down selects, Esc back to the search box)
 #
@@ -39,6 +41,8 @@
 #   SG_MUTANT_NOZIP       does not unpack a zipped installer
 #   SG_MUTANT_NOSEARCH    the search box filters nothing
 #   SG_MUTANT_NOPACKAGE   never has the missing package installed
+#   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
+#   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -74,12 +78,12 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOPACKAGE NOCUSTOM NOLAUNCH; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
 # the stand-ins
-"$MINGW" -municode -O1 -o "$T/store-fake.exe" "$HERE/test/sg-store-fake.c" || { fail "the stand-ins do not build"; exit 1; }
+"$MINGW" -municode -O1 -o "$T/store-fake.exe" "$HERE/test/sg-store-fake.c" -lole32 -luuid -lshell32 || { fail "the stand-ins do not build"; exit 1; }
 
 # --- the source: winget-pkgs' layout on this machine ---------------------------------------------
 W="$T/www"
@@ -141,6 +145,7 @@ Installers:
   Scope: machine
   InstallerSwitches:
     Silent: /S /picked-nullsoft
+    Custom: /gate-custom=1
   InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
   InstallerSha256: $SHA
 ManifestType: installer
@@ -322,9 +327,40 @@ SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='
     wine "$EXE" --install 08 >/dev/null 2>&1; ec=$?
 [ "$ec" = 0 ] && grep -q '/picked-nullsoft' "$G/setup.log" 2>/dev/null \
     && pass "the runnable installer is picked over a portable zip of the same arch" || fail "install 08 exit $ec: $(cat "$D.result" "$G/setup.log" 2>/dev/null)"
+grep -q '/S /picked-nullsoft /gate-custom=1' "$G/setup.log" 2>/dev/null \
+    && pass "and run with its Custom switches after the silent ones (Opera's /allusers)" || fail "no Custom switches: $(cat "$G/setup.log" 2>/dev/null)"
+rm -f "$G/setup.log"; ununinstall PickApp
+SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
+    wine "$T/mut-nocustom.exe" --install 08 >/dev/null 2>&1
+grep -q '/picked-nullsoft' "$G/setup.log" 2>/dev/null && ! grep -q 'gate-custom' "$G/setup.log" \
+    && pass "MUTANT NOCUSTOM drops the Custom switches (gate catches it)" || fail "NOCUSTOM not detected: $(cat "$G/setup.log" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall PickApp
 SG_MUT="$T/mut-anytype.exe" run --install 08
 [ ! -e "$G/setup.log" ] && pass "MUTANT ANYTYPE picks the portable zip and installs nothing (gate catches it)" || fail "ANYTYPE not detected"
+
+# --- E2. Open starts the installed program (it opened Apps & features) ---------------------------
+# Fake App (01, still installed): its Uninstall entry's DisplayIcon is its program.
+# Pick App (08): the DisplayIcon is its uninstaller; its Start shortcut is the way.
+launched() { i=0; while ! grep -q "$1" "$G/launch.log" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.25; i=$((i + 1)); done
+             grep -q "$1" "$G/launch.log" 2>/dev/null; }
+rm -f "$G/launch.log"
+run --open 01
+launched 'app.exe' && pass "Open starts the program its Uninstall entry names (DisplayIcon)" \
+    || fail "Open 01 started nothing: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+SG_FAKE_LINK=1 SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
+    wine "$EXE" --install 08 >/dev/null 2>&1
+run --open 08
+launched 'from-shortcut' && ! grep -q 'uninstall' "$G/launch.log" \
+    && pass "no program in DisplayIcon (an uninstaller): its Start shortcut, not the Uninstall one" \
+    || fail "Open 08: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+wine "$T/mut-nolaunch.exe" --open 01 >/dev/null 2>&1; sleep 3
+[ ! -e "$G/launch.log" ] && pass "MUTANT NOLAUNCH opens Apps & features, never the program (gate catches it)" \
+    || fail "NOLAUNCH not detected: $(cat "$G/launch.log" 2>/dev/null)"
+wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
+rm -f "$G/setup.log"; ununinstall PickApp
+rm -f "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/"*Pick\ App*.lnk
 
 # --- G. a zip holding the installer ---------------------------------------------------------------
 rm -f "$G/setup.log"

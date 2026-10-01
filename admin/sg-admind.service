@@ -8,7 +8,13 @@ Type=oneshot
 ExecStart=/usr/libexec/stained-glass/sg-admind
 # Root, because renaming the computer, managing accounts and setting the time
 # zone are root's; every operation is on a fixed, validated list.
-PrivateTmp=yes
+# No PrivateTmp: package-install registers a package in the running Windows
+# side with "wine reg import" as the machine account, and the shared
+# wineserver's socket is under /tmp (/tmp/.wine-sg-*). A private /tmp hid it,
+# so the import started a second wineserver on the same prefix: the running
+# one never saw the keys (SG Store: "SG Office was installed; restart, then
+# install it again") and its next save dropped them from system.reg. The
+# daemon keeps its own files in /var/tmp and /run.
 # SG Store's installs run apt, which can take long (a large program, a slow
 # mirror): no start timeout short of that.
 TimeoutStartSec=4h

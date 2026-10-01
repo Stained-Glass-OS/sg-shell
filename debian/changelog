@@ -42,6 +42,37 @@ sg-shell (0.1.0-81) unstable; urgency=medium
     either side): the cards are a grid of two or three columns beside each
     other when there is room, the header and search across the same width.
     Test: test/store-check.sh (maximized: two columns; mutant: one).
+  * SG Store, from installing every app in it on a test machine (David:
+    "install everything in the store one at a time and verify things
+    install, show up and work"):
+    - Opera did not install ("The installer stopped with code 103"): its
+      winget manifest gives each installer Custom switches (/allusers=0 or
+      1), which winget always passes and the store dropped, so Opera's
+      installer could not choose a folder ("The path is invalid"). The
+      store now passes a manifest's Custom switches after the silent ones
+      (SumatraPDF's -install as well). Test: test/store-check.sh (mutant
+      NOCUSTOM); test/browser-manifest-test.c (Opera's manifest).
+    - Open on an installed program opened Apps & features instead of the
+      program. It now starts the program its Uninstall entry names as its
+      icon (not an uninstaller or setup), or else its shortcut in Start
+      (never "Uninstall ..."); Apps & features only when there is neither.
+      sg-store64.exe --open ID does the same without the window. Test:
+      test/store-check.sh (mutant NOLAUNCH).
+    - SG Office from the store on a machine without the sg-office package
+      said "SG Office was installed; restart, then install it again to
+      finish" -- every time. sg-admind (package-install) registers the
+      package with "wine reg import" as the machine account, but its
+      service had a private /tmp, which hid the shared wineserver's socket
+      (/tmp/.wine-sg-*): the import started a second wineserver of its own,
+      so the running one never had sg-office-setup.exe's App Paths (the
+      store's elevated copy stopped with 21), and the running one's next
+      save dropped the key from system.reg while the import's stamp kept
+      the next boot from importing it again. sg-admind.service no longer
+      has PrivateTmp (its own files are in /var/tmp and /run). Seen on a
+      test machine: the key in system.reg at 23:45:43, gone at 23:45:58,
+      never in the running registry; with the unit changed, package-install
+      took 2 s and the store went on to SG Office's setup. Test:
+      test/admind-check.sh (mutant PRIVATETMP: the old unit).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 30 Sep 2026 21:15:00 +0000
 

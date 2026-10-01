@@ -6,7 +6,7 @@
  * may have its own InstallerSwitches, and lists such as InstallModes that we
  * skip). Only the keys we use are kept: Architecture, Scope,
  * InstallerLocale, InstallerType, InstallerUrl, InstallerSha256 and the
- * Silent/SilentWithProgress switches.
+ * Silent/SilentWithProgress and Custom switches.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -95,6 +95,7 @@ static void set_field(mf_entry *e, const char *key, const char *val, int switche
     if (switches) {
         if (!strcmp(key, "Silent")) copy(e->silent, v, sizeof(e->silent));
         else if (!strcmp(key, "SilentWithProgress") && !e->silent[0]) copy(e->silent, v, sizeof(e->silent));
+        else if (!strcmp(key, "Custom")) copy(e->custom, v, sizeof(e->custom));
         return;
     }
     if (!strcmp(key, "Architecture")) copy(e->arch, v, sizeof(e->arch));
@@ -165,6 +166,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->locale[0]) copy(e->locale, root->locale, sizeof(e->locale));
         if (!e->type[0]) copy(e->type, root->type, sizeof(e->type));
         if (!e->silent[0]) copy(e->silent, root->silent, sizeof(e->silent));
+        if (!e->custom[0]) copy(e->custom, root->custom, sizeof(e->custom));
         if (!e->arch[0]) copy(e->arch, root->arch, sizeof(e->arch));
         if (!e->url[0]) copy(e->url, root->url, sizeof(e->url));
         if (!e->sha[0]) copy(e->sha, root->sha, sizeof(e->sha));

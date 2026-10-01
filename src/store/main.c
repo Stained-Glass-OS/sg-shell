@@ -7,6 +7,8 @@
  *                                  available version first
  *   sg-store64.exe --install ID    install (or update) one app by ordinal,
  *                                  name or winget id (headless), then exit
+ *   sg-store64.exe --open ID       Open, as the card's button: the program
+ *                                  (headless), then exit
  *   sg-store64.exe --install-elevated ID   the elevated (SYSTEM) copy's part of
  *                                  installing an "ours" app whose programs are
  *                                  a system package (catalog.c); exit code only
@@ -226,9 +228,21 @@ static void dump(void)
 
 static void open_app(app_t *a)
 {
+    WCHAR target[MAX_PATH], dir[MAX_PATH], *slash;
     if (a->method == SRC_OURS_SETUP) { ShellExecuteW(NULL, NULL, L"sg-documents.exe", NULL, NULL, SW_SHOWNORMAL); return; }
     if (a->tier == TIER_LINUX && a->run[0]) { sys_run_linux(a->run); return; }
-    /* Apps & features, where every installed app can be launched/removed */
+#ifndef SG_MUTANT_NOLAUNCH
+    /* the program itself (or its Start shortcut), started in its own folder */
+    if (app_launch_target(a, target, MAX_PATH)) {
+        lstrcpynW(dir, target, MAX_PATH);
+        if ((slash = wcsrchr(dir, '\\'))) *slash = 0;
+        ShellExecuteW(NULL, NULL, target, NULL, dir, SW_SHOWNORMAL);
+        return;
+    }
+#else
+    (void)target; (void)dir; (void)slash;
+#endif
+    /* neither found: Apps & features, where it can be changed or removed */
     ShellExecuteW(NULL, NULL, L"ms-settings:appsfeatures", NULL, NULL, SW_SHOWNORMAL);
 }
 
@@ -838,6 +852,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             rc = sys_elevated_main(argc, argv, i);
             LocalFree(argv);
             return rc;
+        }
+        if (!lstrcmpiW(argv[i], L"--open") && i + 1 < argc) {
+            int k;
+            load_all(FALSE);
+            k = find_app(argv[i + 1]);
+            if (k >= 0) open_app(&g_apps[k]);
+            LocalFree(argv);
+            return k < 0 ? 2 : 0;
         }
         if (!lstrcmpiW(argv[i], L"--search") && i + 1 < argc) { query = argv[++i]; continue; }
         if (!lstrcmpiW(argv[i], L"--install") && i + 1 < argc) {

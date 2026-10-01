@@ -92,6 +92,28 @@ static const char BRAVE[] =
     "    ElevationRequirement: elevationRequired\n"
     "ManifestType: installer\n";
 
+/* Opera: the root's Silent switch, each installer's own Custom one (/allusers) */
+static const char OPERA[] =
+    "PackageIdentifier: Opera.Opera\n"
+    "InstallerType: exe\n"
+    "InstallerSwitches:\n"
+    "  Silent: /silent\n"
+    "  SilentWithProgress: /runimmediately\n"
+    "Installers:\n"
+    "- Architecture: x64\n"
+    "  Scope: user\n"
+    "  InstallerUrl: https://example.org/Opera_Setup_x64.exe\n"
+    "  InstallerSha256: 4F4593749F89C075F05A3D6102A970E866EB7DF2C964E34465F8939299EF24DD\n"
+    "  InstallerSwitches:\n"
+    "    Custom: /allusers=0\n"
+    "- Architecture: x64\n"
+    "  Scope: machine\n"
+    "  InstallerUrl: https://example.org/Opera_Setup_x64.exe\n"
+    "  InstallerSha256: 4F4593749F89C075F05A3D6102A970E866EB7DF2C964E34465F8939299EF24DD\n"
+    "  InstallerSwitches:\n"
+    "    Custom: /allusers=1\n"
+    "ManifestType: installer\n";
+
 /* Microsoft Edge: root scope and type, machine-wide MSIs only, three architectures */
 static const char EDGE[] =
     "PackageIdentifier: Microsoft.Edge\n"
@@ -159,6 +181,12 @@ int main(void)
     CHECK(!strcmp(list[1].silent, "/silent /install") && !strcmp(list[1].scope, "machine"), "Brave: the machine installer's own switches (%s)", list[1].silent);
     CHECK(mf_pick(list, n, "en-US", 0, 1) == 0, "Brave: a standard user gets the per-user installer");
     CHECK(mf_pick(list, n, "en-US", 1, 1) == 1, "Brave: an administrator gets the machine-wide one");
+
+    strcpy(buf, OPERA);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 2, "Opera: 2 installers (%d)", n);
+    CHECK(!strcmp(list[0].silent, "/silent") && !strcmp(list[0].custom, "/allusers=0"), "Opera: the root's Silent and the user installer's Custom (%s | %s)", list[0].silent, list[0].custom);
+    CHECK(!strcmp(list[1].custom, "/allusers=1") && !strcmp(list[1].silent, "/silent"), "Opera: the machine installer's Custom (%s)", list[1].custom);
 
     strcpy(buf, EDGE);
     n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);

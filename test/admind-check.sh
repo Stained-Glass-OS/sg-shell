@@ -364,6 +364,14 @@ if [ "$(first "$r")" = OK ] && grep -q '^apt-get -q -y .* install sg-office' "$C
     && ! printf '%s' "$reg_call" | grep -q 'README\|sg-office-setup64\|sg-prefix-init'; then
     pass "package-install installs one of our packages, then imports its registry defaults as the machine account"
 else fail "package-install sg-office: $r / $(tr '\n' '|' < "$CALLS")"; fi
+# ... into the RUNNING shared wineserver: its socket is under /tmp, so the
+# service must not have a private /tmp (it had: the import went to a second
+# server of its own, and SG Store said "restart, then install it again")
+private_tmp() { grep -Eiq '^[[:space:]]*PrivateTmp[[:space:]]*=[[:space:]]*(yes|true|on|1|disconnected)' "$1"; }
+private_tmp "$HERE/admin/sg-admind.service" && fail "sg-admind.service has a private /tmp: package-install's registration misses the running wineserver" \
+    || pass "sg-admind shares /tmp, so its registration reaches the running shared wineserver"
+sed 's/^TimeoutStartSec=/PrivateTmp=yes\nTimeoutStartSec=/' "$HERE/admin/sg-admind.service" > "$T/mut-privtmp.service"
+private_tmp "$T/mut-privtmp.service" && pass "MUTANT PRIVATETMP (the old unit) is caught" || fail "PRIVATETMP mutant not detected"
 : > "$CALLS"
 for p in openssh-server 'sg-office extra' '-o=foo' ''; do
     r=$(ask package-install "$p")

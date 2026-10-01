@@ -7,12 +7,20 @@
  *                                   C:\Program Files\%SG_FAKE_DIR% and writes an
  *                                   Uninstall entry (%SG_FAKE_KEY%: DisplayName
  *                                   %SG_FAKE_DISPLAY%, DisplayVersion
- *                                   %SG_FAKE_VERSION%) so SG Store detects it.
+ *                                   %SG_FAKE_VERSION%) so SG Store detects it,
+ *                                   whose DisplayIcon is app.exe -- or, with
+ *                                   %SG_FAKE_LINK%, an uninstaller, and
+ *                                   shortcuts in all users' Start menu: the
+ *                                   program's and "Uninstall <name>"
+ *   app.exe ARGS                    the installed program: logs its arguments
+ *                                   to C:\gate\launch.log (Open started it)
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <windows.h>
+#include <shlobj.h>
+#include <objbase.h>
 #include <stdio.h>
 #include <wchar.h>
 
@@ -33,6 +41,20 @@ static void sz(HKEY root, const WCHAR *sub, const WCHAR *name, const WCHAR *val)
     if (RegCreateKeyExW(root, sub, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
     RegSetValueExW(k, name, 0, REG_SZ, (const BYTE *)val, (DWORD)(wcslen(val) + 1) * sizeof(WCHAR));
     RegCloseKey(k);
+}
+
+static void shortcut(const WCHAR *lnk, const WCHAR *target, const WCHAR *args)
+{
+    IShellLinkW *sl;
+    IPersistFile *pf;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) return;
+    sl->lpVtbl->SetPath(sl, target);
+    sl->lpVtbl->SetArguments(sl, args);
+    if (SUCCEEDED(sl->lpVtbl->QueryInterface(sl, &IID_IPersistFile, (void **)&pf))) {
+        pf->lpVtbl->Save(pf, lnk, TRUE);
+        pf->lpVtbl->Release(pf);
+    }
+    sl->lpVtbl->Release(sl);
 }
 
 static void env(const WCHAR *name, const WCHAR *def, WCHAR *out, int cch)
@@ -63,6 +85,11 @@ int wmain(int argc, WCHAR **argv)
         return (int)code;
     }
 
+    if (!_wcsicmp(base, L"app.exe")) {
+        logline(L"C:\\gate\\launch.log", args);
+        return 0;
+    }
+
     logline(L"C:\\gate\\setup.log", args);
     env(L"SG_FAKE_KEY", L"FakeApp", key, ARRAYSIZE(key));
     env(L"SG_FAKE_DISPLAY", L"Fake App", display, ARRAYSIZE(display));
@@ -79,5 +106,21 @@ int wmain(int argc, WCHAR **argv)
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayName", display);
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayVersion", version);
     sz(HKEY_LOCAL_MACHINE, sub, L"Publisher", L"The gate");
+    if (GetEnvironmentVariableW(L"SG_FAKE_LINK", NULL, 0)) {
+        WCHAR programs[MAX_PATH], lnk[MAX_PATH], icon[MAX_PATH];
+        swprintf(icon, MAX_PATH, L"%ls\\uninst.exe,0", dest);
+        sz(HKEY_LOCAL_MACHINE, sub, L"DisplayIcon", icon);
+        CoInitialize(NULL);
+        SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, 0, programs);
+        swprintf(lnk, MAX_PATH, L"%ls\\Uninstall %ls.lnk", programs, display);
+        shortcut(lnk, exe, L"/uninstall");
+        swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", programs, display);
+        shortcut(lnk, exe, L"/from-shortcut");
+        CoUninitialize();
+    } else {
+        WCHAR icon[MAX_PATH];
+        swprintf(icon, MAX_PATH, L"%ls,0", exe);
+        sz(HKEY_LOCAL_MACHINE, sub, L"DisplayIcon", icon);
+    }
     return 0;
 }
