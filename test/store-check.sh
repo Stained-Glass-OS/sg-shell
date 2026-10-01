@@ -34,6 +34,12 @@
 #      Start shortcut (never its uninstaller's)
 #   K. the window: searching filters the whole catalogue; the Linux apps
 #      category; the keyboard (Down selects, Esc back to the search box)
+#   L. David 2026-10-01: an app with a Windows and a Linux build is one card
+#      (no duplicates), suggesting the Linux build unless Prefer=windows, the
+#      installed build first; its picture (Icon) is fetched, cached and drawn;
+#      a second Install waits its turn (the queue); Uninstall runs a Windows
+#      program's QuietUninstallString, and apt-get remove (sg-admind's
+#      apt-remove) for a Linux app -- never one of the system's own packages
 #
 # Mutants (built here from source) -- each must turn it red:
 #   SG_MUTANT_NOHASH      installs an unverified download
@@ -51,6 +57,10 @@
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
 #   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
+#   SG_MUTANT_NOPAIR      lists both builds of an app as apps of their own
+#   SG_MUTANT_NOICON      keeps the letter badges
+#   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
+#   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -79,14 +89,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-STORE_SRC="$HERE/src/store/main.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
-STORE_LIBS="-lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -lmsimg32 -lcomdlg32"
+STORE_SRC="$HERE/src/store/main.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
+STORE_LIBS="-lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
 build_mut() { # define outfile
     # shellcheck disable=SC2086
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -723,6 +733,91 @@ wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")
 [ "$v" != NOWINDOW ] && [ "$v" != "2 05 L1" ] && pass "MUTANT NOSEARCH lists everything after \"gimp\" (gate catches it)" || fail "NOSEARCH not detected ('$v')"
 wine taskkill /f /im mut-nosearch.exe >/dev/null 2>&1
+
+# --- L. one app, two builds; its picture; the queue; Uninstall -----------------------------------
+reg "$K\\05" /v Linux /d L1
+sleep 0.5
+run --list
+grep -q '^pair 05 L1 choice=linux target=L1$' "$D" && pass "GIMP's Windows and Linux builds are one app, suggesting the Linux build" \
+    || fail "pair: $(grep '^pair' "$D")"
+case " $(view) " in *" L1 "*) fail "the Linux GIMP is still listed on its own: $(view)" ;;
+    *) pass "the Linux GIMP is no card of its own: no app is listed twice ($(view))" ;; esac
+SG_MUT="$T/mut-nopair.exe" run --list
+case " $(view) " in *" 05 "*" L1 "*) pass "MUTANT NOPAIR lists GIMP twice (gate catches it)" ;; *) fail "NOPAIR not detected: $(view)" ;; esac
+reg "$K\\05" /v Prefer /d windows
+run --list
+grep -q '^pair 05 L1 choice=windows target=05$' "$D" && pass "Prefer=windows suggests the Windows build (a browser and its sign-on)" \
+    || fail "Prefer=windows: $(grep '^pair' "$D")"
+wine reg delete "$K\\05" /v Prefer /f >/dev/null 2>&1
+uninstall GIMP_is1 'GIMP' 3.0
+sleep 0.5
+run --list
+grep -q '^pair 05 L1 choice=linux target=05$' "$D" && pass "the build that is installed is the card's (Open, Uninstall)" \
+    || fail "installed build: $(grep '^pair' "$D")"
+ununinstall GIMP_is1; sleep 0.5
+
+# pictures: a PNG and an ICO from the web, drawn on the cards, cached
+convert -size 64x64 xc:'#ff0000' "PNG32:$W/files/icon.png" 2>/dev/null
+convert -size 32x32 xc:'#00ff00' "$W/files/icon.ico" 2>/dev/null
+app 08 'Pick App' Utilities windows 'winget:Fake.Pick' 'Pick App'
+reg "$K\\01" /v Icon /d "http://127.0.0.1:$PORT/files/icon.png"
+reg "$K\\08" /v Icon /d "http://127.0.0.1:$PORT/files/icon.ico"
+reg "$K\\01" /v Description /d 'Fake App, a queue-test app.'
+reg "$K\\08" /v Description /d 'Pick App, a queue-test app.'
+sleep 0.5
+export SG_STORE_ICON_CACHE='C:\gate\icons'
+store_window() { # exe -- opens it on "queue-test"; FALSE if it did not open
+    rm -f "$D"
+    SG_STORE_YES=1 SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' SG_FAKE_SLEEP=5000 \
+        wine "$1" --search queue-test >/dev/null 2>&1 &
+    waitfor "$D" '^window 1' 60 || return 1
+    waitfor "$D" '^icons 2' 60
+    sleep 1
+}
+pixel() { # dump verb ord -> the screen's colour at that hit, as #RRGGBB
+    xy=$(grep "^hit $2 $3 " "$1" 2>/dev/null | tail -1 | awk '{ print $(NF-1), $NF }'); [ -n "$xy" ] || { echo none; return; }
+    import -window root -crop "1x1+${xy% *}+${xy#* }" -depth 8 txt:- 2>/dev/null | grep -o '#[0-9A-Fa-f]\{6\}' | head -1
+}
+if store_window "$EXE"; then
+    [ "$(field icons)" = 2 ] && pass "both pictures (PNG, ICO) are fetched" || fail "icons '$(field icons)'"
+    [ "$(pixel "$D" icon 01 | tr a-f A-F)" = '#FF0000' ] && pass "the card shows its picture, not a letter" || fail "01's picture: $(pixel "$D" icon 01)"
+    [ "$(pixel "$D" icon 08 | tr a-f A-F)" = '#00FF00' ] && pass "an ICO's too" || fail "08's picture: $(pixel "$D" icon 08)"
+    [ "$(ls "$G/icons" 2>/dev/null | wc -l)" = 2 ] && pass "and they are cached for next time" || fail "cache: $(ls "$G/icons" 2>/dev/null)"
+    import -window root "$OUT/store-icons.png" 2>/dev/null
+    rm -f "$G/setup.log"
+    click "$D" "install 01"; sleep 0.8; click "$D" "install 08"; sleep 1
+    grep -q '^queued 08 install' "$D" && pass "a second Install while one runs waits its turn" || fail "not queued: $(grep -E '^(queued|app 0[18])' "$D")"
+    import -window root "$OUT/store-queue.png" 2>/dev/null
+    i=0; while ! { grep -q '^app 08 .*state=\(done\|installed\)' "$D" && grep -q '^app 01 .*state=\(done\|installed\)' "$D"; } && [ $i -lt 120 ]; do sleep 0.5; i=$((i + 1)); done
+    [ "$(grep -c -- '/gate-silent\|/picked-nullsoft' "$G/setup.log" 2>/dev/null)" = 2 ] && head -1 "$G/setup.log" | grep -q -- '/gate-silent' \
+        && pass "then installs: one after the other, in the order asked" || fail "setup.log: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+    rm -f "$G/uninstall.log"
+    waitfor "$D" '^hit uninstall 01 ' 20; click "$D" "uninstall 01"
+    i=0; while ! grep -q '^app 01 .*state=not-installed' "$D" && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
+    grep -q '/quiet' "$G/uninstall.log" 2>/dev/null && grep -q '^app 01 .*state=not-installed' "$D" \
+        && pass "Uninstall runs its QuietUninstallString, and the app is gone" || fail "uninstall: $(cat "$G/uninstall.log" 2>/dev/null) / $(appline 01)"
+else fail "the window (pictures, queue) did not open"; fi
+wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+ununinstall FakeApp; ununinstall PickApp; sleep 0.5
+if store_window "$T/mut-noicon.exe"; then
+    [ "$(pixel "$D" icon 01)" = none ] && pass "MUTANT NOICON draws letters (gate catches it)" || fail "NOICON not detected"
+else fail "the NOICON window did not open"; fi
+wine taskkill /f /im mut-noicon.exe >/dev/null 2>&1; sleep 0.5
+if store_window "$T/mut-noqueue.exe"; then
+    rm -f "$G/setup.log"
+    click "$D" "install 01"; sleep 0.8; click "$D" "install 08"; sleep 8
+    ! grep -q -- '/picked-nullsoft' "$G/setup.log" 2>/dev/null && pass "MUTANT NOQUEUE drops the second Install (gate catches it)" \
+        || fail "NOQUEUE not detected"
+else fail "the NOQUEUE window did not open"; fi
+wine taskkill /f /im mut-noqueue.exe >/dev/null 2>&1; sleep 0.5
+ununinstall FakeApp; ununinstall PickApp; sleep 0.5
+# headless, and the uninstaller's UI for the mutant
+SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+rm -f "$G/uninstall.log"
+SG_MUT="$T/mut-noquiet.exe" run --uninstall 01
+grep -q '/ui' "$G/uninstall.log" 2>/dev/null && ! grep -q '/quiet' "$G/uninstall.log" && pass "MUTANT NOQUIET runs the uninstaller's UI (gate catches it)" \
+    || fail "NOQUIET not detected: $(cat "$G/uninstall.log" 2>/dev/null)"
+ununinstall FakeApp; sleep 0.5
 
 [ $RC = 0 ] && echo "store-check: all passed" || echo "store-check: FAILED"
 exit $RC

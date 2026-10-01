@@ -1,5 +1,30 @@
 sg-shell (0.1.0-86) unstable; urgency=medium
 
+  * SG Store (David 2026-10-01): pictures, one card per app, a queue,
+    Uninstall for Windows programs.
+    - Every app shows its own icon, not a letter: the catalogue's Icon is
+      Flathub's appstream icon or the maker's site's (274 of 308 apps),
+      fetched when the store first shows it, decoded with WIC (PNG, ICO)
+      and scaled with an area average, cached per person for a month
+      (%LOCALAPPDATA%\Stained Glass\Store\Icons). We ship no maker's
+      artwork; offline, the letter badge stays.
+    - No app is listed twice: a Windows program whose entry names its
+      Linux build (Linux=Lnn; 29 pairs: GIMP, OBS, VLC, LibreOffice...) is
+      one card with a Linux app / Windows program drop-down. The Linux
+      build is suggested unless the entry says Prefer=windows (BleachBit;
+      browsers that need Windows sign-on); the build that is installed is
+      the card's.
+    - Install on several apps queues them, one at a time, in the order
+      asked; a waiting one can be cancelled. Uninstall goes through the
+      same queue.
+    - Uninstall for Windows programs too: the Uninstall entry's
+      QuietUninstallString (else UninstallString; MsiExec /I becomes /X),
+      as an administrator when the uninstaller asks; --uninstall ID works
+      for them.
+    - The window looks at what is installed again when it comes forward;
+      dpkg's status is read again only when it changes.
+    - DYMO Connect and DYMO Label added.
+    Test: store-check section L (mutants NOPAIR, NOICON, NOQUEUE, NOQUIET).
   * SG Store: Uninstall. An installed system package -- SG Office, a Linux
     app -- has Uninstall beside Open (it could only be installed: neither
     the Store nor Programs and Features could remove it). After a question,

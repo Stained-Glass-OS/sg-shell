@@ -80,8 +80,8 @@ BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi3
 # SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
 # install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build
 # time. See docs/decisions/0017-sg-store.md.
-STORE_SRC  = src/store/main.c src/store/catalog.c src/store/sysinstall.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
-STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -lmsimg32 -lcomdlg32
+STORE_SRC  = src/store/main.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
+STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 

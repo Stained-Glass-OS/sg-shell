@@ -9,9 +9,11 @@
  *                                  name or winget id (headless), then exit
  *   sg-store64.exe --open ID       Open, as the card's button: the program
  *                                  (headless), then exit
+ *   sg-store64.exe --uninstall ID  remove one app (headless), then exit
  *   sg-store64.exe --deb FILE      "Install a Linux package": what a .deb is,
  *                                  and Install (File Explorer's .deb verb)
- *   --elevated-apt / --elevated-deb   the elevated half (sysinstall.c)
+ *   --elevated-apt / --elevated-apt-remove / --elevated-deb
+ *                                  the elevated half (sysinstall.c)
  *
  * SG_STORE_DUMP=<file> (a Windows path) receives the catalogue, each app's
  * tier/state/versions, what the window lists in which order and, while the
@@ -39,13 +41,19 @@ static WNDPROC g_search_proc;
 static HFONT g_f_title, g_f_head, g_f_body, g_f_small;
 static int g_dpi = 96, g_scroll, g_extent;
 static volatile LONG g_cancel;
-static int g_busy = -1;                   /* the app being installed, or -1 */
+static int g_busy = -1;                   /* the app being installed (or removed), or -1 */
+/* What waits its turn: one install (or removal) at a time, the rest queued
+ * in the order they were asked for (David 2026-10-01). */
+static int g_queue[MAX_APPS], g_qn;
+static BOOL g_qremove[MAX_APPS];          /* by app: its turn removes it */
+static CRITICAL_SECTION g_qlock;
 static WCHAR g_query[128];                /* the search box */
 static int g_cat;                         /* the chosen category: 0 = all */
 static int g_sel = -1;                    /* the selected app (keyboard), or -1 */
 static int g_view[MAX_APPS], g_nview;     /* what the list shows, in order */
 static int g_view_y[MAX_APPS];
-static int g_cols = 1;                     /* the cards' columns, as last drawn */            /* each shown card's top, content coordinates */
+static int g_cols = 1;                     /* the cards' columns, as last drawn */
+#define WM_ICONS (WM_APP + 1)
 
 #define dpx(x) MulDiv((x), g_dpi, 96)
 
@@ -58,7 +66,7 @@ static const WCHAR *const g_cats[] = {
 #define NCATS ((int)ARRAYSIZE(g_cats))
 
 /* hit rectangles, for the mouse and the gate */
-enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_UNINSTALL };
+enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON };
 typedef struct { int verb, idx; RECT rc; } hit_t;
 static hit_t g_hits[MAX_APPS * 3 + 32];
 static int g_nhits;
@@ -84,6 +92,68 @@ static const WCHAR *method_name(int m)
     case SRC_LINUX_APT:  return L"linux-apt";
     default:             return L"unknown";
     }
+}
+
+/* ---- one app, two builds ----------------------------------------------------------------------------
+ *
+ * A Windows program whose catalogue entry names its Linux build (Linux=Lnn)
+ * is one card with a choice of build: the Linux one unless the entry says
+ * Prefer=windows (David 2026-10-01: OBS for Linux before OBS for Windows; a
+ * browser whose single sign-on wants Windows stays a Windows program). The
+ * Linux entry is then no card of its own, so no app is listed twice. */
+
+static void link_pairs(void)
+{
+    int i, j;
+#ifdef SG_MUTANT_NOPAIR
+    return;     /* the mutant lists both builds as apps of their own */
+#endif
+    for (i = 0; i < g_napps; i++) {
+        app_t *a = &g_apps[i];
+        if (!a->linux_ord[0] || a->tier == TIER_LINUX) continue;
+        for (j = 0; j < g_napps; j++)
+            if (j != i && g_apps[j].tier == TIER_LINUX && !g_apps[j].is_alt && !lstrcmpiW(g_apps[j].ord, a->linux_ord)) break;
+        if (j == g_napps) continue;
+        a->alt = j;
+        g_apps[j].alt = i;
+        g_apps[j].is_alt = TRUE;
+        a->use_alt = !a->prefer_windows;
+    }
+}
+
+static BOOL has_it(const app_t *a)
+{
+    return a->state == AST_INSTALLED || a->state == AST_UPDATE || a->state == AST_DONE;
+}
+
+/* Uninstall is offered for an installed app: a system package (SG Office,
+ * a Linux app) through sg-admind's apt-remove, a Windows program through
+ * its own uninstaller (catalog.c app_uninstall) */
+static BOOL can_uninstall(const app_t *a)
+{
+#ifdef SG_MUTANT_NOUNINSTALL
+    return FALSE;
+#endif
+    if ((a->method == SRC_OURS_APT || a->method == SRC_LINUX_APT) && !a->apt_pkg[0]) return FALSE;
+    return has_it(a);
+}
+
+static BOOL in_hand(int i)      /* being installed or removed, or waiting to be */
+{
+    return i == g_busy || g_apps[i].queued || g_apps[i].state == AST_INSTALLING || g_apps[i].state == AST_REMOVING;
+}
+
+/* the entry a card acts on: the build being worked on, else the one that is
+ * installed, else the one chosen */
+static int card_target(int i)
+{
+    const app_t *a = &g_apps[i];
+    int l = a->alt;
+    if (l < 0 || a->is_alt) return i;
+    if (in_hand(i)) return i;
+    if (in_hand(l)) return l;
+    if (has_it(a) != has_it(&g_apps[l])) return has_it(a) ? i : l;
+    return a->use_alt ? l : i;
 }
 
 /* ---- what the list shows ------------------------------------------------------------------------ */
@@ -112,7 +182,7 @@ static BOOL matches_query(const app_t *a, const WCHAR *q)
         if (!n) break;
         if (!StrStrIW(a->name, word) && !StrStrIW(a->publisher, word) && !StrStrIW(a->desc, word) &&
             !StrStrIW(a->category, word) && !StrStrIW(app_section(a), word) &&
-            !(a->tier == TIER_LINUX && !lstrcmpiW(word, L"linux")))
+            !((a->tier == TIER_LINUX || a->alt >= 0) && !lstrcmpiW(word, L"linux")))
             return FALSE;
     }
     return TRUE;
@@ -138,6 +208,9 @@ static void list_view(int *view, int *n)
     *n = 0;
     for (i = 0; i < g_napps; i++) {
         const app_t *a = &g_apps[i];
+        BOOL linux_tab = g_cat > 0 && !lstrcmpiW(g_cats[g_cat], LINUX_SECTION);
+        if (a->is_alt) continue;      /* its Windows build's card offers it */
+        if (linux_tab && a->alt >= 0) { if (!g_query[0] || matches_query(a, g_query)) view[(*n)++] = i; continue; }
         if (g_cat > 0 && lstrcmpiW(app_section(a), g_cats[g_cat]) && lstrcmpiW(a->category, g_cats[g_cat])) continue;
         if (g_cat > 0 && a->tier == TIER_LINUX && lstrcmpiW(g_cats[g_cat], LINUX_SECTION)) continue;
         if (g_query[0] && !matches_query(a, g_query)) continue;
@@ -191,7 +264,12 @@ static void dump(void)
               a->available_version[0] ? a->available_version : L"-",
               a->category, app_section(a), a->name);
         if (a->msg[0]) dumpf(f, L"msg %ls %ls\n", a->ord, a->msg);
+        if (a->alt >= 0 && !a->is_alt)
+            dumpf(f, L"pair %ls %ls choice=%ls target=%ls\n", a->ord, g_apps[a->alt].ord,
+                  a->use_alt ? L"linux" : L"windows", g_apps[card_target(i)].ord);
+        if (a->queued) dumpf(f, L"queued %ls %ls\n", a->ord, g_qremove[i] ? L"remove" : L"install");
     }
+    dumpf(f, L"icons %d\n", icons_ready());
     /* the list's order: ordinals, first to last */
     {
         int view[MAX_APPS];
@@ -205,7 +283,8 @@ static void dump(void)
     dumpf(f, L"focus %ls\n", g_wnd && GetFocus() == g_search ? L"search" : L"list");
     for (i = 0; i < g_nhits; i++) {
         POINT pt = { (g_hits[i].rc.left + g_hits[i].rc.right) / 2, (g_hits[i].rc.top + g_hits[i].rc.bottom) / 2 };
-        static const WCHAR *const verbs[] = { L"install", L"open", L"update", L"checkall", L"category", L"fromfile", L"card", L"uninstall" };
+        static const WCHAR *const verbs[] = { L"install", L"open", L"update", L"checkall", L"category", L"fromfile", L"card",
+                                              L"build", L"uninstall", L"unqueue", L"icon" };
         if (g_wnd) ClientToScreen(g_wnd, &pt);
         dumpf(f, L"hit %ls %ls %d %d\n", verbs[g_hits[i].verb],
               g_hits[i].verb == H_CAT ? g_cats[g_hits[i].idx] : g_hits[i].idx >= 0 ? g_apps[g_hits[i].idx].ord : L"-",
@@ -271,6 +350,17 @@ static void load_all(BOOL check_updates)
         app_detect(&g_apps[i]);
         if (check_updates) app_check_update(&g_apps[i], err, ARRAYSIZE(err));
     }
+    link_pairs();
+}
+
+/* what is installed now (the window, coming back to it: something may have
+ * been removed in Apps & features meanwhile) -- not while the queue works */
+static void redetect(void)
+{
+    int i;
+    if (g_busy >= 0) return;
+    for (i = 0; i < g_napps; i++)
+        if (g_apps[i].state != AST_FAILED && !g_apps[i].queued) app_detect(&g_apps[i]);
 }
 
 /* ---- installing on a worker thread ----------------------------------------------------------------- */
@@ -280,16 +370,23 @@ static void progress_cb(void *ctx, int stage, ULONGLONG done, ULONGLONG total)
     (void)ctx; (void)stage; (void)done; (void)total;
 }
 
-static DWORD WINAPI install_worker(void *arg)
+/* one turn: install (or update) a, or remove it */
+static void run_one(int i, BOOL remove)
 {
-    app_t *a = arg;
+    app_t *a = &g_apps[i];
     WCHAR err[512];
     int rc;
-    a->state = AST_INSTALLING;
+    a->state = remove ? AST_REMOVING : AST_INSTALLING;
     a->msg[0] = 0;
+    a->msg_error = FALSE;
     if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
-    rc = app_install(a, progress_cb, NULL, &g_cancel, err, ARRAYSIZE(err));
-    if (rc == 0) {
+    rc = remove ? app_uninstall(a, err, ARRAYSIZE(err)) : app_install(a, progress_cb, NULL, &g_cancel, err, ARRAYSIZE(err));
+    if (remove) {
+        app_detect(a);
+        if (has_it(a) && !rc) rc = 1, lstrcpynW(err, L"It is still installed.", ARRAYSIZE(err));
+        if (rc) { lstrcpynW(a->msg, err[0] ? err : L"It was not removed.", ARRAYSIZE(a->msg)); a->msg_error = TRUE; }
+        else lstrcpynW(a->msg, L"Uninstalled.", ARRAYSIZE(a->msg));
+    } else if (rc == 0) {
         a->state = AST_DONE;
         app_detect(a);              /* pick up the new installed version */
         if (a->state == AST_NOT_INSTALLED) a->state = AST_DONE;
@@ -298,69 +395,88 @@ static DWORD WINAPI install_worker(void *arg)
         a->state = AST_FAILED;
         lstrcpynW(a->msg, err[0] ? err : L"The install failed.", ARRAYSIZE(a->msg));
     }
-    g_busy = -1;
-    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
-    return 0;
 }
 
-/* Uninstall: a system package (SG Office, a Linux app), through the
- * administrator's consent and sg-admind's apt-remove */
-static BOOL can_uninstall(const app_t *a)
+static DWORD WINAPI queue_worker(void *arg)
 {
-#ifdef SG_MUTANT_NOUNINSTALL
-    return FALSE;
-#endif
-    return (a->method == SRC_OURS_APT || a->method == SRC_LINUX_APT) && a->apt_pkg[0] &&
-           (a->state == AST_INSTALLED || a->state == AST_DONE || a->state == AST_UPDATE);
-}
-
-static DWORD WINAPI uninstall_worker(void *arg)
-{
-    app_t *a = arg;
-    WCHAR err[512];
-    int rc;
-    a->state = AST_REMOVING;
-    a->msg[0] = 0;
-    a->msg_error = FALSE;
-    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
-    rc = sys_remove_apt(a, err, ARRAYSIZE(err));
-    app_detect(a);
-    if (rc == SYS_OK && a->state == AST_NOT_INSTALLED) {
-        lstrcpynW(a->msg, L"Uninstalled.", ARRAYSIZE(a->msg));
-    } else if (rc != SYS_OK) {
-        /* still there (app_detect said so): what went wrong shows on its card */
-        lstrcpynW(a->msg, err[0] ? err : L"It was not uninstalled.", ARRAYSIZE(a->msg));
-        a->msg_error = TRUE;
+    int i = (int)(INT_PTR)arg;
+    for (;;) {
+        run_one(i, g_qremove[i]);
+        g_qremove[i] = FALSE;
+        EnterCriticalSection(&g_qlock);
+        if (g_qn) {
+            i = g_queue[0];
+            memmove(g_queue, g_queue + 1, --g_qn * sizeof(g_queue[0]));
+            g_apps[i].queued = FALSE;
+            g_busy = i;
+        } else g_busy = -1;
+        LeaveCriticalSection(&g_qlock);
+        if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+        if (g_busy < 0) return 0;
     }
-    g_busy = -1;
-    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
-    return 0;
 }
 
-static void start_uninstall(int i)
+/* install (or remove) i now, or when its turn comes */
+static void enqueue(int i, BOOL remove)
 {
-    WCHAR q[400];
-    app_t *a;
-    if (g_busy >= 0 || i < 0 || i >= g_napps || !can_uninstall(&g_apps[i])) return;
-    a = &g_apps[i];
+    BOOL now = FALSE;
+    if (i < 0 || i >= g_napps || in_hand(i)) return;
+    EnterCriticalSection(&g_qlock);
+    if (g_busy < 0) { g_busy = i; now = TRUE; }
+#ifdef SG_MUTANT_NOQUEUE
+    else { LeaveCriticalSection(&g_qlock); return; }    /* the mutant ignores a second click (the old store) */
+#else
+    else { g_queue[g_qn++] = i; g_apps[i].queued = TRUE; g_apps[i].msg[0] = 0; }
+#endif
+    g_qremove[i] = remove;
+    LeaveCriticalSection(&g_qlock);
+    if (now) CloseHandle(CreateThread(NULL, 0, queue_worker, (void *)(INT_PTR)i, 0, NULL));
+    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+}
+
+static void start_install(int i) { enqueue(i, FALSE); }
+
+static void unqueue(int i)
+{
+    int k;
+    EnterCriticalSection(&g_qlock);
+    for (k = 0; k < g_qn; k++)
+        if (g_queue[k] == i) { memmove(g_queue + k, g_queue + k + 1, (g_qn - k - 1) * sizeof(g_queue[0])); g_qn--; break; }
+    g_apps[i].queued = FALSE;
+    g_qremove[i] = FALSE;
+    LeaveCriticalSection(&g_qlock);
+    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+}
+
+static void ask_uninstall(HWND hwnd, int i)
+{
+    WCHAR q[400], yes[4] = L"";
+    const app_t *a = &g_apps[i];
     _snwprintf(q, ARRAYSIZE(q), L"Uninstall %ls?\n\nIts files are removed from this computer. "
                L"Your documents and settings are kept.", a->name);
     q[ARRAYSIZE(q) - 1] = 0;
     /* SG_STORE_YES=1: the gate's answer */
-    {
-        WCHAR yes[4] = L"";
-        GetEnvironmentVariableW(L"SG_STORE_YES", yes, ARRAYSIZE(yes));
-        if (yes[0] != L'1' && MessageBoxW(g_wnd, q, L"SG Store", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
-    }
-    g_busy = i;
-    CloseHandle(CreateThread(NULL, 0, uninstall_worker, a, 0, NULL));
+    GetEnvironmentVariableW(L"SG_STORE_YES", yes, ARRAYSIZE(yes));
+    if (yes[0] == L'1' || MessageBoxW(hwnd, q, L"SG Store", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES)
+        enqueue(i, TRUE);
 }
 
-static void start_install(int i)
+/* the card's build: Linux or Windows */
+static void choose_build(HWND hwnd, int i, POINT pt)
 {
-    if (g_busy >= 0 || i < 0 || i >= g_napps) return;
-    g_busy = i;
-    CloseHandle(CreateThread(NULL, 0, install_worker, &g_apps[i], 0, NULL));
+    app_t *a = &g_apps[i];
+    HMENU m;
+    int cmd;
+    if (a->alt < 0) return;
+    m = CreatePopupMenu();
+    AppendMenuW(m, MF_STRING | (a->use_alt ? MF_CHECKED : 0), 1,
+                a->prefer_windows ? L"Linux app" : L"Linux app (recommended)");
+    AppendMenuW(m, MF_STRING | (!a->use_alt ? MF_CHECKED : 0), 2,
+                a->prefer_windows ? L"Windows program (recommended)" : L"Windows program");
+    ClientToScreen(hwnd, &pt);
+    cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, NULL);
+    DestroyMenu(m);
+    if (cmd) { a->use_alt = cmd == 1; InvalidateRect(hwnd, NULL, FALSE); }
 }
 
 /* the card's main action: Install / Update / Open */
@@ -368,8 +484,9 @@ static void activate(int i)
 {
     app_t *a;
     if (i < 0 || i >= g_napps) return;
+    i = card_target(i);
     a = &g_apps[i];
-    if (i == g_busy || a->state == AST_INSTALLING || a->state == AST_REMOVING) return;
+    if (in_hand(i)) return;
     if (a->state == AST_INSTALLED || a->state == AST_DONE) open_app(a);
     else start_install(i);
 }
@@ -424,12 +541,14 @@ static void button(HDC dc, RECT rc, const WCHAR *label, BOOL primary)
 static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
 {
     app_t *a = &g_apps[idx];
-    int cardh = dpx(96), pad = dpx(16), badge = dpx(48);
+    int t = card_target(idx), cardh = dpx(96), pad = dpx(16), badge = dpx(48), textright;
+    app_t *s = &g_apps[t];          /* the build the card acts on */
     RECT card = { x, y, x + w, y + cardh }, r;
-    BOOL sel = idx == g_sel;
+    BOOL sel = idx == g_sel, two = FALSE;
     HBRUSH cb;
     HPEN pen, oldp;
     HBRUSH oldb;
+    HBITMAP pic;
     if (card.bottom < 0 || card.top > client_bottom) return y + cardh + dpx(12);   /* off screen */
     cb = CreateSolidBrush(C_CARD);
     pen = CreatePen(PS_SOLID, sel ? 2 : 1, sel ? C_SEL : C_LINE);
@@ -440,8 +559,23 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
     DeleteObject(cb); DeleteObject(pen);
     add_list_hit(H_CARD, idx, card, client_bottom);
 
-    /* letter badge in the entry's colour (no logos) */
-    {
+    /* its picture (icons.c); until it is here, or without one, a letter
+     * badge in the entry's colour */
+    pic = icon_for(a);
+    if (!pic) pic = icon_for(s);
+#ifdef SG_MUTANT_NOICON
+    pic = NULL;     /* the mutant keeps the letter badges */
+#endif
+    if (pic) {
+        RECT ir = { x + pad, y + pad, x + pad + badge, y + pad + badge };
+        HDC mdc = CreateCompatibleDC(dc);
+        HBITMAP ob = SelectObject(mdc, pic);
+        BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+        AlphaBlend(dc, x + pad, y + pad, badge, badge, mdc, 0, 0, badge, badge, bf);
+        SelectObject(mdc, ob);
+        DeleteDC(mdc);
+        add_list_hit(H_ICON, idx, ir, client_bottom);
+    } else {
         DWORD c = a->colour;
         HBRUSH bb = CreateSolidBrush(RGB((c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff));
         HBRUSH ob = SelectObject(dc, bb);
@@ -454,50 +588,68 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
         text(dc, g_f_head, RGB(255, 255, 255), br, letter, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
-    /* the text stops short of the buttons: Uninstall sits left of Open */
-    r.left = x + pad + badge + dpx(14); r.right = x + w - dpx(can_uninstall(a) && a->state != AST_UPDATE ? 260 : 150);
-    r.top = y + dpx(12); r.bottom = y + dpx(36);
+    /* the buttons, right to left: the main one, then Uninstall or the
+     * choice of build; and what is going on */
+    {
+        RECT bt = { x + w - dpx(134), y + dpx(30), x + w - pad, y + dpx(30) + dpx(34) };
+        RECT b2 = { bt.left - dpx(150), bt.top, bt.left - dpx(8), bt.bottom };
+        RECT st = { bt.left - dpx(250), y + dpx(8), x + w - pad, y + dpx(28) };
+        if (t == g_busy && s->state == AST_REMOVING) {
+            text(dc, g_f_body, C_SUB, bt, L"Uninstalling...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        } else if (t == g_busy || s->state == AST_INSTALLING) {
+            text(dc, g_f_body, C_SUB, bt, L"Installing...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        } else if (s->queued) {
+            button(dc, bt, L"Cancel", FALSE); add_list_hit(H_UNQUEUE, t, bt, client_bottom);
+            text(dc, g_f_small, C_SUB, st, g_qremove[t] ? L"Waiting to uninstall" : L"Waiting to install",
+                 DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        } else if (has_it(s)) {
+            WCHAR what[64];
+            button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", s->state == AST_UPDATE);
+            add_list_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt, client_bottom);
+            if (can_uninstall(s)) { button(dc, b2, L"Uninstall", FALSE); add_list_hit(H_UNINSTALL, t, b2, client_bottom); two = TRUE; }
+            swprintf(what, ARRAYSIZE(what), L"Installed%ls", a->alt >= 0 ? (s->tier == TIER_LINUX ? L" (Linux app)" : L" (Windows program)") : L"");
+            text(dc, g_f_small, C_OK, st, what, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        } else {
+            button(dc, bt, s->state == AST_FAILED ? L"Try again" : L"Install", TRUE);
+            add_list_hit(H_INSTALL, t, bt, client_bottom);
+            if (a->alt >= 0) {      /* which build: a drop-down */
+                WCHAR lab[32];
+                POINT tri[3];
+                HBRUSH tb = CreateSolidBrush(C_TEXT), otb;
+                HPEN np;
+                RECT lr = b2;
+                swprintf(lab, ARRAYSIZE(lab), L"%ls", a->use_alt ? L"Linux app" : L"Windows program");
+                button(dc, b2, L"", FALSE);
+                lr.right -= dpx(18);
+                text(dc, g_f_body, C_TEXT, lr, lab, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                tri[0].x = b2.right - dpx(20); tri[0].y = (b2.top + b2.bottom) / 2 - dpx(2);
+                tri[1].x = b2.right - dpx(12); tri[1].y = tri[0].y;
+                tri[2].x = b2.right - dpx(16); tri[2].y = tri[0].y + dpx(4);
+                otb = SelectObject(dc, tb); np = SelectObject(dc, GetStockObject(NULL_PEN));
+                Polygon(dc, tri, 3);
+                SelectObject(dc, otb); SelectObject(dc, np); DeleteObject(tb);
+                add_list_hit(H_BUILD, idx, b2, client_bottom);
+                two = TRUE;
+            }
+        }
+        textright = two ? b2.left - dpx(10) : bt.left - dpx(10);
+    }
+
+    r.left = x + pad + badge + dpx(14); r.right = textright; r.top = y + dpx(12); r.bottom = y + dpx(36);
     text(dc, g_f_head, C_TEXT, r, a->name, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     r.top = r.bottom; r.bottom = y + dpx(54);
     {
         WCHAR sub[300];
         if (a->tier == TIER_LINUX) swprintf(sub, ARRAYSIZE(sub), L"%ls  \x00b7  Linux app", a->publisher);
+        else if (a->alt >= 0) swprintf(sub, ARRAYSIZE(sub), L"%ls  \x00b7  Linux app or Windows program", a->publisher);
         else lstrcpynW(sub, a->publisher, ARRAYSIZE(sub));
         text(dc, g_f_small, C_SUB, r, sub, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     }
     r.top = r.bottom; r.bottom = y + cardh - dpx(8);
-    if ((a->state == AST_FAILED || a->msg_error) && a->msg[0])
-        text(dc, g_f_small, C_ERR, r, a->msg, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_END_ELLIPSIS);
+    if ((s->state == AST_FAILED || s->msg_error) && s->msg[0])
+        text(dc, g_f_small, C_ERR, r, s->msg, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_END_ELLIPSIS);
     else
         text(dc, g_f_body, C_SUB, r, a->desc, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_END_ELLIPSIS);
-
-    /* the action button, and state text */
-    {
-        RECT bt = { x + w - dpx(134), y + dpx(30), x + w - pad, y + dpx(30) + dpx(34) };
-        if (a->state == AST_REMOVING) {
-            text(dc, g_f_body, C_SUB, bt, L"Uninstalling...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        } else if (idx == g_busy || a->state == AST_INSTALLING) {
-            text(dc, g_f_body, C_SUB, bt, L"Installing...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        } else if (a->state == AST_UPDATE) {
-            button(dc, bt, L"Update", TRUE); add_list_hit(H_UPDATE, idx, bt, client_bottom);
-        } else if (a->state == AST_INSTALLED || a->state == AST_DONE) {
-            button(dc, bt, L"Open", FALSE); add_list_hit(H_OPEN, idx, bt, client_bottom);
-            if (can_uninstall(a)) {
-                /* a system package: Uninstall beside Open, Installed below it */
-                RECT u = { x + w - dpx(250), bt.top, x + w - dpx(144), bt.bottom };
-                RECT s = { bt.left, bt.bottom + dpx(2), bt.right, bt.bottom + dpx(20) };
-                button(dc, u, L"Uninstall", FALSE); add_list_hit(H_UNINSTALL, idx, u, client_bottom);
-                text(dc, g_f_small, C_OK, s, L"Installed", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            } else {
-                RECT s = { x + w - dpx(280), bt.top, x + w - dpx(144), bt.bottom };
-                text(dc, g_f_small, C_OK, s, L"Installed", DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
-            }
-        } else if (a->state == AST_FAILED) {
-            button(dc, bt, L"Try again", TRUE); add_list_hit(H_INSTALL, idx, bt, client_bottom);
-        } else {
-            button(dc, bt, L"Install", TRUE); add_list_hit(H_INSTALL, idx, bt, client_bottom);
-        }
-    }
     return y + cardh + dpx(12);
 }
 
@@ -558,7 +710,7 @@ static void paint(HWND hwnd)
                 RECT sub = { x, top, x + w, top + dpx(34) };
                 text(dc, g_f_small, C_SUB, sub,
                      L"Built for Linux and installed with the system's package manager (an administrator is asked). "
-                     L"The store suggests Windows programs first; these are for when you prefer a Linux build.",
+                     L"An app made for both is one card in its category, with a choice of build.",
                      DT_LEFT | DT_TOP | DT_WORDBREAK);
                 top += dpx(38);
             }
@@ -650,7 +802,7 @@ static int hit_at(int cx, int cy, int *verb, int *idx)
         return 0;
     }
     for (i = 0; i < g_nhits; i++)       /* buttons before the card they sit on */
-        if (g_hits[i].verb != H_CARD && PtInRect(&g_hits[i].rc, pt)) { *verb = g_hits[i].verb; *idx = g_hits[i].idx; return 1; }
+        if (g_hits[i].verb != H_CARD && g_hits[i].verb != H_ICON && PtInRect(&g_hits[i].rc, pt)) { *verb = g_hits[i].verb; *idx = g_hits[i].idx; return 1; }
     for (i = 0; i < g_nhits; i++)
         if (g_hits[i].verb == H_CARD && PtInRect(&g_hits[i].rc, pt)) { *verb = H_CARD; *idx = g_hits[i].idx; return 1; }
     return 0;
@@ -758,14 +910,21 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SETFOCUS:
         return 0;
     case WM_ACTIVATE:
+        if (LOWORD(wp) != WA_INACTIVE) { redetect(); InvalidateRect(hwnd, NULL, FALSE); }
         if (LOWORD(wp) != WA_INACTIVE && g_sel < 0) SetFocus(g_search);
+        return 0;
+    case WM_ICONS:
+        InvalidateRect(hwnd, NULL, FALSE);
+        if (wp) dump();
         return 0;
     case WM_LBUTTONUP: {
         int verb, idx;
         if (hit_at(GET_X_LPARAM(lp), GET_Y_LPARAM(lp), &verb, &idx)) {
-            if (verb == H_INSTALL || verb == H_UPDATE) { g_sel = idx; start_install(idx); }
-            else if (verb == H_UNINSTALL) { g_sel = idx; start_uninstall(idx); }
-            else if (verb == H_OPEN) { g_sel = idx; open_app(&g_apps[idx]); }
+            if (verb == H_INSTALL || verb == H_UPDATE) start_install(idx);
+            else if (verb == H_OPEN) open_app(&g_apps[idx]);
+            else if (verb == H_UNINSTALL) ask_uninstall(hwnd, idx);
+            else if (verb == H_UNQUEUE) unqueue(idx);
+            else if (verb == H_BUILD) { POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) }; choose_build(hwnd, idx, pt); }
             else if (verb == H_CHECKALL) do_checkall();
             else if (verb == H_FROMFILE) install_from_file();
             else if (verb == H_CAT) set_category(hwnd, idx);
@@ -856,6 +1015,7 @@ static int window(HINSTANCE inst, const WCHAR *query)
                             WS_OVERLAPPEDWINDOW | WS_VSCROLL,
                             CW_USEDEFAULT, CW_USEDEFAULT, dpx(820), dpx(680), NULL, NULL, inst, NULL);
     if (!g_wnd) return 1;
+    icons_fetch(g_apps, g_napps, dpx(48), g_wnd, WM_ICONS);
     if (query && query[0]) SetWindowTextW(g_search, query);
     ShowWindow(g_wnd, SW_SHOWNORMAL);
     UpdateWindow(g_wnd);
@@ -890,6 +1050,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     const WCHAR *query = NULL;
     (void)prev; (void)cmdline; (void)show;
     GetEnvironmentVariableW(L"SG_STORE_DUMP", g_dump, MAX_PATH);
+    InitializeCriticalSection(&g_qlock);
 
     for (i = 1; argv && i < argc; i++) {
         if (!lstrcmpiW(argv[i], L"--list")) {
@@ -903,8 +1064,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             LocalFree(argv);
             return rc;
         }
-        if (!lstrcmpiW(argv[i], L"--elevated-apt") || !lstrcmpiW(argv[i], L"--elevated-deb") ||
-            !lstrcmpiW(argv[i], L"--elevated-apt-remove")) {
+        if (!lstrcmpiW(argv[i], L"--elevated-apt") || !lstrcmpiW(argv[i], L"--elevated-apt-remove") ||
+            !lstrcmpiW(argv[i], L"--elevated-deb")) {
             rc = sys_elevated_main(argc, argv, i);
             LocalFree(argv);
             return rc;
@@ -928,8 +1089,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             if (k < 0) { LocalFree(argv); return 2; }
             app_detect(&g_apps[k]);
             if (!can_uninstall(&g_apps[k])) { rc = SYS_FAILED; lstrcpynW(err, L"It cannot be uninstalled here.", ARRAYSIZE(err)); }
-            else rc = sys_remove_apt(&g_apps[k], err, ARRAYSIZE(err));
+            else rc = app_uninstall(&g_apps[k], err, ARRAYSIZE(err));
             app_detect(&g_apps[k]);
+            if (!rc && has_it(&g_apps[k])) { rc = 1; lstrcpynW(err, L"It is still installed.", ARRAYSIZE(err)); }
             if (g_dump[0]) {
                 swprintf(tmp, ARRAYSIZE(tmp), L"%ls.result", g_dump);
                 if ((f = _wfopen(tmp, L"wb"))) {

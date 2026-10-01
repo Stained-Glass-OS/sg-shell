@@ -121,6 +121,11 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"DetectName", a->detect_name, ARRAYSIZE(a->detect_name));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"PinVersion", a->pin_version, ARRAYSIZE(a->pin_version));
+        reg_str(item, L"Icon", a->icon_url, ARRAYSIZE(a->icon_url));
+        reg_str(item, L"Linux", a->linux_ord, ARRAYSIZE(a->linux_ord));
+        reg_str(item, L"Prefer", tier, ARRAYSIZE(tier));
+        a->prefer_windows = !lstrcmpiW(tier, L"windows");
+        a->alt = -1;
         colour = 0x00808080; cb = sizeof(colour);
         RegGetValueW(item, NULL, L"Colour", RRF_RT_REG_DWORD, NULL, &colour, &cb);
         a->colour = colour;
@@ -233,24 +238,63 @@ static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
 /* Is a Debian package installed (dpkg's status file: a stanza with
  * "Package: <pkg>" and "Status: install ok installed")? Z: is the root
  * file system; SG_DPKG_STATUS names another file for the gate. */
+/* dpkg's status file, read again only when it changes (the window looks at
+ * every Linux app's state each time it comes forward). The text is held
+ * under g_dpkg_lock: dpkg_text() takes it, dpkg_done() gives it back. */
+static CRITICAL_SECTION g_dpkg_lock;
+static INIT_ONCE g_dpkg_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK dpkg_init(INIT_ONCE *once, void *param, void **ctx)
+{
+    (void)once; (void)param; (void)ctx;
+    InitializeCriticalSection(&g_dpkg_lock);
+    return TRUE;
+}
+
+static char *dpkg_text(const WCHAR *path)
+{
+    static char *cached;
+    static FILETIME stamp;
+    static WCHAR cached_path[MAX_PATH];
+    static DWORD size_seen;
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    HANDLE h;
+    DWORD size, got = 0;
+    InitOnceExecuteOnce(&g_dpkg_once, dpkg_init, NULL, NULL);
+    EnterCriticalSection(&g_dpkg_lock);
+    if (!GetFileAttributesExW(path, GetFileExInfoStandard, &fa)) { LeaveCriticalSection(&g_dpkg_lock); return NULL; }
+    if (cached && !lstrcmpiW(cached_path, path) && !CompareFileTime(&stamp, &fa.ftLastWriteTime) && size_seen == fa.nFileSizeLow)
+        return cached;
+    free(cached);
+    cached = NULL;
+    h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        size = GetFileSize(h, NULL);
+        if (size != INVALID_FILE_SIZE && size <= (256u << 20) && (cached = malloc(size + 2))) {
+            ReadFile(h, cached + 1, size, &got, NULL);
+            cached[0] = '\n';       /* every stanza line now follows a '\n' */
+            cached[got + 1] = 0;
+            stamp = fa.ftLastWriteTime;
+            size_seen = fa.nFileSizeLow;
+            lstrcpynW(cached_path, path, MAX_PATH);
+        }
+        CloseHandle(h);
+    }
+    if (!cached) LeaveCriticalSection(&g_dpkg_lock);
+    return cached;
+}
+
+static void dpkg_done(void) { LeaveCriticalSection(&g_dpkg_lock); }
+
 BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch)
 {
     WCHAR path[MAX_PATH] = L"Z:\\var\\lib\\dpkg\\status";
     char want[160], *text, *p;
-    HANDLE h;
-    DWORD size, got = 0;
     BOOL found = FALSE;
     version[0] = 0;
     if (!pkg[0]) return FALSE;
     GetEnvironmentVariableW(L"SG_DPKG_STATUS", path, MAX_PATH);
-    h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) return FALSE;
-    size = GetFileSize(h, NULL);
-    if (size == INVALID_FILE_SIZE || size > (256u << 20) || !(text = malloc(size + 2))) { CloseHandle(h); return FALSE; }
-    ReadFile(h, text + 1, size, &got, NULL);
-    CloseHandle(h);
-    text[0] = '\n';                 /* every stanza line now follows a '\n' */
-    text[got + 1] = 0;
+    if (!(text = dpkg_text(path))) return FALSE;
     snprintf(want, sizeof(want), "\nPackage: %ls\n", pkg);
     for (p = text; (p = strstr(p, want)); p++) {
         char *end = strstr(p + 1, "\n\n"), *st, *ver, save = 0;
@@ -272,7 +316,7 @@ BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch)
         if (end) *end = save;
         if (found) break;
     }
-    free(text);
+    dpkg_done();
     return found;
 }
 
@@ -583,4 +627,110 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
         lstrcpynW(err, L"This app's source is not understood.", cch);
         return 1;
     }
+}
+
+/* ---- removing an app ------------------------------------------------------------------------------
+ *
+ * A Linux app (or one of ours): apt-get remove, through the administrator's
+ * consent and sg-admind (sysinstall.c). A Windows program: what its Uninstall
+ * entry says removes it, as Apps & features does -- QuietUninstallString if
+ * it has one, else UninstallString, an MSI's "MsiExec.exe /I{...}" (repair)
+ * turned into /X{...} (remove). It runs as the person, or as an administrator
+ * when the uninstaller asks to be (the consent prompt). An NSIS uninstaller
+ * copies itself to %TEMP% and returns at once: the entry is watched until it
+ * goes, a few minutes at most. */
+
+static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
+{
+    static const struct { HKEY root; const WCHAR *path; } roots[] = {
+        { HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+        { HKEY_LOCAL_MACHINE, L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+        { HKEY_CURRENT_USER,  L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+        { HKEY_CURRENT_USER,  L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
+    };
+    unsigned r;
+    cmd[0] = 0;
+    if (!needle[0]) return FALSE;
+    for (r = 0; r < ARRAYSIZE(roots) && !cmd[0]; r++) {
+        HKEY key, item;
+        DWORD i, n;
+        WCHAR sub[256], name[256];
+        if (RegOpenKeyExW(roots[r].root, roots[r].path, 0, KEY_READ, &key)) continue;
+        for (i = 0; !cmd[0] && (n = ARRAYSIZE(sub), !RegEnumKeyExW(key, i, sub, &n, NULL, NULL, NULL, NULL)); i++) {
+            if (RegOpenKeyExW(key, sub, 0, KEY_READ, &item)) continue;
+            reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
+            if (name_matches(name, needle)) {
+#ifndef SG_MUTANT_NOQUIET
+                reg_str(item, L"QuietUninstallString", cmd, cch);
+#endif
+                if (!cmd[0]) reg_str(item, L"UninstallString", cmd, cch);
+            }
+            RegCloseKey(item);
+        }
+        RegCloseKey(key);
+    }
+    if (cmd[0]) {   /* MsiExec /I{GUID} repairs; /X{GUID} removes */
+        WCHAR *p = StrStrIW(cmd, L"msiexec");
+        if (p && (p = StrStrIW(p, L" /I")) && (p[3] == L'{' || p[3] == L' ')) p[2] = L'X';
+    }
+    return cmd[0] != 0;
+}
+
+/* "C:\Program Files\X\unins000.exe" /S -> the program and its arguments (an
+ * unquoted path with spaces runs to its .exe) */
+static void split_command(const WCHAR *cmd, WCHAR *file, WCHAR *args, int cch)
+{
+    const WCHAR *end, *exe;
+    while (*cmd == L' ') cmd++;
+    if (*cmd == L'"' && (end = wcschr(cmd + 1, L'"'))) {
+        lstrcpynW(file, cmd + 1, min(cch, (int)(end - cmd)));
+        end++;
+    } else if ((exe = StrStrIW(cmd, L".exe")) && (exe[4] == 0 || exe[4] == L' ')) {
+        lstrcpynW(file, cmd, min(cch, (int)(exe + 4 - cmd) + 1));
+        end = exe + 4;
+    } else {
+        end = cmd + wcscspn(cmd, L" ");
+        lstrcpynW(file, cmd, min(cch, (int)(end - cmd) + 1));
+    }
+    while (*end == L' ') end++;
+    lstrcpynW(args, end, cch);
+}
+
+int app_uninstall(app_t *a, WCHAR *err, int cch)
+{
+    WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64];
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    DWORD code = 0, start;
+    int attempt;
+    err[0] = 0;
+    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
+    if (!uninstall_command(a->detect_name, cmd, ARRAYSIZE(cmd))) {
+        swprintf(err, cch, L"%ls has no uninstaller. Remove it in Settings > Apps.", a->name);
+        return 1;
+    }
+    split_command(cmd, file, args, MAX_PATH);
+    for (attempt = 0; attempt < 2; attempt++) {
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        sei.lpVerb = attempt ? L"runas" : NULL;
+        sei.lpFile = file;
+        sei.lpParameters = args[0] ? args : NULL;
+        sei.nShow = SW_SHOWNORMAL;
+        if (ShellExecuteExW(&sei)) break;
+        if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) break;
+    }
+    if (!sei.hProcess) {
+        swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
+        return 1;
+    }
+    WaitForSingleObject(sei.hProcess, INFINITE);
+    GetExitCodeProcess(sei.hProcess, &code);
+    CloseHandle(sei.hProcess);
+    /* its entry goes when it is gone; a self-copying uninstaller is still at it */
+    for (start = GetTickCount(); find_installed(a->detect_name, ver, ARRAYSIZE(ver)) && GetTickCount() - start < 180000;)
+        Sleep(1000);
+    if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) {
+        swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);
+        return 1;
+    }
+    return 0;
 }

@@ -63,6 +63,15 @@ typedef struct {
     WCHAR detect_name[128];       /* "Name|Other|!Not this" -- see name_matches() */
     WCHAR run[260];               /* what Open starts: SRC_LINUX_APT, a Unix program;
                                    * SRC_OURS_APT, a Windows program (App Paths name) */
+    WCHAR icon_url[512];          /* Icon: its picture (https: or a file) -- icons.c */
+    /* one app, two builds: a Windows program's Linux = the ordinal of the
+     * same app's Linux build. The pair is one card, with a choice of build;
+     * Prefer = linux (the default) or windows names the one it suggests. */
+    WCHAR linux_ord[8];
+    BOOL  prefer_windows;
+    int   alt;                    /* the pair's other entry (index), or -1 */
+    BOOL  is_alt;                 /* the Linux half of a pair: not a card of its own */
+    BOOL  use_alt;                /* the card's choice: the Linux build */
     /* runtime */
     int   state;                  /* AST_* */
     WCHAR installed_version[64];
@@ -70,6 +79,7 @@ typedef struct {
     WCHAR msg[256];
     BOOL  msg_error;              /* msg says what went wrong (an uninstall that failed) */
     BOOL  ran_elevated;           /* its installer was started as an administrator */
+    BOOL  queued;                 /* waiting for the install before it */
 } app_t;
 
 #define MAX_APPS 512   /* the catalogue: 200-odd apps, Linux ones among them */
@@ -87,7 +97,14 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or 
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
+int  app_uninstall(app_t *a, WCHAR *err, int cch);  /* 0: removed (as its uninstaller or apt says) */
 const WCHAR *tier_name(int tier);
+
+/* icons.c: the cards' pictures, fetched on a few threads; msg is posted to
+ * notify as each is ready (wParam 1: all done) */
+void    icons_fetch(const app_t *apps, int n, int px, HWND notify, UINT msg);
+HBITMAP icon_for(const app_t *a);
+int     icons_ready(void);
 
 /* sysinstall.c: system packages (Linux apps, .deb files) through the
  * administrator's consent and sg-admind */

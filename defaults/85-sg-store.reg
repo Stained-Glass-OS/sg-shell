@@ -32,6 +32,13 @@ Windows Registry Editor Version 5.00
 ;   Run        = what Open starts: a Linux app's program, e.g. /usr/bin/gimp;
 ;                one of ours, its Windows program's App Paths name
 ;   PinVersion = the available version for a pin: entry (update checks)
+;   Icon       = its picture: https: (Flathub's appstream icon, else the
+;                maker's site's) or a file; fetched when SG Store first shows
+;                it and cached per person -- we ship no maker's artwork
+;   Linux      = (a Windows program) the ordinal of the same app's Linux
+;                build: the pair is one card, with a choice of build
+;   Prefer     = windows: suggest the Windows build of the pair; otherwise
+;                the Linux build is suggested (native, no Wine in between)
 ;
 ; Every winget: id here exists in github.com/microsoft/winget-pkgs (checked
 ; 2026-09-30, each resolving to an installer SG Store can run). FileZilla is
@@ -93,6 +100,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Mozilla.Firefox"
 "DetectName"="Mozilla Firefox|!Mozilla Firefox*ESR"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\02]
 "Name"="Google Chrome"
@@ -103,6 +111,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Google.Chrome"
 "DetectName"="Google Chrome"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.google.Chrome.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\03]
 "Name"="Brave"
@@ -113,6 +122,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Brave.Brave"
 "DetectName"="Brave"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.brave.Browser.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\04]
 "Name"="SG Office"
@@ -134,6 +144,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Vivaldi.Vivaldi"
 "DetectName"="Vivaldi"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.vivaldi.Vivaldi.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\06]
 "Name"="Opera"
@@ -144,6 +155,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Opera.Opera"
 "DetectName"="Opera Stable"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.opera.Opera.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\07]
 "Name"="LibreWolf"
@@ -154,6 +166,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:LibreWolf.LibreWolf"
 "DetectName"="LibreWolf"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.gitlab.librewolf-community.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\08]
 "Name"="Waterfox"
@@ -164,6 +177,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Waterfox.Waterfox"
 "DetectName"="Waterfox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.waterfox.waterfox.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\09]
 "Name"="Firefox ESR"
@@ -174,6 +188,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Mozilla.Firefox.ESR"
 "DetectName"="Mozilla Firefox*ESR"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"
+"Linux"="L44"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\10]
 "Name"="Apache OpenOffice"
@@ -184,6 +200,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Apache.OpenOffice"
 "DetectName"="OpenOffice"
+"Icon"="https://www.openoffice.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\11]
 "Name"="SumatraPDF"
@@ -194,6 +211,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:SumatraPDF.SumatraPDF"
 "DetectName"="SumatraPDF"
+"Icon"="https://www.sumatrapdfreader.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\12]
 "Name"="Foxit PDF Reader"
@@ -204,6 +222,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Foxit.FoxitReader"
 "DetectName"="Foxit PDF Reader"
+"Icon"="https://www.foxit.com/assets/favicons/favicon180.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\13]
 "Name"="Joplin"
@@ -214,6 +233,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Joplin.Joplin"
 "DetectName"="Joplin"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.cozic.joplin_desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\14]
 "Name"="Obsidian"
@@ -224,6 +244,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Obsidian.Obsidian"
 "DetectName"="Obsidian"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/md.obsidian.Obsidian.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\15]
 "Name"="calibre"
@@ -234,6 +255,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:calibre.calibre"
 "DetectName"="calibre"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.calibre_ebook.calibre.png"
+"Linux"="L16"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\16]
 "Name"="Scribus"
@@ -244,6 +267,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Scribus.Scribus"
 "DetectName"="Scribus"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.scribus.Scribus.png"
+"Linux"="L22"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\17]
 "Name"="GnuCash"
@@ -254,6 +279,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GnuCash.GnuCash"
 "DetectName"="GnuCash"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnucash.GnuCash.png"
+"Linux"="L58"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\18]
 "Name"="KeePass"
@@ -264,6 +291,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:DominikReichl.KeePass"
 "DetectName"="KeePass Password Safe"
+"Icon"="https://keepass.info/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\19]
 "Name"="KeePassXC"
@@ -274,6 +302,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:KeePassXCTeam.KeePassXC"
 "DetectName"="KeePassXC"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.keepassxc.KeePassXC.png"
+"Linux"="L15"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\20]
 "Name"="Bitwarden"
@@ -284,6 +314,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Bitwarden.Bitwarden"
 "DetectName"="Bitwarden"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.bitwarden.desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\21]
 "Name"="GIMP"
@@ -294,6 +325,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GIMP.GIMP.3"
 "DetectName"="GIMP"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gimp.GIMP.png"
+"Linux"="L01"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\22]
 "Name"="Inkscape"
@@ -304,6 +337,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Inkscape.Inkscape"
 "DetectName"="Inkscape"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.inkscape.Inkscape.png"
+"Linux"="L03"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\23]
 "Name"="Krita"
@@ -314,6 +349,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:KDE.Krita"
 "DetectName"="Krita"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.krita.png"
+"Linux"="L04"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\24]
 "Name"="Paint.NET"
@@ -324,6 +361,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:dotPDN.PaintDotNet"
 "DetectName"="paint.net"
+"Icon"="https://www.getpaint.net/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\25]
 "Name"="IrfanView"
@@ -334,6 +372,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:IrfanSkiljan.IrfanView"
 "DetectName"="IrfanView"
+"Icon"="https://www.irfanview.com/images/favicon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\26]
 "Name"="XnView"
@@ -344,6 +383,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:XnSoft.XnView.Classic"
 "DetectName"="XnView|!XnView MP"
+"Icon"="https://www.xnview.com/ico/apple-touch-icon-144-precomposed.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\27]
 "Name"="XnView MP"
@@ -354,6 +394,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:XnSoft.XnViewMP"
 "DetectName"="XnView MP"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.xnview.XnViewMP.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\28]
 "Name"="FastStone Image Viewer"
@@ -364,6 +405,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:FastStone.Viewer"
 "DetectName"="FastStone Image Viewer"
+"Icon"="https://www.faststone.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\29]
 "Name"="Blender"
@@ -374,6 +416,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:BlenderFoundation.Blender"
 "DetectName"="Blender"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.blender.Blender.png"
+"Linux"="L05"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\30]
 "Name"="darktable"
@@ -384,6 +428,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:darktable.darktable"
 "DetectName"="darktable"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.darktable.Darktable.png"
+"Linux"="L06"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\31]
 "Name"="RawTherapee"
@@ -394,6 +440,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:RawTherapee.RawTherapee"
 "DetectName"="RawTherapee"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.rawtherapee.RawTherapee.png"
+"Linux"="L17"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\32]
 "Name"="Greenshot"
@@ -404,6 +452,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Greenshot.Greenshot"
 "DetectName"="Greenshot"
+"Icon"="https://getgreenshot.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\33]
 "Name"="ShareX"
@@ -414,6 +463,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:ShareX.ShareX"
 "DetectName"="ShareX"
+"Icon"="https://getsharex.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\34]
 "Name"="VLC media player"
@@ -424,6 +474,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:VideoLAN.VLC"
 "DetectName"="VLC media player"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.videolan.VLC.png"
+"Linux"="L07"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\35]
 "Name"="Audacity"
@@ -434,6 +486,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Audacity.Audacity"
 "DetectName"="Audacity"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.audacityteam.Audacity.png"
+"Linux"="L08"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\36]
 "Name"="HandBrake"
@@ -444,6 +498,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:HandBrake.HandBrake"
 "DetectName"="HandBrake"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/fr.handbrake.ghb.png"
+"Linux"="L11"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\37]
 "Name"="K-Lite Codec Pack"
@@ -464,6 +520,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:VentisMedia.MediaMonkey.2024"
 "DetectName"="MediaMonkey"
+"Icon"="https://www.mediamonkey.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\39]
 "Name"="Winamp"
@@ -474,6 +531,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Winamp.Winamp"
 "DetectName"="Winamp"
+"Icon"="https://framerusercontent.com/images/rswrlRKY76L6M11q49AUUPxWG3Y.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\40]
 "Name"="foobar2000"
@@ -484,6 +542,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:PeterPawlowski.foobar2000"
 "DetectName"="foobar2000"
+"Icon"="https://www.foobar2000.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\41]
 "Name"="AIMP"
@@ -494,6 +553,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:AIMP.AIMP"
 "DetectName"="AIMP"
+"Icon"="https://www.aimp.ru/v2/theme/images/tile180.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\42]
 "Name"="MPC-HC"
@@ -514,6 +574,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:OBSProject.OBSStudio"
 "DetectName"="OBS Studio"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.obsproject.Studio.png"
+"Linux"="L10"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\44]
 "Name"="Shotcut"
@@ -524,6 +586,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Meltytech.Shotcut"
 "DetectName"="Shotcut"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.shotcut.Shotcut.png"
+"Linux"="L36"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\45]
 "Name"="Kdenlive"
@@ -534,6 +598,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:KDE.Kdenlive"
 "DetectName"="Kdenlive"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kdenlive.png"
+"Linux"="L09"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\46]
 "Name"="OpenShot"
@@ -544,6 +610,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:OpenShot.OpenShot"
 "DetectName"="OpenShot Video Editor"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openshot.OpenShot.png"
+"Linux"="L37"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\47]
 "Name"="Mp3tag"
@@ -554,6 +622,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:FlorianHeidenreich.Mp3tag"
 "DetectName"="Mp3tag"
+"Icon"="https://www.mp3tag.de/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\48]
 "Name"="LMMS"
@@ -564,6 +633,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:LMMS.LMMS"
 "DetectName"="LMMS"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.lmms.LMMS.png"
+"Linux"="L33"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\49]
 "Name"="Git"
@@ -574,6 +645,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Git.Git"
 "DetectName"="Git"
+"Icon"="https://git-scm.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\50]
 "Name"="Python 3.13"
@@ -584,6 +656,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Python.Python.3.13"
 "DetectName"="Python 3.13"
+"Icon"="https://www.python.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\51]
 "Name"="Notepad++"
@@ -594,6 +667,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Notepad++.Notepad++"
 "DetectName"="Notepad++"
+"Icon"="https://notepad-plus-plus.org/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\52]
 "Name"="VSCodium"
@@ -604,6 +678,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:VSCodium.VSCodium"
 "DetectName"="VSCodium"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.vscodium.codium.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\53]
 "Name"="Geany"
@@ -614,6 +689,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Geany.Geany"
 "DetectName"="Geany"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.geany.Geany.png"
+"Linux"="L66"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\54]
 "Name"="Sublime Text"
@@ -624,6 +701,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:SublimeHQ.SublimeText.4"
 "DetectName"="Sublime Text"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.sublimehq.SublimeText.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\55]
 "Name"="Node.js LTS"
@@ -634,6 +712,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:OpenJS.NodeJS.LTS"
 "DetectName"="Node.js"
+"Icon"="https://nodejs.org/static/images/favicons/favicon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\56]
 "Name"="CMake"
@@ -644,6 +723,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Kitware.CMake"
 "DetectName"="CMake"
+"Icon"="https://cmake.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\57]
 "Name"="Java 21 (Temurin JDK)"
@@ -654,6 +734,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.21.JDK"
 "DetectName"="Eclipse Temurin JDK"
+"Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\58]
 "Name"="Go"
@@ -664,6 +745,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GoLang.Go"
 "DetectName"="Go Programming Language"
+"Icon"="https://go.dev/images/favicon-gopher.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\59]
 "Name"="Strawberry Perl"
@@ -684,6 +766,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:TortoiseGit.TortoiseGit"
 "DetectName"="TortoiseGit"
+"Icon"="https://tortoisegit.org/images/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\61]
 "Name"="WinMerge"
@@ -694,6 +777,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:WinMerge.WinMerge"
 "DetectName"="WinMerge"
+"Icon"="https://winmerge.org/engine/images/icon-256x256.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\62]
 "Name"="PyCharm Community"
@@ -704,6 +788,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:JetBrains.PyCharm.Community"
 "DetectName"="PyCharm Community Edition"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.jetbrains.PyCharm-Community.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\63]
 "Name"="Lazarus"
@@ -714,6 +799,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Lazarus.Lazarus"
 "DetectName"="Lazarus"
+"Icon"="https://www.lazarus-ide.org/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\64]
 "Name"="TeXstudio"
@@ -724,6 +810,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:TeXstudio.TeXstudio"
 "DetectName"="TeXstudio"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.texstudio.TeXstudio.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\65]
 "Name"="7-Zip"
@@ -744,6 +831,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:RARLab.WinRAR"
 "DetectName"="WinRAR"
+"Icon"="https://www.win-rar.com/fileadmin/images/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\67]
 "Name"="PeaZip"
@@ -754,6 +842,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Giorgiotani.Peazip"
 "DetectName"="PeaZip"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.peazip.PeaZip.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\68]
 "Name"="WinDirStat"
@@ -764,6 +853,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:WinDirStat.WinDirStat"
 "DetectName"="WinDirStat"
+"Icon"="https://windirstat.net/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\69]
 "Name"="WizTree"
@@ -774,6 +864,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:AntibodySoftware.WizTree"
 "DetectName"="WizTree"
+"Icon"="https://diskanalyzer.com/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\70]
 "Name"="Everything"
@@ -784,6 +875,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:voidtools.Everything"
 "DetectName"="Everything"
+"Icon"="https://www.voidtools.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\71]
 "Name"="CPU-Z"
@@ -794,6 +886,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:CPUID.CPU-Z"
 "DetectName"="CPUID CPU-Z"
+"Icon"="https://www.cpuid.com/medias/images/apple-touch-icon-precomposed.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\72]
 "Name"="HWiNFO"
@@ -814,6 +907,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:CrystalDewWorld.CrystalDiskInfo"
 "DetectName"="CrystalDiskInfo"
+"Icon"="https://crystalmark.info/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\74]
 "Name"="CrystalDiskMark"
@@ -824,6 +918,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:CrystalDewWorld.CrystalDiskMark"
 "DetectName"="CrystalDiskMark"
+"Icon"="https://crystalmark.info/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\75]
 "Name"="BleachBit"
@@ -834,6 +929,9 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:BleachBit.BleachBit"
 "DetectName"="BleachBit"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.bleachbit.BleachBit.png"
+"Linux"="L83"
+"Prefer"="windows"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\76]
 "Name"="Total Commander"
@@ -844,6 +942,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Ghisler.TotalCommander"
 "DetectName"="Total Commander"
+"Icon"="https://www.ghisler.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\77]
 "Name"="Thunderbird"
@@ -854,6 +953,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Mozilla.Thunderbird"
 "DetectName"="Mozilla Thunderbird"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.thunderbird.png"
+"Linux"="L12"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\78]
 "Name"="PuTTY"
@@ -864,6 +965,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:PuTTY.PuTTY"
 "DetectName"="PuTTY release"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/uk.org.greenend.chiark.sgtatham.putty.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\79]
 "Name"="WinSCP"
@@ -874,6 +976,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:WinSCP.WinSCP"
 "DetectName"="WinSCP"
+"Icon"="https://winscp.net/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\80]
 "Name"="qBittorrent"
@@ -884,6 +987,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:qBittorrent.qBittorrent"
 "DetectName"="qBittorrent"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.qbittorrent.qBittorrent.png"
+"Linux"="L46"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\81]
 "Name"="Pidgin"
@@ -894,6 +999,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Pidgin.Pidgin"
 "DetectName"="Pidgin"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/im.pidgin.Pidgin.png"
+"Linux"="L49"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\82]
 "Name"="HexChat"
@@ -904,6 +1011,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:HexChat.HexChat"
 "DetectName"="HexChat"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.Hexchat.png"
+"Linux"="L48"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\83]
 "Name"="Element"
@@ -914,6 +1023,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Element.Element"
 "DetectName"="Element"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/im.riot.Riot.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\84]
 "Name"="Discord"
@@ -924,6 +1034,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Discord.Discord"
 "DetectName"="Discord"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.discordapp.Discord.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\85]
 "Name"="Zoom"
@@ -934,6 +1045,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Zoom.Zoom"
 "DetectName"="Zoom"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/us.zoom.Zoom.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\86]
 "Name"="Telegram Desktop"
@@ -944,6 +1056,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Telegram.TelegramDesktop"
 "DetectName"="Telegram Desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.telegram.desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\88]
 "Name"="GOG GALAXY"
@@ -954,6 +1067,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GOG.Galaxy"
 "DetectName"="GOG GALAXY"
+"Icon"="https://www.gogalaxy.com/favicons/android-icon-192x192.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\89]
 "Name"="Epic Games Launcher"
@@ -974,6 +1088,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:HeroicGamesLauncher.HeroicGamesLauncher"
 "DetectName"="Heroic"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.heroicgameslauncher.hgl.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\91]
 "Name"="Prism Launcher"
@@ -984,6 +1099,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:PrismLauncher.PrismLauncher"
 "DetectName"="Prism Launcher"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.prismlauncher.PrismLauncher.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\92]
 "Name"="DOSBox"
@@ -994,6 +1110,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:DOSBox.DOSBox"
 "DetectName"="DOSBox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.dosbox.DOSBox.png"
+"Linux"="L109"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\93]
 "Name"="ScummVM"
@@ -1004,6 +1122,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:ScummVM.ScummVM"
 "DetectName"="ScummVM"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.scummvm.ScummVM.png"
+"Linux"="L108"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L01]
 "Name"="GIMP"
@@ -1014,6 +1134,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gimp"
 "Run"="/usr/bin/gimp"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gimp.GIMP.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L02]
 "Name"="FileZilla"
@@ -1024,6 +1145,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:filezilla"
 "Run"="/usr/bin/filezilla"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.filezillaproject.Filezilla.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L03]
 "Name"="Inkscape"
@@ -1034,6 +1156,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:inkscape"
 "Run"="/usr/bin/inkscape"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.inkscape.Inkscape.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L04]
 "Name"="Krita"
@@ -1044,6 +1167,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:krita"
 "Run"="/usr/bin/krita"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.krita.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L05]
 "Name"="Blender"
@@ -1054,6 +1178,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:blender"
 "Run"="/usr/bin/blender"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.blender.Blender.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L06]
 "Name"="darktable"
@@ -1064,6 +1189,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:darktable"
 "Run"="/usr/bin/darktable"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.darktable.Darktable.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L07]
 "Name"="VLC media player"
@@ -1074,6 +1200,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:vlc"
 "Run"="/usr/bin/vlc"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.videolan.VLC.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L08]
 "Name"="Audacity"
@@ -1084,6 +1211,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:audacity"
 "Run"="/usr/bin/audacity"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.audacityteam.Audacity.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L09]
 "Name"="Kdenlive"
@@ -1094,6 +1222,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kdenlive"
 "Run"="/usr/bin/kdenlive"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kdenlive.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L10]
 "Name"="OBS Studio"
@@ -1104,6 +1233,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:obs-studio"
 "Run"="/usr/bin/obs"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.obsproject.Studio.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L11]
 "Name"="HandBrake"
@@ -1114,6 +1244,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:handbrake"
 "Run"="/usr/bin/ghb"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/fr.handbrake.ghb.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L12]
 "Name"="Thunderbird"
@@ -1124,6 +1255,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:thunderbird"
 "Run"="/usr/bin/thunderbird"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.thunderbird.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L13]
 "Name"="Remmina"
@@ -1134,6 +1266,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:remmina"
 "Run"="/usr/bin/remmina"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.remmina.Remmina.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L14]
 "Name"="Transmission"
@@ -1144,6 +1277,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:transmission-gtk"
 "Run"="/usr/bin/transmission-gtk"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.transmissionbt.Transmission.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L15]
 "Name"="KeePassXC"
@@ -1154,6 +1288,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:keepassxc"
 "Run"="/usr/bin/keepassxc"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.keepassxc.KeePassXC.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L16]
 "Name"="calibre"
@@ -1164,6 +1299,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:calibre"
 "Run"="/usr/bin/calibre"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.calibre_ebook.calibre.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L17]
 "Name"="RawTherapee"
@@ -1174,6 +1310,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:rawtherapee"
 "Run"="/usr/bin/rawtherapee"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.rawtherapee.RawTherapee.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L18]
 "Name"="digiKam"
@@ -1184,6 +1321,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:digikam"
 "Run"="/usr/bin/digikam"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.digikam.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L19]
 "Name"="Shotwell"
@@ -1194,6 +1332,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:shotwell"
 "Run"="/usr/bin/shotwell"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Shotwell.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L20]
 "Name"="gThumb"
@@ -1204,6 +1343,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gthumb"
 "Run"="/usr/bin/gthumb"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.gThumb.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L21]
 "Name"="MyPaint"
@@ -1214,6 +1354,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:mypaint"
 "Run"="/usr/bin/mypaint"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mypaint.MyPaint.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L22]
 "Name"="Scribus"
@@ -1224,6 +1365,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:scribus"
 "Run"="/usr/bin/scribus"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.scribus.Scribus.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L23]
 "Name"="Xournal++"
@@ -1234,6 +1376,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:xournalpp"
 "Run"="/usr/bin/xournalpp"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.github.xournalpp.xournalpp.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L24]
 "Name"="LibreCAD"
@@ -1244,6 +1387,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:librecad"
 "Run"="/usr/bin/librecad"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.librecad.librecad.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L25]
 "Name"="OpenSCAD"
@@ -1254,6 +1398,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:openscad"
 "Run"="/usr/bin/openscad"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openscad.OpenSCAD.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L26]
 "Name"="KolourPaint"
@@ -1264,6 +1409,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kolourpaint"
 "Run"="/usr/bin/kolourpaint"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kolourpaint.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L27]
 "Name"="Image Viewer (Eye of GNOME)"
@@ -1274,6 +1420,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:eog"
 "Run"="/usr/bin/eog"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.eog.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L28]
 "Name"="mpv"
@@ -1284,6 +1431,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:mpv"
 "Run"="/usr/bin/mpv"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.mpv.Mpv.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L29]
 "Name"="Celluloid"
@@ -1294,6 +1442,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:celluloid"
 "Run"="/usr/bin/celluloid"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.celluloid_player.Celluloid.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L30]
 "Name"="Rhythmbox"
@@ -1304,6 +1453,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:rhythmbox"
 "Run"="/usr/bin/rhythmbox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Rhythmbox3.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L31]
 "Name"="Strawberry"
@@ -1314,6 +1464,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:strawberry"
 "Run"="/usr/bin/strawberry"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.strawberrymusicplayer.strawberry.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L32]
 "Name"="Ardour"
@@ -1324,6 +1475,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ardour"
 "Run"="/usr/bin/ardour"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.ardour.Ardour.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L33]
 "Name"="LMMS"
@@ -1334,6 +1486,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:lmms"
 "Run"="/usr/bin/lmms"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.lmms.LMMS.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L34]
 "Name"="MuseScore"
@@ -1344,6 +1497,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:musescore3"
 "Run"="/usr/bin/mscore3"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.musescore.MuseScore.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L35]
 "Name"="Hydrogen"
@@ -1354,6 +1508,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:hydrogen"
 "Run"="/usr/bin/hydrogen"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.hydrogenmusic.Hydrogen.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L36]
 "Name"="Shotcut"
@@ -1364,6 +1519,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:shotcut"
 "Run"="/usr/bin/shotcut"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.shotcut.Shotcut.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L37]
 "Name"="OpenShot"
@@ -1374,6 +1530,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:openshot-qt"
 "Run"="/usr/bin/openshot-qt"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openshot.OpenShot.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L38]
 "Name"="Pitivi"
@@ -1384,6 +1541,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:pitivi"
 "Run"="/usr/bin/pitivi"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.pitivi.Pitivi.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L39]
 "Name"="MusicBrainz Picard"
@@ -1394,6 +1552,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:picard"
 "Run"="/usr/bin/picard"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.musicbrainz.Picard.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L40]
 "Name"="Kid3"
@@ -1404,6 +1563,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kid3"
 "Run"="/usr/bin/kid3"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kid3.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L41]
 "Name"="Sound Converter"
@@ -1414,6 +1574,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:soundconverter"
 "Run"="/usr/bin/soundconverter"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.soundconverter.SoundConverter.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L42]
 "Name"="Cheese"
@@ -1424,6 +1585,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:cheese"
 "Run"="/usr/bin/cheese"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Cheese.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L43]
 "Name"="guvcview"
@@ -1444,6 +1606,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:firefox-esr"
 "Run"="/usr/bin/firefox-esr"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L45]
 "Name"="Chromium"
@@ -1454,6 +1617,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:chromium"
 "Run"="/usr/bin/chromium"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.chromium.Chromium.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L46]
 "Name"="qBittorrent"
@@ -1464,6 +1628,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:qbittorrent"
 "Run"="/usr/bin/qbittorrent"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.qbittorrent.qBittorrent.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L47]
 "Name"="Deluge"
@@ -1474,6 +1639,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:deluge"
 "Run"="/usr/bin/deluge"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.deluge_torrent.deluge.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L48]
 "Name"="HexChat"
@@ -1484,6 +1650,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:hexchat"
 "Run"="/usr/bin/hexchat"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.Hexchat.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L49]
 "Name"="Pidgin"
@@ -1494,6 +1661,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:pidgin"
 "Run"="/usr/bin/pidgin"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/im.pidgin.Pidgin.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L50]
 "Name"="Evolution"
@@ -1504,6 +1672,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:evolution"
 "Run"="/usr/bin/evolution"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Evolution.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L51]
 "Name"="Geary"
@@ -1514,6 +1683,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:geary"
 "Run"="/usr/bin/geary"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Geary.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L52]
 "Name"="Liferea"
@@ -1524,6 +1694,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:liferea"
 "Run"="/usr/bin/liferea"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.sourceforge.liferea.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L53]
 "Name"="Gajim"
@@ -1534,6 +1705,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gajim"
 "Run"="/usr/bin/gajim"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gajim.Gajim.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L54]
 "Name"="Nicotine+"
@@ -1544,6 +1716,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:nicotine"
 "Run"="/usr/bin/nicotine"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.nicotine_plus.Nicotine.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L55]
 "Name"="Mumble"
@@ -1554,6 +1727,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:mumble"
 "Run"="/usr/bin/mumble"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/info.mumble.Mumble.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L56]
 "Name"="Okular"
@@ -1564,6 +1738,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:okular"
 "Run"="/usr/bin/okular"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.okular.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L57]
 "Name"="Document Viewer (Evince)"
@@ -1574,6 +1749,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:evince"
 "Run"="/usr/bin/evince"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Evince.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L58]
 "Name"="GnuCash"
@@ -1584,6 +1760,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnucash"
 "Run"="/usr/bin/gnucash"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnucash.GnuCash.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L59]
 "Name"="HomeBank"
@@ -1594,6 +1771,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:homebank"
 "Run"="/usr/bin/homebank"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/fr.free.Homebank.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L60]
 "Name"="KMyMoney"
@@ -1604,6 +1782,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kmymoney"
 "Run"="/usr/bin/kmymoney"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kmymoney.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L61]
 "Name"="Zim"
@@ -1614,6 +1793,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:zim"
 "Run"="/usr/bin/zim"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.zim_wiki.Zim.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L62]
 "Name"="CherryTree"
@@ -1624,6 +1804,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:cherrytree"
 "Run"="/usr/bin/cherrytree"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.giuspen.cherrytree.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L63]
 "Name"="Document Scanner"
@@ -1634,6 +1815,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:simple-scan"
 "Run"="/usr/bin/simple-scan"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.SimpleScan.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L64]
 "Name"="Foliate"
@@ -1644,6 +1826,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:foliate"
 "Run"="/usr/bin/foliate"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.github.johnfactotum.Foliate.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L65]
 "Name"="Calendar"
@@ -1654,6 +1837,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-calendar"
 "Run"="/usr/bin/gnome-calendar"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Calendar.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L66]
 "Name"="Geany"
@@ -1664,6 +1848,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:geany"
 "Run"="/usr/bin/geany"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.geany.Geany.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L67]
 "Name"="Kate"
@@ -1674,6 +1859,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kate"
 "Run"="/usr/bin/kate"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kate.desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L68]
 "Name"="gedit"
@@ -1684,6 +1870,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gedit"
 "Run"="/usr/bin/gedit"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.gedit.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L69]
 "Name"="Meld"
@@ -1694,6 +1881,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:meld"
 "Run"="/usr/bin/meld"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.meld.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L70]
 "Name"="gitg"
@@ -1704,6 +1892,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gitg"
 "Run"="/usr/bin/gitg"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.gitg.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L71]
 "Name"="Git Cola"
@@ -1714,6 +1903,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:git-cola"
 "Run"="/usr/bin/git-cola"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.github.git_cola.git-cola.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L72]
 "Name"="Qt Creator"
@@ -1724,6 +1914,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:qtcreator"
 "Run"="/usr/bin/qtcreator"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.qt.QtCreator.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L73]
 "Name"="KDevelop"
@@ -1734,6 +1925,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kdevelop"
 "Run"="/usr/bin/kdevelop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kdevelop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L74]
 "Name"="Code::Blocks"
@@ -1744,6 +1936,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:codeblocks"
 "Run"="/usr/bin/codeblocks"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.codeblocks.codeblocks.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L75]
 "Name"="GNU Emacs"
@@ -1754,6 +1947,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:emacs-gtk"
 "Run"="/usr/bin/emacs-gtk"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnu.emacs.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L76]
 "Name"="GVim"
@@ -1764,6 +1958,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:vim-gtk3"
 "Run"="/usr/bin/vim.gtk3"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.vim.Vim.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L77]
 "Name"="DB Browser for SQLite"
@@ -1774,6 +1969,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:sqlitebrowser"
 "Run"="/usr/bin/sqlitebrowser"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.sqlitebrowser.sqlitebrowser.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L78]
 "Name"="GHex"
@@ -1784,6 +1980,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ghex"
 "Run"="/usr/bin/ghex"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.GHex.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L79]
 "Name"="Wireshark"
@@ -1794,6 +1991,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:wireshark"
 "Run"="/usr/bin/wireshark"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.wireshark.Wireshark.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L80]
 "Name"="Virtual Machine Manager"
@@ -1804,6 +2002,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:virt-manager"
 "Run"="/usr/bin/virt-manager"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.virt_manager.virt-manager.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L81]
 "Name"="Boxes"
@@ -1814,6 +2013,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-boxes"
 "Run"="/usr/bin/gnome-boxes"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Boxes.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L82]
 "Name"="Arduino IDE"
@@ -1824,6 +2024,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:arduino"
 "Run"="/usr/bin/arduino"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/cc.arduino.arduinoide.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L83]
 "Name"="BleachBit"
@@ -1834,6 +2035,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:bleachbit"
 "Run"="/usr/bin/bleachbit"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.bleachbit.BleachBit.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L84]
 "Name"="GParted"
@@ -1854,6 +2056,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:baobab"
 "Run"="/usr/bin/baobab"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.baobab.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L86]
 "Name"="Disks"
@@ -1874,6 +2077,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:file-roller"
 "Run"="/usr/bin/file-roller"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.FileRoller.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L88]
 "Name"="Ark"
@@ -1884,6 +2088,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ark"
 "Run"="/usr/bin/ark"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.ark.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L89]
 "Name"="Timeshift"
@@ -1914,6 +2119,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:flameshot"
 "Run"="/usr/bin/flameshot"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.flameshot.Flameshot.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L92]
 "Name"="KDE Connect"
@@ -1934,6 +2140,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:font-manager"
 "Run"="/usr/bin/font-manager"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.FontManager.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L94]
 "Name"="Character Map"
@@ -1964,6 +2171,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:syncthing-gtk"
 "Run"="/usr/bin/syncthing-gtk"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/me.kozec.syncthingtk.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L97]
 "Name"="SuperTuxKart"
@@ -1974,6 +2182,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:supertuxkart"
 "Run"="/usr/games/supertuxkart"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.supertuxkart.SuperTuxKart.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L98]
 "Name"="0 A.D."
@@ -1984,6 +2193,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:0ad"
 "Run"="/usr/games/0ad"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.play0ad.zeroad.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L99]
 "Name"="Luanti"
@@ -1994,6 +2204,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:luanti"
 "Run"="/usr/games/luanti"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.luanti.luanti.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L100]
 "Name"="SuperTux"
@@ -2004,6 +2215,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:supertux"
 "Run"="/usr/games/supertux2"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.supertuxproject.SuperTux.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L101]
 "Name"="Hedgewars"
@@ -2014,6 +2226,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:hedgewars"
 "Run"="/usr/games/hedgewars"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.hedgewars.Hedgewars.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L102]
 "Name"="OpenTTD"
@@ -2024,6 +2237,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:openttd"
 "Run"="/usr/games/openttd"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openttd.OpenTTD.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L103]
 "Name"="Freeciv"
@@ -2034,6 +2248,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:freeciv-client-gtk3"
 "Run"="/usr/games/freeciv-gtk3.22"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.freeciv.gtk322.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L104]
 "Name"="Warzone 2100"
@@ -2044,6 +2259,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:warzone2100"
 "Run"="/usr/games/warzone2100"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.wz2100.wz2100.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L105]
 "Name"="Extreme Tux Racer"
@@ -2054,6 +2270,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:extremetuxracer"
 "Run"="/usr/games/etr"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.sourceforge.ExtremeTuxRacer.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L106]
 "Name"="Neverball"
@@ -2064,6 +2281,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:neverball"
 "Run"="/usr/games/neverball"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.neverball.Neverball.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L107]
 "Name"="RetroArch"
@@ -2074,6 +2292,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:retroarch"
 "Run"="/usr/bin/retroarch"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.libretro.RetroArch.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L108]
 "Name"="ScummVM"
@@ -2084,6 +2303,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:scummvm"
 "Run"="/usr/games/scummvm"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.scummvm.ScummVM.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L109]
 "Name"="DOSBox"
@@ -2094,6 +2314,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:dosbox"
 "Run"="/usr/bin/dosbox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.dosbox.DOSBox.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L110]
 "Name"="Chess"
@@ -2104,6 +2325,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-chess"
 "Run"="/usr/games/gnome-chess"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Chess.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L111]
 "Name"="AisleRiot Solitaire"
@@ -2114,6 +2336,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:aisleriot"
 "Run"="/usr/games/sol"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Aisleriot.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L112]
 "Name"="Mines"
@@ -2124,6 +2347,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-mines"
 "Run"="/usr/games/gnome-mines"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Mines.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L113]
 "Name"="Frozen Bubble"
@@ -2134,6 +2358,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:frozen-bubble"
 "Run"="/usr/games/frozen-bubble"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.frozen_bubble.frozen-bubble.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L114]
 "Name"="Pingus"
@@ -2154,6 +2379,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:libreoffice"
 "Run"="/usr/bin/libreoffice"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.libreoffice.LibreOffice.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L116]
 "Name"="Gpick"
@@ -2184,6 +2410,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:vokoscreen-ng"
 "Run"="/usr/share/applications/vokoscreenNG.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.github.vkohaupt.vokoscreenNG.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L119]
 "Name"="Audacious"
@@ -2194,6 +2421,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:audacious"
 "Run"="/usr/share/applications/audacious.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.atheme.audacious.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L120]
 "Name"="Kodi"
@@ -2204,6 +2432,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kodi"
 "Run"="/usr/share/applications/kodi.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/tv.kodi.Kodi.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L121]
 "Name"="Mixxx"
@@ -2214,6 +2443,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:mixxx"
 "Run"="/usr/share/applications/org.mixxx.Mixxx.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mixxx.Mixxx.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L122]
 "Name"="Rosegarden"
@@ -2224,6 +2454,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:rosegarden"
 "Run"="/usr/share/applications/com.rosegardenmusic.rosegarden.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.rosegardenmusic.rosegarden.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L123]
 "Name"="TuxGuitar"
@@ -2234,6 +2465,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:tuxguitar"
 "Run"="/usr/share/applications/tuxguitar.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/ar.com.tuxguitar.TuxGuitar.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L124]
 "Name"="Frescobaldi"
@@ -2244,6 +2476,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:frescobaldi"
 "Run"="/usr/share/applications/org.frescobaldi.Frescobaldi.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.frescobaldi.Frescobaldi.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L125]
 "Name"="Sound Juicer"
@@ -2254,6 +2487,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:sound-juicer"
 "Run"="/usr/share/applications/org.gnome.SoundJuicer.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.SoundJuicer.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L126]
 "Name"="Brasero"
@@ -2264,6 +2498,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:brasero"
 "Run"="/usr/share/applications/brasero.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Brasero.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L127]
 "Name"="K3b"
@@ -2284,6 +2519,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gpodder"
 "Run"="/usr/share/applications/gpodder.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gpodder.gpodder.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L129]
 "Name"="Lollypop"
@@ -2294,6 +2530,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:lollypop"
 "Run"="/usr/share/applications/org.gnome.Lollypop.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Lollypop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L130]
 "Name"="Quassel IRC"
@@ -2304,6 +2541,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:quassel"
 "Run"="/usr/share/applications/quassel.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.quassel_irc.QuasselClient.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L131]
 "Name"="Konversation"
@@ -2314,6 +2552,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:konversation"
 "Run"="/usr/share/applications/org.kde.konversation.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.konversation.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L132]
 "Name"="Polari"
@@ -2324,6 +2563,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:polari"
 "Run"="/usr/share/applications/org.gnome.Polari.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Polari.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L133]
 "Name"="KTorrent"
@@ -2334,6 +2574,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ktorrent"
 "Run"="/usr/share/applications/org.kde.ktorrent.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.ktorrent.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L134]
 "Name"="Dino"
@@ -2344,6 +2585,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:dino-im"
 "Run"="/usr/share/applications/im.dino.Dino.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/im.dino.Dino.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L135]
 "Name"="AbiWord"
@@ -2354,6 +2596,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:abiword"
 "Run"="/usr/share/applications/abiword.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.abisource.AbiWord.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L136]
 "Name"="Gnumeric"
@@ -2364,6 +2607,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnumeric"
 "Run"="/usr/share/applications/org.gnumeric.gnumeric.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnumeric.Gnumeric.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L137]
 "Name"="FocusWriter"
@@ -2374,6 +2618,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:focuswriter"
 "Run"="/usr/share/applications/focuswriter.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gottcode.FocusWriter.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L138]
 "Name"="ghostwriter"
@@ -2384,6 +2629,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ghostwriter"
 "Run"="/usr/share/applications/org.kde.ghostwriter.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.ghostwriter.desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L139]
 "Name"="Qalculate!"
@@ -2394,6 +2640,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:qalculate-gtk"
 "Run"="/usr/share/applications/qalculate-gtk.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.Qalculate.qalculate-qt.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L140]
 "Name"="Clocks"
@@ -2404,6 +2651,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-clocks"
 "Run"="/usr/share/applications/org.gnome.clocks.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.clocks.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L141]
 "Name"="Weather"
@@ -2414,6 +2662,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-weather"
 "Run"="/usr/share/applications/org.gnome.Weather.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Weather.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L142]
 "Name"="Spyder"
@@ -2424,6 +2673,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:spyder"
 "Run"="/usr/share/applications/spyder.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.spyder_ide.spyder.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L143]
 "Name"="Thonny"
@@ -2434,6 +2684,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:thonny"
 "Run"="/usr/share/applications/org.thonny.Thonny.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.thonny.Thonny.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L144]
 "Name"="Neovim Qt"
@@ -2454,6 +2705,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kdiff3"
 "Run"="/usr/share/applications/org.kde.kdiff3.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kdiff3.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L146]
 "Name"="Umbrello"
@@ -2464,6 +2716,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:umbrello"
 "Run"="/usr/share/applications/org.kde.umbrello.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.umbrello.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L147]
 "Name"="Glade"
@@ -2474,6 +2727,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:glade"
 "Run"="/usr/share/applications/org.gnome.Glade.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Glade.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L148]
 "Name"="GNU Octave"
@@ -2484,6 +2738,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:octave"
 "Run"="/usr/share/applications/org.octave.Octave.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.octave.Octave.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L149]
 "Name"="Builder"
@@ -2494,6 +2749,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-builder"
 "Run"="/usr/share/applications/org.gnome.Builder.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Builder.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L150]
 "Name"="Stellarium"
@@ -2504,6 +2760,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:stellarium"
 "Run"="/usr/share/applications/org.stellarium.Stellarium.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.stellarium.Stellarium.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L151]
 "Name"="KStars"
@@ -2514,6 +2771,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kstars"
 "Run"="/usr/share/applications/org.kde.kstars.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kstars.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L152]
 "Name"="Marble"
@@ -2524,6 +2782,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:marble"
 "Run"="/usr/share/applications/org.kde.marble.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.marble.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L153]
 "Name"="Kalzium"
@@ -2534,6 +2793,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kalzium"
 "Run"="/usr/share/applications/org.kde.kalzium.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kalzium.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L154]
 "Name"="KTouch"
@@ -2544,6 +2804,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:ktouch"
 "Run"="/usr/share/applications/org.kde.ktouch.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.ktouch.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L155]
 "Name"="Tux Paint"
@@ -2554,6 +2815,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:tuxpaint"
 "Run"="/usr/share/applications/tuxpaint.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.tuxpaint.Tuxpaint.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L156]
 "Name"="GCompris"
@@ -2564,6 +2826,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gcompris-qt"
 "Run"="/usr/share/applications/org.kde.gcompris.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.gcompris.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L157]
 "Name"="The Battle for Wesnoth"
@@ -2574,6 +2837,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:wesnoth"
 "Run"="/usr/share/applications/org.wesnoth.Wesnoth-1.18.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.wesnoth.Wesnoth.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L158]
 "Name"="PySol"
@@ -2584,6 +2848,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:pysolfc"
 "Run"="/usr/share/applications/pysol.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.sourceforge.pysolfc.PySolFC.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L159]
 "Name"="KPatience"
@@ -2594,6 +2859,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kpat"
 "Run"="/usr/share/applications/org.kde.kpat.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kpat.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L160]
 "Name"="Sudoku"
@@ -2604,6 +2870,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-sudoku"
 "Run"="/usr/share/applications/org.gnome.Sudoku.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Sudoku.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L161]
 "Name"="Quadrapassel"
@@ -2614,6 +2881,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:quadrapassel"
 "Run"="/usr/share/applications/org.gnome.Quadrapassel.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Quadrapassel.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L162]
 "Name"="X-Moto"
@@ -2624,6 +2892,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:xmoto"
 "Run"="/usr/share/applications/xmoto.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.tuxfamily.XMoto.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L163]
 "Name"="Naev"
@@ -2634,6 +2903,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:naev"
 "Run"="/usr/share/applications/org.naev.naev.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.naev.Naev.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L164]
 "Name"="Flare"
@@ -2644,6 +2914,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:flare-game"
 "Run"="/usr/share/applications/flare.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.flarerpg.Flare.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L165]
 "Name"="Widelands"
@@ -2654,6 +2925,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:widelands"
 "Run"="/usr/share/applications/org.widelands.Widelands.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.widelands.Widelands.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L166]
 "Name"="LinCity-NG"
@@ -2664,6 +2936,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:lincity-ng"
 "Run"="/usr/share/applications/lincity-ng.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.lincity_ng.lincity-ng.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L167]
 "Name"="Simutrans"
@@ -2674,6 +2947,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:simutrans"
 "Run"="/usr/share/applications/simutrans.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.simutrans.Simutrans.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L168]
 "Name"="Armagetron Advanced"
@@ -2684,6 +2958,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:armagetronad"
 "Run"="/usr/share/applications/org.armagetronad.armagetronad.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.armagetronad.ArmagetronAdvanced.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L169]
 "Name"="Double Commander"
@@ -2714,6 +2989,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:filelight"
 "Run"="/usr/share/applications/org.kde.filelight.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.filelight.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L172]
 "Name"="GSmartControl"
@@ -2734,6 +3010,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:cpu-x"
 "Run"="/usr/share/applications/io.github.thetumultuousunicornofdarkness.cpu-x.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.thetumultuousunicornofdarkness.cpu-x.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L174]
 "Name"="HardInfo2"
@@ -2754,6 +3031,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:deja-dup"
 "Run"="/usr/share/applications/org.gnome.DejaDup.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.DejaDup.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L176]
 "Name"="Back In Time"
@@ -2784,6 +3062,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:recollgui"
 "Run"="/usr/share/applications/recoll-searchgui.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.recoll.recoll.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L179]
 "Name"="KCalc"
@@ -2794,6 +3073,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:kcalc"
 "Run"="/usr/share/applications/org.kde.kcalc.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.kcalc.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L180]
 "Name"="Galculator"
@@ -2824,6 +3104,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-characters"
 "Run"="/usr/share/applications/org.gnome.Characters.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.Characters.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L183]
 "Name"="Sound Recorder"
@@ -2834,6 +3115,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:gnome-sound-recorder"
 "Run"="/usr/share/applications/org.gnome.SoundRecorder.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.SoundRecorder.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L184]
 "Name"="Steam"
@@ -2844,6 +3126,7 @@ Windows Registry Editor Version 5.00
 "Tier"="linux"
 "Source"="linux:apt:steam-launcher"
 "Run"="/usr/share/applications/steam.desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.valvesoftware.Steam.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\94]
 "Name"="Microsoft Edge"
@@ -2854,6 +3137,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Microsoft.Edge"
 "DetectName"="Microsoft Edge"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.microsoft.Edge.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\95]
 "Name"="Trillian"
@@ -2864,6 +3148,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:CeruleanStudios.Trillian"
 "DetectName"="Trillian"
+"Icon"="https://trillian.im/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\96]
 "Name"="iTunes"
@@ -2874,6 +3159,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Apple.iTunes"
 "DetectName"="iTunes"
+"Icon"="https://www.apple.com/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\97]
 "Name"="GOM Player"
@@ -2894,6 +3180,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Spotify.Spotify"
 "DetectName"="Spotify"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.spotify.Client.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\99]
 "Name"=".NET Desktop Runtime 8"
@@ -2904,6 +3191,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Microsoft.DotNet.DesktopRuntime.8"
 "DetectName"="Microsoft *Desktop Runtime - 8"
+"Icon"="https://dotnet.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\100]
 "Name"=".NET Desktop Runtime 9"
@@ -2914,6 +3202,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Microsoft.DotNet.DesktopRuntime.9"
 "DetectName"="Microsoft *Desktop Runtime - 9"
+"Icon"="https://dotnet.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\101]
 "Name"=".NET Desktop Runtime 10"
@@ -2924,6 +3213,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Microsoft.DotNet.DesktopRuntime.10"
 "DetectName"="Microsoft *Desktop Runtime - 10"
+"Icon"="https://dotnet.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\102]
 "Name"="Java 8 (Temurin JRE)"
@@ -2934,6 +3224,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.8.JRE"
 "DetectName"="Eclipse Temurin JRE with Hotspot 8"
+"Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\103]
 "Name"="Java 17 (Temurin JDK)"
@@ -2944,6 +3235,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.17.JDK"
 "DetectName"="Eclipse Temurin JDK with Hotspot 17"
+"Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\104]
 "Name"="Java 25 (Temurin JDK)"
@@ -2954,6 +3246,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.25.JDK"
 "DetectName"="Eclipse Temurin JDK with Hotspot 25"
+"Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\105]
 "Name"="Amazon Corretto 21"
@@ -2964,6 +3257,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Amazon.Corretto.21.JDK"
 "DetectName"="Amazon Corretto 21"
+"Icon"="https://a0.awsstatic.com/libra-css/images/site/touch-icon-ipad-144-smile.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\106]
 "Name"="Bambu Studio"
@@ -2974,6 +3268,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Bambulab.Bambustudio"
 "DetectName"="Bambu Studio"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.bambulab.BambuStudio.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\107]
 "Name"="UltiMaker Cura"
@@ -2984,6 +3279,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Ultimaker.Cura"
 "DetectName"="UltiMaker Cura"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.ultimaker.cura.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\108]
 "Name"="CutePDF Writer"
@@ -2994,6 +3290,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:AcroSoftware.CutePDFWriter"
 "DetectName"="CutePDF Writer"
+"Icon"="https://www.cutepdf.com/images/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\109]
 "Name"="LibreOffice"
@@ -3004,6 +3301,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:TheDocumentFoundation.LibreOffice"
 "DetectName"="LibreOffice"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.libreoffice.LibreOffice.png"
+"Linux"="L115"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\110]
 "Name"="Dropbox"
@@ -3014,6 +3313,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Dropbox.Dropbox"
 "DetectName"="Dropbox"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.dropbox.Client.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\111]
 "Name"="Evernote"
@@ -3024,6 +3324,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Evernote.Evernote"
 "DetectName"="Evernote"
+"Icon"="https://evernote.com/images/evernote-logo-ios.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\112]
 "Name"="Google Earth Pro"
@@ -3034,6 +3335,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Google.EarthPro"
 "DetectName"="Google Earth Pro"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.google.EarthPro.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\113]
 "Name"="NVDA"
@@ -3054,6 +3356,8 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:WiresharkFoundation.Wireshark"
 "DetectName"="Wireshark"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.wireshark.Wireshark.png"
+"Linux"="L79"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\115]
 "Name"="AnyDesk"
@@ -3064,6 +3368,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:AnyDesk.AnyDesk"
 "DetectName"="AnyDesk"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.anydesk.Anydesk.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\116]
 "Name"="TeamViewer"
@@ -3074,6 +3379,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:TeamViewer.TeamViewer"
 "DetectName"="TeamViewer"
+"Icon"="https://www.teamviewer.com/etc.clientlibs/teamviewer/clientlibs/clientlib-resources/resources/favicon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\117]
 "Name"="ImgBurn"
@@ -3094,6 +3400,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GlavSoft.TightVNC"
 "DetectName"="TightVNC"
+"Icon"="https://www.tightvnc.com/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\119]
 "Name"="TeraCopy"
@@ -3104,6 +3411,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:CodeSector.TeraCopy"
 "DetectName"="TeraCopy"
+"Icon"="https://www.codesector.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\120]
 "Name"="Revo Uninstaller"
@@ -3124,6 +3432,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Piriform.CCleaner"
 "DetectName"="CCleaner"
+"Icon"="https://s1.pir.fm/pf/favicons--AwgCBwYOBQc/apple-touch-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\122]
 "Name"="Visual Studio Code"
@@ -3134,6 +3443,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Microsoft.VisualStudioCode"
 "DetectName"="Microsoft Visual Studio Code"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.visualstudio.code.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\123]
 "Name"="Cursor"
@@ -3144,3 +3454,26 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Anysphere.Cursor"
 "DetectName"="Cursor"
+"Icon"="https://cursor.com/marketing-static/favicon-light.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\124]
+"Name"="DYMO Connect"
+"Publisher"="DYMO"
+"Description"="Design and print labels on DYMO LabelWriter and LabelManager printers."
+"Category"="Productivity"
+"Colour"=dword:00d71920
+"Tier"="windows"
+"Source"="winget:DYMO.DYMOConnect"
+"DetectName"="DYMO Connect"
+"Icon"="https://www.dymo.com/favicon.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\125]
+"Name"="DYMO Label"
+"Publisher"="DYMO"
+"Description"="Label software for earlier DYMO printers (LabelWriter 400, 450, Duo)."
+"Category"="Productivity"
+"Colour"=dword:00d71920
+"Tier"="windows"
+"Source"="winget:DYMO.DYMOLabel"
+"DetectName"="DYMO Label"
+"Icon"="https://www.dymo.com/favicon.ico"

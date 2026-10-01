@@ -14,6 +14,11 @@
  *                                   program's and "Uninstall <name>"
  *   app.exe ARGS                    the installed program: logs its arguments
  *                                   to C:\gate\launch.log (Open started it)
+ *   uninst.exe /key=K ARGS          its uninstaller (the entry's UninstallString
+ *                                   /ui, QuietUninstallString /quiet): logs its
+ *                                   arguments to C:\gate\uninstall.log and
+ *                                   deletes the Uninstall entry K
+ * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -90,7 +95,25 @@ int wmain(int argc, WCHAR **argv)
         return 0;
     }
 
+    if (!_wcsicmp(base, L"uninst.exe")) {
+        const WCHAR *k = wcsstr(args, L"/key=");
+        logline(L"C:\\gate\\uninstall.log", args);
+        if (k) {
+            WCHAR name[128];
+            int n = 0;
+            for (k += 5; *k && *k != L' ' && n < 127; k++) name[n++] = *k;
+            name[n] = 0;
+            swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", name);
+            RegDeleteKeyW(HKEY_LOCAL_MACHINE, sub);
+        }
+        return 0;
+    }
+
     logline(L"C:\\gate\\setup.log", args);
+    {
+        WCHAR ms[16];
+        if (GetEnvironmentVariableW(L"SG_FAKE_SLEEP", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
+    }
     env(L"SG_FAKE_KEY", L"FakeApp", key, ARRAYSIZE(key));
     env(L"SG_FAKE_DISPLAY", L"Fake App", display, ARRAYSIZE(display));
     env(L"SG_FAKE_VERSION", L"1.10.0", version, ARRAYSIZE(version));
@@ -106,6 +129,15 @@ int wmain(int argc, WCHAR **argv)
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayName", display);
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayVersion", version);
     sz(HKEY_LOCAL_MACHINE, sub, L"Publisher", L"The gate");
+    {
+        WCHAR un[MAX_PATH], cmd[MAX_PATH + 160];
+        swprintf(un, MAX_PATH, L"%ls\\uninst.exe", dest);
+        CopyFileW(self, un, FALSE);
+        swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" /key=%ls /ui", un, key);
+        sz(HKEY_LOCAL_MACHINE, sub, L"UninstallString", cmd);
+        swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" /key=%ls /quiet", un, key);
+        sz(HKEY_LOCAL_MACHINE, sub, L"QuietUninstallString", cmd);
+    }
     if (GetEnvironmentVariableW(L"SG_FAKE_LINK", NULL, 0)) {
         WCHAR programs[MAX_PATH], lnk[MAX_PATH], icon[MAX_PATH];
         swprintf(icon, MAX_PATH, L"%ls\\uninst.exe,0", dest);
