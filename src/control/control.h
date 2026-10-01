@@ -227,6 +227,8 @@ extern const WCHAR *const LOOK_KEYS[LOOK_COUNT];   /* classic, rounded, horizon,
 BOOL look_rounded(void);
 DWORD look_taskbar_style(void);   /* 0 flat, 1 Horizon, 2 Glass */
 const WCHAR *look_set_style(BOOL rounded);
+const WCHAR *look_set_frame(int style);   /* LOOK_*: the window style alone */
+int look_frame_style(void);
 const WCHAR *look_apply(int look);
 void look_wait(void);
 /* lookshare.c: a look saved to an .sglook file, read back, or put back as new */

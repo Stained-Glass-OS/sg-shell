@@ -140,7 +140,8 @@ void set_build_colors(void)
 {
     static const WCHAR *const modes[] = { L"Light", L"Dark", L"Custom" };
     static const WCHAR *const ld[] = { L"Light", L"Dark" };
-    static const WCHAR *const styles[] = { L"Classic: square corners", L"Rounded: round corners, a taller taskbar" };
+    static const WCHAR *const styles[] = { L"Classic: square corners", L"Rounded: round corners, a taller taskbar",
+                                           L"Horizon: a blue title bar", L"Glass: a pale glass frame" };
     struct pstate st;
     int y = st_title(L"Colors"), i, mode;
     pers_read(&st);
@@ -153,7 +154,7 @@ void set_build_colors(void)
         st_combo(&y, L"Choose your default system mode", ld, 2, st.system_light ? 0 : 1, CMD_SYS_MODE);
         st_combo(&y, L"Choose your default app mode", ld, 2, st.apps_light ? 0 : 1, CMD_APPS_MODE);
     }
-    st_combo(&y, L"Window style", styles, 2, look_rounded() ? 1 : 0, CMD_STYLE);
+    st_combo(&y, L"Window style", styles, 4, look_frame_style(), CMD_STYLE);
     st_toggle(&y, L"Transparency effects", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSPARENCY);
     y = st_head(y, L"Choose your accent color");
     y = st_text(y, L"Accent colors");
@@ -192,7 +193,7 @@ BOOL set_cmd_colors(int id, int code, HWND ctl)
         return TRUE;
     case CMD_TRANSPARENCY: reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", st_checked(ctl)); return TRUE;
     case CMD_STYLE:
-        if (code == CBN_SELCHANGE) failed(look_set_style(SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 1));
+        if (code == CBN_SELCHANGE) failed(look_set_frame((int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)));
         return TRUE;
     case CMD_CUSTOM: {
         static COLORREF custom[16];
@@ -328,8 +329,10 @@ void set_build_themes(void)
         BOOL r = look_rounded(), centred = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1,
              cstart = reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Start", L"Centered", 0) != 0;
         DWORD bar = look_taskbar_style();
+        int frame = look_frame_style();   /* the windows' frames are part of a look too */
         int look = r || centred || cstart ? (r && centred && cstart && !bar ? LOOK_ROUNDED : 4)
-                 : bar == 1 ? LOOK_HORIZON : bar == 2 ? LOOK_GLASS : LOOK_CLASSIC;
+                 : bar == 1 ? (frame == LOOK_HORIZON ? LOOK_HORIZON : 4) : bar == 2 ? (frame == LOOK_GLASS ? LOOK_GLASS : 4)
+                 : frame == LOOK_CLASSIC ? LOOK_CLASSIC : 4;
         st_combo(&y, L"Choose a look", looks, look == 4 ? 5 : 4, look, CMD_LOOK);
     }
     y = st_para(y, L"Classic: square windows, with the taskbar's buttons and Start at the left. "

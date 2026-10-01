@@ -8,6 +8,7 @@
  * a centred taskbar with square windows, any taskbar colour or style.
  *
  *   HKCU\Software\Stained Glass\Style Rounded       wine-sg 0483, 0484
+ *   HKCU\Software\Stained Glass\Style Frame         wine-sg 0742 (0 flat, 1 Horizon, 2 Glass)
  *   HKCU\Software\Stained Glass\Taskbar Color, ShowDesktops, PinOrder (0484, 0485)
  *   HKCU\Software\Stained Glass\Taskbar Style       wine-sg 0600 (0 flat, 1 Horizon, 2 Glass)
  *   HKCU\Software\Stained Glass\Start Centered      sg-start
@@ -64,15 +65,57 @@ BOOL look_rounded(void)
     return reg_dword(HKEY_CURRENT_USER, STYLE, L"Rounded", 0) != 0;
 }
 
+/* the window style: LOOK_CLASSIC, LOOK_ROUNDED, or the Horizon and Glass
+ * frames (Style\Frame 1 and 2, wine-sg 0742) */
+int look_frame_style(void)
+{
+    DWORD frame = reg_dword(HKEY_CURRENT_USER, STYLE, L"Frame", 0);
+    if (frame == 1) return LOOK_HORIZON;
+    if (frame == 2) return LOOK_GLASS;
+    return look_rounded() ? LOOK_ROUNDED : LOOK_CLASSIC;
+}
+
+/* each style's title bar and frame sizes, as its era had them, in pixels at
+ * 96 DPI, and whether the title is bold (Horizon's was) */
+static void look_metrics(int style)
+{
+    static const int caption[LOOK_COUNT] = { 18, 18, 25, 21 }, button[LOOK_COUNT] = { 18, 18, 25, 26 };
+    static const int border[LOOK_COUNT] = { 1, 1, 2, 7 };   /* Wine keeps the padded border in this one */
+    NONCLIENTMETRICSW ncm;
+
+    memset(&ncm, 0, sizeof(ncm));
+    ncm.cbSize = sizeof(ncm);
+    if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0)) return;
+    if (ncm.iCaptionHeight == caption[style] && ncm.iCaptionWidth == button[style] && ncm.iBorderWidth == border[style] &&
+        (ncm.lfCaptionFont.lfWeight >= FW_BOLD) == (style == LOOK_HORIZON))
+        return;
+    ncm.iCaptionHeight = caption[style];
+    ncm.iCaptionWidth = button[style];
+    ncm.iBorderWidth = border[style];
+    ncm.lfCaptionFont.lfWeight = style == LOOK_HORIZON ? FW_BOLD : FW_NORMAL;
+#ifndef SG_MUTANT_NOMETRICS
+    SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(ncm), &ncm, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+#endif
+}
+
 static HANDLE g_reframe;
 
-const WCHAR *look_set_style(BOOL rounded)
+const WCHAR *look_set_frame(int style)
 {
-    if (!reg_set_dword(HKEY_CURRENT_USER, STYLE, L"Rounded", rounded ? 1 : 0)) return L"the setting could not be saved";
+    if (style < 0 || style >= LOOK_COUNT) return L"unknown window style";
+    if (!reg_set_dword(HKEY_CURRENT_USER, STYLE, L"Rounded", style == LOOK_ROUNDED ? 1 : 0) ||
+        !reg_set_dword(HKEY_CURRENT_USER, STYLE, L"Frame", style == LOOK_HORIZON ? 1 : style == LOOK_GLASS ? 2 : 0))
+        return L"the setting could not be saved";
+    look_metrics(style);
     broadcast(L"ImmersiveColorSet");   /* the taskbar takes the style's height and look */
     if (g_reframe) CloseHandle(g_reframe);
     g_reframe = CreateThread(NULL, 0, reframe_later, NULL, 0, NULL);
     return NULL;
+}
+
+const WCHAR *look_set_style(BOOL rounded)
+{
+    return look_set_frame(rounded ? LOOK_ROUNDED : LOOK_CLASSIC);
 }
 
 /* before the program ends (--set): the windows have their new corners */
@@ -165,5 +208,5 @@ const WCHAR *look_apply(int look)
     reg_set_dword(HKEY_CURRENT_USER, START, L"Centered", rounded ? 1 : 0);
     if (rounded || look == LOOK_GLASS) default_pins();
     broadcast(L"TraySettings");
-    return look_set_style(rounded);
+    return look_set_frame(look);   /* the windows' frames: the look's own */
 }

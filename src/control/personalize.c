@@ -640,7 +640,7 @@ static BOOL parse_rgb(const WCHAR *s, COLORREF *c)
 int personalize_set(int argc, WCHAR **argv)
 {
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
-                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide on|off | desktop WxH";
+                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide on|off | desktop WxH";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {
@@ -656,6 +656,10 @@ int personalize_set(int argc, WCHAR **argv)
              (!lstrcmpW(argv[1], L"classic") || !lstrcmpW(argv[1], L"rounded"))) {
         BOOL rounded = !lstrcmpW(argv[1], L"rounded");
         why = !lstrcmpW(argv[0], L"look") ? look_apply(rounded ? LOOK_ROUNDED : LOOK_CLASSIC) : look_set_style(rounded);
+        look_wait();
+    }
+    else if (argc == 2 && !lstrcmpW(argv[0], L"style") && (!lstrcmpW(argv[1], L"horizon") || !lstrcmpW(argv[1], L"glass"))) {
+        why = look_set_frame(!lstrcmpW(argv[1], L"horizon") ? LOOK_HORIZON : LOOK_GLASS);
         look_wait();
     }
     else if (argc == 2 && !lstrcmpW(argv[0], L"look") && (!lstrcmpW(argv[1], L"horizon") || !lstrcmpW(argv[1], L"glass"))) {
@@ -696,6 +700,6 @@ void dump_personalize(void)
     wprintf(L"accent=%02X%02X%02X\n", GetRValue(s.accent), GetGValue(s.accent), GetBValue(s.accent));
     wprintf(L"mode.apps=%ls\n", s.apps_light ? L"light" : L"dark");
     wprintf(L"mode.system=%ls\n", s.system_light ? L"light" : L"dark");
-    wprintf(L"style=%ls\n", look_rounded() ? L"rounded" : L"classic");
+    wprintf(L"style=%ls\n", LOOK_KEYS[look_frame_style()]);
     wprintf(L"taskbar.style=%ls\n", look_taskbar_style() == 1 ? L"horizon" : look_taskbar_style() == 2 ? L"glass" : L"flat");
 }

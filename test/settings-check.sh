@@ -430,6 +430,17 @@ wine start ms-settings:themes >/dev/null 2>&1
 page_is Themes "ms-settings:themes (horizon)"
 sleep 0.5
 has ": Horizon" && pass "Themes shows the Horizon look" || fail "Themes horizon: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+# the look's window frames (wine-sg 0742) and that era's title bar sizes
+WM='HKCU\Control Panel\Desktop\WindowMetrics'
+cfweight() { wine reg query "$WM" /v CaptionFont 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_BINARY *//p' | cut -c33-36; }
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Frame)" = 0x1 ] && [ "$(regq "$WM" CaptionHeight)" = 25 ] && [ "$(regq "$WM" BorderWidth)" = 2 ] \
+    && [ "$(cfweight)" = BC02 ] \
+    && pass "Horizon: its window frames (Style Frame 1), 25 px bold title bars, 2 px borders" \
+    || fail "Horizon frames: frame $(regq 'HKCU\Software\Stained Glass\Style' Frame) caption $(regq "$WM" CaptionHeight) border $(regq "$WM" BorderWidth) weight $(cfweight)"
+wine start ms-settings:colors >/dev/null 2>&1
+page_is Colors "ms-settings:colors (horizon frame)"
+sleep 0.5
+has ": Horizon: a blue title bar" && pass "Colors shows the Horizon window style" || fail "Colors horizon style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 wine start ms-settings:taskbar >/dev/null 2>&1
 page_is Taskbar "ms-settings:taskbar (style)"
 sleep 0.5
@@ -438,6 +449,10 @@ wine "$T/sg-settings64.exe" --set look glass 2>/dev/null | tr -d '\r' | grep -q 
     && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] \
     && pass "--set look glass: Taskbar Style 2, combined icon buttons, square windows" \
     || fail "Glass look: style $(TBS) glom $(regq "$ADVK" TaskbarGlomLevel)"
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Frame)" = 0x2 ] && [ "$(regq "$WM" CaptionHeight)" = 21 ] && [ "$(regq "$WM" BorderWidth)" = 7 ] \
+    && [ "$(cfweight)" = 9001 ] \
+    && pass "Glass: its window frames (Style Frame 2), thick glass borders, a regular title" \
+    || fail "Glass frames: frame $(regq 'HKCU\Software\Stained Glass\Style' Frame) caption $(regq "$WM" CaptionHeight) border $(regq "$WM" BorderWidth) weight $(cfweight)"
 wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep -qx 'taskbar.style=glass' \
     && pass "--dump personalization: taskbar.style=glass" || fail "dump: $(wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep taskbar)"
 wine start ms-settings:themes >/dev/null 2>&1
@@ -447,6 +462,12 @@ has ": Glass" && pass "Themes shows the Glass look" || fail "Themes glass: $(tr 
 wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
 [ "$(TBS)" = 0x0 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x2 ] \
     && pass "Classic again: the flat taskbar, Task View, labelled buttons" || fail "Classic after glass: style $(TBS) taskview $(regq "$ADVK" ShowTaskViewButton)"
+[ "$(regq 'HKCU\Software\Stained Glass\Style' Frame)" = 0x0 ] && [ "$(regq "$WM" CaptionHeight)" = 18 ] && [ "$(regq "$WM" BorderWidth)" = 1 ] \
+    && pass "and the flat frames at their old sizes" || fail "Classic frames: frame $(regq 'HKCU\Software\Stained Glass\Style' Frame) caption $(regq "$WM" CaptionHeight) border $(regq "$WM" BorderWidth)"
+wine "$T/sg-settings64.exe" --set style glass 2>/dev/null | tr -d '\r' | grep -q '^OK' && [ "$(regq 'HKCU\Software\Stained Glass\Style' Frame)" = 0x2 ] && [ "$(TBS)" = 0x0 ] \
+    && wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep -qx 'style=glass' \
+    && pass "--set style glass: Glass frames with the flat taskbar (the looks mix)" || fail "style glass: frame $(regq 'HKCU\Software\Stained Glass\Style' Frame) bar $(TBS)"
+wine "$T/sg-settings64.exe" --set style classic >/dev/null 2>&1
 
 # --- Share & reset: a look saved, reset, read back; a shared file sets only look choices ---------
 SG='C:\users\Public'

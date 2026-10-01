@@ -88,7 +88,7 @@ const WCHAR *look_export(const WCHAR *path)
     pers_read(&s);
     DeleteFileW(path);
     if (!WritePrivateProfileStringW(L"Look", L"Format", L"1", path)) return L"the file could not be written";
-    WritePrivateProfileStringW(L"Look", L"Style", look_rounded() ? L"rounded" : L"classic", path);
+    WritePrivateProfileStringW(L"Look", L"Style", LOOK_KEYS[look_frame_style()], path);
     WritePrivateProfileStringW(L"Look", L"AppsMode", s.apps_light ? L"light" : L"dark", path);
     WritePrivateProfileStringW(L"Look", L"SystemMode", s.system_light ? L"light" : L"dark", path);
     rgb_text(s.accent, rgb);
@@ -125,8 +125,8 @@ const WCHAR *look_import(const WCHAR *path)
     if (lstrcmpW(text, L"1")) return L"this is not a look saved by Stained Glass OS";
 
     GetPrivateProfileStringW(L"Look", L"Style", L"", text, ARRAYSIZE(text), path);
-    if (!lstrcmpiW(text, L"classic") || !lstrcmpiW(text, L"rounded"))
-        if (!why) why = look_set_style(!lstrcmpiW(text, L"rounded"));
+    for (style = 0; style < LOOK_COUNT; style++)
+        if (!lstrcmpiW(text, LOOK_KEYS[style])) { if (!why) why = look_set_frame(style); break; }
     GetPrivateProfileStringW(L"Look", L"AppsMode", L"", text, ARRAYSIZE(text), path);
     if (!lstrcmpiW(text, L"light") || !lstrcmpiW(text, L"dark")) pers_set_mode(TRUE, !lstrcmpiW(text, L"light"));
     GetPrivateProfileStringW(L"Look", L"SystemMode", L"", text, ARRAYSIZE(text), path);

@@ -43,6 +43,15 @@ sg-shell (0.1.0-86) unstable; urgency=medium
     foot; 8 pt type. Test: start-check's Horizon section (proportions, head
     band, orange rule, columns, All Programs and its arrow, the foot buttons,
     the cascade; mutant: the old menu fails them).
+  * Settings: the window style has four choices -- Classic, Rounded,
+    Horizon (a blue title bar) and Glass (a pale glass frame) -- on Colors
+    and with --set style; the Horizon and Glass looks set theirs (wine-sg
+    0742's Style\Frame) with that era's title bar and frame sizes (Horizon
+    25 px bold titles, 2 px borders; Glass 21 px titles, 7 px borders;
+    Classic and Rounded back to 18 and 1), applied live. .sglook files
+    carry all four; Themes says Mixed when the frames do not match the
+    taskbar. Test: settings-check (Frame, sizes and title weight per look,
+    --set style glass; mutant NOMETRICS).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 01 Oct 2026 15:10:00 +0000
 
