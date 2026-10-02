@@ -42,7 +42,8 @@ enum {
 #define PHRASE_TEXT_CCH 16384
 
 static const struct { const WCHAR *name; DWORD vk; } HOLD_KEYS[] = {
-    { L"Right Ctrl", VK_RCONTROL }, { L"Right Alt", VK_RMENU }, { L"Right Shift", VK_RSHIFT },
+    /* not Alt: released, it gives a program's menu bar the keyboard */
+    { L"Right Ctrl", VK_RCONTROL }, { L"Right Shift", VK_RSHIFT },
     { L"Scroll Lock", VK_SCROLL }, { L"Pause", VK_PAUSE }, { L"F12", VK_F12 },
 };
 static const struct { const WCHAR *name, *code; } LANGS[] = {
@@ -184,6 +185,12 @@ static void load_mics(void)
 }
 
 static DWORD setting(const WCHAR *name, DWORD def) { return reg_dword(HKEY_CURRENT_USER, SPEECH_KEY, name, def); }
+/* the hold-to-talk key; an Alt kept from before is Right Ctrl, as the bar has it */
+static DWORD hold_key(void)
+{
+    DWORD vk = setting(L"HoldKey", VK_RCONTROL);
+    return vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU ? VK_RCONTROL : vk;
+}
 static void set_setting(const WCHAR *name, DWORD v) { reg_set_dword(HKEY_CURRENT_USER, SPEECH_KEY, name, v); }
 
 static const WCHAR *hold_key_name(DWORD vk)
@@ -272,7 +279,7 @@ void build_speech(void)
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(36), y = S(24), w = pg_width() - x - S(40), i;
     WCHAR mic[256] = L"", lang[16] = L"en-US";
     HWND c;
-    DWORD holdkey = setting(L"HoldKey", VK_RCONTROL);
+    DWORD holdkey = hold_key();
 
     g_testing = FALSE;
     reg_sz(HKEY_CURRENT_USER, SPEECH_KEY, L"Microphone", mic, ARRAYSIZE(mic));
@@ -631,7 +638,7 @@ void dump_speech(void)
     wprintf(L"speech.microphone=%ls\n", mic[0] ? mic : L"default");
     wprintf(L"speech.shortcut=Win+H\n");
     wprintf(L"speech.hold_to_talk=%ls\n", setting(L"HoldToTalk", 0) ? L"on" : L"off");
-    wprintf(L"speech.hold_key=%ls\n", hold_key_name(setting(L"HoldKey", VK_RCONTROL)));
+    wprintf(L"speech.hold_key=%ls\n", hold_key_name(hold_key()));
     wprintf(L"speech.continuous=%ls\n", setting(L"Continuous", 1) ? L"on" : L"off");
     wprintf(L"speech.auto_punctuation=%ls\n", setting(L"AutoPunctuation", 1) ? L"on" : L"off");
     wprintf(L"speech.spoken_punctuation=%ls\n", setting(L"SpokenPunctuation", 0) ? L"on" : L"off");

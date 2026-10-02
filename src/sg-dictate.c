@@ -56,6 +56,11 @@
 #define TIMER_HOLD 1
 #define TIMER_UNLOAD 2
 #define TIMER_ANIM 3
+#define TIMER_FLUSH 4
+/* After the hold key's release, before what was heard is typed: the release
+ * reaches the program first -- typed at once with Alt as the hold key, the
+ * words went in as Alt+letters, menu keys (David 2026-10-02). */
+#define FLUSH_DELAY_MS 150
 #define HOLD_DELAY_MS 250
 #define UNLOAD_AFTER_MS (5 * 60 * 1000)
 #define CLASS_NAME L"SgDictateBar"
@@ -137,6 +142,14 @@ static void load_settings(void)
     g_set.paste = reg_dword(k, L"InsertMethod", 0) == 1;
     g_set.hold = reg_dword(k, L"HoldToTalk", 0);
     g_set.holdkey = reg_dword(k, L"HoldKey", VK_RCONTROL);
+#ifndef SG_MUTANT_ALT_HOLD
+    /* Alt cannot be the key: pressed and released, a program's menu bar
+     * takes the keyboard and the words went into the menu (David
+     * 2026-10-02). Speech Recognition no longer offers it; an Alt kept from
+     * before is Right Ctrl. */
+    if (g_set.holdkey == VK_MENU || g_set.holdkey == VK_LMENU || g_set.holdkey == VK_RMENU)
+        g_set.holdkey = VK_RCONTROL;
+#endif
     g_set.mic[0] = 0;
     if (!k || RegQueryValueExW(k, L"Microphone", NULL, &type, (BYTE *)g_set.mic, &sz) || type != REG_SZ)
         g_set.mic[0] = 0;
@@ -834,7 +847,7 @@ static void engine_line(char *line)
     else if (!strncmp(line, "idle", 4))
     {
         set_state(ST_IDLE);
-        if (!g_hold_down) flush_held_text();
+        if (!g_hold_down && g_held_text) SetTimer( g_wnd, TIMER_FLUSH, FLUSH_DELAY_MS, NULL );
         g_hold_active = FALSE;
         if (g_hold_shown && g_visible)
         {
@@ -1138,7 +1151,11 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     case WM_HOLD_RELEASED:
+#ifndef SG_MUTANT_FLUSH_AT_ONCE
+        SetTimer( hwnd, TIMER_FLUSH, FLUSH_DELAY_MS, NULL );
+#else
         flush_held_text();
+#endif
         return 0;
     case WM_TIMER:
         if (wp == TIMER_ANIM)
@@ -1150,6 +1167,11 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 g_ring = next;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
+        }
+        else if (wp == TIMER_FLUSH)
+        {
+            KillTimer( hwnd, TIMER_FLUSH );
+            flush_held_text();
         }
         else if (wp == TIMER_HOLD)
         {

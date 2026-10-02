@@ -1,3 +1,14 @@
+sg-shell (0.1.0-93) unstable; urgency=medium
+
+  * Voice typing's hold-to-talk key is never Alt: pressed and released, a
+    program's menu bar took the keyboard and the words went into the menu
+    (David 2026-10-02). Right Alt is no longer offered; an Alt kept from
+    before is Right Ctrl, the default. What was heard is typed 150 ms after
+    the key's release, the release having reached the program. Gate:
+    test/dictate-check.sh (mutant ALT_HOLD).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 18:45:00 +0000
+
 sg-shell (0.1.0-92) unstable; urgency=medium
 
   * Voice typing's hold-to-talk works when it is turned on while the voice

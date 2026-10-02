@@ -113,7 +113,7 @@ for raw in os.fdopen(ur, "rb"):
 child.wait()
 EOF
 chmod 755 "$T/fake-engine"
-printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Bar open.", "Held again.", " Adult male chart.", " I use stained glass daily.", " Long one.", "Caf\u00e9 cr\u00e8me \u2013 fin",
+printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Bar open.", "Held again.", " Adult male chart.", " I use stained glass daily.", " Long one.", "Held with Alt.", "Caf\u00e9 cr\u00e8me \u2013 fin",
   {"partials": ["Hallo", "Hallo Welt,", "Hallo Welt, das ist ein"], "pause": 2.5,
    "text": " Hallo Welt, das ist ein Test.", "after": 4, "cmd": "delete"}]' > "$T/texts.json"
 export FAKE_LOG="$T/engine.log" FAKE_ERR="$T/bar.log" FAKE_TEXTS="$T/texts.json" FAKE_N="$T/n"
@@ -306,6 +306,28 @@ phrase_case " $LONG" "...and a paragraph comes out whole"
 diff "$FAKE_ERR.mark" "$FAKE_ERR" | grep -q 'by paste' && pass "...pasted (a long text, not typed)" || fail "the long text was not pasted"
 wine reg delete "$PK" /f >/dev/null 2>&1
 
+# --- an Alt hold key from before is Right Ctrl -------------------------------------------------------
+# Alt cannot be the key: released, a program's menu bar takes the keyboard
+# and the words went into the menu (David 2026-10-02). Not offered any more;
+# HoldKey=Right Alt (165) kept from before means Right Ctrl. Mutant ALT_HOLD.
+speech HoldToTalk 1; speech HoldKey 165
+wine "$EXE" /background >/dev/null 2>&1
+sleep 1
+P activate Notepad; sleep 0.5
+before=$(P text Notepad)
+starts=$(grep -c '"start"' "$FAKE_LOG")
+xdotool keydown Alt_R; sleep 1.5; xdotool keyup Alt_R; sleep 1
+[ "$(grep -c '"start"' "$FAKE_LOG")" = "$starts" ] && pass "holding Right Alt does not start dictation (no longer the key)" \
+    || fail "Right Alt started dictation"
+xdotool key Escape; sleep 0.5
+xdotool keydown Control_R; sleep 1.5; xdotool keyup Control_R
+wait_text "${before}Held with Alt." 10 && pass "...Right Ctrl does, for an Alt kept from before" \
+    || fail "with an old Alt setting: Notepad has '$(P text Notepad)'"
+wait_gone
+speech HoldToTalk 0; wine reg delete 'HKCU\Software\Stained Glass\Speech' /v HoldKey /f >/dev/null 2>&1
+wine "$EXE" /reload >/dev/null 2>&1
+sleep 1
+
 # --- Control Panel > Speech Recognition ------------------------------------------------------
 CTL="$HERE/build/sg-control64.exe"
 if [ -f "$CTL" ]; then
@@ -332,7 +354,7 @@ if [ -f "$CTL" ]; then
     got="$(val "$out" enabled) $(val "$out" insert) $(val "$out" hold_to_talk) $(val "$out" hold_key) $(val "$out" continuous)"
     got="$got $(val "$out" spoken_punctuation) $(val "$out" remove_fillers) $(val "$out" format_numbers) $(val "$out" auto_punctuation)"
     got="$got $(val "$out" microphone) $(val "$out" language) $(val "$out" model) $(val "$out" model.progress)"
-    [ "$got" = "on paste on Right Alt off off off off off sg.other auto downloading 1000/672807563" ] \
+    [ "$got" = "on paste on Right Ctrl off off off off off sg.other auto downloading 1000/672807563" ] \
         && pass "Speech --dump reflects every setting and the download" || fail "dump: $got"
     wine reg delete 'HKCU\Software\Stained Glass\Speech' /f >/dev/null 2>&1
     rm -f "$SG_SPEECH_DIR/status"
@@ -384,7 +406,7 @@ if [ "${WINH:-0}" = 1 ]; then
 fi
 
 # --- partial results: shown in the bar while speaking, never typed; commands ---------------------------
-echo 9 > "$FAKE_N"
+echo 10 > "$FAKE_N"
 reg 'HKCU\Software\Stained Glass\Speech' /v Language /d de-DE
 P activate Notepad; sleep 0.5
 before=$(P text Notepad)
