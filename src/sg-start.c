@@ -232,6 +232,15 @@ static struct entry g_settings[] = {
     { .name = L"Updates", .path = L"ms-settings:windowsupdate", .args = L"", .keywords = L"windows update updates upgrade", .kind = K_SETTING },
     { .name = L"Display", .path = L"control.exe", .args = L"desk.cpl", .keywords = L"screen resolution monitor scale", .kind = K_SETTING },
     { .name = L"Internet Options", .path = L"control.exe", .args = L"inetcpl.cpl", .keywords = L"internet proxy browser", .kind = K_SETTING },
+    /* David 2026-10-01: "Environment" found nothing when a program asked for
+     * PATH to be changed. Both open the Environment Variables dialog, whose
+     * machine list changes as an administrator. */
+#ifndef SG_MUTANT_NO_ENVVARS_SEARCH
+    { .name = L"Edit environment variables for your account", .path = L"control.exe", .args = L"EditEnvironmentVariables",
+      .keywords = L"environment variables path pathext user account", .kind = K_SETTING },
+    { .name = L"Edit the system environment variables", .path = L"control.exe", .args = L"EditEnvironmentVariables",
+      .keywords = L"environment variables path system machine advanced", .kind = K_SETTING },
+#endif
 };
 #define NSETTINGS ((int)ARRAYSIZE(g_settings))
 

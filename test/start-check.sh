@@ -206,6 +206,11 @@ xdotool key Escape; sleep 1
 xdotool type --delay 80 uninstall; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = "Apps & features" ] && pass "settings are found too: 'uninstall' -> Apps & features" || fail "settings search: $(d | grep '^best')"
 xdotool key Escape; sleep 1
+xdotool type --delay 80 environment; sleep 1.5
+d | sed -n 's/^best //p' | grep -q '^Edit .*environment variables' \
+    && pass "'environment' finds the environment variables, as Windows' Start does ($(d | sed -n 's/^best //p'))" \
+    || fail "environment search: $(d | grep '^best') $(d | grep '^item' | head -3 | tr '\n' ' ')"
+xdotool key Escape; sleep 1
 xdotool type --delay 80 txt; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = Notepad ] && pass "apps are found by what they open: 'txt' -> Notepad" || fail "keyword search: $(d | grep '^best')"
 xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
