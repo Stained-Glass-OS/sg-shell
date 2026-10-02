@@ -13,6 +13,7 @@ sg-shell (0.1.0-89) unstable; urgency=medium
     the system environment variables", as Windows' Start does; both open
     the Environment Variables dialog (David 2026-10-01: "Environment" found
     nothing). Test: test/start-check.sh (mutant NO_ENVVARS_SEARCH fails it).
+  * The Environment Variables dialog has only a Close button, as Windows'.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 06:30:00 +0000
 

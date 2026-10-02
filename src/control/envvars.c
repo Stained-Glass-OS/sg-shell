@@ -461,7 +461,7 @@ int envvars_main(BOOL system_only)
     RegisterClassW(&wc);
     hwnd = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT, L"SgEnvVars",
                            system_only ? L"System Variables" : L"Environment Variables",
-                           WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, w,
+                           WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, w,
                            system_only ? S(330) : S(560), NULL, NULL, g_inst, NULL);
     if (!hwnd) return 1;
     if (!system_only) {
