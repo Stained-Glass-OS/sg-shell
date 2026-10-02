@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wctype.h>
 
 #define BAR_W 360
 #define BAR_W_WIDE 600  /* while it shows what is being said */
@@ -51,6 +52,7 @@
 #define MIC_R 18
 #define WM_ENGINE (WM_APP + 1)
 #define WM_ENGINE_GONE (WM_APP + 2)
+#define WM_HOLD_RELEASED (WM_APP + 3)
 #define TIMER_HOLD 1
 #define TIMER_UNLOAD 2
 #define TIMER_ANIM 3
@@ -81,6 +83,8 @@ static HWND g_wnd;
 static HANDLE g_in, g_out;
 static BOOL g_bridged, g_background, g_visible, g_closing, g_hold_active, g_hold_pending;
 static BOOL g_hold_shown;       /* the hold key opened the bar: it goes when done */
+static BOOL g_hold_down;        /* the hold key is down: what is heard waits for its release */
+static WCHAR *g_held_text;      /* ...here */
 static enum state g_state = ST_IDLE;
 static enum hot g_hot;
 static int g_level;
@@ -126,7 +130,7 @@ static void load_settings(void)
     RegOpenKeyExW(HKEY_CURRENT_USER, SPEECH_KEY, 0, KEY_READ, &k);
     g_set.enabled = reg_dword(k, L"Enabled", 0);
     g_set.continuous = reg_dword(k, L"Continuous", 1);
-    g_set.spoken = reg_dword(k, L"SpokenPunctuation", 1);
+    g_set.spoken = reg_dword(k, L"SpokenPunctuation", 0);  /* the model punctuates */
     g_set.autopunct = reg_dword(k, L"AutoPunctuation", 1);
     g_set.fillers = reg_dword(k, L"RemoveFillers", 1);
     g_set.numbers = reg_dword(k, L"FormatNumbers", 1);
@@ -427,20 +431,193 @@ static void set_partial(WCHAR *text)
     dump();
 }
 
-static void insert_text(const char *json)
+/* ---- phrases: a short phrase said, the person's own text typed --------------------------------- */
+
+/* Speech Recognition > Phrases (HKCU\...\Speech\Phrases: value name the
+ * phrase, data the text): word replacement, and whole paragraphs from a few
+ * words, as dictation programs' "auto-text" ("adult male chart" -> the
+ * paragraph). Matched on words, ignoring case and the punctuation the model
+ * adds; the longest phrase at a word wins. Said on its own, the phrase is
+ * replaced whole -- the model's full stop and capital go with it. */
+#define PHRASES_KEY L"Software\\Stained Glass\\Speech\\Phrases"
+#define MAX_PHRASES 256
+#define MAX_PHRASE_WORDS 16
+
+struct phrase { WCHAR *words[MAX_PHRASE_WORDS]; int n; WCHAR *text; };
+
+static BOOL word_char(WCHAR c) { return iswalnum(c) || c == '\''; }
+
+/* the words of s (lower case), at most max; their spans when asked */
+static int split_words(const WCHAR *s, WCHAR **words, int *start, int *end, int max)
 {
-    WCHAR *text = json_to_w(json);
+    int n = 0, i = 0, len = (int)wcslen(s);
+    while (i < len && n < max)
+    {
+        int b;
+        while (i < len && !word_char(s[i])) i++;
+        if (i >= len) break;
+        b = i;
+        while (i < len && word_char(s[i])) i++;
+        if (words)
+        {
+            int k;
+            if (!(words[n] = calloc(i - b + 1, sizeof(WCHAR)))) break;
+            for (k = 0; k < i - b; k++) words[n][k] = towlower(s[b + k]);
+        }
+        if (start) start[n] = b;
+        if (end) end[n] = i;
+        n++;
+    }
+    return n;
+}
+
+static int load_phrases(struct phrase *ph)
+{
+    HKEY k;
+    DWORD i, n = 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, PHRASES_KEY, 0, KEY_READ, &k)) return 0;
+    for (i = 0; n < MAX_PHRASES; i++)
+    {
+        WCHAR name[256];
+        DWORD cname = ARRAYSIZE(name), type, cb = 0;
+        WCHAR *data, *src, *dst;
+        LONG r = RegEnumValueW(k, i, name, &cname, NULL, &type, NULL, &cb);
+        if (r == ERROR_NO_MORE_ITEMS) break;
+        if (r || (type != REG_SZ && type != REG_EXPAND_SZ)) continue;
+        if (!(data = calloc(cb / sizeof(WCHAR) + 2, sizeof(WCHAR)))) break;
+        cname = ARRAYSIZE(name);
+        if (RegEnumValueW(k, i, name, &cname, NULL, &type, (BYTE *)data, &cb)) { free(data); continue; }
+        for (src = dst = data; *src; src++) if (*src != '\r') *dst++ = *src;   /* the edit box's CR LF */
+        *dst = 0;
+        memset(&ph[n], 0, sizeof(ph[n]));
+        ph[n].n = split_words(name, ph[n].words, NULL, NULL, MAX_PHRASE_WORDS);
+        ph[n].text = data;
+        if (ph[n].n) n++;
+        else free(data);
+    }
+    RegCloseKey(k);
+    return (int)n;
+}
+
+static void free_phrases(struct phrase *ph, int n)
+{
+    int i, j;
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < ph[i].n; j++) free(ph[i].words[j]);
+        free(ph[i].text);
+    }
+}
+
+/* text with the phrases replaced: a new string, or text itself */
+static WCHAR *apply_phrases(WCHAR *text)
+{
+    static struct phrase ph[MAX_PHRASES];
+    WCHAR *words[512];
+    int start[512], end[512], nw, np, i, j, w, best, bestn;
+    size_t cap, len = 0;
+    WCHAR *out;
+#ifdef SG_MUTANT_NO_PHRASES
+    return text;
+#endif
+    if (!(np = load_phrases(ph))) return text;
+    nw = split_words(text, words, start, end, ARRAYSIZE(words));
+    /* said on its own: the whole of it, with what was before the first word
+     * (the engine's space) */
+    for (i = 0; i < np; i++)
+    {
+        if (ph[i].n != nw) continue;
+        for (j = 0; j < nw && !wcscmp(ph[i].words[j], words[j]); j++) ;
+        if (j < nw) continue;
+        cap = (nw ? start[0] : 0) + wcslen(ph[i].text) + 1;
+        if ((out = calloc(cap, sizeof(WCHAR))))
+        {
+            wcsncpy(out, text, nw ? start[0] : 0);
+            wcscat(out, ph[i].text);
+            for (w = 0; w < nw; w++) free(words[w]);
+            free_phrases(ph, np);
+            free(text);
+            return out;
+        }
+    }
+    /* within what was said: word by word, the longest phrase first */
+    cap = wcslen(text) + 1;
+    for (i = 0; i < np; i++) cap += wcslen(ph[i].text) * (nw / ph[i].n + 1);
+    if (!(out = calloc(cap, sizeof(WCHAR)))) goto done;
+    {
+        int pos = 0;
+        for (w = 0; w < nw; )
+        {
+            best = -1; bestn = 0;
+            for (i = 0; i < np; i++)
+            {
+                if (ph[i].n <= bestn || w + ph[i].n > nw) continue;
+                for (j = 0; j < ph[i].n && !wcscmp(ph[i].words[j], words[w + j]); j++) ;
+                if (j == ph[i].n) { best = i; bestn = ph[i].n; }
+            }
+            if (best < 0) { w++; continue; }
+            wcsncpy(out + len, text + pos, start[w] - pos); len += start[w] - pos;
+            wcscpy(out + len, ph[best].text); len += wcslen(ph[best].text);
+            pos = end[w + bestn - 1];
+            w += bestn;
+        }
+        wcscpy(out + len, text + pos);
+    }
+    free(text);
+    text = out;
+done:
+    for (w = 0; w < nw; w++) free(words[w]);
+    free_phrases(ph, np);
+    return text;
+}
+
+static void insert_now(WCHAR *text)
+{
     HWND fg = GetForegroundWindow();
     WCHAR cls[64] = L"";
-    if (!text) return;
+    /* a long phrase's text (a paragraph) is pasted: typed, it took seconds
+     * and any key pressed meanwhile went into the middle of it */
+    BOOL paste = g_set.paste || wcslen(text) > 200;
     if (fg) GetClassNameW(fg, cls, 64);
-    set_partial(NULL);  /* the final text replaces what was shown */
-    if (g_set.paste) paste_text(text); else type_text(text);
+    if (paste) paste_text(text); else type_text(text);
     g_last_len = (int)wcslen(text);
     g_last_target = fg;
     report("sg-dictate: inserted %d characters into %ls by %s\n", (int)wcslen(text), cls,
-           g_set.paste ? "paste" : "typing");
+           paste ? "paste" : "typing");
     free(text);
+}
+
+static void insert_text(const char *json)
+{
+    WCHAR *text = json_to_w(json);
+    if (!text) return;
+    text = apply_phrases(text);
+    set_partial(NULL);  /* the final text replaces what was shown */
+#ifndef SG_MUTANT_TYPE_WHILE_HELD
+    /* Hold-to-talk: a pause while the key is still down ends a phrase, and
+     * typed now it went in with the key held -- Right Ctrl+letters,
+     * shortcuts, not text. It waits for the key's release. */
+    if (g_hold_active && g_hold_down)
+    {
+        size_t had = g_held_text ? wcslen(g_held_text) : 0;
+        WCHAR *n = realloc(g_held_text, (had + wcslen(text) + 1) * sizeof(WCHAR));
+        if (n)
+        {
+            wcscpy(n + had, text);
+            g_held_text = n;
+            free(text);
+            return;
+        }
+    }
+#endif
+    insert_now(text);
+}
+
+static void flush_held_text(void)
+{
+    WCHAR *text = g_held_text;
+    g_held_text = NULL;
+    if (text) insert_now(text);
 }
 
 /* ---- listening -------------------------------------------------------------------------------- */
@@ -518,7 +695,8 @@ static void start_listening(BOOL hold)
              g_set.numbers ? "true" : "false", fg != g_last_target ? "true" : "false");
     json_str(req, sizeof(req) - 64, mic);
     WideCharToMultiByte(CP_UTF8, 0, g_set.language, -1, lang, sizeof(lang), NULL, NULL);
-    strcat(req, ", \"partials\": true, \"language\": ");
+    /* "delete that", "stop listening": on whatever spoken punctuation is */
+    strcat(req, ", \"partials\": true, \"commands\": true, \"language\": ");
     json_str(req, sizeof(req) - 16, lang);
     caret_context(fg, tail, sizeof(tail));
     if (tail[0])
@@ -656,6 +834,7 @@ static void engine_line(char *line)
     else if (!strncmp(line, "idle", 4))
     {
         set_state(ST_IDLE);
+        if (!g_hold_down) flush_held_text();
         g_hold_active = FALSE;
         if (g_hold_shown && g_visible)
         {
@@ -691,12 +870,17 @@ static LRESULT CALLBACK kb_hook(int code, WPARAM wp, LPARAM lp)
             if (down && !g_hold_pending && !g_hold_active)
             {
                 g_hold_pending = TRUE;
+                g_hold_down = TRUE;
                 SetTimer(g_wnd, TIMER_HOLD, HOLD_DELAY_MS, NULL);
             }
             else if (!down)
             {
                 KillTimer(g_wnd, TIMER_HOLD);
                 g_hold_pending = FALSE;
+                g_hold_down = FALSE;
+                /* typed once the key is up (posted: the release is
+                 * delivered first), then the rest after stop */
+                if (g_hold_active) PostMessageW(g_wnd, WM_HOLD_RELEASED, 0, 0);
                 if (g_hold_active) engine_cmd("stop");
             }
         }
@@ -907,6 +1091,13 @@ static void command(const WCHAR *cmd)
     }
     if (!wcscmp(cmd, L"/background") || !wcscmp(cmd, L"background"))
     {
+        /* Speech Recognition turned hold-to-talk on while the bar ran: its
+         * settings and the key's hook, now -- the bar kept the old ones and
+         * the key did nothing until the next sign-in (David 2026-10-02). */
+#ifndef SG_MUTANT_HOLD_STALE
+        load_settings();
+        update_hook();
+#endif
         g_background = TRUE;
         return;
     }
@@ -945,6 +1136,9 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             break;
         default: break;
         }
+        return 0;
+    case WM_HOLD_RELEASED:
+        flush_held_text();
         return 0;
     case WM_TIMER:
         if (wp == TIMER_ANIM)

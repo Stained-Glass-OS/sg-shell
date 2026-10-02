@@ -113,7 +113,7 @@ for raw in os.fdopen(ur, "rb"):
 child.wait()
 EOF
 chmod 755 "$T/fake-engine"
-printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Caf\u00e9 cr\u00e8me \u2013 fin",
+printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Bar open.", "Held again.", " Adult male chart.", " I use stained glass daily.", " Long one.", "Caf\u00e9 cr\u00e8me \u2013 fin",
   {"partials": ["Hallo", "Hallo Welt,", "Hallo Welt, das ist ein"], "pause": 2.5,
    "text": " Hallo Welt, das ist ein Test.", "after": 4, "cmd": "delete"}]' > "$T/texts.json"
 export FAKE_LOG="$T/engine.log" FAKE_ERR="$T/bar.log" FAKE_TEXTS="$T/texts.json" FAKE_N="$T/n"
@@ -249,8 +249,8 @@ xdotool keydown Control_R; sleep 0.1; xdotool keydown c; sleep 0.6; xdotool keyu
     || fail "a chord started dictation"
 xdotool keydown Control_R; sleep 1.5
 P bar | grep -q 'VISIBLE 1' && pass "holding Right Ctrl opens the bar" || fail "no bar while held"
-xdotool keyup Control_R; sleep 1
-[ "$(P text Notepad)" = "${before}Held to talk." ] && pass "held to talk: typed into Notepad" \
+xdotool keyup Control_R
+wait_text "${before}Held to talk." 10 && pass "held to talk: typed into Notepad when released" \
     || fail "Notepad has '$(P text Notepad)'"
 tail -1 "$FAKE_LOG" | grep -q '"stop"' && pass "releasing the key stops listening" || fail "log end: $(tail -2 "$FAKE_LOG")"
 wait_gone && pass "...and the bar goes again" || fail "the bar stayed after hold-to-talk"
@@ -258,6 +258,53 @@ wait_gone && pass "...and the bar goes again" || fail "the bar stayed after hold
 speech HoldToTalk 0
 wine "$EXE" /reload >/dev/null 2>&1
 sleep 1
+
+# --- hold-to-talk turned on while the bar runs ------------------------------------------------
+# Speech Recognition sends the running bar /background: it must take the new
+# setting and the key's hook at once -- it kept the old ones and the key did
+# nothing until the next sign-in (David 2026-10-02; mutant HOLD_STALE).
+P activate Notepad; sleep 0.5
+before=$(P text Notepad)
+toggle
+wait_text "${before}Bar open." 30 && pass "the bar runs (hold-to-talk off)" || fail "no bar: '$(P text Notepad)'"
+speech HoldToTalk 1
+wine "$EXE" /background >/dev/null 2>&1
+sleep 1
+toggle; wait_gone
+P activate Notepad; sleep 0.5
+before=$(P text Notepad)
+xdotool keydown Control_R; sleep 1.5
+P bar | grep -q 'VISIBLE 1' && pass "turned on while the bar ran: holding Right Ctrl opens it" || fail "no bar while held (the setting was ignored)"
+xdotool keyup Control_R
+wait_text "${before}Held again." 10 && pass "...types what was said when released" \
+    || fail "Notepad has '$(P text Notepad)'"
+wait_gone && pass "...and the bar goes again" || fail "the bar stayed"
+speech HoldToTalk 0
+wine "$EXE" /reload >/dev/null 2>&1
+sleep 1
+
+# --- phrases (Speech Recognition > Phrases): said, replaced by the person's text ---------------
+# Said on its own the phrase becomes the text (the model's full stop and
+# capital go); within a sentence, the words are replaced; a long text is
+# pasted, not typed. Mutant NO_PHRASES.
+PK='HKCU\Software\Stained Glass\Speech\Phrases'
+reg "$PK" /v 'adult male chart' /d 'Adult male, normal chart.'
+reg "$PK" /v 'Stained Glass' /d 'Stained Glass OS'
+LONG=$(python3 -c 'print("This paragraph was written in advance. " * 8, end="")')
+reg "$PK" /v 'long one' /d "$LONG"
+phrase_case() {   # what Notepad must end with, what to call it
+    P activate Notepad; sleep 0.5
+    before=$(P text Notepad)
+    toggle
+    wait_text "${before}$1" 20 && pass "$2" || fail "$2: Notepad has '$(P text Notepad)'"
+    toggle; wait_gone
+}
+phrase_case " Adult male, normal chart." "a phrase said on its own is replaced by its text"
+phrase_case " I use Stained Glass OS daily." "...and within a sentence, word for word"
+: > "$FAKE_ERR.mark"; cp "$FAKE_ERR" "$FAKE_ERR.mark"
+phrase_case " $LONG" "...and a paragraph comes out whole"
+diff "$FAKE_ERR.mark" "$FAKE_ERR" | grep -q 'by paste' && pass "...pasted (a long text, not typed)" || fail "the long text was not pasted"
+wine reg delete "$PK" /f >/dev/null 2>&1
 
 # --- Control Panel > Speech Recognition ------------------------------------------------------
 CTL="$HERE/build/sg-control64.exe"
@@ -337,7 +384,7 @@ if [ "${WINH:-0}" = 1 ]; then
 fi
 
 # --- partial results: shown in the bar while speaking, never typed; commands ---------------------------
-echo 4 > "$FAKE_N"
+echo 9 > "$FAKE_N"
 reg 'HKCU\Software\Stained Glass\Speech' /v Language /d de-DE
 P activate Notepad; sleep 0.5
 before=$(P text Notepad)
@@ -360,7 +407,10 @@ python3 - "$OUT/dictate-partial.png" "$1" "$2" <<'PY' && pass "the partial text 
 import subprocess, sys
 png, x0, y0 = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 raw = subprocess.run(["convert", png, "-crop", "380x56+%d+%d" % (x0 + 130, y0), "rgb:-"], capture_output=True).stdout
-grey = sum(1 for i in range(0, len(raw) - 2, 3) if 0x70 < raw[i] < 0xB0 and abs(raw[i] - raw[i+1]) < 8 and abs(raw[i] - raw[i+2]) < 8)
+# light, near-neutral pixels on the dark bar (subpixel antialiasing tints
+# the glyphs' edges, so not exactly grey)
+grey = sum(1 for i in range(0, len(raw) - 2, 3)
+           if max(raw[i:i+3]) > 0x60 and max(raw[i:i+3]) - min(raw[i:i+3]) < 48)
 print("      grey pixels:", grey)
 sys.exit(0 if grey > 150 else 1)
 PY

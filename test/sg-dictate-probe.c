@@ -32,6 +32,14 @@ static void put_utf8(const WCHAR *w)
 
 struct find { const WCHAR *text; HWND found; };
 
+static BOOL CALLBACK find_editor(HWND w, LPARAM lp)
+{
+    WCHAR cls[64];
+    GetClassNameW(w, cls, 64);
+    if (!wcscmp(cls, L"SgNotepadEditor") && IsWindowVisible(w)) { *(HWND *)lp = w; return FALSE; }
+    return TRUE;
+}
+
 static BOOL CALLBACK find_child(HWND w, LPARAM lp)
 {
     struct find *f = (struct find *)lp;
@@ -78,7 +86,10 @@ int wmain(int argc, WCHAR **argv)
         HWND top = FindWindowW(argv[2], NULL), edit;
         static WCHAR text[32768];
         if (!top) { puts("NOWINDOW"); return 1; }
+        /* Wine's old Notepad: an Edit child; Stained Glass's Notepad
+         * (wine-sg 0100): its editor control, deeper (tabs) */
         edit = FindWindowExW(top, NULL, L"Edit", NULL);
+        if (!edit) EnumChildWindows(top, find_editor, (LPARAM)&edit);
         SendMessageW(edit ? edit : top, WM_GETTEXT, 32768, (LPARAM)text);
         put_utf8(text);
         return 0;

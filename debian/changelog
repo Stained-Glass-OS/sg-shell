@@ -1,3 +1,30 @@
+sg-shell (0.1.0-92) unstable; urgency=medium
+
+  * Voice typing's hold-to-talk works when it is turned on while the voice
+    typing bar runs: Speech Recognition tells the bar (/background), which
+    only noted it -- its settings and the key's hook stayed the old ones and
+    the key did nothing until the next sign-in (David 2026-10-02). And what
+    is heard while the key is still down waits for its release: typed then,
+    it went in with the key held (Right Ctrl+letters, shortcuts). Key down:
+    the bar appears and listens; key up: the words are typed and the bar
+    goes. Gate: test/dictate-check.sh (mutants HOLD_STALE, TYPE_WHILE_HELD).
+  * Speech Recognition > Phrases: say a phrase, get your own text -- word
+    replacement, and whole paragraphs from a few words, as dictation
+    programs' auto-text ("adult male chart" -> the paragraph written for
+    it). Matched on words, ignoring case and the model's punctuation; said
+    on its own the phrase is replaced whole. A long text is pasted, not
+    typed. Add/Edit/Remove on the page, a multi-line box for the text.
+    Gate: test/dictate-check.sh (mutant NO_PHRASES).
+  * The model punctuates by itself: "Add punctuation automatically" is no
+    longer offered, and typing punctuation that is said ("comma") is off
+    unless turned on (David). The spoken commands ("delete that") no longer
+    depend on it (sg-session 0.1.0-91's "commands" switch, now required).
+  * test/dictate-check.sh reads Stained Glass's Notepad (its editor control,
+    wine-sg 0100), waits for the text typed when the key is released, and
+    counts the partial text's pixels with subpixel antialiasing.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 15:30:00 +0000
+
 sg-shell (0.1.0-91) unstable; urgency=medium
 
   * Task Manager lists the session's Linux programs' windows under Apps, as

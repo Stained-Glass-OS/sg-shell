@@ -202,7 +202,7 @@ struct form_field {
     const WCHAR *const *options;    /* FF_COMBO */
     int nopt;
 };
-enum { FF_TEXT, FF_PASSWORD, FF_RADIO_FIRST, FF_RADIO, FF_NOTE, FF_CHECK, FF_COMBO };
+enum { FF_TEXT, FF_PASSWORD, FF_RADIO_FIRST, FF_RADIO, FF_NOTE, FF_CHECK, FF_COMBO, FF_MULTILINE };
 BOOL run_form(HWND owner, const WCHAR *title, const WCHAR *intro, struct form_field *f, int n,
               const WCHAR *ok_label, BOOL shield);
 void message(HWND owner, const WCHAR *title, const WCHAR *text, BOOL error);

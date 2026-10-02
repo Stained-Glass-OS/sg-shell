@@ -16,6 +16,12 @@
  *   PipeWire source; empty for the default), Language (SZ, en-US, de-DE,
  *   fr-FR, es-ES or auto: the language of spoken punctuation, commands and
  *   filler words; the model itself recognises 25 languages either way).
+ * Phrases, HKCU\Software\Stained Glass\Speech\Phrases: each value a phrase
+ * said (its name) and the text typed for it (REG_SZ, lines and all) --
+ * word replacement and paragraphs from a few words; the toolbar applies them.
+ * The model punctuates by itself, so "Add punctuation automatically" is no
+ * longer offered (AutoPunctuation stays on), and typing punctuation that is
+ * said is off unless turned on (David 2026-10-02).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -29,8 +35,11 @@
 enum {
     CMD_ENABLED = CMD_PAGE_FIRST + 1, CMD_RETRY, CMD_MIC, CMD_TEST, CMD_HOLD, CMD_HOLDKEY,
     CMD_CONTINUOUS, CMD_AUTOPUNCT, CMD_SPOKEN, CMD_FILLERS, CMD_NUMBERS,
-    CMD_TYPE, CMD_PASTE, CMD_LANG, CMD_TRY,
+    CMD_TYPE, CMD_PASTE, CMD_LANG, CMD_TRY, CMD_PHRASES, CMD_PHRASE_ADD, CMD_PHRASE_EDIT, CMD_PHRASE_REMOVE,
 };
+
+#define PHRASES_KEY SPEECH_KEY L"\\Phrases"
+#define PHRASE_TEXT_CCH 16384
 
 static const struct { const WCHAR *name; DWORD vk; } HOLD_KEYS[] = {
     { L"Right Ctrl", VK_RCONTROL }, { L"Right Alt", VK_RMENU }, { L"Right Shift", VK_RSHIFT },
@@ -48,8 +57,9 @@ static const struct { const WCHAR *name, *code; } LANGS[] = {
 static WCHAR g_mic_name[MAX_MICS][256], g_mic_desc[MAX_MICS][256];
 static int g_nmics = -1;
 static WCHAR g_default_mic[256];
-static HWND g_status, g_progress, g_meter, g_test_btn, g_retry;
+static HWND g_status, g_progress, g_meter, g_test_btn, g_retry, g_phrases;
 static BOOL g_testing, g_downloading;
+static void phrases_fill(const WCHAR *select);
 static char g_meter_file[MAX_PATH];
 static DWORD g_test_started;
 
@@ -274,9 +284,9 @@ void build_speech(void)
     pg_icon(x, y, S(48), IC_SPEECH);
     i = pg_para(x + S(64), y, w - S(64), g_font_body, COL_TEXT,
                  L"Dictate text anywhere you can type. Press the Start key + H to start or stop, "
-                 L"or select the microphone on the voice typing bar. Say \x201C" L"comma\x201D, \x201Cperiod\x201D, "
-                 L"\x201Cquestion mark\x201D or \x201Cnew line\x201D for punctuation, and \x201C" L"delete that\x201D, "
-                 L"\x201Cundo that\x201D or \x201Cstop listening\x201D to take something back or stop.");
+                 L"or select the microphone on the voice typing bar. Punctuation and capitals are added as you speak; "
+                 L"say \x201C" L"delete that\x201D, \x201Cundo that\x201D or \x201Cstop listening\x201D to take something "
+                 L"back or stop.");
     y += max(i, S(48)) + S(24);
 
     y = section(x, y, w, L"Voice typing");
@@ -331,10 +341,8 @@ void build_speech(void)
     y = section(x, y, w, L"Dictation");
     check(L"Keep listening until I stop it (continuous dictation)", x + S(16), y, w - S(16), CMD_CONTINUOUS, setting(L"Continuous", 1));
     y += S(28);
-    check(L"Add punctuation automatically", x + S(16), y, w - S(16), CMD_AUTOPUNCT, setting(L"AutoPunctuation", 1));
-    y += S(28);
     check(L"Type punctuation I say (\x201C" L"comma\x201D, \x201Cperiod\x201D, \x201Cnew line\x201D)", x + S(16), y, w - S(16),
-          CMD_SPOKEN, setting(L"SpokenPunctuation", 1));
+          CMD_SPOKEN, setting(L"SpokenPunctuation", 0));
     y += S(28);
     check(L"Leave out filler words (\x201Cum\x201D, \x201Cuh\x201D)", x + S(16), y, w - S(16), CMD_FILLERS, setting(L"RemoveFillers", 1));
     y += S(28);
@@ -362,6 +370,19 @@ void build_speech(void)
     SendMessageW(c, BM_SETCHECK, setting(L"InsertMethod", 0) == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
     y += S(40);
 
+    y = section(x, y, w, L"Phrases");
+    y += pg_para(x + S(16), y, w - S(16), g_font_body, COL_TEXT,
+                 L"Say a phrase and have your own text typed instead: a word you want written your way, or a whole "
+                 L"paragraph from a few words (say \x201C" L"adult male chart\x201D, get the paragraph you wrote for it).");
+    y += S(10);
+    g_phrases = pg_control(L"LISTBOX", L"", WS_TABSTOP | WS_BORDER | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
+                           x + S(16), y, w - S(16) - S(130), S(132), CMD_PHRASES);
+    phrases_fill(NULL);
+    pg_control(L"BUTTON", L"Add\x2026", WS_TABSTOP | BS_PUSHBUTTON, x + w - S(120), y, S(120), S(28), CMD_PHRASE_ADD);
+    pg_control(L"BUTTON", L"Edit\x2026", WS_TABSTOP | BS_PUSHBUTTON, x + w - S(120), y + S(36), S(120), S(28), CMD_PHRASE_EDIT);
+    pg_control(L"BUTTON", L"Remove", WS_TABSTOP | BS_PUSHBUTTON, x + w - S(120), y + S(72), S(120), S(28), CMD_PHRASE_REMOVE);
+    y += S(150);
+
     y = section(x, y, w, L"Privacy");
     y += pg_para(x + S(16), y, w - S(16), g_font_body, COL_TEXT,
                  L"Speech is recognized on this computer. Nothing you say is recorded, kept or sent anywhere, "
@@ -371,6 +392,88 @@ void build_speech(void)
             L"Speech recognition model: NVIDIA Parakeet TDT 0.6B v3, licensed under CC BY 4.0. "
             L"Voice activity detection: Silero VAD, MIT License.");
     pg_timer(200);
+}
+
+/* ---- phrases ---------------------------------------------------------------------------- */
+
+/* the list: "phrase  ->  the text's first line", each item's data its phrase */
+static void phrases_fill(const WCHAR *select)
+{
+    HKEY k;
+    DWORD i;
+    int n;
+    if (!g_phrases) return;
+    n = (int)SendMessageW(g_phrases, LB_GETCOUNT, 0, 0);
+    while (n-- > 0) free((void *)SendMessageW(g_phrases, LB_GETITEMDATA, n, 0));
+    SendMessageW(g_phrases, LB_RESETCONTENT, 0, 0);
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, PHRASES_KEY, 0, KEY_READ, &k)) return;
+    for (i = 0; ; i++) {
+        static WCHAR text[PHRASE_TEXT_CCH];
+        WCHAR name[256], item[400], *nl;
+        DWORD cname = ARRAYSIZE(name), cb = sizeof(text) - sizeof(WCHAR), type;
+        LONG r = RegEnumValueW(k, i, name, &cname, NULL, &type, (BYTE *)text, &cb);
+        int at;
+        if (r == ERROR_NO_MORE_ITEMS) break;
+        if (r || type != REG_SZ) continue;
+        text[cb / sizeof(WCHAR)] = 0;
+        if ((nl = wcspbrk(text, L"\r\n"))) { *nl = 0; }
+        _snwprintf(item, ARRAYSIZE(item), L"%ls   \x2192   %.80ls%ls", name, text, nl || wcslen(text) > 80 ? L"\x2026" : L"");
+        item[ARRAYSIZE(item) - 1] = 0;
+        at = (int)SendMessageW(g_phrases, LB_ADDSTRING, 0, (LPARAM)item);
+        SendMessageW(g_phrases, LB_SETITEMDATA, at, (LPARAM)_wcsdup(name));
+        if (select && !_wcsicmp(select, name)) SendMessageW(g_phrases, LB_SETCURSEL, at, 0);
+    }
+    RegCloseKey(k);
+}
+
+static const WCHAR *phrase_selected(void)
+{
+    int at = (int)SendMessageW(g_phrases, LB_GETCURSEL, 0, 0);
+    LRESULT d = at < 0 ? 0 : SendMessageW(g_phrases, LB_GETITEMDATA, at, 0);
+    return d && d != LB_ERR ? (const WCHAR *)d : NULL;
+}
+
+static void phrase_edit(BOOL add)
+{
+    static WCHAR text[PHRASE_TEXT_CCH];
+    WCHAR name[256] = L"", old[256] = L"", *c;
+    HWND owner = GetAncestor(g_page, GA_ROOT);
+    struct form_field f[] = {
+        { L"When I say:", name, ARRAYSIZE(name), FF_TEXT },
+        { L"Type this instead (as many lines as you like):", text, ARRAYSIZE(text), FF_MULTILINE },
+    };
+    text[0] = 0;
+    if (!add) {
+        const WCHAR *sel = phrase_selected();
+        if (!sel) return;
+        lstrcpynW(name, sel, ARRAYSIZE(name));
+        lstrcpynW(old, sel, ARRAYSIZE(old));
+        reg_sz(HKEY_CURRENT_USER, PHRASES_KEY, name, text, ARRAYSIZE(text));
+    }
+    for (;;) {
+        BOOL words = FALSE;
+        if (!run_form(owner, add ? L"New phrase" : L"Edit phrase", NULL, f, 2, L"Save", FALSE)) return;
+        for (c = name; *c; c++) if (iswalnum(*c)) words = TRUE;
+        if (words && text[0]) break;
+        message(owner, L"Phrases", words ? L"Write the text to type for this phrase."
+                                         : L"Write the phrase you will say: a word or a few.", TRUE);
+    }
+    if (old[0] && _wcsicmp(old, name)) {
+        HKEY k;
+        if (!RegOpenKeyExW(HKEY_CURRENT_USER, PHRASES_KEY, 0, KEY_SET_VALUE, &k)) { RegDeleteValueW(k, old); RegCloseKey(k); }
+    }
+    reg_set_sz(HKEY_CURRENT_USER, PHRASES_KEY, name, text);
+    phrases_fill(name);
+}
+
+static void phrase_remove(void)
+{
+    const WCHAR *sel = phrase_selected();
+    HKEY k;
+    if (!sel || RegOpenKeyExW(HKEY_CURRENT_USER, PHRASES_KEY, 0, KEY_SET_VALUE, &k)) return;
+    RegDeleteValueW(k, sel);
+    RegCloseKey(k);
+    phrases_fill(NULL);
 }
 
 static void stop_test(void)
@@ -447,6 +550,10 @@ BOOL cmd_speech(int id, int code, HWND ctl)
         return TRUE;
     case CMD_CONTINUOUS: set_setting(L"Continuous", on); return TRUE;
     case CMD_AUTOPUNCT: set_setting(L"AutoPunctuation", on); return TRUE;
+    case CMD_PHRASE_ADD: phrase_edit(TRUE); return TRUE;
+    case CMD_PHRASE_EDIT: phrase_edit(FALSE); return TRUE;
+    case CMD_PHRASE_REMOVE: phrase_remove(); return TRUE;
+    case CMD_PHRASES: if (code == LBN_DBLCLK) phrase_edit(FALSE); return TRUE;
     case CMD_SPOKEN: set_setting(L"SpokenPunctuation", on); return TRUE;
     case CMD_FILLERS: set_setting(L"RemoveFillers", on); return TRUE;
     case CMD_NUMBERS: set_setting(L"FormatNumbers", on); return TRUE;
@@ -500,7 +607,16 @@ void dump_speech(void)
     wprintf(L"speech.hold_key=%ls\n", hold_key_name(setting(L"HoldKey", VK_RCONTROL)));
     wprintf(L"speech.continuous=%ls\n", setting(L"Continuous", 1) ? L"on" : L"off");
     wprintf(L"speech.auto_punctuation=%ls\n", setting(L"AutoPunctuation", 1) ? L"on" : L"off");
-    wprintf(L"speech.spoken_punctuation=%ls\n", setting(L"SpokenPunctuation", 1) ? L"on" : L"off");
+    wprintf(L"speech.spoken_punctuation=%ls\n", setting(L"SpokenPunctuation", 0) ? L"on" : L"off");
+    {
+        HKEY k;
+        DWORD n = 0;
+        if (!RegOpenKeyExW(HKEY_CURRENT_USER, PHRASES_KEY, 0, KEY_READ, &k)) {
+            RegQueryInfoKeyW(k, NULL, NULL, NULL, NULL, NULL, NULL, &n, NULL, NULL, NULL, NULL);
+            RegCloseKey(k);
+        }
+        wprintf(L"speech.phrases=%lu\n", n);
+    }
     wprintf(L"speech.remove_fillers=%ls\n", setting(L"RemoveFillers", 1) ? L"on" : L"off");
     wprintf(L"speech.format_numbers=%ls\n", setting(L"FormatNumbers", 1) ? L"on" : L"off");
     wprintf(L"speech.insert=%ls\n", setting(L"InsertMethod", 0) == 1 ? L"paste" : L"type");

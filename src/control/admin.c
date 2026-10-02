@@ -210,7 +210,7 @@ static LRESULT CALLBACK form_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                     HWND c = fm->ctl[i];
                     if (!c || !f->value) continue;
                     switch (f->kind) {
-                    case FF_TEXT: case FF_PASSWORD: GetWindowTextW(c, f->value, f->cch); break;
+                    case FF_TEXT: case FF_PASSWORD: case FF_MULTILINE: GetWindowTextW(c, f->value, f->cch); break;
                     case FF_RADIO_FIRST: case FF_RADIO: case FF_CHECK:
                         lstrcpynW(f->value, SendMessageW(c, BM_GETCHECK, 0, 0) == BST_CHECKED ? L"1" : L"0", f->cch);
                         break;
@@ -286,6 +286,16 @@ BOOL run_form(HWND owner, const WCHAR *title, const WCHAR *intro, struct form_fi
                 fm.ctl[i] = last;
                 if (!focus) focus = last;
                 y += S(36);
+                break;
+            case FF_MULTILINE:   /* paragraphs: Enter is a new line, not OK */
+                ADD(L"STATIC", ff->label, SS_NOPREFIX, x, y, cw, S(18), -1);
+                y += S(20);
+                ADD(L"EDIT", ff->value ? ff->value : L"", WS_TABSTOP | WS_BORDER | WS_VSCROLL | ES_MULTILINE |
+                    ES_AUTOVSCROLL | ES_WANTRETURN, x, y, cw, S(180), FORM_FIRST + i);
+                if (ff->cch) SendMessageW(last, EM_LIMITTEXT, ff->cch - 1, 0);
+                fm.ctl[i] = last;
+                if (!focus) focus = last;
+                y += S(190);
                 break;
             case FF_RADIO_FIRST: case FF_RADIO: case FF_CHECK:
                 ADD(L"BUTTON", ff->label, WS_TABSTOP | (ff->kind == FF_CHECK ? BS_AUTOCHECKBOX : BS_AUTORADIOBUTTON) |
