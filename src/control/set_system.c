@@ -272,7 +272,8 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
 }
 
 /* ---- Sound --------------------------------------------------------------------------------- */
-enum { CMD_OUT = CMD_PAGE_FIRST + 1, CMD_OUT_VOL, CMD_IN, CMD_IN_VOL, CMD_MUTE, CMD_SPEECH, CMD_MICPRIV };
+enum { CMD_OUT = CMD_PAGE_FIRST + 1, CMD_OUT_VOL, CMD_IN, CMD_IN_VOL, CMD_MUTE, CMD_SPEECH, CMD_MICPRIV, CMD_MICTEST };
+static HWND g_mictest, g_miclevel;
 
 struct sdev { WCHAR name[200], desc[200]; int vol; BOOL def, muted; };
 static struct sdev g_sinks[24], g_sources[24];
@@ -342,6 +343,13 @@ void set_build_sound(void)
     if (!g_nsources) { EnableWindow(c, FALSE); y = st_para(y - S(6), L"No input devices found."); }
     c = st_slider(&y, L"Input volume", 0, 100, d >= 0 ? min(g_sources[d].vol, 100) : 0, CMD_IN_VOL);
     EnableWindow(c, d >= 0);
+    /* Test your microphone: the chosen input's level while you speak, as
+     * Speech Recognition's (sg-dictate --meter) -- David 2026-10-02 */
+    mic_meter_stop();
+    g_mictest = st_button(&y, L"Test your microphone", CMD_MICTEST);
+    g_miclevel = pg_control(PROGRESS_CLASSW, L"", 0, st_x() + S(200), y - S(46) + S(11), S(300), S(10), -1);
+    EnableWindow(g_mictest, d >= 0);
+    pg_timer(200);
     if (!privacy_mic_allowed())
         y = st_para(y, L"Microphone access for this device is off, so apps and voice typing cannot use it.");
 
@@ -384,8 +392,29 @@ BOOL set_cmd_sound(int id, int code, HWND ctl)
         return TRUE;
     case CMD_SPEECH: navigate(PG_SPEECH); return TRUE;
     case CMD_MICPRIV: navigate(PG_S_PRIV_MIC); return TRUE;
+    case CMD_MICTEST:
+        if (mic_meter_poll() >= 0) {
+            mic_meter_stop();
+            SetWindowTextW(g_mictest, L"Test your microphone");
+            SendMessageW(g_miclevel, PBM_SETPOS, 0, 0);
+        } else if ((d = default_of(g_sources, g_nsources)) >= 0 && mic_meter_start(g_sources[d].name))
+            SetWindowTextW(g_mictest, L"Stop test");
+        return TRUE;
     }
     return FALSE;
+}
+
+void set_timer_sound(void)
+{
+    static BOOL was;
+    int lv = mic_meter_poll();
+    if (!g_mictest || !IsWindow(g_mictest)) return;
+    if (lv >= 0) { SendMessageW(g_miclevel, PBM_SETPOS, lv, 0); was = TRUE; }
+    else if (was) {
+        was = FALSE;
+        SetWindowTextW(g_mictest, L"Test your microphone");
+        SendMessageW(g_miclevel, PBM_SETPOS, 0, 0);
+    }
 }
 
 /* ---- Notifications & actions -------------------------------------------------------------- */

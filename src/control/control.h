@@ -315,6 +315,11 @@ void dump_personalize(void);
 void dump_update(void);
 void dump_network(void);
 void dump_speech(void);
+/* "Test microphone" (speech.c): sg-dictate --meter on a PipeWire source
+ * (empty: the default); poll: its level 0-100, -1 once over */
+BOOL mic_meter_start(const WCHAR *device);
+void mic_meter_stop(void);
+int  mic_meter_poll(void);
 void dump_items(void);
 int  personalize_set(int argc, WCHAR **argv);
 int  programs_uninstall_cli(const WCHAR *name);   /* --uninstall NAME */   /* --set KIND VALUE...: non-interactive */

@@ -20,7 +20,7 @@
     [PG_S_HOME]         = { L"Home",                         PG_COUNT,  set_build_home,      set_cmd_home }, \
     [PG_S_SEARCH]       = { L"Search results",               PG_S_HOME, set_build_search,    set_cmd_home }, \
     [PG_S_DISPLAY]      = { L"Display",                      PG_S_HOME, set_build_display,   set_cmd_display, NULL, set_timer_display }, \
-    [PG_S_SOUND]        = { L"Sound",                        PG_S_HOME, set_build_sound,     set_cmd_sound }, \
+    [PG_S_SOUND]        = { L"Sound",                        PG_S_HOME, set_build_sound,     set_cmd_sound, NULL, set_timer_sound }, \
     [PG_S_NOTIFY]       = { L"Notifications & actions",      PG_S_HOME, set_build_notify,    set_cmd_notify }, \
     [PG_S_POWER]        = { L"Power & sleep",                PG_S_HOME, set_build_power,     set_cmd_power }, \
     [PG_S_STORAGE]      = { L"Storage",                      PG_S_HOME, set_build_storage,   set_cmd_storage }, \
@@ -94,7 +94,7 @@ BOOL ctl_field(const char *s, int i, WCHAR *out, int cch);
 /* ---- page builders ------------------------------------------------------------------------- */
 void set_build_home(void);      void set_build_search(void);    BOOL set_cmd_home(int, int, HWND);
 void set_build_display(void);   BOOL set_cmd_display(int, int, HWND);   void set_timer_display(void);
-void set_build_sound(void);     BOOL set_cmd_sound(int, int, HWND);
+void set_build_sound(void);     BOOL set_cmd_sound(int, int, HWND);     void set_timer_sound(void);
 void set_build_notify(void);    BOOL set_cmd_notify(int, int, HWND);
 void set_build_power(void);     BOOL set_cmd_power(int, int, HWND);
 void set_build_storage(void);   BOOL set_cmd_storage(int, int, HWND);

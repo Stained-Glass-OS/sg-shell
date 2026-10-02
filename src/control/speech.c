@@ -476,7 +476,31 @@ static void phrase_remove(void)
     phrases_fill(NULL);
 }
 
-static void stop_test(void)
+/* ---- the microphone's level: "Test microphone", here and in Settings > Sound ---- */
+
+static int g_meter_last;
+static BOOL g_test_ui;          /* this page's button says "Stop test" */
+
+/* `sg-dictate --meter` on DEVICE (a PipeWire source; empty: the default) for
+ * up to 30 seconds, writing its level to a file of ours */
+BOOL mic_meter_start(const WCHAR *device)
+{
+    WCHAR dos[MAX_PATH], args[1024];
+    mic_meter_stop();
+    if (!temp_file(L"sg-speech-level.txt", dos, g_meter_file, MAX_PATH)) return FALSE;
+    if (device && device[0])
+        _snwprintf(args, ARRAYSIZE(args), L"--meter \"%S\" --seconds 30 --device \"%ls\"", g_meter_file, device);
+    else
+        _snwprintf(args, ARRAYSIZE(args), L"--meter \"%S\" --seconds 30", g_meter_file);
+    args[ARRAYSIZE(args) - 1] = 0;
+    if (!run_engine(args)) return FALSE;
+    g_testing = TRUE;
+    g_meter_last = 0;
+    g_test_started = GetTickCount();
+    return TRUE;
+}
+
+void mic_meter_stop(void)
 {
     WCHAR dos[MAX_PATH];
     char stop[MAX_PATH + 8];
@@ -485,24 +509,37 @@ static void stop_test(void)
     _snprintf(stop, sizeof(stop), "%s.stop", g_meter_file);
     unix_to_dos(stop, dos, MAX_PATH);
     CloseHandle(CreateFileW(dos, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL));
+}
+
+/* the level now (0-100), or -1 once the test is over */
+int mic_meter_poll(void)
+{
+    WCHAR dos[MAX_PATH];
+    char *text;
+    if (!g_testing) return -1;
+    unix_to_dos(g_meter_file, dos, MAX_PATH);
+    if ((text = read_dos_file(dos))) {
+        if (!strncmp(text, "LEVEL ", 6)) g_meter_last = atoi(text + 6);
+        else if (!strncmp(text, "DONE", 4) || !strncmp(text, "ERROR", 5)) g_testing = FALSE;
+        free(text);
+    }
+    if (g_testing && GetTickCount() - g_test_started > 31000) mic_meter_stop();
+    return g_testing ? g_meter_last : -1;
+}
+
+static void stop_test(void)
+{
+    g_test_ui = FALSE;
+    mic_meter_stop();
     if (g_test_btn) SetWindowTextW(g_test_btn, L"Test microphone");
     if (g_meter) SendMessageW(g_meter, PBM_SETPOS, 0, 0);
 }
 
 static void start_test(void)
 {
-    WCHAR dos[MAX_PATH], args[1024], mic[256] = L"";
+    WCHAR mic[256] = L"";
     reg_sz(HKEY_CURRENT_USER, SPEECH_KEY, L"Microphone", mic, ARRAYSIZE(mic));
-    if (!temp_file(L"sg-speech-level.txt", dos, g_meter_file, MAX_PATH)) return;
-    if (mic[0])
-        _snwprintf(args, ARRAYSIZE(args), L"--meter \"%S\" --seconds 30 --device \"%ls\"", g_meter_file, mic);
-    else
-        _snwprintf(args, ARRAYSIZE(args), L"--meter \"%S\" --seconds 30", g_meter_file);
-    args[ARRAYSIZE(args) - 1] = 0;
-    if (!run_engine(args)) return;
-    g_testing = TRUE;
-    g_test_started = GetTickCount();
-    SetWindowTextW(g_test_btn, L"Stop test");
+    if (mic_meter_start(mic)) { SetWindowTextW(g_test_btn, L"Stop test"); g_test_ui = TRUE; }
 }
 
 static void download(void)
@@ -531,10 +568,10 @@ BOOL cmd_speech(int id, int code, HWND ctl)
     case CMD_MIC:
         if (code != CBN_SELCHANGE) return TRUE;
         reg_set_sz(HKEY_CURRENT_USER, SPEECH_KEY, L"Microphone", sel > 0 && sel <= g_nmics ? g_mic_name[sel - 1] : L"");
-        if (g_testing) { stop_test(); start_test(); }
+        if (g_test_ui) { stop_test(); start_test(); }
         return TRUE;
     case CMD_TEST:
-        if (g_testing) stop_test(); else start_test();
+        if (g_test_ui) stop_test(); else start_test();
         return TRUE;
     case CMD_HOLD:
         set_setting(L"HoldToTalk", on);
@@ -570,20 +607,10 @@ BOOL cmd_speech(int id, int code, HWND ctl)
 void timer_speech(void)
 {
     if (g_downloading || (g_retry && IsWindowVisible(g_retry))) update_status();
-    if (g_testing) {
-        WCHAR dos[MAX_PATH];
-        char *text;
-        unix_to_dos(g_meter_file, dos, MAX_PATH);
-        if ((text = read_dos_file(dos))) {
-            if (!strncmp(text, "LEVEL ", 6)) SendMessageW(g_meter, PBM_SETPOS, atoi(text + 6), 0);
-            else if (!strncmp(text, "DONE", 4) || !strncmp(text, "ERROR", 5)) {
-                g_testing = FALSE;
-                SetWindowTextW(g_test_btn, L"Test microphone");
-                SendMessageW(g_meter, PBM_SETPOS, 0, 0);
-            }
-            free(text);
-        }
-        if (GetTickCount() - g_test_started > 31000) stop_test();
+    if (g_test_ui && g_test_btn && IsWindow(g_test_btn)) {
+        int lv = mic_meter_poll();
+        if (lv >= 0) SendMessageW(g_meter, PBM_SETPOS, lv, 0);
+        else stop_test();
     }
 }
 
