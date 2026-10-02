@@ -9,6 +9,10 @@ sg-shell (0.1.0-95) unstable; urgency=medium
     choice says "(Linux)". Depends on xdg-utils. Test:
     test/linuxapps-check.sh (mutant NO_PROGIDS); VM: Firefox chosen, a link
     from a Windows program opened in it.
+  * Two backdrops for a session's start: "Welcome" (backdrop.sgbd) and, for
+    a person's first sign-in, "Getting things ready" (backdrop-first.sgbd,
+    which sg-session chooses then); the first-sign-in words showed at every
+    sign-in (David 2026-10-02).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 23:00:00 +0000
 

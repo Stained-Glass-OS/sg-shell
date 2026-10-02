@@ -65,6 +65,7 @@ override_dh_auto_install:
 	install -d debian/sg-shell/usr/share/stained-glass/defaults.d
 	# what sg-compositor shows where no window is (its backdrop.c)
 	python3 theme/gen-backdrop.py debian/sg-shell/usr/share/stained-glass/backdrop.sgbd
+	python3 theme/gen-backdrop.py --first debian/sg-shell/usr/share/stained-glass/backdrop-first.sgbd
 	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
 	# Linux apps Start does not list: the system's own plumbing (src/linuxapps)
 	install -m0644 src/linuxapps/linux-apps-hidden debian/sg-shell/usr/share/stained-glass/linux-apps-hidden

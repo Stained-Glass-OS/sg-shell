@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""gen-backdrop.py OUT.sgbd -- what the screen shows where no window is.
+"""gen-backdrop.py [--first] OUT.sgbd -- what the screen shows where no window is.
 
 sg-compositor draws it beneath every window (its backdrop.c): the colour,
 and this picture centred -- the four-diamond mark, "Getting things ready",
 "This might take a minute." It shows while a session starts and nothing is
 drawn yet: after the first-run setup, the first session takes a minute, and
-it was a black screen.
+it was a black screen. "Getting things ready" is for a person's first session
+(--first, backdrop-first.sgbd, which sg-session-start chooses then); every
+other sign-in shows "Welcome", as Windows does (David 2026-10-02: the first
+sign-in's words at every sign-in).
 
 The file: "SGBD", width, height, colour (0xAARRGGBB), little-endian uint32,
 then the picture's premultiplied ARGB8888 pixels (little-endian: B, G, R, A).
@@ -35,7 +38,7 @@ def diamond(d, cx, cy, r, color):
     d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], fill=color + (255,))
 
 
-def main(out):
+def main(out, first):
     img = Image.new("RGBA", (W * K, H * K), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     # the mark: four diamonds around a centre, a small gap between them
@@ -45,8 +48,9 @@ def main(out):
     diamond(d, cx + off, cy, r, MARK[1])
     diamond(d, cx, cy + off, r, MARK[2])
     diamond(d, cx - off, cy, r, MARK[3])
-    for text, size, y, alpha, light in (("Getting things ready", 34, 180, 255, True),
-                                        ("This might take a minute.", 17, 232, 200, False)):
+    lines = ((("Getting things ready", 34, 180, 255, True), ("This might take a minute.", 17, 232, 200, False))
+             if first else (("Welcome", 34, 196, 255, True),))
+    for text, size, y, alpha, light in lines:
         f = font(size * K, light)
         w = d.textlength(text, font=f)
         d.text(((W * K - w) / 2, y * K), text, font=f, fill=(255, 255, 255, alpha))
@@ -64,4 +68,5 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "backdrop.sgbd")
+    args = [a for a in sys.argv[1:] if a != "--first"]
+    main(args[0] if args else "backdrop.sgbd", "--first" in sys.argv[1:])
