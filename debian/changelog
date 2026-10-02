@@ -7,6 +7,10 @@ sg-shell (0.1.0-91) unstable; urgency=medium
     forward (wine-sg 0759). Not on the Details or Users tabs: they are not
     processes of this system. Test: test/taskmgr-check.sh (mutants
     NO_LINUX_APPS, LINUX_NO_SWITCH fail it).
+  * A Control Panel item opens with "open" too: Run's "sysdm.cpl" (and
+    `start sysdm.cpl`) asked for "open", a .cpl had only cplopen, and it
+    said "There is no program configured to open this type of file" (QA
+    2026-10-02). Test: test/cplfile-check.sh (without the verb it fails).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 09:00:00 +0000
 

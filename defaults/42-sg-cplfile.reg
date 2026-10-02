@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: a Control Panel item (.cpl) opens with "open" too, as
+; with its own verb cplopen. Run's "sysdm.cpl" and `start sysdm.cpl` ask for
+; "open" by name, and a .cpl has only cplopen: "There is no program
+; configured to open this type of file" (QA 2026-10-02).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\cplfile\shell\open]
+@="Open with Control Panel"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\cplfile\shell\open\command]
+@="rundll32.exe shell32.dll,Control_RunDLL \"%1\",%*"
