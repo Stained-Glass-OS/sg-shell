@@ -17,6 +17,18 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\DefaultIcon]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe,0"
 
+; each file's own icon, the app's (sglinuxicon64.dll; the icon above when
+; it has none made)
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\shellex\IconHandler]
+@="{0FADADA1-718E-488D-A815-66A920A012EF}"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{0FADADA1-718E-488D-A815-66A920A012EF}]
+@="Stained Glass Linux app icon"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{0FADADA1-718E-488D-A815-66A920A012EF}\InprocServer32]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sglinuxicon64.dll"
+"ThreadingModel"="Apartment"
+
 [HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\shell]
 @="open"
 

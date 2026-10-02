@@ -30,6 +30,7 @@ override_dh_auto_install:
 	    build/sg-fontview64.exe \
 	    build/sg-pdf64.exe \
 	    build/sgcompat64.dll \
+	    build/sglinuxicon64.dll \
 	    build/sg-magnify64.exe build/sg-osk64.exe \
 	    build/sg-browser64.exe \
 	    build/sg-store64.exe src/store/sg-debinfo \

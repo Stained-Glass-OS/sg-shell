@@ -1,0 +1,4 @@
+LIBRARY sglinuxicon64.dll
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

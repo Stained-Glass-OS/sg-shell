@@ -5,6 +5,12 @@ sg-shell (0.1.0-94) unstable; urgency=medium
     (to 2000 characters): Sonos's EntryPointNotFoundException was cut off
     at 300 behind two wrappers (David 2026-10-02). Test:
     test/bugreport-check.sh.
+  * A Linux app's .desktop file shows the app's icon: sglinuxicon64.dll,
+    the icon handler of its type (defaults/88-sg-linuxapps.reg; wine-sg 0767
+    asks it), names the icon sg-linuxapp made for the app -- by the file's
+    name, else its Icon=. Steam's steam.desktop on the desktop showed the
+    Store's icon (David 2026-10-02). Test: test/linuxicon-check.sh (mutant
+    LINUXICON_NONE).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 20:45:00 +0000
 

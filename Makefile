@@ -218,6 +218,11 @@ build:
 	@$(MINGW64) -O2 -municode -shared -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
 	    -o $(BUILD)/sgcompat64.dll src/compat/sgcompat.c $(BUILD)/sgcompat-res64.o src/compat/sgcompat.def \
 	    -lole32 -luuid -lshell32 -lshlwapi -lcomctl32 -ladvapi32 -luser32 && echo "built sgcompat (64-bit)"
+	@# A Linux app's .desktop file shows the app's icon: the icon handler of
+	@# its type (src/linuxapps/sglinuxicon.c, wine-sg 0767).
+	@$(MINGW64) -O2 -municode -shared -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
+	    -o $(BUILD)/sglinuxicon64.dll src/linuxapps/sglinuxicon.c src/linuxapps/sglinuxicon.def \
+	    -lole32 -luuid -lshell32 -lshlwapi && echo "built sglinuxicon (64-bit)"
 	@python3 src/fontview/gen-icon.py $(BUILD)/sg-fontview.ico $(BUILD)/sg-fonts.ico
 	@$(WINDRES64) -I src/fontview -I $(BUILD) src/fontview/fontview.rc -O coff -o $(BUILD)/sg-fontview-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $(FONTVIEW_SRC) \
@@ -340,6 +345,7 @@ test-volume: build
 	@sh test/cplfile-check.sh
 	@sh test/runas-check.sh
 	@sh test/compat-check.sh
+	@sh test/linuxicon-check.sh
 	@sh test/wordpad-check.sh
 	@sh test/fontview-check.sh
 	@sh test/magnify-check.sh
