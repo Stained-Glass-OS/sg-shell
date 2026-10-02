@@ -68,8 +68,22 @@ if command -v Xvfb >/dev/null && command -v "$MINGW" >/dev/null; then
     kill "$VP" "$XP" 2>/dev/null
     [ "$out" = "shown=1 after=0" ] && pass "a second click on the icon closes the flyout (no flicker reopen)" \
         || { fail "flyout second click: $out (want shown=1 after=0)"; sed 's/^/      vol: /' "$T/vol.log" | head -5; }
+    # --- the chime: a volume change from the flyout (a key, the wheel, the
+    # slider let go) plays it, after the change (David 2026-10-02; mutant
+    # NO_CHIME)
+    "$MINGW" -O2 -municode -o "$T/vol-key.exe" "$HERE/test/sg-vol-key.c" 2>/dev/null
+    Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display2" >/dev/null 2>&1 & XP=$!
+    i=0; while [ ! -s "$T/display2" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    : > "$T/calls"
+    DISPLAY=":$(cat "$T/display2")" SG_SETTINGSCTL="$T/settingsctl" "$WINE_DIR/bin/wine" "$T/sg-volume64.exe" >"$T/vol.log" 2>&1 & VP=$!
+    WINEPREFIX="$T/pfx" DISPLAY=":$(cat "$T/display2")" "$WINE_DIR/bin/wine" "$T/vol-key.exe" >/dev/null 2>&1
+    kill "$VP" "$XP" 2>/dev/null
+    v=$(grep -n '^sound volume sink' "$T/calls" | head -1 | cut -d: -f1)
+    c=$(grep -n '^sound chime' "$T/calls" | head -1 | cut -d: -f1)
+    [ -n "$v" ] && [ -n "$c" ] && [ "$c" -gt "$v" ] && pass "a volume change from the flyout chimes, after the change" \
+        || fail "no chime after the change: $(tr '\n' '|' < "$T/calls")"
 else
-    echo "SKIP  flyout second-click (no Xvfb or mingw)"
+    echo "SKIP  flyout second-click and chime (no Xvfb or mingw)"
 fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

@@ -383,7 +383,11 @@ BOOL set_cmd_sound(int id, int code, HWND ctl)
     case CMD_OUT_VOL: case CMD_IN_VOL:
         if (code == (PG_SCROLL_CODE | TB_ENDTRACK)) {
             _snwprintf(v, ARRAYSIZE(v), L"%d", (int)SendMessageW(ctl, TBM_GETPOS, 0, 0));
-            if (id == CMD_OUT_VOL && (d = default_of(g_sinks, g_nsinks)) >= 0) sound_set(L"volume", L"sink", g_sinks[d].name, v);
+            if (id == CMD_OUT_VOL && (d = default_of(g_sinks, g_nsinks)) >= 0) {
+                BOOL ok;
+                sound_set(L"volume", L"sink", g_sinks[d].name, v);
+                free(ctl_run(L"sound chime", &ok, NULL, 0, 3000));   /* at the new volume */
+            }
             if (id == CMD_IN_VOL && (d = default_of(g_sources, g_nsources)) >= 0) sound_set(L"volume", L"source", g_sources[d].name, v);
         }
         return TRUE;

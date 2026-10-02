@@ -133,6 +133,7 @@ struct change { WCHAR args[512]; };
 static CRITICAL_SECTION g_cs;
 static struct change g_pending[8];
 static int g_npending;
+static BOOL g_chime;            /* the chime after the changes (sound chime) */
 static HANDLE g_wake;
 
 static void queue_change(const WCHAR *verb, const WCHAR *name, const WCHAR *value)
@@ -161,14 +162,20 @@ static DWORD WINAPI worker(void *arg)
         struct state *st;
         char *ans;
         int n, i;
+        BOOL chime;
 
         WaitForSingleObject(g_wake, 5000);   /* a change, a refresh, or every 5 s */
         EnterCriticalSection(&g_cs);
         n = g_npending;
         memcpy(todo, g_pending, n * sizeof(*todo));
         g_npending = 0;
+        chime = g_chime;
+        g_chime = FALSE;
         LeaveCriticalSection(&g_cs);
         for (i = 0; i < n; i++) free(ctl_run(todo[i].args, 8000));
+        /* at the new volume, so the person hears where it is (David
+         * 2026-10-02); one for a burst of wheel steps */
+        if (chime) free(ctl_run(L"sound chime", 3000));
         if (!(st = calloc(1, sizeof(*st)))) continue;
         ans = ctl_run(L"sound", 8000);
         st->ok = parse_sinks(ans, st->sinks, &st->count);
@@ -385,6 +392,15 @@ static void set_volume(int v, BOOL send)
     g_sinks[g_cur].vol = v;
     if (send)
     {
+#ifndef SG_MUTANT_NO_CHIME
+        /* the slider let go, a key, the wheel -- not while it is dragged */
+        if (!g_dragging)
+        {
+            EnterCriticalSection(&g_cs);
+            g_chime = TRUE;
+            LeaveCriticalSection(&g_cs);
+        }
+#endif
         _snwprintf(value, ARRAYSIZE(value), L"%d", v);
         queue_change(L"volume", g_sinks[g_cur].name, value);
         /* moving the slider unmutes, as on Windows */

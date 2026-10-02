@@ -22,6 +22,11 @@ sg-shell (0.1.0-92) unstable; urgency=medium
   * Settings > Sound: "Test your microphone" under the input device, with a
     level bar, as Speech Recognition's (David 2026-10-02); the meter is
     shared between them (mic_meter_start/poll/stop).
+  * The volume chime: changing the volume from the taskbar's flyout (the
+    slider let go, an arrow key, the wheel) or Settings > Sound's slider
+    plays it at the new volume, so the right level is easy to find (David
+    2026-10-02; sg-session 0.1.0-91's "sound chime"). Gate:
+    test/volume-check.sh (mutant NO_CHIME).
   * test/dictate-check.sh reads Stained Glass's Notepad (its editor control,
     wine-sg 0100), waits for the text typed when the key is released, and
     counts the partial text's pixels with subpixel antialiasing.
