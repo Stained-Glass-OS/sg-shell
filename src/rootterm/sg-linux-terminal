@@ -5,6 +5,11 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 cd "${HOME:-/}" 2>/dev/null || cd /
+# Copy and paste as in the Windows console (David 2026-10-01: Ctrl+Shift+V
+# did nothing, and nothing could be copied out): what you select is copied,
+# a right-click pastes; Ctrl+Shift+C / Ctrl+Shift+V and Shift+Insert too.
+# xterm's own default pasted only with the middle button.
+SG_XTERM_COPY_PASTE='XTerm*VT100.translations: #override \nCtrl Shift <Key>C: copy-selection(CLIPBOARD) \nCtrl Shift <Key>V: insert-selection(CLIPBOARD) \nShift <Key>Insert: insert-selection(CLIPBOARD) \n<Btn1Up>: select-end(CLIPBOARD, PRIMARY) \n<Btn3Down>: ignore() \n<Btn3Up>: insert-selection(CLIPBOARD)'
 exec xterm -class SgLinuxTerminal -title 'Linux Terminal' \
     -fa 'Cascadia Mono' -fs 11 -bg '#0c0c0c' -fg '#cccccc' -cr '#cccccc' \
-    -geometry 110x30 -sl 5000 -xrm 'XTerm*selectToClipboard: true' -ls
+    -geometry 110x30 -sl 5000 -xrm 'XTerm*selectToClipboard: true' -xrm "$SG_XTERM_COPY_PASTE" -ls
