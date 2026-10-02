@@ -41,6 +41,10 @@ Windows Registry Editor Version 5.00
 "Tahoma"="Inter"
 "MS Sans Serif"="Inter"
 "Microsoft Sans Serif"="Inter"
+; .NET programs make fonts of these by name (GDI+ finds them only so):
+; AmbirScan's Verdana was "not found"
+"Verdana"="Inter"
+"Trebuchet MS"="Inter"
 ; The icon font programs draw caption buttons with (Firefox's minimize,
 ; maximize, restore, close are U+E921-E923 and U+E8BB): Stained Glass Icons,
 ; the shell's own (sg-icons-font.py). Without it those buttons were boxes.

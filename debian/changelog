@@ -11,6 +11,10 @@ sg-shell (0.1.0-94) unstable; urgency=medium
     name, else its Icon=. Steam's steam.desktop on the desktop showed the
     Store's icon (David 2026-10-02). Test: test/linuxicon-check.sh (mutant
     LINUXICON_NONE).
+  * Verdana and Trebuchet MS are Inter, as Tahoma and Segoe UI are (font
+    substitutes): GDI+ found no font by those names, and .NET programs that
+    make one failed (AmbirScan, David 2026-10-02; wine-sg 0768 does the
+    rest).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 20:45:00 +0000
 
