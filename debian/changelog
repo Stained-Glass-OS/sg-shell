@@ -1,3 +1,15 @@
+sg-shell (0.1.0-90) unstable; urgency=medium
+
+  * The Visual C++ 2015-2022 runtime is marked present (Wine's own), where
+    installers look before running Microsoft's redistributable: Winamp's
+    ran it with no arguments, its window waited for "I agree", and the
+    silent install from SG Store hung (Store walk 2026-10-01). SG Store
+    already treats the runtime as present. Test: test/vcruntime-check.sh
+    (both runtimes in both registry views; Winamp's real silent install
+    with SG_WINAMP_SETUP; without the marks it fails).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 07:45:00 +0000
+
 sg-shell (0.1.0-89) unstable; urgency=medium
 
   * Terminal draws box-drawing characters and block elements itself, in the

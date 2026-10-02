@@ -1,0 +1,42 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: the Visual C++ 2015-2022 runtime is there -- Wine's own
+; (msvcp140, vcruntime140, ucrtbase and the rest) -- as the redistributable's
+; installer marks it. Installers look here before they run the
+; redistributable; without these Winamp's (and others') ran it with no
+; arguments, its window waited for "I agree", and a silent install hung (SG
+; Store walk 2026-10-01). SG Store already treats the runtime as present.
+; Both the x86 and x64 runtimes, in both registry views, where installers of
+; either bitness look.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\x86]
+"Installed"=dword:00000001
+"Version"="v14.44.35211.00"
+"Major"=dword:0000000e
+"Minor"=dword:0000002c
+"Bld"=dword:0000898b
+"Rbld"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\x64]
+"Installed"=dword:00000001
+"Version"="v14.44.35211.00"
+"Major"=dword:0000000e
+"Minor"=dword:0000002c
+"Bld"=dword:0000898b
+"Rbld"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x86]
+"Installed"=dword:00000001
+"Version"="v14.44.35211.00"
+"Major"=dword:0000000e
+"Minor"=dword:0000002c
+"Bld"=dword:0000898b
+"Rbld"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64]
+"Installed"=dword:00000001
+"Version"="v14.44.35211.00"
+"Major"=dword:0000000e
+"Minor"=dword:0000002c
+"Bld"=dword:0000898b
+"Rbld"=dword:00000000
