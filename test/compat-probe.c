@@ -4,6 +4,9 @@
  *   compat-probe set PATH      -- host the tab, set every setting as a person
  *                                 would, press Apply
  *   compat-probe preset PATH   -- host the tab, press Apply (recommended), Apply
+ *   compat-probe mklink LNK TARGET [ARGS] -- make a shortcut
+ *   compat-probe shortcut LNK  -- host LNK's pages, print the Shortcut tab's
+ *                                 fields (TYPE, LOCATION, TARGET, LINUX)
  * SPDX-License-Identifier: AGPL-3.0-or-later */
 #define COBJMACROS
 #define INITGUID
@@ -155,6 +158,61 @@ static int host( const WCHAR *path, BOOL preset )
     return 0;
 }
 
+static int mklink( const WCHAR *lnk, const WCHAR *target, const WCHAR *args )
+{
+    IShellLinkW *link;
+    IPersistFile *file;
+    HRESULT hr;
+    if (FAILED(hr = CoCreateInstance( &CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link )))
+    { printf( "NOLINK %08lx\n", hr ); return 1; }
+    IShellLinkW_SetPath( link, target );
+    if (args) IShellLinkW_SetArguments( link, args );
+    IShellLinkW_QueryInterface( link, &IID_IPersistFile, (void **)&file );
+    hr = IPersistFile_Save( file, lnk, TRUE );
+    printf( "SAVED %08lx\n", hr );
+    return FAILED(hr);
+}
+
+static int shortcut( const WCHAR *lnk )
+{
+    static const struct { int id; const char *name; } fields[] = {
+        { IDC_SC_TYPE, "TYPE" }, { IDC_SC_LOCATION, "LOCATION" }, { IDC_SC_TARGET, "TARGET" }, { IDC_SC_LINUX, "LINUX" } };
+    IShellExtInit *init;
+    IShellPropSheetExt *sheet_ext;
+    IShellItem *item;
+    IDataObject *data;
+    PROPSHEETHEADERW psh = { sizeof(psh) };
+    HWND sheet, page;
+    WCHAR text[1024];
+    HRESULT hr;
+    int i;
+
+    if (FAILED(hr = CoCreateInstance( &CLSID_SgCompat, NULL, CLSCTX_INPROC_SERVER, &IID_IShellExtInit, (void **)&init )))
+    { printf( "NOCLASS %08lx\n", hr ); return 1; }
+    if (FAILED(SHCreateItemFromParsingName( lnk, NULL, &IID_IShellItem, (void **)&item )) ||
+        FAILED(IShellItem_BindToHandler( item, NULL, &SG_BHID_DataObject, &IID_IDataObject, (void **)&data )))
+    { printf( "NODATA\n" ); return 1; }
+    if (FAILED(hr = IShellExtInit_Initialize( init, NULL, data, NULL ))) { printf( "INIT %08lx\n", hr ); return 1; }
+    IShellExtInit_QueryInterface( init, &IID_IShellPropSheetExt, (void **)&sheet_ext );
+    IShellPropSheetExt_AddPages( sheet_ext, add_page, 0 );
+    if (!npages) { printf( "NOPAGE\n" ); return 1; }
+    psh.dwFlags = PSH_MODELESS | PSH_NOAPPLYNOW;
+    psh.pszCaption = L"compat-probe";
+    psh.nPages = npages;
+    psh.phpage = pages;
+    sheet = (HWND)PropertySheetW( &psh );
+    page = PropSheet_GetCurrentPageHwnd( sheet );
+    if (!GetDlgItem( page, IDC_SC_TARGET )) { printf( "NOSHORTCUTPAGE\n" ); DestroyWindow( sheet ); return 1; }
+    for (i = 0; i < (int)ARRAYSIZE(fields); i++)
+    {
+        GetDlgItemTextW( page, fields[i].id, text, ARRAYSIZE(text) );
+        printf( "%s %ls\n", fields[i].name, text );
+    }
+    fflush( stdout );
+    DestroyWindow( sheet );
+    return 0;
+}
+
 int wmain( int argc, WCHAR **argv )
 {
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_WIN95_CLASSES };
@@ -164,5 +222,7 @@ int wmain( int argc, WCHAR **argv )
     if (!lstrcmpW( argv[1], L"tabs" )) return tabs( argv[2] );
     if (!lstrcmpW( argv[1], L"set" )) return host( argv[2], FALSE );
     if (!lstrcmpW( argv[1], L"preset" )) return host( argv[2], TRUE );
+    if (!lstrcmpW( argv[1], L"mklink" ) && argc >= 4) return mklink( argv[2], argv[3], argc >= 5 ? argv[4] : NULL );
+    if (!lstrcmpW( argv[1], L"shortcut" )) return shortcut( argv[2] );
     return 2;
 }

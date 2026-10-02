@@ -22,6 +22,13 @@
  * Recommended settings come from /usr/share/stained-glass/compat-presets.ini,
  * our own list, one [program.exe] section each.
  *
+ * A shortcut also gets a Shortcut tab, as on Windows: its target, Start in
+ * and comment (saved on Apply), the target's folder, and Open File Location.
+ * The Properties of a desktop icon said only where the shortcut was (the
+ * Desktop); and for a Linux app's shortcut (sg-linuxapp64.exe --run
+ * X.desktop) the tab names the Linux program and its folder, from the
+ * .desktop file's Exec (David 2026-10-02).
+ *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #define COBJMACROS
@@ -77,7 +84,15 @@ struct compat
     LONG ref;
     WCHAR path[MAX_PATH];     /* the program's full path */
     WCHAR exe[MAX_PATH];      /* its file name: the AppDefaults key */
+    BOOL compat;              /* a program (or its shortcut): the Compatibility tab */
+    BOOL link;                /* a shortcut: the Shortcut tab */
+    WCHAR lnk[MAX_PATH];      /* the shortcut file */
+    WCHAR args[1024], workdir[MAX_PATH], comment[512];
+    WCHAR linux_cmd[1024];    /* a Linux app's command (its .desktop's Exec) */
+    WCHAR linux_bin[MAX_PATH];/* ...its program, as a DOS path (Z:\usr\bin\...) */
 };
+
+static void linux_target( struct compat *c );
 
 /* ---- settings ------------------------------------------------------------ */
 
@@ -427,6 +442,182 @@ static INT_PTR CALLBACK page_proc( HWND dlg, UINT msg, WPARAM wp, LPARAM lp )
 
 /* ---- COM ------------------------------------------------------------------ */
 
+/* ---- the Shortcut tab ---------------------------------------------------- */
+
+/* A Unix path's DOS name (Z:\...), or "" */
+static void dos_of( const char *unix_path, WCHAR *out, DWORD chars )
+{
+    static WCHAR *(CDECL *to_dos)(const char *);
+    WCHAR *d;
+    out[0] = 0;
+    if (!to_dos) to_dos = (void *)GetProcAddress( GetModuleHandleW( L"kernel32.dll" ), "wine_get_dos_file_name" );
+    if (to_dos && (d = to_dos( unix_path )))
+    {
+        lstrcpynW( out, d, chars );
+        HeapFree( GetProcessHeap(), 0, d );
+    }
+}
+
+/* A Linux app's shortcut runs sg-linuxapp64.exe --run X.desktop: the program
+ * is the .desktop's Exec -- its first word, looked for where the session's
+ * PATH would find it */
+static void linux_target( struct compat *c )
+{
+    static const char *const dirs[] = { "/usr/local/bin", "/usr/bin", "/bin", "/usr/games", "/usr/local/games",
+                                        "/var/lib/flatpak/exports/bin", "/snap/bin" };
+    WCHAR desktop[MAX_PATH], args[ARRAYSIZE(c->args)], *p, *q;
+    char line[2048], word[512];
+    FILE *f;
+    int i;
+
+    if (lstrcmpiW( PathFindFileNameW( c->path ), L"sg-linuxapp64.exe" ) && lstrcmpiW( PathFindFileNameW( c->path ), L"sg-linuxapp.exe" ))
+        return;
+    lstrcpynW( args, c->args, ARRAYSIZE(args) );   /* cut here, not in the Target shown */
+#ifdef SG_MUTANT_TARGET_CUT
+    if (!(p = wcsstr( c->args, L"--run" ))) return;
+#else
+    if (!(p = wcsstr( args, L"--run" ))) return;
+#endif
+    p += 5;
+    while (*p == ' ') p++;
+    if (*p == '"') { p++; if ((q = wcschr( p, '"' ))) *q = 0; }
+    lstrcpynW( desktop, p, MAX_PATH );
+    if (desktop[0] == '/')   /* a Unix path */
+    {
+        char u[MAX_PATH * 3];
+        WideCharToMultiByte( CP_UTF8, 0, desktop, -1, u, sizeof(u), NULL, NULL );
+        dos_of( u, desktop, MAX_PATH );
+    }
+    if (!(f = _wfopen( desktop, L"r" ))) return;
+    while (fgets( line, sizeof(line), f ))
+    {
+        char *e = line, *w;
+        if (strncmp( line, "Exec=", 5 )) continue;
+        e += 5;
+        e[strcspn( e, "\r\n" )] = 0;
+        /* the command without its field codes (%u, %F, ...) */
+        {
+            char clean[2048];
+            int n = 0;
+            for (w = e; *w && n < (int)sizeof(clean) - 1; w++)
+            {
+                if (*w == '%' && w[1]) { w++; if (*w == '%') clean[n++] = '%'; continue; }
+                clean[n++] = *w;
+            }
+            while (n && clean[n - 1] == ' ') n--;
+            clean[n] = 0;
+            MultiByteToWideChar( CP_UTF8, 0, clean, -1, c->linux_cmd, ARRAYSIZE(c->linux_cmd) );
+            e = clean;
+            if (*e == '"') { e++; e[strcspn( e, "\"" )] = 0; }
+            else e[strcspn( e, " " )] = 0;
+            lstrcpynA( word, e, sizeof(word) );
+        }
+        break;
+    }
+    fclose( f );
+    if (!c->linux_cmd[0]) return;
+    if (word[0] == '/') dos_of( word, c->linux_bin, MAX_PATH );
+    else for (i = 0; i < (int)ARRAYSIZE(dirs) && !c->linux_bin[0]; i++)
+    {
+        char full[1024];
+        WCHAR dos[MAX_PATH];
+        snprintf( full, sizeof(full), "%s/%s", dirs[i], word );
+        dos_of( full, dos, MAX_PATH );
+        if (dos[0] && GetFileAttributesW( dos ) != INVALID_FILE_ATTRIBUTES) lstrcpynW( c->linux_bin, dos, MAX_PATH );
+    }
+}
+
+/* the target as the person reads it: the program and its arguments */
+static void target_text( const struct compat *c, WCHAR *out, DWORD chars )
+{
+    if (c->args[0]) _snwprintf( out, chars, wcschr( c->path, ' ' ) ? L"\"%ls\" %ls" : L"%ls %ls", c->path, c->args );
+    else lstrcpynW( out, c->path, chars );
+    out[chars - 1] = 0;
+}
+
+static INT_PTR CALLBACK shortcut_proc( HWND dlg, UINT msg, WPARAM wp, LPARAM lp )
+{
+    struct compat *c = (struct compat *)GetWindowLongPtrW( dlg, DWLP_USER );
+    WCHAR buf[2048], folder[MAX_PATH];
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+    {
+        BOOL linux;
+        HICON icon = NULL;
+        c = (struct compat *)((PROPSHEETPAGEW *)lp)->lParam;
+        SetWindowLongPtrW( dlg, DWLP_USER, (LONG_PTR)c );
+        linux = c->linux_cmd[0] != 0;
+        lstrcpynW( buf, PathFindFileNameW( c->lnk ), ARRAYSIZE(buf) );
+        PathRemoveExtensionW( buf );
+        SetDlgItemTextW( dlg, IDC_SC_NAME, buf );
+        ExtractIconExW( c->lnk, 0, &icon, NULL, 1 );
+        if (icon) SendDlgItemMessageW( dlg, IDC_SC_ICON, STM_SETICON, (WPARAM)icon, 0 );
+        SetDlgItemTextW( dlg, IDC_SC_TYPE, linux ? L"Linux application" :
+                         !lstrcmpiW( PathFindExtensionW( c->path ), L".exe" ) ? L"Application" : L"File" );
+        lstrcpynW( folder, linux && c->linux_bin[0] ? c->linux_bin : c->path, MAX_PATH );
+        PathRemoveFileSpecW( folder );
+        SetDlgItemTextW( dlg, IDC_SC_LOCATION, folder );
+        ShowWindow( GetDlgItem( dlg, IDC_SC_LINUX_LABEL ), linux ? SW_SHOW : SW_HIDE );
+        ShowWindow( GetDlgItem( dlg, IDC_SC_LINUX ), linux ? SW_SHOW : SW_HIDE );
+        SetDlgItemTextW( dlg, IDC_SC_LINUX, c->linux_cmd );
+        target_text( c, buf, ARRAYSIZE(buf) );
+        SetDlgItemTextW( dlg, IDC_SC_TARGET, buf );
+        SetDlgItemTextW( dlg, IDC_SC_START, c->workdir );
+        SetDlgItemTextW( dlg, IDC_SC_COMMENT, c->comment );
+        return TRUE;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDC_SC_OPEN)
+        {
+            /* the program selected in File Explorer -- the Linux program's
+             * own file for a Linux app */
+            const WCHAR *what = c->linux_bin[0] ? c->linux_bin : c->path;
+            _snwprintf( buf, ARRAYSIZE(buf), L"/select,\"%ls\"", what );
+            buf[ARRAYSIZE(buf) - 1] = 0;
+            ShellExecuteW( dlg, NULL, L"explorer.exe", buf, NULL, SW_SHOWNORMAL );
+        }
+        else if (HIWORD(wp) == EN_CHANGE && LOWORD(wp) != IDC_SC_LINUX) PropSheet_Changed( GetParent( dlg ), dlg );
+        return TRUE;
+    case WM_NOTIFY:
+        if (((NMHDR *)lp)->code == PSN_APPLY)
+        {
+            IShellLinkW *link;
+            IPersistFile *pf;
+            WCHAR target[2048], *args;
+            GetDlgItemTextW( dlg, IDC_SC_TARGET, target, ARRAYSIZE(target) );
+            GetDlgItemTextW( dlg, IDC_SC_START, c->workdir, MAX_PATH );
+            GetDlgItemTextW( dlg, IDC_SC_COMMENT, c->comment, ARRAYSIZE(c->comment) );
+            /* "program" args, or program args */
+            args = PathGetArgsW( target );
+            if (args > target && args[-1] == ' ') args[-1] = 0;
+            lstrcpynW( c->args, args, ARRAYSIZE(c->args) );
+            PathUnquoteSpacesW( target );
+            lstrcpynW( c->path, target, MAX_PATH );
+            if (SUCCEEDED(CoCreateInstance( &CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link )))
+            {
+                if (SUCCEEDED(IShellLinkW_QueryInterface( link, &IID_IPersistFile, (void **)&pf )))
+                {
+                    if (SUCCEEDED(IPersistFile_Load( pf, c->lnk, STGM_READWRITE )))
+                    {
+                        IShellLinkW_SetPath( link, c->path );
+                        IShellLinkW_SetArguments( link, c->args );
+                        IShellLinkW_SetWorkingDirectory( link, c->workdir );
+                        IShellLinkW_SetDescription( link, c->comment );
+                        IPersistFile_Save( pf, c->lnk, TRUE );
+                    }
+                    IPersistFile_Release( pf );
+                }
+                IShellLinkW_Release( link );
+            }
+            SetWindowLongPtrW( dlg, DWLP_MSGRESULT, PSNRET_NOERROR );
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
 static inline struct compat *from_init( IShellExtInit *i ) { return CONTAINING_RECORD( i, struct compat, IShellExtInit_iface ); }
 static inline struct compat *from_sheet( IShellPropSheetExt *i ) { return CONTAINING_RECORD( i, struct compat, IShellPropSheetExt_iface ); }
 
@@ -470,18 +661,27 @@ static HRESULT WINAPI init_Initialize( IShellExtInit *iface, PCIDLIST_ABSOLUTE f
             {
                 if (SUCCEEDED(IShellLinkW_QueryInterface( link, &IID_IPersistFile, (void **)&pf )))
                 {
-                    if (SUCCEEDED(IPersistFile_Load( pf, file, STGM_READ )) &&
-                        SUCCEEDED(IShellLinkW_GetPath( link, c->path, MAX_PATH, NULL, 0 )) && c->path[0])
+                    if (SUCCEEDED(IPersistFile_Load( pf, file, STGM_READ )))
+                    {
+                        IShellLinkW_GetPath( link, c->path, MAX_PATH, NULL, 0 );
+                        IShellLinkW_GetArguments( link, c->args, ARRAYSIZE(c->args) );
+                        IShellLinkW_GetWorkingDirectory( link, c->workdir, MAX_PATH );
+                        IShellLinkW_GetDescription( link, c->comment, ARRAYSIZE(c->comment) );
+                        lstrcpynW( c->lnk, file, MAX_PATH );
+                        c->link = TRUE;
                         hr = S_OK;
+                    }
                     IPersistFile_Release( pf );
                 }
                 IShellLinkW_Release( link );
             }
-            if (hr == S_OK && lstrcmpiW( PathFindExtensionW( c->path ), L".exe" )) hr = E_FAIL;
+            c->compat = hr == S_OK && c->path[0] && !lstrcmpiW( PathFindExtensionW( c->path ), L".exe" );
+            if (c->link) linux_target( c );
         }
         else if (!lstrcmpiW( ext, L".exe" ))
         {
             lstrcpynW( c->path, file, MAX_PATH );
+            c->compat = TRUE;
             hr = S_OK;
         }
         if (hr == S_OK) lstrcpynW( c->exe, PathFindFileNameW( c->path ), MAX_PATH );
@@ -505,24 +705,34 @@ static UINT CALLBACK page_callback( HWND hwnd, UINT msg, PROPSHEETPAGEW *page )
     return 1;
 }
 
-static HRESULT WINAPI sheet_AddPages( IShellPropSheetExt *iface, LPFNSVADDPROPSHEETPAGE add, LPARAM lparam )
+static HRESULT add_page( struct compat *c, int id, DLGPROC proc, LPFNSVADDPROPSHEETPAGE add, LPARAM lparam )
 {
-    struct compat *c = from_sheet( iface );
     PROPSHEETPAGEW page;
+    HPROPSHEETPAGE h;
 
     memset( &page, 0, sizeof(page) );
     page.dwSize = sizeof(page);
-    HPROPSHEETPAGE h;
-
     page.dwFlags = PSP_USECALLBACK;
     page.hInstance = g_inst;
-    page.pszTemplate = MAKEINTRESOURCEW( IDD_COMPAT );
-    page.pfnDlgProc = page_proc;
+    page.pszTemplate = MAKEINTRESOURCEW( id );
+    page.pfnDlgProc = proc;
     page.lParam = (LPARAM)c;
     page.pfnCallback = page_callback;
     if (!(h = CreatePropertySheetPageW( &page ))) return E_OUTOFMEMORY;
     if (!add( h, lparam )) { DestroyPropertySheetPage( h ); return E_FAIL; }
     return S_OK;
+}
+
+static HRESULT WINAPI sheet_AddPages( IShellPropSheetExt *iface, LPFNSVADDPROPSHEETPAGE add, LPARAM lparam )
+{
+    struct compat *c = from_sheet( iface );
+    HRESULT hr = S_OK;
+
+#ifndef SG_MUTANT_NO_SHORTCUT_TAB
+    if (c->link) hr = add_page( c, IDD_SHORTCUT, shortcut_proc, add, lparam );
+#endif
+    if (SUCCEEDED(hr) && c->compat) hr = add_page( c, IDD_COMPAT, page_proc, add, lparam );
+    return hr;
 }
 static HRESULT WINAPI sheet_ReplacePage( IShellPropSheetExt *iface, EXPPS id, LPFNSVADDPROPSHEETPAGE fn, LPARAM lp )
 { return E_NOTIMPL; }

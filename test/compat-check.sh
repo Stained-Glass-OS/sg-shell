@@ -12,6 +12,10 @@
 #     AppCompatFlags\Layers\<path>: "~ WIN7RTM RUNASADMIN")
 #   - recommended settings for the program (SG_COMPAT_PRESETS) are offered
 #     and applied
+#   - a shortcut's Properties has a Shortcut tab: its Location is the
+#     folder of the program it starts, not the Desktop where the shortcut
+#     is (David 2026-10-02); a Linux program's shortcut (sg-linuxapp64.exe
+#     --run its .desktop) shows the Linux program, its folder and command
 #
 # Screenshot: build/compat-tab.png. Needs wine-sg, Xvfb, ImageMagick and
 # mingw; skips (77) without them.
@@ -88,6 +92,25 @@ echo "$out" | grep -q '^PRESET Tested: needs Vulkan' && pass "the recommended se
 [ "$(q "$A\\DllOverrides" d3d11)" = "native,builtin" ] && [ "$(q "$A\\Environment" DXVK_ASYNC)" = 1 ] \
     && pass "and applied: Vulkan (DXVK), DXVK_ASYNC=1" || fail "preset applied: '$(q "$A\\DllOverrides" d3d11)' '$(q "$A\\Environment" DXVK_ASYNC)'"
 [ -z "$(q "$A\\Environment" SGTEST_COMPAT)" ] && pass "the environment was replaced, not merged" || fail "old variable kept"
+
+# 4. a shortcut on the Desktop: the Shortcut tab says where the program is
+D="$C/users/Public/Desktop"; mkdir -p "$D"
+timeout -s KILL 60 "$WINE" "$T/compat-probe.exe" mklink 'C:\users\Public\Desktop\Game.lnk' 'C:\game.exe' >/dev/null 2>&1
+out=$(timeout -s KILL 60 "$WINE" "$T/compat-probe.exe" tabs 'C:\users\Public\Desktop\Game.lnk' 2>/dev/null | tr -d '\r')
+printf '%s\n' "$out" | grep -qx 'TAB Shortcut' && pass "a shortcut's Properties has a Shortcut tab" || fail "no Shortcut tab: $out"
+out=$(timeout -s KILL 60 "$WINE" "$T/compat-probe.exe" shortcut 'C:\users\Public\Desktop\Game.lnk' 2>/dev/null | tr -d '\r')
+printf '%s\n' "$out" | sed 's/^/      /'
+printf '%s\n' "$out" | grep -qx 'LOCATION C:\\' && printf '%s\n' "$out" | grep -qx 'TARGET C:\\game.exe' && printf '%s\n' "$out" | grep -qx 'TYPE Application' \
+    && pass "its Location is the program's folder (C: itself), not the Desktop; its Target the program" || fail "shortcut fields: $out"
+# a Linux program's: sg-linuxapp64.exe --run its .desktop file
+cp "$T/compat-probe.exe" "$C/sg-linuxapp64.exe"
+printf '[Desktop Entry]\nType=Application\nName=Shell Test\nExec=sh -c true %%U\n' > "$T/shelltest.desktop"
+timeout -s KILL 60 "$WINE" "$T/compat-probe.exe" mklink 'C:\users\Public\Desktop\Shell Test.lnk' 'C:\sg-linuxapp64.exe' "--run \"$T/shelltest.desktop\"" >/dev/null 2>&1
+out=$(timeout -s KILL 60 "$WINE" "$T/compat-probe.exe" shortcut 'C:\users\Public\Desktop\Shell Test.lnk' 2>/dev/null | tr -d '\r')
+printf '%s\n' "$out" | sed 's/^/      /'
+printf '%s\n' "$out" | grep -qx 'TYPE Linux application' && printf '%s\n' "$out" | grep -q '^TARGET C:.*shelltest.desktop"$' && printf '%s\n' "$out" | grep -qix 'LOCATION Z:\\usr\\bin' && printf '%s\n' "$out" | grep -qx 'LINUX sh -c true' \
+    && pass "a Linux program's shortcut: a Linux application in /usr/bin, its command 'sh -c true' (not sg-linuxapp64.exe), its whole Target" \
+    || fail "Linux shortcut fields: $out"
 
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

@@ -35,3 +35,29 @@ BEGIN
     PUSHBUTTON      "Recommended", IDC_PRESET_APPLY, 170, 197, 50, 14
 END
 
+
+/* A shortcut's Shortcut tab: where it points -- for a Linux app's shortcut
+ * (sg-linuxapp64.exe --run X.desktop), the Linux program itself. */
+IDD_SHORTCUT DIALOGEX 0, 0, 227, 215
+STYLE DS_SHELLFONT | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Shortcut"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            "", IDC_SC_ICON, 7, 7, 21, 20
+    LTEXT           "", IDC_SC_NAME, 40, 12, 180, 9, SS_ENDELLIPSIS
+    LTEXT           "", -1, 7, 32, 213, 1, SS_ETCHEDHORZ
+    LTEXT           "Target type:", -1, 7, 40, 60, 9
+    LTEXT           "", IDC_SC_TYPE, 70, 40, 150, 9
+    LTEXT           "Target location:", -1, 7, 54, 60, 9
+    LTEXT           "", IDC_SC_LOCATION, 70, 54, 150, 9, SS_PATHELLIPSIS
+    LTEXT           "Linux program:", IDC_SC_LINUX_LABEL, 7, 68, 60, 9
+    EDITTEXT        IDC_SC_LINUX, 70, 66, 150, 12, ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Target:", -1, 7, 86, 60, 9
+    EDITTEXT        IDC_SC_TARGET, 70, 84, 150, 12, ES_AUTOHSCROLL
+    LTEXT           "", -1, 7, 104, 213, 1, SS_ETCHEDHORZ
+    LTEXT           "Start in:", -1, 7, 112, 60, 9
+    EDITTEXT        IDC_SC_START, 70, 110, 150, 12, ES_AUTOHSCROLL
+    LTEXT           "Comment:", -1, 7, 130, 60, 9
+    EDITTEXT        IDC_SC_COMMENT, 70, 128, 150, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "Open &File Location", IDC_SC_OPEN, 7, 150, 80, 14
+END

@@ -20,6 +20,13 @@ sg-shell (0.1.0-93) unstable; urgency=medium
     (defaults/43-sg-runas.reg; David 2026-10-02). A shortcut's runs its
     target: wine-sg 10.0-141 (0763). Gate: test/runas-check.sh (mutant: no
     defaults file).
+  * A shortcut's Properties has a Shortcut tab, as Windows': its name,
+    type, Location -- the folder of the program it starts, not the Desktop
+    where the shortcut is (David 2026-10-02) -- Target, Start in, Comment
+    and Open file location. A Linux program's shortcut (sg-linuxapp64.exe
+    --run its .desktop file) shows the Linux program: "Linux application",
+    the folder of its binary, its command -- not sg-linuxapp64.exe. Test:
+    test/compat-check.sh (mutants NO_SHORTCUT_TAB, TARGET_CUT).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 18:45:00 +0000
 
