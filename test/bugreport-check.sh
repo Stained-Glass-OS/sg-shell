@@ -59,11 +59,14 @@ mkdir -p "$T/sum"
     echo 'Unhandled Exception:'
     echo 'System.NullReferenceException: Object reference not set to an instance of an object'
     echo '  at App.Cache.Load ()'
+    printf '%s\n' "[ERROR] FATAL UNHANDLED EXCEPTION: System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation. ---> App.WrappedException: Rethrown exception. See innerexception for details, which is long enough to carry the cause past three hundred characters of text. ---> System.EntryPointNotFoundException: CreateInstalledObjectsInfo assembly:<unknown assembly> type:<unknown type> member:(null)"
 } > "$T/sum/log"
 echo 255 > "$T/sum/exit"
 python3 "$B/sg-debug-summary" "$T/sum"
 grep -q 'c0000005 EXCEPTION_ACCESS_VIOLATION.*Lib.dll+0x1234' "$T/sum/highlights" && pass "the summary names the exception and its module" || fail "exception: $(head -8 "$T/sum/highlights")"
 grep -q 'System.NullReferenceException' "$T/sum/highlights" && pass "...and the .NET exception" || fail "no .NET exception"
+grep -q '^The innermost .NET exception (the cause): System.EntryPointNotFoundException: CreateInstalledObjectsInfo assembly:<unknown assembly> type:<unknown type> member:(null)$' "$T/sum/highlights" \
+    && pass "...the innermost of a chain of them, whole (the cause)" || fail "innermost: $(grep -i innermost "$T/sum/highlights")"
 grep -q '80000026' "$T/sum/highlights" && fail "the longjmp unwinding is in the summary" || pass "...without the unwinding noise"
 
 # Send: to a stand-in server, ASCII and without the account's name

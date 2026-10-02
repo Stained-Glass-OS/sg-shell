@@ -1,3 +1,13 @@
+sg-shell (0.1.0-94) unstable; urgency=medium
+
+  * Report a problem's summary names the innermost .NET exception of a
+    chain ("A ---> B ---> C"), the cause, and keeps exception lines whole
+    (to 2000 characters): Sonos's EntryPointNotFoundException was cut off
+    at 300 behind two wrappers (David 2026-10-02). Test:
+    test/bugreport-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 20:45:00 +0000
+
 sg-shell (0.1.0-93) unstable; urgency=medium
 
   * Voice typing's hold-to-talk key is never Alt: pressed and released, a

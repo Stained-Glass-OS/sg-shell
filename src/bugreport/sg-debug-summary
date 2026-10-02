@@ -9,8 +9,9 @@
 #     happened (the module, from the log's own DLL load addresses) -- not the
 #     unwinding noise of every longjmp (STATUS_LONGJUMP, 0x80000026) that
 #     filled whole reports before (MeediOS, Meedio, 2026-10-02)
-#   - .NET (Wine Mono) exceptions: the type and message, and the first lines
-#     of the stack
+#   - .NET (Wine Mono) exceptions: the type and message (whole), the
+#     innermost of a chain of them (the cause), and the first lines of the
+#     stack
 #   - errors and missing pieces (err:, fixme:), DLLs that did not load, the
 #     native programs and DLLs it loaded
 #   - the end of the log without the trace lines (register dumps, unwinding)
@@ -134,6 +135,15 @@ def main(dirname):
            if re.search(r"(Unhandled Exception|FATAL UNHANDLED EXCEPTION|^\s*\[ERROR\]|System\.[A-Za-z.]*Exception: |Exception: .+)", l)
            and "trace:" not in l]
     if net:
+        # the innermost of a chain ("A ---> B ---> C: message") is the cause:
+        # Sonos's was an EntryPointNotFoundException behind two wrappers, cut
+        # off at 300 characters (2026-10-02)
+        for i in net:
+            if " ---> " in lines[i]:
+                inner = lines[i].strip().split(" ---> ")[-1]
+                say("The innermost .NET exception (the cause): " + inner[:1000])
+                say("")
+                break
         say(".NET exceptions (first %d):" % min(len(net), 3))
         shown = 0
         last = -10
@@ -143,7 +153,7 @@ def main(dirname):
             for l in lines[i:i + 12]:
                 if "trace:" in l:
                     continue
-                say("  " + l.strip()[:300])
+                say("  " + l.strip()[:2000 if "Exception" in l else 300])
             last = i
             shown += 1
             if shown == 3:
