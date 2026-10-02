@@ -1,3 +1,14 @@
+sg-shell (0.1.0-91) unstable; urgency=medium
+
+  * Task Manager lists the session's Linux programs' windows under Apps, as
+    Windows' lists every app (David 2026-10-01: Linux and Windows programs
+    first class), by the stand-ins the taskbar keeps for them; End task
+    asks the Linux window to close (wine-sg 0759). Not on the Details or
+    Users tabs: they are not processes of this system. Test:
+    test/taskmgr-check.sh (mutant NO_LINUX_APPS fails it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 09:00:00 +0000
+
 sg-shell (0.1.0-90) unstable; urgency=medium
 
   * The Visual C++ 2015-2022 runtime is marked present (Wine's own), where

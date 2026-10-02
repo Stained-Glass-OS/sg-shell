@@ -342,6 +342,40 @@ next:
                 if (!lstrcmpiW(p->name, windows_procs[j])) { p->group = GRP_WINDOWS; break; }
     }
 
+    /* Stained Glass OS: the session's Linux programs' windows are apps too.
+     * The taskbar keeps a hidden stand-in for each (class SgLinuxWindow,
+     * its title), which closes the Linux window when asked to (WM_CLOSE:
+     * End task). Not processes of this system: not on the Details or Users
+     * tabs. Re-listed at each refresh (never "seen" by the process list). */
+#ifndef SG_MUTANT_NO_LINUX_APPS
+    {
+        HWND s = NULL;
+        WCHAR t[128];
+        while ((s = FindWindowExW(NULL, s, L"SgLinuxWindow", NULL)))
+        {
+            proc_t *p;
+            if (!GetWindowTextW(s, t, ARRAYSIZE(t))) continue;
+            if (g_nprocs == g_cap)
+            {
+                proc_t *n = realloc(g_procs, (g_cap ? g_cap * 2 : 64) * sizeof(proc_t));
+                if (!n) break;
+                g_procs = n; g_cap = g_cap ? g_cap * 2 : 64;
+            }
+            p = &g_procs[g_nprocs++];
+            memset(p, 0, sizeof(*p));
+            p->pid = 0xF0000000 | (DWORD)((ULONG_PTR)s & 0x0FFFFFFF);
+            p->linux = TRUE;
+            p->win = s;
+            p->group = GRP_APPS;
+            lstrcpynW(p->name, t, ARRAYSIZE(p->name));
+            lstrcpynW(p->desc, t, ARRAYSIZE(p->desc));
+            lstrcpynW(p->title, t, ARRAYSIZE(p->title));
+            lstrcpyW(p->arch, L"Linux");
+            p->icon = generic_icon();
+        }
+    }
+#endif
+
     /* the machine */
     if (GetSystemTimes(&fi, &fk, &fu))
     {
@@ -405,6 +439,8 @@ BOOL end_process(DWORD pid, BOOL gracefully)
     proc_t *p = find_proc(pid);
     HANDLE h;
     BOOL ok;
+    /* a Linux program's window: its stand-in asks it to close */
+    if (p && p->linux) return PostMessageW(p->win, WM_CLOSE, 0, 0);
     if (gracefully && p && p->win)
     {
         ender_t *e = malloc(sizeof(*e));

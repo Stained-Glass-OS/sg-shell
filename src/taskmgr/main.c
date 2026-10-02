@@ -403,9 +403,10 @@ static void fill_details(void)
     for (i = 0; i < g_nprocs; i++)
     {
         proc_t *p = &g_procs[i];
-        grow_t *r = grid_add(g);
+        grow_t *r;
         WCHAR mem[32];
-        if (!r) break;
+        if (p->linux) continue;   /* not a process of this system */
+        if (!(r = grid_add(g))) break;
         r->key = p->pid;
         r->icon = p->icon;
         lstrcpynW(r->text[0], p->name, GRID_CELL);
@@ -430,6 +431,7 @@ static void fill_users(void)
     for (i = 0; i < g_nprocs; i++)
     {
         const WCHAR *u = g_procs[i].user[0] ? g_procs[i].user : L"SYSTEM";
+        if (g_procs[i].linux) continue;
         grow_t *r = NULL;
         for (j = 0; j < g->nrows; j++) if (!lstrcmpiW(g->rows[j].skey, u)) { r = &g->rows[j]; break; }
         if (!r)

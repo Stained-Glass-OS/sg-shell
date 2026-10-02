@@ -42,6 +42,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 "$MINGW" -O1 -municode -mconsole -o "$T/sgburn.exe" "$HERE/test/sg-taskmgr-burn.c" || { fail "test process did not build"; exit 1; }
+"$MINGW" -O1 -municode -mwindows -o "$T/sglinux.exe" "$HERE/test/sg-taskmgr-linux.c" || { fail "the Linux stand-in did not build"; exit 1; }
 
 Xvfb ":$DPY" -screen 0 1024x768x24 -nolisten tcp >/dev/null 2>&1 & XP=$!
 export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDLLOVERRIDES='mscoree,mshtml=' WINEDEBUG=-all
@@ -49,6 +50,7 @@ export PATH="$WINE_DIR/bin:$PATH"
 DUMP="$T/dump.txt"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 cp "$T/sgburn.exe" "$WINEPREFIX/drive_c/sgburn.exe"
+cp "$T/sglinux.exe" "$WINEPREFIX/drive_c/sglinux.exe"
 winexe=$(wine winepath -w "$EXE" 2>/dev/null | tr -d '\r')
 windump=$(wine winepath -w "$DUMP" 2>/dev/null | tr -d '\r')
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
@@ -76,6 +78,7 @@ shot() { import -window root "$OUT/taskmgr-$1.png" 2>/dev/null; }
 
 wine clock >/dev/null 2>&1 &
 wine 'C:\sgburn.exe' >/dev/null 2>&1 &
+wine 'C:\sglinux.exe' >/dev/null 2>&1 &
 sleep 2
 # Task Manager, fewer details first (as on a first run in Windows)
 # taskmgr.exe as the Run box, scripts and the Win+X menu name it. CreateProcess
@@ -141,6 +144,23 @@ else
     fail "no row for the test process on screen"
 fi
 
+# a Linux program's window (its stand-in, SgLinuxWindow): an app, ended by
+# asking it to close (wine-sg 0759 closes the Linux window)
+if wait_dump '^PROC [0-9]+	0	Linux Test App	' 10; then
+    pass "a Linux program's window is listed under Apps"
+    xy=$(d | awk '$1 == "ROW" && /Linux Test App/ { print $3, $4; exit }')
+    if [ -n "$xy" ]; then
+        # shellcheck disable=SC2086
+        click $xy
+        set -- $(d | awk '$1 == "BUTTON" { print $2, $3 }')
+        click "$1" "$2"; sleep 1.5
+        [ -f "$WINEPREFIX/drive_c/linuxclosed.txt" ] && pass "End task asks it to close (its stand-in gets WM_CLOSE)" \
+            || fail "End task did not ask the Linux window to close: $(d | grep '^ACTION')"
+    else fail "no row for the Linux window on screen"; fi
+else
+    fail "the Linux window is not listed: $(d | grep 'Linux Test')"
+fi
+
 # Performance
 xdotool key ctrl+Tab; sleep 1.5
 wait_dump '^TAB 1 Performance' 5 && pass "Performance tab" || fail "no Performance tab"
@@ -155,7 +175,7 @@ if [ -n "$total" ] && awk -v a="$total" -v b="$real" 'BEGIN { d = a - b; if (d <
 else
     fail "memory total '$total' does not match /proc/meminfo ($real)"
 fi
-listed=$(d | grep -c '^PROC ')
+listed=$(d | grep '^PROC ' | grep -vc '	Linux$')   # not the Linux windows: not processes
 [ "$procs" = "$listed" ] && [ "$listed" -gt 3 ] && pass "process count $procs matches the list" || fail "process count '$procs' vs $listed listed"
 shot performance
 xdotool key Down; sleep 1

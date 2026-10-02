@@ -60,6 +60,7 @@ typedef struct proc
     WCHAR title[128];           /* its main window's title */
     HICON icon;
     BOOL seen;
+    BOOL linux;                 /* a Linux program's window (its stand-in), not a process */
 } proc_t;
 
 typedef struct perf
