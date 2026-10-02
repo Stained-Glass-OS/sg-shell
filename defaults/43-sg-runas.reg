@@ -1,0 +1,42 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: "Run as administrator" on a program's right-click menu --
+; the desktop's icons and File Explorer's (shell32's item menu lists a file
+; type's verbs) -- as on Windows (David 2026-10-02). ShellExecute's "runas"
+; goes to the elevation broker (wine-sg 0022; a shortcut's target, 0444); the
+; shield is drawn beside it (HasLUAShield).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\exefile\shell\runas]
+@="Run as &administrator"
+"HasLUAShield"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\exefile\shell\runas\command]
+@="\"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shell\runas]
+@="Run as &administrator"
+"HasLUAShield"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\lnkfile\shell\runas\command]
+@="\"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\batfile\shell\runas]
+@="Run as &administrator"
+"HasLUAShield"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\batfile\shell\runas\command]
+@="%SystemRoot%\\System32\\cmd.exe /C \"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\cmdfile\shell\runas]
+@="Run as &administrator"
+"HasLUAShield"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\cmdfile\shell\runas\command]
+@="%SystemRoot%\\System32\\cmd.exe /C \"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Msi.Package\shell\runas]
+@="Install as &administrator"
+"HasLUAShield"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Msi.Package\shell\runas\command]
+@="\"%SystemRoot%\\System32\\msiexec.exe\" /i \"%1\" %*"

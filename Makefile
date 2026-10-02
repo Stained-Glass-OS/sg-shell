@@ -338,6 +338,7 @@ test-volume: build
 	@sh test/envvars-check.sh
 	@sh test/vcruntime-check.sh
 	@sh test/cplfile-check.sh
+	@sh test/runas-check.sh
 	@sh test/compat-check.sh
 	@sh test/wordpad-check.sh
 	@sh test/fontview-check.sh

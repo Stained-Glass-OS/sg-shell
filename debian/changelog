@@ -14,6 +14,12 @@ sg-shell (0.1.0-93) unstable; urgency=medium
     2026-10-02); choosing a zone by hand turns it off. sg-admind:
     "timezone-auto on|off". Tests: test/timezone-auto-test.sh,
     test/admind-check.sh.
+  * "Run as administrator" on programs' right-click menus -- the desktop's
+    icons and File Explorer's -- for programs, shortcuts, batch files and
+    installer packages ("Install as administrator"), with the shield
+    (defaults/43-sg-runas.reg; David 2026-10-02). A shortcut's runs its
+    target: wine-sg 10.0-141 (0763). Gate: test/runas-check.sh (mutant: no
+    defaults file).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 18:45:00 +0000
 
