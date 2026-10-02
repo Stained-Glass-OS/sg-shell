@@ -6,6 +6,14 @@ sg-shell (0.1.0-93) unstable; urgency=medium
     before is Right Ctrl, the default. What was heard is typed 150 ms after
     the key's release, the release having reached the program. Gate:
     test/dictate-check.sh (mutant ALT_HOLD).
+  * Set time zone automatically (Settings > Date & time), as Windows' does:
+    sg-timezone-auto asks the project's server for this PC's zone by its
+    address (freesoft.page/api/timezone: DB-IP city data, GeoNames towns;
+    nothing kept) at boot and every six hours. On when turned on, or, never
+    set, while the zone is still UTC -- the Latitude was left in UTC (David
+    2026-10-02); choosing a zone by hand turns it off. sg-admind:
+    "timezone-auto on|off". Tests: test/timezone-auto-test.sh,
+    test/admind-check.sh.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 18:45:00 +0000
 

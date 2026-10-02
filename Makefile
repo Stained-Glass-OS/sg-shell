@@ -299,6 +299,7 @@ test: build
 	@sh test/settings-teardown-check.sh
 	@sh test/recovery-check.sh
 	@sh test/admind-check.sh
+	@sh test/timezone-auto-test.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
 	@sh test/terminal-check.sh

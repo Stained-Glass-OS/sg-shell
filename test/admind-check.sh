@@ -68,7 +68,7 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)"
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -142,6 +142,11 @@ grep -q '^chpasswd  | bob:n3w pass$' "$CALLS" && pass "resets a password through
 : > "$CALLS"
 r=$(ask timezone America/Denver)
 grep -q '^timedatectl set-timezone America/Denver ' "$CALLS" && pass "sets the time zone" || fail "timezone: $r"
+[ "$(cat "$T/tz-auto" 2>/dev/null)" = off ] && pass "...and a zone chosen by hand turns 'automatically' off" || fail "tz-auto after a zone: $(cat "$T/tz-auto" 2>/dev/null)"
+r=$(ask timezone-auto on)
+[ "$(first "$r")" = OK ] && [ "$(cat "$T/tz-auto")" = on ] && pass "turns 'Set time zone automatically' on" || fail "timezone-auto on: $r"
+r=$(ask timezone-auto maybe)
+case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted timezone-auto maybe" ;; esac
 : > "$CALLS"
 for bad in '../../etc/passwd' 'America/Nowhere' 'America' '/etc/passwd' 'a b'; do
     r=$(ask timezone "$bad")

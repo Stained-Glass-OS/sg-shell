@@ -50,6 +50,11 @@ override_dh_auto_install:
 	install -D -m0644 admin/sg-admind.service debian/sg-shell/usr/lib/systemd/system/sg-admind.service
 	install -D -m0644 admin/sg-admind.path debian/sg-shell/usr/lib/systemd/system/sg-admind.path
 	install -D -m0644 admin/sg-admind.tmpfiles debian/sg-shell/usr/lib/tmpfiles.d/sg-admind.conf
+	# Set time zone automatically (Settings > Date & time): at boot and every
+	# six hours, while it is on
+	install -D -m0755 admin/sg-timezone-auto debian/sg-shell/usr/libexec/stained-glass/sg-timezone-auto
+	install -D -m0644 admin/sg-timezone-auto.service debian/sg-shell/usr/lib/systemd/system/sg-timezone-auto.service
+	install -D -m0644 admin/sg-timezone-auto.timer debian/sg-shell/usr/lib/systemd/system/sg-timezone-auto.timer
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.
 	# Wallpapers: our own art, generated here (theme/wallpapers).

@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+# sg-timezone-auto -- "Set time zone automatically" (Settings > Date & time):
+# the time zone where this PC is, as Windows' location service sets it
+# (David 2026-10-02: the Latitude was left in UTC). Root, from
+# sg-timezone-auto.timer (at boot and every six hours) and when the setting
+# is turned on.
+#
+# On only when /etc/stained-glass/timezone-auto says "on", or, never set,
+# while the zone is still UTC (a new PC): a zone someone chose is left alone,
+# and choosing one turns this off (sg-admind). The zone comes from the
+# project's server, by this PC's address (freesoft.page/api/timezone: DB-IP's
+# city data and GeoNames' towns; nothing is kept there); it must be a zone
+# this PC has, and is set as sg-admind's "timezone" sets one.
+#
+# SG_TZ_URL, SG_TZ_SETTING, SG_TZ_CURRENT (a file holding the zone),
+# SG_TZ_SET (a command run with the zone instead of timedatectl): the test.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.request
+
+URL = os.environ.get("SG_TZ_URL", "https://freesoft.page/api/timezone")
+SETTING = os.environ.get("SG_TZ_SETTING", "/etc/stained-glass/timezone-auto")
+ZONEINFO = "/usr/share/zoneinfo"
+ZONE_RE = re.compile(r"^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+){0,2}$")
+
+
+def current():
+    f = os.environ.get("SG_TZ_CURRENT")
+    if f:
+        return open(f).read().strip()
+    try:
+        return subprocess.run(["timedatectl", "show", "-p", "Timezone", "--value"], capture_output=True,
+                              text=True, timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def wanted():
+    try:
+        with open(SETTING) as f:
+            return f.read().strip() == "on"
+    except OSError:
+        return current() in ("", "UTC", "Etc/UTC", "Etc/Universal", "Universal", "Zulu")
+
+
+def main():
+    if not wanted():
+        print("sg-timezone-auto: off")
+        return 0
+    try:
+        req = urllib.request.Request(URL, headers={"User-Agent": "sg-timezone-auto"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            zone = json.loads(r.read().decode()).get("timezone", "")
+    except (OSError, ValueError) as e:
+        print("sg-timezone-auto: the server could not be asked: %s" % e)
+        return 0   # offline: tried again later
+    path = os.path.realpath(os.path.join(ZONEINFO, zone))
+    if not ZONE_RE.match(zone) or ".." in zone or not (
+            path.startswith(os.path.realpath(ZONEINFO) + os.sep) and os.path.isfile(path)):
+        print("sg-timezone-auto: not a zone here: %r" % zone)
+        return 1
+    if zone == current():
+        print("sg-timezone-auto: %s already" % zone)
+        return 0
+    cmd = os.environ.get("SG_TZ_SET")
+    if cmd:
+        subprocess.run([cmd, zone], check=False)
+    else:
+        subprocess.run(["timedatectl", "set-timezone", zone], check=False)
+        try:
+            with open("/etc/timezone.sg-new", "w") as f:
+                f.write(zone + "\n")
+            os.chmod("/etc/timezone.sg-new", 0o644)
+            os.replace("/etc/timezone.sg-new", "/etc/timezone")
+        except OSError:
+            pass
+    print("sg-timezone-auto: %s" % zone)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

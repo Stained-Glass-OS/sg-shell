@@ -11,10 +11,11 @@
 #include "settings.h"
 
 enum {
-    CMD_AUTO = CMD_PAGE_FIRST + 1, CMD_ZONE, CMD_CHANGE = SHIELD_ID(CMD_PAGE_FIRST + 3), CMD_DATE_CPL = CMD_PAGE_FIRST + 4,
+    CMD_AUTO = CMD_PAGE_FIRST + 1, CMD_ZONE, CMD_TZAUTO = CMD_PAGE_FIRST + 6, CMD_CHANGE = SHIELD_ID(CMD_PAGE_FIRST + 3), CMD_DATE_CPL = CMD_PAGE_FIRST + 4,
     CMD_REGION_CPL = CMD_PAGE_FIRST + 5,
 };
 static WCHAR **g_zones;
+static BOOL g_tz_auto;
 static int g_nzones;
 
 static void clock_text(WCHAR *out, int cch)
@@ -25,6 +26,21 @@ static void clock_text(WCHAR *out, int cch)
     GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &t, NULL, h, ARRAYSIZE(h));
     GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &t, NULL, d, ARRAYSIZE(d));
     _snwprintf(out, cch, L"%ls   %ls", h, d);
+}
+
+/* "Set time zone automatically" (sg-timezone-auto, as root): its setting,
+ * or, never set, on while the zone is still UTC (a new PC) */
+static BOOL tz_auto(const WCHAR *iana)
+{
+    char buf[8] = "";
+    DWORD got = 0;
+    HANDLE f = CreateFileW(L"Z:\\etc\\stained-glass\\timezone-auto", GENERIC_READ, FILE_SHARE_READ, NULL,
+                           OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE)
+        return !iana[0] || !lstrcmpW(iana, L"UTC") || !lstrcmpW(iana, L"Etc/UTC") || !lstrcmpW(iana, L"Etc/Universal");
+    ReadFile(f, buf, sizeof(buf) - 1, &got, NULL);
+    CloseHandle(f);
+    return !strncmp(buf, "on", 2);
 }
 
 void set_build_datetime(void)
@@ -46,6 +62,11 @@ void set_build_datetime(void)
     c = st_button(&y, L"Change", CMD_CHANGE);
     EnableWindow(c, !ntp);
     y = st_head(y, L"Time zone");
+    {
+        BOOL autotz = tz_auto(z.iana);
+        st_toggle(&y, L"Set time zone automatically", autotz, CMD_TZAUTO);
+        g_tz_auto = autotz;
+    }
     if (!g_zones) g_nzones = load_zones(&g_zones);
     items = malloc((g_nzones + 1) * sizeof(*items));
     if (items) {
@@ -53,7 +74,8 @@ void set_build_datetime(void)
         for (i = 0; i < g_nzones; i++) { items[i] = g_zones[i]; if (!lstrcmpW(g_zones[i], z.iana)) sel = i; }
         /* a zone the list does not have is still the one set: show it */
         if (sel < 0 && z.iana[0]) { items[n] = z.iana; sel = n++; }
-        st_combo(&y, NULL, items, n, sel, CMD_ZONE);
+        c = st_combo(&y, NULL, items, n, sel, CMD_ZONE);
+        EnableWindow(c, !g_tz_auto);   /* chosen by place while that is on */
         free(items);
     }
     /* the zones' display names already start with their offset, "(UTC+01:00) ..." */
@@ -84,6 +106,10 @@ BOOL set_cmd_datetime(int id, int code, HWND ctl)
         if (run_elevated(args)) refresh_when_back(); else refresh_page();
         return TRUE;
     case CMD_CHANGE: if (run_elevated(L"/admin set-time")) refresh_when_back(); return TRUE;
+    case CMD_TZAUTO:
+        _snwprintf(args, ARRAYSIZE(args), L"/admin timezone-auto %ls", st_checked(ctl) ? L"on" : L"off");
+        if (run_elevated(args)) refresh_when_back(); else refresh_page();
+        return TRUE;
     case CMD_ZONE:
         if (code == CBN_SELCHANGE) {
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);

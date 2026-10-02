@@ -1,0 +1,10 @@
+[Unit]
+Description=Set the time zone automatically (Settings > Date & time)
+Documentation=https://freesoft.page/
+Wants=network-online.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/stained-glass/sg-timezone-auto
+TimeoutStartSec=60

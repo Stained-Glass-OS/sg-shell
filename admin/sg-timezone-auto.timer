@@ -1,0 +1,10 @@
+[Unit]
+Description=Set the time zone automatically: at boot and every six hours (a PC that travels)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

@@ -35,7 +35,8 @@
 #   user-type NAME standard|administrator
 #   user-password NAME PASSWORD
 #   user-remove NAME keep|delete
-#   timezone AREA/CITY
+#   timezone AREA/CITY                 (and "automatically" off)
+#   timezone-auto on|off                Set time zone automatically (sg-timezone-auto)
 #   ntp on|off
 #   time YYYY-MM-DD HH:MM:SS                 (only with synchronisation off)
 #   update-check
@@ -351,6 +352,8 @@ def op_timezone(args):
     if not path.startswith(os.path.realpath(ZONEINFO) + os.sep) or not os.path.isfile(path):
         raise Refused("'%s' is not a time zone." % zone)
     must(["timedatectl", "set-timezone", zone], "The time zone could not be changed")
+    # a zone chosen by hand: no longer set automatically (sg-timezone-auto)
+    write_tz_auto("off")
     # Debian's record of the zone by name, which the Control Panel reads back
     tzfile = "/etc/timezone" if not TEST else os.environ.get("SG_ADMIN_TIMEZONE", "/dev/null")
     try:
@@ -360,6 +363,31 @@ def op_timezone(args):
         os.replace(tzfile + ".sg-new", tzfile)
     except OSError as e:
         log("%s not updated: %s" % (tzfile, e))
+    return []
+
+
+TZ_AUTO = os.environ.get("SG_ADMIN_TZ_AUTO", "/etc/stained-glass/timezone-auto")
+
+
+def write_tz_auto(value):
+    try:
+        os.makedirs(os.path.dirname(TZ_AUTO), exist_ok=True)
+        with open(TZ_AUTO + ".sg-new", "w") as f:
+            f.write(value + "\n")
+        os.chmod(TZ_AUTO + ".sg-new", 0o644)
+        os.replace(TZ_AUTO + ".sg-new", TZ_AUTO)
+    except OSError as e:
+        log("%s not updated: %s" % (TZ_AUTO, e))
+
+
+def op_timezone_auto(args):
+    """Set time zone automatically, on or off (Settings > Date & time)"""
+    (v,) = args
+    if v not in ("on", "off"):
+        raise Refused("Setting the time zone automatically is on or off.")
+    write_tz_auto(v)
+    if v == "on" and not TEST:
+        subprocess.run(["systemctl", "start", "--no-block", "sg-timezone-auto.service"], check=False)
     return []
 
 
@@ -1052,6 +1080,7 @@ OPS = {
     "user-password": (op_user_password, 2),
     "user-remove": (op_user_remove, 2),
     "timezone": (op_timezone, 1),
+    "timezone-auto": (op_timezone_auto, 1),
     "ntp": (op_ntp, 1),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
