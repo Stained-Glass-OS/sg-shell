@@ -5,8 +5,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include <shellapi.h>
 
-enum { CMD_CHANGE = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_GPRESULT = CMD_PAGE_FIRST + 2 };
+enum { CMD_CHANGE = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_GPRESULT = CMD_PAGE_FIRST + 2, CMD_ENVVARS = CMD_PAGE_FIRST + 3 };
 
 
 int program_count(void);
@@ -136,9 +137,10 @@ static int row(int x, int y, int w, const WCHAR *label, const WCHAR *value)
 
 void build_system(void)
 {
-    static const WCHAR *const labels[] = { L"Rename this computer", L"Updates", L"Group Policy results",
-                                           NULL, L"See also", L"User Accounts", L"Programs and Features" };
-    static const int ids[] = { CMD_CHANGE, NAV(PG_UPDATE), CMD_GPRESULT, 0, -1, NAV(PG_USERS), NAV(PG_PROGRAMS) };
+    static const WCHAR *const labels[] = { L"Rename this computer", L"Environment variables", L"Updates",
+                                           L"Group Policy results", NULL, L"See also", L"User Accounts",
+                                           L"Programs and Features" };
+    static const int ids[] = { CMD_CHANGE, CMD_ENVVARS, NAV(PG_UPDATE), CMD_GPRESULT, 0, -1, NAV(PG_USERS), NAV(PG_PROGRAMS) };
     struct sysfacts f;
     int x = pg_left_pane(labels, ids, ARRAYSIZE(labels)) + S(36), y = S(24), w = pg_width() - x - S(40);
     WCHAR line[256];
@@ -188,6 +190,13 @@ BOOL cmd_system(int id, int code, HWND ctl)
     (void)code; (void)ctl;
     switch (id) {
     case CMD_CHANGE: if (run_elevated(L"/admin rename")) refresh_when_back(); return TRUE;
+    case CMD_ENVVARS: {
+        /* the Environment Variables dialog (envvars.c), in a process of its own */
+        WCHAR self[MAX_PATH];
+        GetModuleFileNameW(NULL, self, MAX_PATH);
+        ShellExecuteW(g_main, NULL, self, L"/envvars", NULL, SW_SHOWNORMAL);
+        return TRUE;
+    }
     case CMD_GPRESULT: {
         /* gpresult is a console program; show its report in a console */
         STARTUPINFOW si = { sizeof(si) };

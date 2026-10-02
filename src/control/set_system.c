@@ -639,7 +639,7 @@ BOOL set_cmd_multitask(int id, int code, HWND ctl)
 
 /* ---- About ------------------------------------------------------------------------------------ */
 enum { CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_RENAME_ADV = SHIELD_ID(CMD_PAGE_FIRST + 2), CMD_COPY = CMD_PAGE_FIRST + 3,
-       CMD_COPY2 = CMD_PAGE_FIRST + 4 };
+       CMD_COPY2 = CMD_PAGE_FIRST + 4 , CMD_ENVVARS_PAGE = CMD_PAGE_FIRST + 10, CMD_ENVVARS_OPEN = CMD_PAGE_FIRST + 11};
 
 static void about_text(WCHAR *out, int cch, BOOL windows)
 {
@@ -684,6 +684,7 @@ void set_build_about(void)
     y = st_para(y, L"Stained Glass OS is free software: its programs are licensed under the GPL, LGPL and AGPL.");
     y = st_head(y, L"Related settings");
     st_link(&y, L"Rename this PC (advanced)", CMD_RENAME_ADV);
+    st_link(&y, L"Environment variables", CMD_ENVVARS_PAGE);
 }
 
 BOOL set_cmd_about(int id, int code, HWND ctl)
@@ -692,6 +693,7 @@ BOOL set_cmd_about(int id, int code, HWND ctl)
     switch (id) {
     case CMD_RENAME: if (run_elevated(L"/admin rename-pc")) refresh_when_back(); return TRUE;
     case CMD_RENAME_ADV: if (run_elevated(L"/admin rename")) refresh_when_back(); return TRUE;
+    case CMD_ENVVARS_PAGE: navigate(PG_S_ENVVARS); return TRUE;
     case CMD_COPY: case CMD_COPY2: {
         WCHAR text[1024];
         HGLOBAL h;
@@ -708,5 +710,48 @@ BOOL set_cmd_about(int id, int code, HWND ctl)
         return TRUE;
     }
     }
+    return FALSE;
+}
+
+/* Environment variables: what they are, the person's Path, and the dialog
+ * (envvars.c) -- found by "environment" and "path" in Settings' search */
+static void envvars_open(void)
+{
+    WCHAR self[MAX_PATH];
+    GetModuleFileNameW(NULL, self, MAX_PATH);
+    ShellExecuteW(g_main, NULL, self, L"/envvars", NULL, SW_SHOWNORMAL);
+}
+
+void set_build_envvars(void)
+{
+    WCHAR path[4096] = L"", line[1100];
+    const WCHAR *p, *e;
+    DWORD cb = sizeof(path);
+    int y = st_title(L"Environment variables");
+    y = st_para(y, L"Programs read settings from environment variables: Path lists the folders searched for "
+                   L"programs you start by name (a command line, a script). Your variables are yours; system "
+                   L"variables apply to everyone and need an administrator to change.");
+    st_button(&y, L"Edit environment variables...", CMD_ENVVARS_OPEN);
+    y = st_head(y, L"Your Path");
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Environment", L"Path", RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND,
+                     NULL, path, &cb) || !path[0])
+        y = st_para(y, L"You have no folders of your own in Path.");
+    else
+        for (p = path; p && *p; p = e ? e + 1 : NULL) {
+            int len;
+            e = wcschr(p, L';');
+            len = e ? (int)(e - p) : lstrlenW(p);
+            if (!len) continue;
+            if (len > 1000) len = 1000;
+            memcpy(line, p, len * sizeof(WCHAR)); line[len] = 0;
+            y = st_para(y, line);
+        }
+    y = st_para(y, L"Programs started after a change get it; ones already running keep what they had.");
+}
+
+BOOL set_cmd_envvars(int id, int code, HWND ctl)
+{
+    (void)code; (void)ctl;
+    if (id == CMD_ENVVARS_OPEN) { envvars_open(); refresh_when_back(); return TRUE; }
     return FALSE;
 }

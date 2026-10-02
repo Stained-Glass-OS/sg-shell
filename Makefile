@@ -334,6 +334,7 @@ test-volume: build
 	@sh test/sticky-check.sh
 	@sh test/snip-check.sh
 	@sh test/charmap-check.sh
+	@sh test/envvars-check.sh
 	@sh test/compat-check.sh
 	@sh test/wordpad-check.sh
 	@sh test/fontview-check.sh

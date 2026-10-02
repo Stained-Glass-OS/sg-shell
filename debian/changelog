@@ -1,3 +1,20 @@
+sg-shell (0.1.0-88) unstable; urgency=medium
+
+  * Environment Variables (David 2026-10-01: Claude Code asked for PATH to be
+    changed and "Environment" found nothing in Settings or Control Panel):
+    an Environment Variables dialog -- the person's variables with New, Edit
+    and Delete, Path and other folder lists edited one entry at a time
+    (New, Edit, Browse, Move Up/Down, Edit text), the machine's variables
+    through "Edit system variables..." as an administrator. OK writes them
+    and tells running programs (WM_SETTINGCHANGE "Environment"). Found as
+    Settings > System > Environment variables (also from About), Control
+    Panel's System pane and its search, and sg-control /envvars. Test:
+    test/envvars-check.sh (Xvfb: New, Path entry added, OK, Cancel; a
+    dialog that does not save, and a Path editor that drops its edit, fail
+    it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 04:30:00 +0000
+
 sg-shell (0.1.0-87) unstable; urgency=medium
 
   * Linux Terminal copies and pastes as the Windows console does (David

@@ -5,10 +5,11 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include <shellapi.h>
 
 /* commands the navigation pages share */
 enum {
-    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS,
+    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -18,6 +19,9 @@ struct task { const WCHAR *label; int id; };
 struct applet { const WCHAR *name; int icon; int id; const WCHAR *keywords; struct task tasks[3]; };
 
 /* ---- the applets, as they appear in the category pages and All Items ---------- */
+static const struct applet ENVVARS_A = { L"Environment Variables", IC_SYSTEM, CMD_ENVVARS_A,
+    L"edit the system environment variables path pathext system properties advanced system settings",
+    { { L"Edit environment variables", CMD_ENVVARS_A } } };
 static const struct applet SYSTEM_A = { L"System", IC_SYSTEM, NAV(PG_SYSTEM), L"computer name domain workgroup ram processor about",
     { { L"View amount of RAM and processor speed", NAV(PG_SYSTEM) }, { L"Rename this computer", CMD_RENAME } } };
 static const struct applet UPDATE_A = { L"Updates", IC_UPDATE, NAV(PG_UPDATE), L"updates upgrade patch apt",
@@ -50,7 +54,7 @@ static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, 
 
 static const struct applet *const ALL[] = {
     &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[4]; };
@@ -202,6 +206,13 @@ BOOL cmd_home(int id, int code, HWND ctl)
     switch (id) {
     case CMD_ALL_ITEMS: navigate(PG_ALL); return TRUE;
     case CMD_CATEGORY: navigate(PG_HOME); return TRUE;
+    case CMD_ENVVARS_A: {
+        /* the Environment Variables dialog (envvars.c), in a process of its own */
+        WCHAR self[MAX_PATH];
+        GetModuleFileNameW(NULL, self, MAX_PATH);
+        ShellExecuteW(g_main, NULL, self, L"/envvars", NULL, SW_SHOWNORMAL);
+        return TRUE;
+    }
     case CMD_INET: cpl_open_file(L"inetcpl.cpl", NULL); return TRUE;
     case CMD_JOY: cpl_open_file(L"joy.cpl", NULL); return TRUE;
     case CMD_DESK: cpl_open_file(L"desk.cpl", NULL); return TRUE;

@@ -1026,6 +1026,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
             fflush(stdout);
             return 0;
         }
+        /* the Environment Variables dialog (rundll32 sysdm.cpl,EditEnvironmentVariables) */
+        if (!_wcsicmp(argv[1], L"/envvars") || !_wcsicmp(argv[1], L"EditEnvironmentVariables")) return envvars_main(FALSE);
         if (!_wcsicmp(argv[1], L"/admin")) return admin_main(argc - 2, argv + 2);
         if (!_wcsicmp(argv[1], L"/admin-do")) return admin_do(argc - 2, argv + 2);
         if (!_wcsicmp(argv[1], L"/cpl") && argc > 2) return cpl_run_inproc(argv[2], argc > 3 ? argv[3] : NULL) >= 0 ? 0 : 1;

@@ -26,6 +26,7 @@
     [PG_S_STORAGE]      = { L"Storage",                      PG_S_HOME, set_build_storage,   set_cmd_storage }, \
     [PG_S_MULTITASK]    = { L"Multitasking",                 PG_S_HOME, set_build_multitask, set_cmd_multitask }, \
     [PG_S_ABOUT]        = { L"About",                        PG_S_HOME, set_build_about,     set_cmd_about }, \
+    [PG_S_ENVVARS]      = { L"Environment variables",        PG_S_HOME, set_build_envvars,   set_cmd_envvars }, \
     [PG_S_BLUETOOTH]    = { L"Bluetooth & other devices",    PG_S_HOME, set_build_bluetooth, set_cmd_bluetooth }, \
     [PG_S_MOUSE]        = { L"Mouse",                        PG_S_HOME, set_build_mouse,     set_cmd_mouse }, \
     [PG_S_TYPING]       = { L"Typing",                       PG_S_HOME, set_build_typing,    set_cmd_typing }, \
@@ -99,6 +100,7 @@ void set_build_power(void);     BOOL set_cmd_power(int, int, HWND);
 void set_build_storage(void);   BOOL set_cmd_storage(int, int, HWND);
 void set_build_multitask(void); BOOL set_cmd_multitask(int, int, HWND);
 void set_build_about(void);     BOOL set_cmd_about(int, int, HWND);
+void set_build_envvars(void);   BOOL set_cmd_envvars(int, int, HWND);
 void set_build_bluetooth(void); BOOL set_cmd_bluetooth(int, int, HWND);
 void set_build_mouse(void);     BOOL set_cmd_mouse(int, int, HWND);
 void set_build_typing(void);    BOOL set_cmd_typing(int, int, HWND);

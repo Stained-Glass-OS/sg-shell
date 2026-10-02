@@ -28,7 +28,7 @@ enum page_id {
     /* Settings (SystemSettings, ms-settings:): the same page machinery in
      * the Settings window (settings.c) */
     PG_S_HOME, PG_S_SEARCH,
-    PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT,
+    PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_S_ENVVARS,
     PG_S_BLUETOOTH, PG_S_MOUSE, PG_S_TYPING,
     PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
     PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_EFFECTS, PG_S_LOOKSHARE,
@@ -190,6 +190,7 @@ void current_zone(WCHAR *out, int cch);     /* the IANA zone, from /etc/timezone
 BOOL ntp_enabled(void);
 int  load_zones(WCHAR ***out);
 int  privacy_admin_consent(const WCHAR *cap, const WCHAR *on_off);   /* set_misc.c */       /* IANA zones, sorted; free each and the array */
+int  envvars_main(BOOL system_only);         /* envvars.c: the Environment Variables dialog */
 int  admin_main(int argc, WCHAR **argv);        /* /admin VERB ...: the elevated dialogs */
 int  admin_do(int argc, WCHAR **argv);          /* /admin-do VERB ...: non-interactive */
 /* a small modal form: title, fields, returns TRUE on OK */

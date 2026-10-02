@@ -39,7 +39,7 @@ static enum page_id g_status_page = PG_COUNT;
 struct category { const WCHAR *name, *sub; int icon; enum page_id pages[12]; const WCHAR *keywords; };
 static const struct category CATS[] = {
     { L"System", L"Display, sound, notifications, power", IC_G_SYSTEM,
-      { PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_COUNT } },
+      { PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_S_ENVVARS, PG_COUNT } },
     { L"Devices", L"Bluetooth, mouse, typing", IC_G_DEVICES,
       { PG_S_BLUETOOTH, PG_S_MOUSE, PG_S_TYPING, PG_COUNT } },
     { L"Network & Internet", L"Wi-Fi, Ethernet, proxy", IC_G_NETWORK,
@@ -70,6 +70,7 @@ static const struct { enum page_id page; const WCHAR *words; } KEYWORDS[] = {
     { PG_S_STORAGE, L"disk space drive free temporary files cleanup" },
     { PG_S_MULTITASK, L"snap windows alt tab virtual desktops" },
     { PG_S_ABOUT, L"pc name rename computer device specifications version edition processor ram" },
+    { PG_S_ENVVARS, L"environment variables path pathext variable system properties advanced system settings edit the system environment variables" },
     { PG_S_BLUETOOTH, L"devices pair wireless headset" },
     { PG_S_MOUSE, L"primary button scroll wheel pointer speed double click" },
     { PG_S_TYPING, L"keyboard repeat rate delay cursor blink spelling" },
