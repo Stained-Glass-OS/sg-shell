@@ -148,5 +148,32 @@ if command -v dpkg-query >/dev/null; then
 else
     echo "SKIP  sg-linuxapp-deps (no dpkg-query here)"
 fi
+# what the apps open: a ProgID per app for Settings > Default apps and Windows
+# programs -- offered for its types' extensions, a browser among the clients,
+# gone with the app (Firefox ESR could not be the default browser, David
+# 2026-10-02)
+rq() { "$WINE" reg query "$1" ${2:+/v "$2"} 2>/dev/null | tr -d '\r'; }
+app gate-browser 'Type=Application' 'Name=Gate Browser' 'MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;' \
+    "Exec=sh -c 'echo \"\$1\" > $T/opened' sh %u"
+app gate-viewer 'Type=Application' 'Name=Gate Viewer' 'MimeType=image/png;' 'Exec=true'
+"$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+cmd=$(rq 'HKCU\Software\Classes\SG.LinuxApp.gate-browser\shell\open\command')
+printf '%s\n' "$cmd" | grep -q -- '--open .*gate-browser.desktop" "%1"' && rq 'HKCU\Software\Classes\.html\OpenWithProgids' | grep -q 'SG.LinuxApp.gate-browser' \
+    && rq 'HKCU\Software\Clients\StartMenuInternet\SG Linux gate-browser\Capabilities\URLAssociations' http | grep -q 'SG.LinuxApp.gate-browser' \
+    && rq 'HKCU\Software\Classes\.png\OpenWithProgids' | grep -q 'SG.LinuxApp.gate-viewer' \
+    && pass "apps that open files or links get ProgIDs: offered for their types' extensions, a browser among the clients" \
+    || fail "ProgIDs: $(printf '%s' "$cmd" | tr '\n' ' ') / $(rq 'HKCU\Software\Classes\.html\OpenWithProgids' | tr '\n' ' ')"
+rq 'HKCU\Software\Classes\SG.LinuxApp.gate-plain' | grep -q '^HKEY_' && fail "an app that opens nothing got a ProgID" || pass "an app that opens nothing gets none"
+if [ -x /usr/bin/gio ]; then
+    rm -f "$T/opened"
+    timeout 60 "$WINE" "$EXE" --open "Z:$(echo "$T" | tr / '\\')\\share\\applications\\gate-browser.desktop" 'https://example.org/gate'
+    for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$T/opened" ] && break; sleep 0.5; done
+    [ "$(cat "$T/opened" 2>/dev/null)" = "https://example.org/gate" ] && pass "--open hands the app the link (gio launch)" || fail "--open: '$(cat "$T/opened" 2>/dev/null)'"
+fi
+rm "$T/share/applications/gate-viewer.desktop"
+"$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+! rq 'HKCU\Software\Classes\SG.LinuxApp.gate-viewer' | grep -q '^HKEY_' && ! rq 'HKCU\Software\Classes\.png\OpenWithProgids' | grep -q 'gate-viewer' \
+    && rq 'HKCU\Software\Classes\SG.LinuxApp.gate-browser' | grep -q '^HKEY_' \
+    && pass "an app that goes loses its ProgID and its offers; the others stay" || fail "after removal: $(rq 'HKCU\Software\Classes\.png\OpenWithProgids' | tr '\n' ' ')"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

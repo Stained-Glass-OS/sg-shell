@@ -1,3 +1,17 @@
+sg-shell (0.1.0-95) unstable; urgency=medium
+
+  * Linux apps are in Settings > Default apps: sg-linuxapp gives each app
+    that opens files or links (its MimeType=) a ProgID, offered for those
+    types' extensions, a browser or mail program among the clients; chosen,
+    Windows programs open with it (sg-linuxapp64.exe --open, gio launch)
+    and Linux programs too (xdg-mime default). Firefox ESR could not be made
+    the default browser (David 2026-10-02). A Linux app named as another
+    choice says "(Linux)". Depends on xdg-utils. Test:
+    test/linuxapps-check.sh (mutant NO_PROGIDS); VM: Firefox chosen, a link
+    from a Windows program opened in it.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 23:00:00 +0000
+
 sg-shell (0.1.0-94) unstable; urgency=medium
 
   * Report a problem's summary names the innermost .NET exception of a

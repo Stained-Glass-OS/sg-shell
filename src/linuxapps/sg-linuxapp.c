@@ -4,6 +4,9 @@
  * file; Start shows shortcuts. This makes one from the other:
  *
  *   sg-linuxapp64.exe --run FILE.desktop   starts the Linux program (gio launch)
+ *   sg-linuxapp64.exe --open FILE.desktop ARG   the same, opening ARG (a file
+ *                                          or a URL) -- an app chosen in
+ *                                          Settings > Default apps
  *   sg-linuxapp64.exe --sync               Start's "Linux apps" folder, once
  *   sg-linuxapp64.exe --watch              the same, then again whenever the
  *                                          applications folders change (Start
@@ -16,6 +19,11 @@
  * brought in as a dependency of another (sg-linuxapp-deps) -- gets
  * "Programs\Linux apps\NAME.lnk", which starts this program with --run, and
  * the app's own icon: its PNGs from the icon theme, put into an .ico.
+ * An app that opens files or links (MimeType=) is also a program Windows
+ * programs and Settings > Default apps know: a ProgID SG.LinuxApp.<id> in
+ * the user's classes, offered for the extensions of its types
+ * (OpenWithProgids), and a browser or mail program among the clients
+ * (Software\Clients). Firefox ESR could not be made the default browser.
  * Shortcuts in that folder whose app has gone are removed; the folder is ours.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -98,6 +106,7 @@ struct app {
     char icon[256];
     char wmclass[128];          /* StartupWMClass: its windows' class */
     char exe[128];              /* Exec's program name: often its windows' class too */
+    char mime[4096];            /* MimeType=: what it opens, ';'-separated */
 };
 
 static struct app *g_apps;
@@ -241,6 +250,7 @@ static void add_desktop_file(const char *unix_file, const char *id)
     }
     if (entry_value(text, "Icon", v, sizeof(v))) lstrcpynA(a->icon, v, sizeof(a->icon));
     if (entry_value(text, "StartupWMClass", v, sizeof(v))) lstrcpynA(a->wmclass, v, sizeof(a->wmclass));
+    entry_value(text, "MimeType", a->mime, sizeof(a->mime));
     if (entry_value(text, "Exec", v, sizeof(v))) {
         char *end = v + strcspn(v, " \t"), *base;
         *end = 0;
@@ -522,13 +532,176 @@ static BOOL name_taken(const WCHAR *dir, const WCHAR *name, int depth)
     return found;
 }
 
+/* ---- what the apps open: ProgIDs for Default apps and Windows programs -- */
+
+/* the types Settings > Default apps chooses for, and their extensions */
+static const struct { const char *mime; const WCHAR *exts[4]; } MIME_EXTS[] = {
+    { "image/jpeg", { L".jpg", L".jpeg" } }, { "image/png", { L".png" } }, { "image/gif", { L".gif" } },
+    { "image/bmp", { L".bmp" } }, { "image/tiff", { L".tif", L".tiff" } },
+    { "audio/mpeg", { L".mp3" } }, { "audio/x-wav", { L".wav" } }, { "audio/wav", { L".wav" } },
+    { "audio/ogg", { L".ogg" } }, { "audio/x-vorbis+ogg", { L".ogg" } }, { "audio/flac", { L".flac" } },
+    { "audio/x-flac", { L".flac" } }, { "audio/x-ms-wma", { L".wma" } }, { "audio/mp4", { L".m4a" } },
+    { "audio/x-m4a", { L".m4a" } },
+    { "video/mp4", { L".mp4" } }, { "video/x-matroska", { L".mkv" } }, { "video/x-msvideo", { L".avi" } },
+    { "video/webm", { L".webm" } }, { "video/x-ms-wmv", { L".wmv" } }, { "video/quicktime", { L".mov" } },
+    { "text/plain", { L".txt", L".log", L".ini" } }, { "application/pdf", { L".pdf" } },
+    { "application/vnd.openxmlformats-officedocument.wordprocessingml.document", { L".docx" } },
+    { "application/msword", { L".doc" } }, { "application/vnd.ms-word.document.macroEnabled.12", { L".docm" } },
+    { "application/vnd.oasis.opendocument.text", { L".odt" } },
+    { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", { L".xlsx" } },
+    { "application/vnd.ms-excel", { L".xls" } }, { "application/vnd.ms-excel.sheet.macroEnabled.12", { L".xlsm" } },
+    { "application/vnd.oasis.opendocument.spreadsheet", { L".ods" } }, { "text/csv", { L".csv" } },
+    { "application/vnd.openxmlformats-officedocument.presentationml.presentation", { L".pptx" } },
+    { "application/vnd.ms-powerpoint", { L".ppt" } },
+    { "application/vnd.ms-powerpoint.presentation.macroEnabled.12", { L".pptm" } },
+    { "application/vnd.oasis.opendocument.presentation", { L".odp" } },
+    { "text/html", { L".htm", L".html" } },
+};
+#define PROGID_PREFIX L"SG.LinuxApp."
+#define CLIENT_PREFIX L"SG Linux "
+
+static BOOL has_mime(const struct app *a, const char *mime)
+{
+    size_t n = strlen(mime);
+    const char *p = a->mime;
+    while (*p) {
+        if (!strncmp(p, mime, n) && (p[n] == ';' || !p[n])) return TRUE;
+        if (!(p = strchr(p, ';'))) break;
+        p++;
+    }
+    return FALSE;
+}
+
+static void set_sz(HKEY root, const WCHAR *sub, const WCHAR *name, const WCHAR *value)
+{
+    HKEY k;
+    if (RegCreateKeyExW(root, sub, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
+    RegSetValueExW(k, name, 0, REG_SZ, (const BYTE *)value, (lstrlenW(value) + 1) * sizeof(WCHAR));
+    RegCloseKey(k);
+}
+
+static void set_none(HKEY root, const WCHAR *sub, const WCHAR *name)
+{
+    HKEY k;
+    if (RegCreateKeyExW(root, sub, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
+    RegSetValueExW(k, name, 0, REG_NONE, NULL, 0);
+    RegCloseKey(k);
+}
+
+/* a ProgID for an app that opens files or links; FALSE: it opens none of
+ * the types Default apps chooses for */
+static BOOL register_app(const struct app *a, const WCHAR *self, const WCHAR *desktop, const WCHAR *ico, WCHAR *progid, int len)
+{
+    WCHAR sub[300], cmd[MAX_PATH * 3], id[128];
+    BOOL any = FALSE, web = has_mime(a, "x-scheme-handler/http") || has_mime(a, "x-scheme-handler/https"),
+         mail = has_mime(a, "x-scheme-handler/mailto");
+    int i, e;
+
+    for (i = 0; i < (int)ARRAYSIZE(MIME_EXTS) && !any; i++) any = has_mime(a, MIME_EXTS[i].mime);
+    if (!any && !web && !mail) return FALSE;
+    MultiByteToWideChar(CP_UTF8, 0, a->id, -1, id, ARRAYSIZE(id));
+    _snwprintf(progid, len, PROGID_PREFIX L"%ls", id);
+    progid[len - 1] = 0;
+    _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", progid);
+    set_sz(HKEY_CURRENT_USER, sub, NULL, a->name);
+    set_sz(HKEY_CURRENT_USER, sub, L"FriendlyTypeName", a->name);
+    {
+        WCHAR desk[140];
+        _snwprintf(desk, ARRAYSIZE(desk), L"%ls.desktop", id);
+        set_sz(HKEY_CURRENT_USER, sub, L"LinuxDesktopId", desk);   /* Settings tells the Linux side too */
+    }
+    if (ico) {
+        WCHAR di[MAX_PATH + 8];
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\DefaultIcon", progid);
+        _snwprintf(di, ARRAYSIZE(di), L"%ls,0", ico);
+        set_sz(HKEY_CURRENT_USER, sub, NULL, di);
+    }
+    _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\shell\\open\\command", progid);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --open \"%ls\" \"%%1\"", self, desktop);
+    set_sz(HKEY_CURRENT_USER, sub, NULL, cmd);
+    for (i = 0; i < (int)ARRAYSIZE(MIME_EXTS); i++) {
+        if (!has_mime(a, MIME_EXTS[i].mime)) continue;
+        for (e = 0; e < 4 && MIME_EXTS[i].exts[e]; e++) {
+            _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\OpenWithProgids", MIME_EXTS[i].exts[e]);
+            set_none(HKEY_CURRENT_USER, sub, progid);
+        }
+    }
+    if (web || mail) {
+        WCHAR base[200];
+        _snwprintf(base, ARRAYSIZE(base), L"Software\\Clients\\%ls\\" CLIENT_PREFIX L"%ls",
+                   web ? L"StartMenuInternet" : L"Mail", id);
+        set_sz(HKEY_CURRENT_USER, base, NULL, a->name);
+        _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\Capabilities", base);
+        set_sz(HKEY_CURRENT_USER, sub, L"ApplicationName", a->name);
+        _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\Capabilities\\URLAssociations", base);
+        if (web) { set_sz(HKEY_CURRENT_USER, sub, L"http", progid); set_sz(HKEY_CURRENT_USER, sub, L"https", progid); }
+        if (mail) set_sz(HKEY_CURRENT_USER, sub, L"mailto", progid);
+    }
+    return TRUE;
+}
+
+static BOOL made_progid(WCHAR (*made)[128], int n, const WCHAR *progid)
+{
+    int i;
+    for (i = 0; i < n; i++) if (!lstrcmpiW(made[i], progid)) return TRUE;
+    return FALSE;
+}
+
+/* the ProgIDs and clients of apps that are gone */
+static void unregister_gone(WCHAR (*made)[128], int nmade)
+{
+    static const WCHAR *clients[] = { L"Software\\Clients\\StartMenuInternet", L"Software\\Clients\\Mail" };
+    WCHAR name[260], sub[400];
+    DWORD n, i;
+    HKEY k;
+    int c, m, e;
+
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Classes", 0, KEY_READ, &k)) {
+        WCHAR (*gone)[128] = calloc(MAX_APPS, sizeof(*gone));
+        int ngone = 0;
+        for (i = 0; gone && (n = ARRAYSIZE(name), !RegEnumKeyExW(k, i, name, &n, NULL, NULL, NULL, NULL)); i++)
+            if (!_wcsnicmp(name, PROGID_PREFIX, lstrlenW(PROGID_PREFIX)) && !made_progid(made, nmade, name) && ngone < MAX_APPS)
+                lstrcpynW(gone[ngone++], name, 128);
+        RegCloseKey(k);
+        for (c = 0; c < ngone; c++) {
+            _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", gone[c]);
+            RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+            RegDeleteKeyW(HKEY_CURRENT_USER, sub);
+            for (m = 0; m < (int)ARRAYSIZE(MIME_EXTS); m++)
+                for (e = 0; e < 4 && MIME_EXTS[m].exts[e]; e++) {
+                    HKEY ow;
+                    _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\OpenWithProgids", MIME_EXTS[m].exts[e]);
+                    if (!RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_SET_VALUE, &ow)) { RegDeleteValueW(ow, gone[c]); RegCloseKey(ow); }
+                }
+        }
+        free(gone);
+    }
+    for (c = 0; c < 2; c++) {
+        WCHAR gone[32][260];
+        int ng = 0;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, clients[c], 0, KEY_READ, &k)) continue;
+        for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(k, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+            WCHAR progid[200];
+            if (_wcsnicmp(name, CLIENT_PREFIX, lstrlenW(CLIENT_PREFIX))) continue;
+            _snwprintf(progid, ARRAYSIZE(progid), PROGID_PREFIX L"%ls", name + lstrlenW(CLIENT_PREFIX));
+            if (!made_progid(made, nmade, progid) && ng < 32) lstrcpynW(gone[ng++], name, 260);
+        }
+        RegCloseKey(k);
+        for (m = 0; m < ng; m++) {
+            _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\%ls", clients[c], gone[m]);
+            RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+            RegDeleteKeyW(HKEY_CURRENT_USER, sub);
+        }
+    }
+}
+
 static int sync_apps(void)
 {
     WCHAR programs[MAX_PATH], common[MAX_PATH], folder[MAX_PATH], icons[MAX_PATH], self[MAX_PATH], pattern[MAX_PATH];
-    WCHAR (*made)[MAX_PATH];
+    WCHAR (*made)[MAX_PATH], (*progids)[128];
     WIN32_FIND_DATAW fd;
     HANDLE h;
-    int i, j, nmade = 0;
+    int i, j, nmade = 0, nprogids = 0;
 
     if (!SHGetSpecialFolderPathW(NULL, programs, CSIDL_PROGRAMS, TRUE)) return 1;
     if (!SHGetSpecialFolderPathW(NULL, icons, CSIDL_LOCAL_APPDATA, TRUE)) return 1;
@@ -543,6 +716,7 @@ static int sync_apps(void)
     load_dep_hidden();
     scan_apps();
     if (!(made = calloc(g_napps + 1, sizeof(*made)))) return 1;
+    if (!(progids = calloc(g_napps + 1, sizeof(*progids)))) { free(made); return 1; }
     if (g_napps) CreateDirectoryW(folder, NULL);
     for (i = 0; i < g_napps; i++) {
         WCHAR name[140], lnk[MAX_PATH], args[1024], file[MAX_PATH], ico[MAX_PATH];
@@ -561,7 +735,13 @@ static int sync_apps(void)
         if (has_icon) icon_aliases(&g_apps[i], icons, ico);
         write_link(lnk, self, args, has_icon ? ico : NULL, g_apps[i].comment);
         lstrcpynW(made[nmade++], lnk, MAX_PATH);
+#ifndef SG_MUTANT_NO_PROGIDS
+        if (register_app(&g_apps[i], self, file, has_icon ? ico : NULL, progids[nprogids], 128)) nprogids++;
+#endif
     }
+    unregister_gone(progids, nprogids);
+    free(progids);
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
     /* what is no longer there */
     _snwprintf(pattern, MAX_PATH, L"%ls\\*.lnk", folder);
     if ((h = FindFirstFileW(pattern, &fd)) != INVALID_HANDLE_VALUE) {
@@ -599,6 +779,37 @@ static int run_app(const WCHAR *file)
     if (r) {
         WCHAR msg[MAX_PATH + 64];
         _snwprintf(msg, ARRAYSIZE(msg), L"The Linux app could not be started:\n%ls", file);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        MessageBoxW(NULL, msg, L"Linux apps", MB_OK | MB_ICONERROR);
+    }
+    return r ? 1 : 0;
+}
+
+/* an app chosen in Default apps, opening a file (a Windows path: given as
+ * the Unix one) or a URL */
+static int open_with_app(const WCHAR *desktop, const WCHAR *arg)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char *unix_desktop = NULL, *unix_arg = NULL, gio[] = "/usr/bin/gio", launch[] = "launch", url[4096];
+    char *argv[5];
+    LONG r = 1;
+    BOOL is_path = arg[0] && (arg[1] == L':' || (arg[0] == L'\\' && arg[1] == L'\\'));
+
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (p_unix_name) unix_desktop = p_unix_name(desktop);
+    if (is_path && p_unix_name) unix_arg = p_unix_name(arg);
+    else WideCharToMultiByte(CP_UTF8, 0, arg, -1, url, sizeof(url), NULL, NULL);
+    if (spawnvp && unix_desktop) {
+        argv[0] = gio; argv[1] = launch; argv[2] = unix_desktop;
+        argv[3] = arg[0] ? (unix_arg ? unix_arg : url) : NULL;
+        argv[4] = NULL;
+        r = spawnvp(argv, FALSE);
+    }
+    if (unix_desktop) HeapFree(GetProcessHeap(), 0, unix_desktop);
+    if (unix_arg) HeapFree(GetProcessHeap(), 0, unix_arg);
+    if (r) {
+        WCHAR msg[MAX_PATH * 2 + 64];
+        _snwprintf(msg, ARRAYSIZE(msg), L"The Linux app could not open:\n%ls", arg);
         msg[ARRAYSIZE(msg) - 1] = 0;
         MessageBoxW(NULL, msg, L"Linux apps", MB_OK | MB_ICONERROR);
     }
@@ -644,6 +855,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     if (!(g_apps = calloc(MAX_APPS, sizeof(*g_apps)))) return 1;
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--run")) ret = run_app(argv[2]);
+    else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--open")) ret = open_with_app(argv[2], argc >= 4 ? argv[3] : L"");
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--sync")) ret = sync_apps();
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--watch")) ret = watch_apps();
     CoUninitialize();

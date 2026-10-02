@@ -107,18 +107,27 @@ BOOL set_cmd_apps(int id, int code, HWND ctl)
 }
 
 /* ---- Default apps ---------------------------------------------------------------------------------- */
-static const struct { const WCHAR *label, *exts[8], *proto; } KINDS[] = {
-    { L"Photo viewer", { L".jpg", L".jpeg", L".png", L".gif", L".bmp", L".tif", L".tiff", NULL } },
-    { L"Music player", { L".mp3", L".wav", L".ogg", L".flac", L".wma", L".m4a", NULL } },
-    { L"Video player", { L".mp4", L".mkv", L".avi", L".webm", L".wmv", L".mov", NULL } },
-    { L"Text editor", { L".txt", L".log", L".ini", NULL } },
-    { L"PDF viewer", { L".pdf", NULL } },
+static const struct { const WCHAR *label, *exts[8], *proto; const char *mimes; } KINDS[] = {
+    { L"Photo viewer", { L".jpg", L".jpeg", L".png", L".gif", L".bmp", L".tif", L".tiff", NULL }, NULL,
+      "image/jpeg image/png image/gif image/bmp image/tiff" },
+    { L"Music player", { L".mp3", L".wav", L".ogg", L".flac", L".wma", L".m4a", NULL }, NULL,
+      "audio/mpeg audio/x-wav audio/ogg audio/x-vorbis+ogg audio/flac audio/x-flac audio/x-ms-wma audio/mp4 audio/x-m4a" },
+    { L"Video player", { L".mp4", L".mkv", L".avi", L".webm", L".wmv", L".mov", NULL }, NULL,
+      "video/mp4 video/x-matroska video/x-msvideo video/webm video/x-ms-wmv video/quicktime" },
+    { L"Text editor", { L".txt", L".log", L".ini", NULL }, NULL, "text/plain" },
+    { L"PDF viewer", { L".pdf", NULL }, NULL, "application/pdf" },
     /* SG Office's, or Microsoft Office's once it is installed and has taken them */
-    { L"Documents", { L".docx", L".doc", L".docm", L".odt", NULL } },
-    { L"Spreadsheets", { L".xlsx", L".xls", L".xlsm", L".ods", L".csv", NULL } },
-    { L"Presentations", { L".pptx", L".ppt", L".pptm", L".odp", NULL } },
-    { L"Web browser", { L".htm", L".html", NULL }, L"http" },
-    { L"Email", { NULL }, L"mailto" },
+    { L"Documents", { L".docx", L".doc", L".docm", L".odt", NULL }, NULL,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document application/msword "
+      "application/vnd.ms-word.document.macroEnabled.12 application/vnd.oasis.opendocument.text" },
+    { L"Spreadsheets", { L".xlsx", L".xls", L".xlsm", L".ods", L".csv", NULL }, NULL,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet application/vnd.ms-excel "
+      "application/vnd.ms-excel.sheet.macroEnabled.12 application/vnd.oasis.opendocument.spreadsheet text/csv" },
+    { L"Presentations", { L".pptx", L".ppt", L".pptm", L".odp", NULL }, NULL,
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation application/vnd.ms-powerpoint "
+      "application/vnd.ms-powerpoint.presentation.macroEnabled.12 application/vnd.oasis.opendocument.presentation" },
+    { L"Web browser", { L".htm", L".html", NULL }, L"http", "x-scheme-handler/http x-scheme-handler/https text/html" },
+    { L"Email", { NULL }, L"mailto", "x-scheme-handler/mailto" },
 };
 #define NKINDS ((int)ARRAYSIZE(KINDS))
 #define MAX_CHOICES 16
@@ -272,6 +281,35 @@ static void copy_key(HKEY from, HKEY to)
     }
 }
 
+/* A Linux app chosen (sg-linuxapp's ProgID, which names its .desktop file):
+ * the Linux side takes it too -- Linux programs open these files and links
+ * with it (xdg-mime, the user's mimeapps.list). Firefox ESR made the default
+ * browser was the Windows side's only (David 2026-10-02). */
+static void linux_default(int k, const WCHAR *progid)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    WCHAR sub[300], desk[140];
+    DWORD cb = sizeof(desk);
+    char deskA[140], mimes[1024], *argv[32], tool[] = "/usr/bin/xdg-mime", verb[] = "default", *p;
+    int n = 0;
+
+    _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", progid);
+    if (RegGetValueW(HKEY_CURRENT_USER, sub, L"LinuxDesktopId", RRF_RT_REG_SZ, NULL, desk, &cb) || !desk[0]) return;
+#ifdef SG_MUTANT_NO_LINUX_DEFAULT
+    return;
+#endif
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (!spawnvp || !KINDS[k].mimes) return;
+    WideCharToMultiByte(CP_UTF8, 0, desk, -1, deskA, sizeof(deskA), NULL, NULL);
+    lstrcpynA(mimes, KINDS[k].mimes, sizeof(mimes));
+    argv[n++] = tool;
+    argv[n++] = verb;
+    argv[n++] = deskA;
+    for (p = strtok(mimes, " "); p && n < 31; p = strtok(NULL, " ")) argv[n++] = p;
+    argv[n] = NULL;
+    spawnvp(argv, TRUE);
+}
+
 static void set_default(int k, const WCHAR *progid)
 {
     WCHAR sub[300];
@@ -308,6 +346,7 @@ static void set_default(int k, const WCHAR *progid)
         _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\%ls\\UserChoice", KINDS[k].proto);
         reg_set_sz(HKEY_CURRENT_USER, sub, L"ProgId", progid);
     }
+    linux_default(k, progid);
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
 }
 
@@ -325,6 +364,17 @@ void set_build_defaultapps(void)
             progid_name(g_choices[k][i], names[i], ARRAYSIZE(names[i]));
             items[i] = names[i];
             if (!lstrcmpiW(g_choices[k][i], cur)) sel = i;
+        }
+        /* a Linux app named as another choice (Google Chrome for Linux and
+         * for Windows) says which it is, as Start does */
+        for (i = 0; i < g_nchoices[k]; i++) {
+            int j;
+            if (_wcsnicmp(g_choices[k][i], L"SG.LinuxApp.", 12)) continue;
+            for (j = 0; j < g_nchoices[k]; j++)
+                if (j != i && !lstrcmpiW(names[i], names[j])) {
+                    if (lstrlenW(names[i]) + 9 < (int)ARRAYSIZE(names[i])) lstrcatW(names[i], L" (Linux)");
+                    break;
+                }
         }
         items[g_nchoices[k]] = L"Choose a default";
         if (sel < 0) sel = g_nchoices[k];
