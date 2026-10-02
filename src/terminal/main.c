@@ -1273,6 +1273,148 @@ static void row_highlights(const struct pane *p, int y, const struct vt_line *l,
         for (x = s[j]; x < e[j] && x < cols; x++) hl[x] = (a == p->cur_line && s[j] == p->cur_col) ? 2 : 1;
 }
 
+/* Box drawing and block elements (U+2500-U+259F), drawn by the terminal in
+ * the cell itself, as Windows Terminal does: a font's glyphs for them are
+ * rarely the cell's size (the fallback font's "─" left gaps -- a dashed line
+ * -- and its corners stood apart; David 2026-10-01: Claude Code's boxes
+ * looked off). Lines meet the cell's edges, so they join across cells. */
+static int box_arms(WCHAR ch, int arm[4])  /* up, right, down, left: 0, 1 light, 2 heavy, 3 double */
+{
+    static const struct { WCHAR c; unsigned char u, r, d, l; } t[] = {
+        {0x2500,0,1,0,1},{0x2501,0,2,0,2},{0x2502,1,0,1,0},{0x2503,2,0,2,0},
+        {0x2504,0,1,0,1},{0x2505,0,2,0,2},{0x2506,1,0,1,0},{0x2507,2,0,2,0},
+        {0x2508,0,1,0,1},{0x2509,0,2,0,2},{0x250A,1,0,1,0},{0x250B,2,0,2,0},
+        {0x250C,0,1,1,0},{0x250F,0,2,2,0},{0x2510,0,0,1,1},{0x2513,0,0,2,2},
+        {0x2514,1,1,0,0},{0x2517,2,2,0,0},{0x2518,1,0,0,1},{0x251B,2,0,0,2},
+        {0x251C,1,1,1,0},{0x2523,2,2,2,0},{0x2524,1,0,1,1},{0x252B,2,0,2,2},
+        {0x252C,0,1,1,1},{0x2533,0,2,2,2},{0x2534,1,1,0,1},{0x253B,2,2,0,2},
+        {0x253C,1,1,1,1},{0x254B,2,2,2,2},
+        {0x254C,0,1,0,1},{0x254D,0,2,0,2},{0x254E,1,0,1,0},{0x254F,2,0,2,0},
+        {0x2550,0,3,0,3},{0x2551,3,0,3,0},{0x2554,0,3,3,0},{0x2557,0,0,3,3},
+        {0x255A,3,3,0,0},{0x255D,3,0,0,3},{0x2560,3,3,3,0},{0x2563,3,0,3,3},
+        {0x2566,0,3,3,3},{0x2569,3,3,0,3},{0x256C,3,3,3,3},
+        {0x2574,0,0,0,1},{0x2575,1,0,0,0},{0x2576,0,1,0,0},{0x2577,0,0,1,0},
+        {0x2578,0,0,0,2},{0x2579,2,0,0,0},{0x257A,0,2,0,0},{0x257B,0,0,2,0},
+    };
+    int i;
+    for (i = 0; i < (int)ARRAYSIZE(t); i++)
+        if (t[i].c == ch) { arm[0] = t[i].u; arm[1] = t[i].r; arm[2] = t[i].d; arm[3] = t[i].l; return 1; }
+    return 0;
+}
+
+static BOOL box_drawn(uint32_t ch)
+{
+    int arm[4];
+#ifdef SG_MUTANT_FONT_BOXES
+    return FALSE;
+#endif
+    if (ch >= 0x256D && ch <= 0x2570) return TRUE;           /* arcs */
+    if (ch >= 0x2580 && ch <= 0x2595) return TRUE;           /* blocks, shades */
+    return ch >= 0x2500 && ch < 0x2580 && box_arms((WCHAR)ch, arm);
+}
+
+static void box_fill(HDC dc, int x0, int y0, int x1, int y1, COLORREF c)
+{
+    RECT r;
+    HBRUSH b;
+    if (x1 <= x0 || y1 <= y0) return;
+    SetRect(&r, x0, y0, x1, y1);
+    b = CreateSolidBrush(c);
+    FillRect(dc, &r, b);
+    DeleteObject(b);
+}
+
+static unsigned long g_box_cells;   /* cells drawn by draw_box, for the test dump */
+
+static void draw_box(HDC dc, uint32_t ch, int x, int y, int cw, int chh, COLORREF fg, COLORREF bg)
+{
+    int lw = chh >= 24 ? 2 : 1, hw = lw * 2 + 1;
+    int cx = x + cw / 2, cy = y + chh / 2, arm[4], i;
+    HRGN clip = CreateRectRgn(x, y, x + cw, y + chh);
+    g_box_cells++;
+    SelectClipRgn(dc, clip);
+    if (ch >= 0x2580) {
+        /* blocks: eighths of the cell, and shades (fg over bg) */
+        if (ch == 0x2580) box_fill(dc, x, y, x + cw, y + chh / 2, fg);
+        else if (ch >= 0x2581 && ch <= 0x2588) box_fill(dc, x, y + chh - chh * (int)(ch - 0x2580) / 8, x + cw, y + chh, fg);
+        else if (ch >= 0x2589 && ch <= 0x258F) box_fill(dc, x, y, x + cw * (8 - (int)(ch - 0x2588)) / 8, y + chh, fg);
+        else if (ch == 0x2590) box_fill(dc, x + cw / 2, y, x + cw, y + chh, fg);
+        else if (ch >= 0x2591 && ch <= 0x2593) {
+            int k = (int)(ch - 0x2590);   /* 1/4, 2/4, 3/4 of the colour */
+            COLORREF m = RGB((GetRValue(fg) * k + GetRValue(bg) * (4 - k)) / 4, (GetGValue(fg) * k + GetGValue(bg) * (4 - k)) / 4,
+                             (GetBValue(fg) * k + GetBValue(bg) * (4 - k)) / 4);
+            box_fill(dc, x, y, x + cw, y + chh, m);
+        }
+        else if (ch == 0x2594) box_fill(dc, x, y, x + cw, y + chh / 8 ? y + chh / 8 : y + 1, fg);
+        else if (ch == 0x2595) box_fill(dc, x + cw - (cw / 8 ? cw / 8 : 1), y, x + cw, y + chh, fg);
+    } else if (ch >= 0x256D && ch <= 0x2570) {
+        /* arcs: a quarter circle from the middle of one edge to the middle of the next */
+        HPEN pen = CreatePen(PS_SOLID, lw, fg);
+        HGDIOBJ o = SelectObject(dc, pen), ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        int r = (cw < chh ? cw : chh) / 2, ax = cx - (lw - 1) / 2, ay = cy - (lw - 1) / 2;
+        if (ch == 0x256D) {        /* ╭ right and down */
+            Arc(dc, ax, ay, ax + 2 * r + 1, ay + 2 * r + 1, ax + r, ay, ax, ay + r);
+            box_fill(dc, ax + r, ay, x + cw, ay + lw, fg); box_fill(dc, ax, ay + r, ax + lw, y + chh, fg);
+        } else if (ch == 0x256E) { /* ╮ left and down */
+            Arc(dc, ax - 2 * r, ay, ax + 1, ay + 2 * r + 1, ax, ay + r, ax - r, ay);
+            box_fill(dc, x, ay, ax - r + 1, ay + lw, fg); box_fill(dc, ax, ay + r, ax + lw, y + chh, fg);
+        } else if (ch == 0x256F) { /* ╯ up and left */
+            Arc(dc, ax - 2 * r, ay - 2 * r, ax + 1, ay + 1, ax - r, ay, ax, ay - r);
+            box_fill(dc, x, ay, ax - r + 1, ay + lw, fg); box_fill(dc, ax, y, ax + lw, ay - r + 1, fg);
+        } else {                   /* ╰ up and right */
+            Arc(dc, ax, ay - 2 * r, ax + 2 * r + 1, ay + 1, ax, ay - r, ax + r, ay);
+            box_fill(dc, ax + r, ay, x + cw, ay + lw, fg); box_fill(dc, ax, y, ax + lw, ay - r + 1, fg);
+        }
+        SelectObject(dc, ob); SelectObject(dc, o); DeleteObject(pen);
+    } else if (box_arms((WCHAR)ch, arm)) {
+        BOOL dashed = (ch >= 0x2504 && ch <= 0x250B) || (ch >= 0x254C && ch <= 0x254F);
+        int dg = lw + 1;   /* a double line's two strokes: this far either side of the middle */
+        BOOL anyh = arm[1] == 3 || arm[3] == 3, anyv = arm[0] == 3 || arm[2] == 3;
+        for (i = 0; i < 4; i++) {
+            int w = arm[i] == 2 ? hw : lw, o = w / 2, k;
+            if (!arm[i]) continue;
+            if (arm[i] != 3) {
+                /* light, heavy: one stroke from the edge across the middle */
+                switch (i) {
+                case 0: box_fill(dc, cx - o, y, cx - o + w, cy - o + w, fg); break;
+                case 1: box_fill(dc, cx - o, cy - o, x + cw, cy - o + w, fg); break;
+                case 2: box_fill(dc, cx - o, cy - o, cx - o + w, y + chh, fg); break;
+                case 3: box_fill(dc, x, cy - o, cx - o + w, cy - o + w, fg); break;
+                }
+                continue;
+            }
+            for (k = -1; k <= 1; k += 2) {
+                /* a double stroke at k*dg from the middle: it stops at the near
+                 * stroke of a crossing double arm on its own side, else runs on
+                 * to the far one (or through, when nothing crosses) */
+                int at = k * dg, end;
+                if (i == 1 || i == 3) {
+                    BOOL side = k < 0 ? arm[0] == 3 : arm[2] == 3;   /* a vertical arm on this stroke's side */
+                    end = !anyv ? 0 : side ? dg : -dg;
+                    if (i == 1) box_fill(dc, cx + (anyv ? end : -1), cy + at, x + cw, cy + at + lw, fg);
+                    else box_fill(dc, x, cy + at, cx - (anyv ? end : -1) + lw, cy + at + lw, fg);
+                } else {
+                    BOOL side = k < 0 ? arm[3] == 3 : arm[1] == 3;   /* a horizontal arm on this stroke's side */
+                    end = !anyh ? 0 : side ? dg : -dg;
+                    if (i == 2) box_fill(dc, cx + at, cy + (anyh ? end : -1), cx + at + lw, y + chh, fg);
+                    else box_fill(dc, cx + at, y, cx + at + lw, cy - (anyh ? end : -1) + lw, fg);
+                }
+            }
+        }
+        if (dashed) {
+            /* gaps cut back into the line: two dashes (and three, four) in a cell */
+            int parts = (ch == 0x2504 || ch == 0x2505 || ch == 0x2506 || ch == 0x2507) ? 3 : (ch >= 0x2508 && ch <= 0x250B) ? 4 : 2;
+            BOOL horiz = arm[1] != 0;
+            for (i = 0; i < parts; i++) {
+                if (horiz) { int gx = x + cw * (i + 1) / parts - (cw / parts) / 3; box_fill(dc, gx, y, gx + (cw / parts) / 3, y + chh, bg); }
+                else { int gy = y + chh * (i + 1) / parts - (chh / parts) / 3; box_fill(dc, x, gy, x + cw, gy + (chh / parts) / 3, bg); }
+            }
+        }
+    }
+    SelectClipRgn(dc, NULL);
+    DeleteObject(clip);
+}
+
 static void paint_view(struct pane *t, HDC dc, RECT *client)
 {
     const struct ts_scheme *sc = pane_scheme(t);
@@ -1295,6 +1437,7 @@ static void paint_view(struct pane *t, HDC dc, RECT *client)
             uint8_t h0 = x < 2048 ? hl[x] : 0;
             WCHAR text[1024];
             INT dx[1024];
+            int boxes[1024], nbox = 0;   /* cells drawn by draw_box: their column */
             int n = 0, x0 = x;
             uint32_t fg, bg;
             RECT rc;
@@ -1308,7 +1451,8 @@ static void paint_view(struct pane *t, HDC dc, RECT *client)
                     uint32_t v = c->ch - 0x10000;
                     text[n] = 0xd800 + (v >> 10); dx[n++] = 0;
                     text[n] = 0xdc00 + (v & 0x3ff); dx[n++] = g_cw;
-                } else { text[n] = c->ch ? (WCHAR)c->ch : L' '; dx[n++] = g_cw; }
+                } else if (box_drawn(c->ch)) { boxes[nbox++] = x; text[n] = L' '; dx[n++] = g_cw; }
+                else { text[n] = c->ch ? (WCHAR)c->ch : L' '; dx[n++] = g_cw; }
                 x++;
             }
             fg = colour(sc, c0->fg, TRUE, c0->flags);
@@ -1323,6 +1467,11 @@ static void paint_view(struct pane *t, HDC dc, RECT *client)
             SetBkColor(dc, rgb_of(bg));
             SetRect(&rc, S(PAD) + x0 * g_cw, py, S(PAD) + x * g_cw, py + g_ch);
             ExtTextOutW(dc, rc.left, py, ETO_OPAQUE | ETO_CLIPPED, &rc, text, n, dx);
+            {
+                int k;
+                for (k = 0; k < nbox; k++)
+                    draw_box(dc, l->cells[boxes[k]].ch, S(PAD) + boxes[k] * g_cw, py, g_cw, g_ch, rgb_of(fg), rgb_of(bg));
+            }
             if (c0->flags & (VT_UNDERLINE | VT_STRIKE)) {
                 HPEN pen = CreatePen(PS_SOLID, 1, rgb_of(fg));
                 HGDIOBJ o = SelectObject(dc, pen);
@@ -1950,6 +2099,7 @@ static void write_dump(BOOL force)
                 t ? t->vt.cols : g_cols, t ? t->vt.rows : g_rows);
         WideCharToMultiByte(CP_UTF8, 0, g_face, -1, line, sizeof(line), NULL, NULL);
         fprintf(f, "font %d %d %d %s\n", g_font_pt, g_cw, g_ch, line);
+        fprintf(f, "boxcells %lu\n", g_box_cells);
     }
     WideCharToMultiByte(CP_UTF8, 0, g_set.path, -1, line, sizeof(line), NULL, NULL);
     fprintf(f, "settings %s\n", line);

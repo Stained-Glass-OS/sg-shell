@@ -117,6 +117,34 @@ if wait_row "attrgreen" 15; then
     case "$(colour_of attrgreen)" in aaaaaaaaa) pass "SetConsoleTextAttribute colours come through as VT" ;; *) fail "attrgreen's colours: '$(colour_of attrgreen)'" ;; esac
 else fail "no attrgreen"; fi
 shot cmd
+# box drawing (Claude Code's boxes): drawn in the cell, so a line of 40 "─"
+# is one unbroken stroke -- the font's glyphs left gaps between the cells
+typ "c:\\conprobe.exe boxes"; key Return
+if wait_row "boxes" 15; then
+    sleep 1; shot boxes
+    set -- $(D font)
+    cw=$2; chh=$3
+    run=$(python3 - "$OUT/terminal-boxes.png" $(D origin) "$cw" "$chh" <<'PY'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("L"); w, h = im.size; px = im.load(); best = 0
+ox, oy, cw, ch = (int(v) for v in sys.argv[2:6])
+# the text view's first 20 rows and 60 columns: not the window's frame, the title bar or the tabs
+for y in range(oy, min(h, oy + 20 * ch)):
+    r = 0
+    for x in range(ox, min(w, ox + 60 * cw)):
+        if px[x, y] > 140: r += 1; best = max(best, r)
+        else: r = 0
+print(best)
+PY
+)
+    # drawn by the terminal, not the font: the 46 box cells counted (a font with
+    # full-width glyphs, as here, would pass the stroke check too)
+    [ "$(D boxcells)" -ge 46 ] 2>/dev/null && pass "the terminal draws the box-drawing cells itself ($(D boxcells) cells)" \
+        || fail "box-drawing cells drawn by the terminal: $(D boxcells)"
+    [ "${run:-0}" -ge $(( 38 * ${cw:-8} )) ] && pass "a line of 40 box-drawing characters is one unbroken stroke ($run px, cells $cw px)" \
+        || fail "the box-drawing line is broken: longest stroke ${run:-?} px"
+else fail "no boxes: $(grep '^row' "$DUMP" | tail -4)"; fi
 
 # --- a second tab: PowerShell 7 --------------------------------------------------------------
 if [ $HAVE_PWSH = 1 ]; then

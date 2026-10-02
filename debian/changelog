@@ -1,3 +1,16 @@
+sg-shell (0.1.0-89) unstable; urgency=medium
+
+  * Terminal draws box-drawing characters and block elements itself, in the
+    cell, as Windows Terminal does (David 2026-10-01: Claude Code looked off
+    in the console): a font's glyphs for them are rarely the cell's size,
+    so its lines were dashed and its corners stood apart. Lines (light,
+    heavy, double, dashed), corners, tees, crosses, rounded corners, half
+    and eighth blocks and shades now join across cells. Test:
+    test/terminal-check.sh (a line of 40 is one unbroken stroke; the cells
+    are the terminal's own -- mutant FONT_BOXES fails it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 02 Oct 2026 06:30:00 +0000
+
 sg-shell (0.1.0-88) unstable; urgency=medium
 
   * Environment Variables (David 2026-10-01: Claude Code asked for PATH to be
