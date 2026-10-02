@@ -1361,6 +1361,11 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             break;
         case GN_DBLCLK:
             if (g == &g_fewer) { grow_t *r = grid_selected(g); proc_t *p = r ? find_proc((DWORD)r->key) : NULL;
+                                 /* a Linux window's stand-in brings it forward on SC_RESTORE (wine-sg 0759) */
+#ifndef SG_MUTANT_LINUX_NO_SWITCH
+                                 if (p && p->linux) PostMessageW(p->win, WM_SYSCOMMAND, SC_RESTORE, 0);
+                                 else
+#endif
                                  if (p && p->win) { if (IsIconic(p->win)) ShowWindow(p->win, SW_RESTORE); SetForegroundWindow(p->win); } }
             break;
         case GN_SORT: refresh(); break;

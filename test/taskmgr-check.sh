@@ -96,6 +96,14 @@ fi
 pass "Task Manager opens with fewer details"
 if wait_dump '^FEWER [0-9]+	.*[Cc]lock' 10; then pass "fewer details lists the running app (Clock)"; else fail "fewer details lacks Clock: $(d | grep '^FEWER')"; fi
 d | grep -q '^FEWER.*sgburn' && fail "fewer details lists a background process" || pass "fewer details leaves out background processes"
+# a Linux program's window among them: double-clicked (Switch to), brought forward
+if wait_dump '^FEWER [0-9]+	Linux Test App' 10; then
+    xy=$(d | awk '$1 == "ROW" && /Linux Test App/ { print $3, $4; exit }')
+    # shellcheck disable=SC2086
+    [ -n "$xy" ] && xdotool mousemove $xy click --repeat 2 --delay 80 1; sleep 1.5
+    [ -f "$WINEPREFIX/drive_c/linuxrestored.txt" ] && pass "fewer details lists a Linux program's window; double-clicked, it comes forward" \
+        || fail "double-clicking the Linux window did not bring it forward"
+else fail "fewer details lacks the Linux window: $(d | grep '^FEWER')"; fi
 shot fewer
 
 # More details
