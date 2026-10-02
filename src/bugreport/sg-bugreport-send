@@ -1,0 +1,95 @@
+#!/usr/bin/python3
+# sg-bugreport-send REPORT OUT -- Report a problem's Send (sg-bugreport.exe):
+# the report, as plain ASCII text, to the project's server (freesoft.page's
+# /api/report: no mail, David 2026-10-02). OUT gets "OK <report id>" or
+# "ERROR <what went wrong>" (Wine gives the Windows side no pipe to read).
+#
+# Reports are public (freesoft.page/reports): the account's name and the
+# computer's are replaced by <user> and <computer> first.
+#
+# The server takes printable ASCII only and at most 512 KB: other characters
+# become their nearest ASCII (accents dropped) or "?", and a longer report
+# keeps its start and its end. SG_REPORT_URL: another server (the test).
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+import getpass
+import json
+import os
+import re
+import socket
+import sys
+import unicodedata
+import urllib.error
+import urllib.request
+
+URL = os.environ.get("SG_REPORT_URL", "https://freesoft.page/api/report")
+LIMIT = 500 * 1024
+
+
+PUNCT = {"\u2013": "-", "\u2014": "--", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+         "\u2026": "...", "\u00a0": " ", "\u2022": "*", "\u00d7": "x", "\u2192": "->"}
+
+
+def ascii_text(text):
+    out = []
+    for ch in text.replace("\r\n", "\n"):
+        if ch in "\t\n" or " " <= ch <= "~":
+            out.append(ch)
+            continue
+        if ch in PUNCT:
+            out.append(PUNCT[ch])
+            continue
+        base = "".join(c for c in unicodedata.normalize("NFKD", ch) if " " <= c <= "~")
+        out.append(base or "?")
+    data = "".join(out).encode("ascii")
+    if len(data) > LIMIT:
+        cut = b"\n\n[... the middle of the report was left out: it was too long to send ...]\n\n"
+        data = data[:LIMIT * 2 // 3] + cut + data[-(LIMIT // 3 - len(cut)):]
+    return data
+
+
+def redact(text):
+    names = []
+    try:
+        names.append((getpass.getuser(), "<user>"))
+    except (KeyError, OSError):
+        pass
+    host = socket.gethostname().split(".")[0]
+    if host and host != "stained-glass":   # the default name, in paths too
+        names.append((host, "<computer>"))
+    for name, mark in names:
+        if len(name) >= 3:
+            text = re.sub(r"(?<![A-Za-z0-9])%s(?![A-Za-z0-9])" % re.escape(name), mark, text, flags=re.I)
+    return text
+
+
+def main():
+    if len(sys.argv) != 3:
+        print("usage: sg-bugreport-send REPORT OUT", file=sys.stderr)
+        return 2
+    report, out = sys.argv[1], sys.argv[2]
+    try:
+        with open(report, encoding="utf-8", errors="replace") as f:
+            data = ascii_text(redact(f.read()))
+        req = urllib.request.Request(URL, data=data, method="POST",
+                                     headers={"Content-Type": "text/plain; charset=us-ascii",
+                                              "User-Agent": "sg-bugreport"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            answer = json.loads(r.read().decode() or "{}")
+        result = "OK %s" % answer.get("id", "")
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read().decode()).get("error", "")
+        except ValueError:
+            msg = ""
+        result = "ERROR %s" % (msg or "the server answered %d" % e.code)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        result = "ERROR could not reach the server (%s)" % getattr(e, "reason", e)
+    with open(out + ".tmp", "w") as f:
+        f.write(result + "\n")
+    os.replace(out + ".tmp", out)
+    return 0 if result.startswith("OK") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

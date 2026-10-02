@@ -25,7 +25,7 @@ override_dh_auto_install:
 	    build/sg-charmap64.exe \
 	    build/sg-rootterm64.exe src/rootterm/sg-root-terminal src/rootterm/sg-linux-terminal src/sg-rdp-connect \
 	    build/sg-linuxapp64.exe \
-	    build/sg-bugreport64.exe src/bugreport/sg-bugreport-info src/bugreport/sg-debug-run \
+	    build/sg-bugreport64.exe src/bugreport/sg-bugreport-info src/bugreport/sg-debug-run src/bugreport/sg-debug-summary src/bugreport/sg-bugreport-send \
 	    build/sg-wordpad64.exe \
 	    build/sg-fontview64.exe \
 	    build/sg-pdf64.exe \

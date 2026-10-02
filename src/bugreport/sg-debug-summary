@@ -1,0 +1,208 @@
+#!/usr/bin/python3
+# sg-debug-summary DIR -- the highlights of a Report a problem debug log
+# (sg-debug-run): what a developer reads first, so a report says why a
+# program failed without its whole log.
+#
+#   - how it ended: the exit code, and what an NTSTATUS one means
+#   - crashes: Wine's "Unhandled exception" blocks
+#   - exceptions by code, most frequent first, with where the first of each
+#     happened (the module, from the log's own DLL load addresses) -- not the
+#     unwinding noise of every longjmp (STATUS_LONGJUMP, 0x80000026) that
+#     filled whole reports before (MeediOS, Meedio, 2026-10-02)
+#   - .NET (Wine Mono) exceptions: the type and message, and the first lines
+#     of the stack
+#   - errors and missing pieces (err:, fixme:), DLLs that did not load, the
+#     native programs and DLLs it loaded
+#   - the end of the log without the trace lines (register dumps, unwinding)
+#
+# Writes DIR/highlights. SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David Hamner and the Stained Glass OS contributors
+import collections
+import os
+import re
+import sys
+
+NOISE_CODES = {"80000026"}  # STATUS_LONGJUMP: Wine's own setjmp/longjmp
+NTSTATUS = {
+    0xC0000005: "access violation (a crash)",
+    0xC0000409: "stack buffer overrun (a crash)",
+    0xC0000374: "heap corruption (a crash)",
+    0xC000001D: "illegal instruction (a crash)",
+    0xC0000094: "integer divide by zero (a crash)",
+    0xC00000FD: "stack overflow (a crash)",
+    0xC0000135: "a DLL it needs was not found",
+    0xC0000139: "a DLL entry point was not found",
+    0xC0000142: "a DLL failed to initialize",
+    0xE0434352: ".NET exception not handled (a crash)",
+    0x40010004: "ended by the debugger or killed",
+}
+EXCEPTION_NAMES = {
+    "c0000005": "EXCEPTION_ACCESS_VIOLATION", "c000001d": "EXCEPTION_ILLEGAL_INSTRUCTION",
+    "c0000094": "EXCEPTION_INT_DIVIDE_BY_ZERO", "c00000fd": "EXCEPTION_STACK_OVERFLOW",
+    "e06d7363": "C++ exception", "e0434352": ".NET exception", "e0434f4d": ".NET exception",
+    "406d1388": "thread name (harmless)", "40010006": "debug string (harmless)",
+    "4001000a": "debug string (harmless)", "80000003": "breakpoint", "c0000409": "stack buffer overrun",
+}
+
+PREFIX = re.compile(r"^(?:\d+\.\d+:)?(?:[0-9a-f]{4}:)?(?:[0-9a-f]{4}:)?")
+
+
+def strip(line):
+    return PREFIX.sub("", line, count=1)
+
+
+def main(dirname):
+    path = os.path.join(dirname, "log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = []
+    out = []
+    say = out.append
+
+    # how it ended
+    try:
+        rc = int(open(os.path.join(dirname, "exit")).read().strip())
+    except (OSError, ValueError):
+        rc = None
+    if rc is not None:
+        code = rc & 0xFFFFFFFF
+        meaning = NTSTATUS.get(code, "")
+        if rc == 0:
+            meaning = "normal (0)"
+        elif code == 255 or code == 1:
+            meaning = "an error the program reported itself (%d)" % rc
+        say("How it ended: exit code %d (0x%08X)%s" % (rc, code, " -- " + meaning if meaning else ""))
+        say("")
+
+    # modules and where they were loaded, to name an exception's address
+    modules = []
+    for l in lines:
+        m = re.search(r'loaddll:\S+ Loaded L"([^"]+)" at ([0-9A-Fa-f]+): (\w+)', l)
+        if m:
+            modules.append((int(m.group(2), 16), m.group(1).replace("\\\\", "\\"), m.group(3)))
+    modules.sort()
+
+    def module_of(addr):
+        best = None
+        for base, name, _kind in modules:
+            if base <= addr:
+                best = (base, name)
+            else:
+                break
+        if not best:
+            return ""
+        return "%s+0x%x" % (best[1].split("\\")[-1], addr - best[0])
+
+    # crashes
+    crash = [i for i, l in enumerate(lines) if re.search(r"Unhandled (exception|page fault|illegal|privileged)", l)]
+    if crash:
+        say("Crashes (%d):" % len(crash))
+        for i in crash[:3]:
+            for l in lines[i:i + 4]:
+                say("  " + strip(l)[:300])
+        say("")
+
+    # exceptions by code
+    excs = collections.OrderedDict()
+    for l in lines:
+        m = re.search(r"dispatch_exception code=([0-9a-fA-F]+)\S*(?: \(([^)]*)\))? flags=\S+ addr=([0-9A-Fa-fx]+)", l)
+        if not m:
+            m = re.search(r"code=([0-9a-fA-F]{8}) flags=\S+ addr=([0-9A-Fa-fx]+)", l)
+            if not m:
+                continue
+            code, name, addr = m.group(1).lower(), "", m.group(2)
+        else:
+            code, name, addr = m.group(1).lower(), m.group(2) or "", m.group(3)
+        if code in NOISE_CODES:
+            continue
+        e = excs.setdefault(code, {"n": 0, "name": name or EXCEPTION_NAMES.get(code, ""), "addr": addr})
+        e["n"] += 1
+    if excs:
+        say("Exceptions (by code, most frequent first; the first one's place):")
+        for code, e in sorted(excs.items(), key=lambda kv: -kv[1]["n"])[:10]:
+            try:
+                where = module_of(int(e["addr"], 16))
+            except ValueError:
+                where = ""
+            say("  %6d  %s %s  at %s%s" % (e["n"], code, e["name"], e["addr"], " (" + where + ")" if where else ""))
+        say("")
+
+    # .NET exceptions (Wine Mono writes them to the log)
+    net = [i for i, l in enumerate(lines)
+           if re.search(r"(Unhandled Exception|FATAL UNHANDLED EXCEPTION|^\s*\[ERROR\]|System\.[A-Za-z.]*Exception: |Exception: .+)", l)
+           and "trace:" not in l]
+    if net:
+        say(".NET exceptions (first %d):" % min(len(net), 3))
+        shown = 0
+        last = -10
+        for i in net:
+            if i <= last + 12:
+                continue
+            for l in lines[i:i + 12]:
+                if "trace:" in l:
+                    continue
+                say("  " + l.strip()[:300])
+            last = i
+            shown += 1
+            if shown == 3:
+                break
+        say("")
+
+    # err: / fixme:
+    def counted(kind, width, cut_args, top):
+        c = collections.Counter()
+        for l in lines:
+            if (":%s:" % kind) in l:
+                s = strip(l)[:width]
+                if cut_args:
+                    s = s.split("(")[0]
+                c[s] += 1
+        return c.most_common(top)
+    errs = counted("err", 220, False, 25)
+    say("Errors (err:, most frequent first):")
+    for s, n in errs:
+        say("  %6d %s" % (n, s))
+    say("")
+    say("Missing pieces (fixme:, most frequent first):")
+    for s, n in counted("fixme", 160, True, 20):
+        say("  %6d %s" % (n, s))
+    say("")
+    nf = sorted({strip(l)[:220] for l in lines if re.search(r"loaddll:.*not found|err:module:import_dll", l)})
+    if nf:
+        say("DLLs that did not load:")
+        for s in nf[:15]:
+            say("  " + s)
+        say("")
+    say("Native (not built-in) programs and DLLs loaded:")
+    for name in sorted({name for _b, name, kind in modules if kind == "native"})[:40]:
+        say("  " + name)
+    say("")
+
+    # the end of the log, without trace noise; repeated lines folded
+    tail = [strip(l)[:300] for l in lines if ":trace:" not in l and l.strip()][-200:]
+    folded, prev, rep = [], None, 0
+    for l in tail:
+        if l == prev:
+            rep += 1
+            continue
+        if rep:
+            folded.append("  (the line above %d more times)" % rep)
+        folded.append(l)
+        prev, rep = l, 0
+    if rep:
+        folded.append("  (the line above %d more times)" % rep)
+    say("The log's last 60 lines (trace lines left out):")
+    for l in folded[-60:]:
+        say(l)
+
+    with open(os.path.join(dirname, "highlights"), "w") as f:
+        f.write("\n".join(out) + "\n")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("usage: sg-debug-summary DIR", file=sys.stderr)
+        sys.exit(2)
+    main(sys.argv[1])

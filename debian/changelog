@@ -27,6 +27,15 @@ sg-shell (0.1.0-92) unstable; urgency=medium
     plays it at the new volume, so the right level is easy to find (David
     2026-10-02; sg-session 0.1.0-91's "sound chime"). Gate:
     test/volume-check.sh (mutant NO_CHIME).
+  * Report a problem sends reports to the project's website instead of
+    mail: Send report asks first (the report is public at
+    freesoft.page/reports), then sg-bugreport-send posts it as ASCII
+    without the account's and computer's names. The log's summary
+    (sg-debug-summary) now says why a program failed: the exit code
+    explained, exceptions by code with the module they happened in, .NET
+    exceptions with their stack, the end of the log without trace noise --
+    reports were 60 lines of unwinding (MeediOS, Meedio; David 2026-10-02).
+    Gate: test/bugreport-check.sh.
   * test/dictate-check.sh reads Stained Glass's Notepad (its editor control,
     wine-sg 0100), waits for the text typed when the key is released, and
     counts the partial text's pixels with subpixel antialiasing.

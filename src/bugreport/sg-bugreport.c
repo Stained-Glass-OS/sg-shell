@@ -12,8 +12,9 @@
  * the program and its version, the machine (sg-bugreport-info), and the
  * debug log's highlights (sg-debug-run). All of it is shown before anything
  * leaves the window. Copy puts it on the clipboard; Save writes a .txt file;
- * Email opens the tester's own mail program addressed to the project, the
- * report on the clipboard to paste in full. Nothing is sent by this program.
+ * Send report puts it on the project's website (freesoft.page/reports, public:
+ * sg-bugreport-send leaves out the account and computer names), after asking
+ * -- no mail any more (David 2026-10-02). Nothing is sent without that.
  *
  * The debug log itself stays in %LOCALAPPDATA%\Stained Glass\Reports\<time>,
  * named in the report, for when a developer asks for all of it.
@@ -32,16 +33,17 @@
 #include <string.h>
 #include <wchar.h>
 
-#define REPORT_TO     L"ke7oxh@gmail.com"
+#define REPORTS_URL   L"https://freesoft.page/reports/"
 #define SHELL_DIR     "/usr/libexec/stained-glass/shell/"
 #define ID_NOTES      101
 #define ID_DETAILS    102
 #define ID_COPY       103
 #define ID_SAVE       104
-#define ID_EMAIL      105
+#define ID_SEND       105
 #define ID_CLOSE      106
 #define ID_NOW        107
 #define WM_RUN_DONE   (WM_APP + 1)
+#define WM_SEND_DONE  (WM_APP + 2)
 #define BANNER_H      64
 
 static HINSTANCE g_inst;
@@ -59,6 +61,7 @@ static DWORD g_pid;                   /* for --window */
 static BOOL  g_running;               /* --run, still running */
 static int   g_exit_code = -1;
 static WCHAR g_dir[MAX_PATH];         /* this report's folder */
+static WCHAR g_result[MAX_PATH];      /* Send's answer (sg-bugreport-send) */
 static char  g_udir[MAX_PATH * 3];    /* the same, as a Unix path */
 static WCHAR *g_report;               /* the details, as shown */
 
@@ -375,62 +378,68 @@ static void save_report(void)
     SetWindowTextW(g_status, write_report(file) ? L"Saved." : L"The report could not be saved there.");
 }
 
-static void url_encode(struct text *t, const WCHAR *s)
+/* Send report: the report to the project's website, where it is public
+ * (sg-bugreport-send: ASCII, names left out); in a thread, the window stays
+ * alive while it goes */
+static DWORD WINAPI send_thread(void *arg)
 {
-    char *u = to_utf8(s), *p;
-    WCHAR buf[4] = { 0 };
-    for (p = u; *p; p++) {
-        unsigned char c = *p;
-        if (isalnum(c) || strchr("-_.~", c)) { buf[0] = c; buf[1] = 0; }
-        else _snwprintf(buf, ARRAYSIZE(buf), L"%%%02X", c);
-        /* add() would turn \n into \r\n: these are already escaped */
-        add(t, buf);
-    }
-    HeapFree(GetProcessHeap(), 0, u);
+    char rep[sizeof(g_udir) + 32], out[sizeof(g_udir) + 32];
+    char *argv[] = { (char *)SHELL_DIR "sg-bugreport-send", rep, out, NULL };
+    (void)arg;
+    snprintf(rep, sizeof(rep), "%s/sent-report.txt", g_udir);
+    snprintf(out, sizeof(out), "%s/sent-result.txt", g_udir);
+    spawn(argv, TRUE);
+    PostMessageW(g_main, WM_SEND_DONE, 0, 0);
+    return 0;
 }
 
-/* the tester's own mail program, addressed; the full report on the clipboard
- * and in a file beside the log, since a mailto: link cannot carry all of it */
-static void email_report(void)
+static void send_report(void)
 {
-    struct text body = { 0 }, url = { 0 }, subject = { 0 };
-    WCHAR file[MAX_PATH], name[MAX_PATH], *r = full_report(), msg[1024];
-    BOOL copied = copy_report(), saved;
-    INT_PTR rc;
-    int keep = lstrlenW(r) > 1500 ? 1500 : lstrlenW(r);
+    WCHAR file[MAX_PATH];
+    HANDLE thread;
 
-    default_name(name, ARRAYSIZE(name));
-    _snwprintf(file, ARRAYSIZE(file), L"%s\\%s", g_dir, name);
-    saved = write_report(file);
-
-    addf(&subject, L"Stained Glass OS problem report: %s", g_program[0] ? g_title : L"system");
-    r[keep] = 0;
-    add(&body, L"(The full report is on the clipboard -- please paste it below this line, or attach ");
-    addf(&body, L"\"%s\".)\n\n", name);
-    add(&body, r);
-    if (keep == 1500) add(&body, L"\n[...]\n");
-    add(&url, L"mailto:" REPORT_TO L"?subject=");
-    url_encode(&url, subject.s);
-    add(&url, L"&body=");
-    url_encode(&url, body.s);
-
-    rc = (INT_PTR)ShellExecuteW(g_main, NULL, url.s, NULL, NULL, SW_SHOWNORMAL);
-    if (rc > 32) {
-        SetWindowTextW(g_status, copied ? L"Your mail program is open. The full report is on the clipboard: paste it into the message."
-                                        : L"Your mail program is open.");
-    } else {
-        _snwprintf(msg, ARRAYSIZE(msg),
-                   L"No mail program is set up on this PC.\n\n%s%sSend it to " REPORT_TO L" from any mail service "
-                   L"(for example, web mail in a browser).",
-                   copied ? L"The report is on the clipboard, ready to paste.\n" : L"",
-                   saved ? L"It is also saved in your Reports folder, which opens now.\n\n" : L"\n");
-        MessageBoxW(g_main, msg, L"Email report", MB_OK | MB_ICONINFORMATION);
-        if (saved) ShellExecuteW(g_main, L"open", g_dir, NULL, NULL, SW_SHOWNORMAL);
+    if (MessageBoxW(g_main, L"The report will be put on the Stained Glass OS website, " REPORTS_URL
+                    L", where anyone can read it -- that is how the project, and anyone helping, sees what fails.\n\n"
+                    L"Your account name and this computer's name are left out. Look over the report above "
+                    L"for anything else you would rather not share.\n\nSend it?",
+                    L"Send report", MB_YESNO | MB_ICONQUESTION) != IDYES)
+        return;
+    _snwprintf(file, ARRAYSIZE(file), L"%s\\sent-report.txt", g_dir);
+    _snwprintf(g_result, ARRAYSIZE(g_result), L"%s\\sent-result.txt", g_dir);
+    DeleteFileW(g_result);
+    if (!g_udir[0] || !write_report(file)) {
+        SetWindowTextW(g_status, L"The report could not be prepared for sending.");
+        return;
     }
-    HeapFree(GetProcessHeap(), 0, r);
-    HeapFree(GetProcessHeap(), 0, body.s);
-    HeapFree(GetProcessHeap(), 0, url.s);
-    HeapFree(GetProcessHeap(), 0, subject.s);
+    EnableWindow(g_buttons[2], FALSE);
+    SetWindowTextW(g_status, L"Sending the report\x2026");
+    if ((thread = CreateThread(NULL, 0, send_thread, NULL, 0, NULL))) CloseHandle(thread);
+    else send_thread(NULL);
+}
+
+static void send_done(void)
+{
+    char buf[512] = "";
+    WCHAR msg[700];
+    HANDLE f = CreateFileW(g_result, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    DWORD got = 0;
+
+    if (f != INVALID_HANDLE_VALUE) {
+        ReadFile(f, buf, sizeof(buf) - 1, &got, NULL);
+        CloseHandle(f);
+        buf[got] = 0;
+    }
+    buf[strcspn(buf, "\r\n")] = 0;
+    EnableWindow(g_buttons[2], TRUE);
+    if (!strncmp(buf, "OK ", 3)) {
+        _snwprintf(msg, ARRAYSIZE(msg), L"Sent -- thank you. Report %S is on " REPORTS_URL, buf + 3);
+        SetWindowTextW(g_status, msg);
+    } else {
+        _snwprintf(msg, ARRAYSIZE(msg), L"The report was not sent: %S\n\nYou can still copy or save it.",
+                   buf[0] ? buf + 6 : "the sending program did not answer");
+        SetWindowTextW(g_status, L"The report was not sent.");
+        MessageBoxW(g_main, msg, L"Send report", MB_OK | MB_ICONWARNING);
+    }
 }
 
 /* ---- running the program ---------------------------------------------- */
@@ -558,7 +567,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                                                    : L"The report could not be copied.");
             return 0;
         case ID_SAVE: save_report(); return 0;
-        case ID_EMAIL: email_report(); return 0;
+        case ID_SEND: send_report(); return 0;
         case ID_NOW:
             SetWindowTextW(g_status, L"Reading the log so far...");
             summarize_log();
@@ -569,6 +578,9 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case ID_CLOSE: DestroyWindow(hwnd); return 0;
         }
         break;
+    case WM_SEND_DONE:
+        send_done();
+        return 0;
     case WM_RUN_DONE:
         g_running = FALSE;
         g_exit_code = (int)wp;
@@ -579,7 +591,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         layout();
         build_report();
         InvalidateRect(hwnd, NULL, TRUE);
-        SetWindowTextW(g_status, L"The program has ended. Add what happened, then copy, save or email the report.");
+        SetWindowTextW(g_status, L"The program has ended. Add what happened, then copy, save or send the report.");
         SetForegroundWindow(hwnd);
         return 0;
     case WM_DESTROY:
@@ -644,8 +656,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
     MSG msg;
     int i;
-    static const WCHAR *labels[5] = { L"Copy report", L"Save...", L"Email report", L"Close", L"Report now" };
-    static const int ids[5] = { ID_COPY, ID_SAVE, ID_EMAIL, ID_CLOSE, ID_NOW };
+    static const WCHAR *labels[5] = { L"Copy report", L"Save...", L"Send report", L"Close", L"Report now" };
+    static const int ids[5] = { ID_COPY, ID_SAVE, ID_SEND, ID_CLOSE, ID_NOW };
 
     (void)prev; (void)cmdline;
     memset(&ncm, 0, sizeof(ncm));
@@ -699,7 +711,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         CloseHandle(CreateThread(NULL, 0, run_thread, NULL, 0, NULL));
     } else {
         build_report();
-        SetWindowTextW(g_status, L"Add what happened, then copy, save or email the report.");
+        SetWindowTextW(g_status, L"Add what happened, then copy, save or send the report.");
     }
 
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {

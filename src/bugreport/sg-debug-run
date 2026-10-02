@@ -17,6 +17,13 @@ set -u
 
 summarize() {
     dir=$1
+    # the full summary (sg-debug-summary: exceptions by code and module, .NET
+    # exceptions, the end of the log without trace noise); this one when it
+    # is missing
+    here=$(dirname "$0")
+    for s in "$here/sg-debug-summary" /usr/libexec/stained-glass/shell/sg-debug-summary; do
+        [ -x "$s" ] && "$s" "$dir" 2>/dev/null && return 0
+    done
     {
         n=$(grep -c 'Unhandled exception\|Unhandled page fault\|Unhandled illegal\|Unhandled privileged' "$dir/log")
         if [ "$n" -gt 0 ]; then
