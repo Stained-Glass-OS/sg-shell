@@ -164,6 +164,10 @@ if wait_dump '^PROC [0-9]+	0	Linux Test App	' 10; then
         click "$1" "$2"; sleep 1.5
         [ -f "$WINEPREFIX/drive_c/linuxclosed.txt" ] && pass "End task asks it to close (its stand-in gets WM_CLOSE)" \
             || fail "End task did not ask the Linux window to close: $(d | grep '^ACTION')"
+        # it did not close (hung: CPU-X, David 2026-10-02): ended then (wine-sg 0772 kills it)
+        i=0; while [ ! -f "$WINEPREFIX/drive_c/linuxended.txt" ] && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+        [ -f "$WINEPREFIX/drive_c/linuxended.txt" ] && pass "still there 3 s on (hung), End task ends it (SgLinuxWindowEnd)" \
+            || fail "a Linux program that did not close was not ended"
     else fail "no row for the Linux window on screen"; fi
 else
     fail "the Linux window is not listed: $(d | grep 'Linux Test')"

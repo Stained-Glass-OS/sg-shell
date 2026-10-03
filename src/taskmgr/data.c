@@ -434,13 +434,33 @@ static DWORD WINAPI ender(void *arg)
     return 0;
 }
 
+/* a Linux program asked to close that is still there 3 s later (hung: CPU-X,
+ * David 2026-10-02) is ended -- its frame or stand-in kills it (wine-sg 0772) */
+static DWORD WINAPI linux_ender(void *arg)
+{
+    HWND w = arg;
+    int i;
+    for (i = 0; i < 30 && IsWindow(w); i++) Sleep(100);
+#ifndef SG_MUTANT_LINUX_END_POLITE
+    if (IsWindow(w)) SendMessageTimeoutW(w, RegisterWindowMessageW(L"SgLinuxWindowEnd"), 0, 0, SMTO_ABORTIFHUNG, 5000, NULL);
+#endif
+    return 0;
+}
+
 BOOL end_process(DWORD pid, BOOL gracefully)
 {
     proc_t *p = find_proc(pid);
     HANDLE h;
     BOOL ok;
-    /* a Linux program's window: its stand-in asks it to close */
-    if (p && p->linux) return PostMessageW(p->win, WM_CLOSE, 0, 0);
+    /* a Linux program's window: its stand-in asks it to close, and ends it
+     * when it does not */
+    if (p && p->linux)
+    {
+        HANDLE t;
+        if (!PostMessageW(p->win, WM_CLOSE, 0, 0)) return FALSE;
+        if ((t = CreateThread(NULL, 0, linux_ender, p->win, 0, NULL))) CloseHandle(t);
+        return TRUE;
+    }
     if (gracefully && p && p->win)
     {
         ender_t *e = malloc(sizeof(*e));
