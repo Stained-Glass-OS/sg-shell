@@ -241,7 +241,7 @@ poke; xdotool type --delay 80 zeta; sleep 1.5
 # the best match row: below the search field and its header, at 96 DPI
 click 110 $((panel_y + 112)) 3
 [ "$(val menu)" = context ] && pass "right-click opens the app's menu: $(val menu_items)" || fail "no context menu: $(val menu)"
-case "$(val menu_items)" in "Pin to Start,Pin to taskbar,Run as administrator,Run with debugging,Open file location,Uninstall") pass "Pin to Start, Pin to taskbar, Run as administrator, Run with debugging, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
+case "$(val menu_items)" in "Pin to Start,Pin to taskbar,Start at sign-in,Run as administrator,Run with debugging,Open file location,Uninstall") pass "Pin to Start, Pin to taskbar, Start at sign-in, Run as administrator, Run with debugging, Open file location, Uninstall" ;; *) fail "context items: $(val menu_items)" ;; esac
 shot context
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && pass "Pin to Start adds a tile" || fail "not pinned: $(d | grep '^tile')"
@@ -281,6 +281,35 @@ click 110 $((panel_y + 112)) 3
 case "$(val menu_items)" in *"Unpin from taskbar"*) pass "then its menu offers Unpin from taskbar" ;; *) fail "taskbar unpin item: $(val menu_items)" ;; esac
 xdotool key k; sleep 1.5
 [ -f "$TBPINS/Zeta Test App.lnk" ] && fail "Unpin from taskbar left the shortcut" || pass "Unpin from taskbar removes it"
+# Start at sign-in (David 2026-10-03: a startup item turned off could not be
+# turned on again): a shortcut in the user's Startup folder; for one in the
+# common Startup folder (an installer's), its StartupApproved mark in HKLM
+USTARTUP="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup"
+CSTARTUP="$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp"
+APPROVED='Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder'
+zmenu() { [ "$(val visible)" = 1 ] || poke; xdotool key Escape; sleep 0.5; [ "$(val visible)" = 1 ] || poke
+          xdotool type --delay 80 zeta; sleep 1.5; click 110 $((panel_y + 112)) 3; }
+zmenu
+xdotool key g; sleep 1.5
+ls "$USTARTUP"/Zeta* "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Microsoft/Windows/Start\ Menu/Programs/[Ss]tart[Uu]p/Zeta* 2>/dev/null | grep -q . \
+    && pass "Start at sign-in: a shortcut in the user's Startup folder" || fail "no Startup shortcut: launched '$(val launched)'"
+zmenu
+case "$(val menu_items)" in *"Don't start at sign-in"*) pass "then its menu offers Don't start at sign-in" ;; *) fail "startup item: $(val menu_items)" ;; esac
+xdotool key g; sleep 1.5
+ls "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Microsoft/Windows/Start\ Menu/Programs/[Ss]tart[Uu]p/Zeta* 2>/dev/null | grep -q . \
+    && fail "Don't start at sign-in left the shortcut" || pass "Don't start at sign-in removes it"
+# everyone's, turned off (as Task Manager does): turned on again where it is
+mkdir -p "$CSTARTUP"
+find "$WINEPREFIX/drive_c" -name 'Zeta Test App.lnk' -path '*Deepest*' -exec cp {} "$CSTARTUP/" \;
+"$WINE" reg add "HKLM\\$APPROVED" /v 'Zeta Test App.lnk' /t REG_BINARY /d 030000000000000000000000 /f >/dev/null 2>&1
+zmenu
+case "$(val menu_items)" in *"Pin to taskbar,Start at sign-in"*) pass "everyone's startup shortcut turned off: Start at sign-in offered" ;; *) fail "off item: $(val menu_items)" ;; esac
+xdotool key g; sleep 2
+"$WINE" reg query "HKLM\\$APPROVED" /v 'Zeta Test App.lnk' 2>/dev/null | grep -q 'REG_BINARY *02' \
+    && ! ls "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Microsoft/Windows/Start\ Menu/Programs/[Ss]tart[Uu]p/Zeta* >/dev/null 2>&1 \
+    && pass "and it turns it on again (its HKLM mark 02, no second shortcut)" \
+    || fail "everyone's item not turned on: $("$WINE" reg query "HKLM\\$APPROVED" /v 'Zeta Test App.lnk' 2>&1 | tr -d '\r' | grep Zeta)"
+rm -f "$CSTARTUP/Zeta Test App.lnk"
 xdotool key Escape; sleep 0.8      # the search clears; Start stays open for the rail
 
 # --- the rail -----------------------------------------------------------------------

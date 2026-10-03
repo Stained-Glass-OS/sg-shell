@@ -1289,6 +1289,115 @@ static void taskbar_pin(const struct entry *e, BOOL on)
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, &r);
 }
 
+/* ---- starting at sign-in (David 2026-10-03: a startup item turned off and
+ * gone from his view could not be turned on again; Start's menu does it): a
+ * shortcut in the user's Startup folder, or -- one in the common Startup
+ * folder, for everyone (an installer's: AmbirScan's) -- its StartupApproved
+ * mark in HKLM, set by an administrator. As Task Manager's Startup tab and
+ * explorer's sign-in (wine-sg 0754) read them. -------------------------- */
+
+#define STARTUP_APPROVED L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\StartupFolder"
+
+/* the shortcut's path in a Startup folder (CSIDL_STARTUP or _COMMON_STARTUP) */
+static BOOL startup_lnk(const struct entry *e, int csidl, WCHAR *out)
+{
+    WCHAR dir[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(NULL, csidl, NULL, 0, dir))) return FALSE;
+    _snwprintf(out, MAX_PATH, L"%ls\\%ls.lnk", dir, e->name);
+    out[MAX_PATH - 1] = 0;
+    return GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* StartupApproved: the value's first byte odd is off; absent is on */
+static BOOL startup_approved(HKEY root, const WCHAR *value)
+{
+    BYTE b[12];
+    DWORD cb = sizeof(b), type;
+    HKEY k;
+    BOOL on = TRUE;
+    if (RegOpenKeyExW(root, STARTUP_APPROVED, 0, KEY_READ, &k)) return TRUE;
+    if (!RegQueryValueExW(k, value, NULL, &type, b, &cb) && type == REG_BINARY && cb >= 1) on = !(b[0] & 1);
+    RegCloseKey(k);
+    return on;
+}
+
+static BOOL starts_at_signin(const struct entry *e)
+{
+    WCHAR lnk[MAX_PATH];
+    if (startup_lnk(e, CSIDL_STARTUP, lnk) && startup_approved(HKEY_CURRENT_USER, wcsrchr(lnk, '\\') + 1)) return TRUE;
+    return startup_lnk(e, CSIDL_COMMON_STARTUP, lnk) && startup_approved(HKEY_LOCAL_MACHINE, wcsrchr(lnk, '\\') + 1);
+}
+
+/* the everyone's item's mark: written directly when this user may, else by
+ * reg.exe run as administrator (one prompt) */
+static void startup_approve_machine(const WCHAR *value, BOOL on)
+{
+    BYTE b[12] = { 0 };
+    WCHAR params[512];
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    HKEY k;
+    b[0] = on ? 0x02 : 0x03;
+    if (!RegCreateKeyExW(HKEY_LOCAL_MACHINE, STARTUP_APPROVED, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL))
+    {
+        LONG r = RegSetValueExW(k, value, 0, REG_BINARY, b, sizeof(b));
+        RegCloseKey(k);
+        if (!r) return;
+    }
+    _snwprintf(params, ARRAYSIZE(params), L"add \"HKLM\\%ls\" /v \"%ls\" /t REG_BINARY /d %ls /f",
+               STARTUP_APPROVED, value, on ? L"020000000000000000000000" : L"030000000000000000000000");
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    sei.lpVerb = L"runas";
+    sei.lpFile = L"reg.exe";
+    sei.lpParameters = params;
+    sei.nShow = SW_HIDE;
+    if (ShellExecuteExW(&sei) && sei.hProcess) CloseHandle(sei.hProcess);
+}
+
+static void startup_set(const struct entry *e, BOOL on)
+{
+    WCHAR lnk[MAX_PATH], common[MAX_PATH];
+    BOOL mine = startup_lnk(e, CSIDL_STARTUP | CSIDL_FLAG_CREATE, lnk), everyone = startup_lnk(e, CSIDL_COMMON_STARTUP, common);
+    HKEY k;
+    const WCHAR *ext;
+
+    lstrcpyW(g_launched, on ? L"startup on " : L"startup off ");
+    lstrcatW(g_launched, e->name);
+    if (!on)
+    {
+        if (mine) DeleteFileW(lnk);
+        if (everyone) startup_approve_machine(wcsrchr(common, '\\') + 1, FALSE);
+    }
+    else if (everyone)   /* the installer's own: turned on again where it is */
+        startup_approve_machine(wcsrchr(common, '\\') + 1, TRUE);
+    else
+    {
+        if ((ext = wcsrchr(e->path, L'.')) && !lstrcmpiW(ext, L".lnk")) CopyFileW(e->path, lnk, FALSE);
+        else
+        {
+            IShellLinkW *link;
+            IPersistFile *file;
+            if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link)))
+            {
+                IShellLinkW_SetPath(link, e->path);
+                if (e->args[0]) IShellLinkW_SetArguments(link, e->args);
+                if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+                {
+                    IPersistFile_Save(file, lnk, TRUE);
+                    IPersistFile_Release(file);
+                }
+                IShellLinkW_Release(link);
+            }
+        }
+    }
+    /* the user's own: no mark left over to keep it off */
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, STARTUP_APPROVED, 0, KEY_SET_VALUE, &k))
+    {
+        RegDeleteValueW(k, wcsrchr(lnk, '\\') + 1);
+        RegCloseKey(k);
+    }
+    dump();
+}
+
 /* "Run with debugging" (David 2026-09-29: a mode the app is started in, as
  * Run as administrator is): Report a problem runs it with Wine's debug log
  * and, when it ends or crashes, shows what a developer needs, to be sent on */
@@ -1307,10 +1416,10 @@ static void run_debugging(const struct entry *e)
 
 static void entry_menu(int id, POINT pt)
 {
-    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG };
+    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG, C_STARTUP };
     struct entry *e = entry_of(id);
     HMENU m;
-    BOOL pinned, on_taskbar;
+    BOOL pinned, on_taskbar, at_signin = FALSE;
     int cmd;
 
     if (!e) return;
@@ -1321,6 +1430,8 @@ static void entry_menu(int id, POINT pt)
     {
         menu_add(m, C_PIN, pinned ? L"Un&pin from Start" : L"&Pin to Start");
         menu_add(m, C_TASKBAR, on_taskbar ? L"Unpin from tas&kbar" : L"Pin to tas&kbar");
+        at_signin = starts_at_signin(e);
+        menu_add(m, C_STARTUP, at_signin ? L"Don't start at si&gn-in" : L"Start at si&gn-in");
         menu_add(m, 0, NULL);
         menu_add(m, C_RUNAS, L"Run as &administrator");
         menu_add(m, C_DEBUG, L"Run with &debugging");
@@ -1335,6 +1446,9 @@ static void entry_menu(int id, POINT pt)
     {
     case C_PIN:       pin(e->name, !pinned); InvalidateRect(g_panel, NULL, FALSE); break;
     case C_TASKBAR:   taskbar_pin(e, !on_taskbar); break;
+#ifndef SG_MUTANT_STARTUP_NOOP
+    case C_STARTUP:   startup_set(e, !at_signin); break;
+#endif
     case C_RUNAS:     run_entry(e, e->kind == K_APP ? L"runas" : NULL); break;
     case C_DEBUG:     run_debugging(e); break;
     case C_LOCATION:  open_location(e); break;

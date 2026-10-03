@@ -513,11 +513,37 @@ BOOL set_cmd_startup(int id, int code, HWND ctl)
         BOOL on = st_checked(ctl);
         b[0] = on ? 0x02 : 0x03;
         if (!on) { FILETIME ft; GetSystemTimeAsFileTime(&ft); memcpy(b + 4, &ft, sizeof(ft)); }
+        LONG r = 1;
         if (!RegCreateKeyExW(s->root, s->approved, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) {
-            if (RegSetValueExW(k, s->value, 0, REG_BINARY, b, sizeof(b)))
-                st_status(L"Only an administrator can change an app that starts for everyone.");
+            r = RegSetValueExW(k, s->value, 0, REG_BINARY, b, sizeof(b));
             RegCloseKey(k);
-        } else st_status(L"Only an administrator can change an app that starts for everyone.");
+        }
+        /* an app that starts for everyone: an administrator's (reg.exe run
+         * as one, after the prompt) -- turned off as a user, it showed off
+         * and was not (David 2026-10-03) */
+        if (r && s->root == HKEY_LOCAL_MACHINE) {
+            WCHAR params[512];
+            SHELLEXECUTEINFOW sei = { sizeof(sei) };
+            DWORD code = 1;
+            _snwprintf(params, ARRAYSIZE(params), L"add \"HKLM\\%ls\" /v \"%ls\" /t REG_BINARY /d %ls /f",
+                       s->approved, s->value, on ? L"020000000000000000000000" : L"030000000000000000000000");
+            sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+            sei.lpVerb = L"runas";
+            sei.lpFile = L"reg.exe";
+            sei.lpParameters = params;
+            sei.nShow = SW_HIDE;
+            if (ShellExecuteExW(&sei) && sei.hProcess) {
+                WaitForSingleObject(sei.hProcess, 120000);
+                GetExitCodeProcess(sei.hProcess, &code);
+                CloseHandle(sei.hProcess);
+            }
+            r = code;
+        }
+        if (r) {
+            st_status(L"Only an administrator can change an app that starts for everyone.");
+            SendMessageW(ctl, BM_SETCHECK, s->on ? BST_CHECKED : BST_UNCHECKED, 0);
+            return TRUE;
+        }
         s->on = on;
         return TRUE;
     }

@@ -238,6 +238,30 @@ static BOOL set_approved(int src, const WCHAR *value, BOOL on)
     return !r;
 }
 
+/* an item for everyone (HKLM) a user may not change: reg.exe run as
+ * administrator writes it, after the one prompt (David 2026-10-03: turning
+ * AmbirScan's on again took an administrator) */
+static BOOL set_approved_elevated(int src, const WCHAR *value, BOOL on)
+{
+    WCHAR params[512];
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    DWORD code = 1;
+    if (approved_root(src) != HKEY_LOCAL_MACHINE) return FALSE;
+    _snwprintf(params, ARRAYSIZE(params), L"add \"HKLM\\%s\" /v \"%s\" /t REG_BINARY /d %s /f",
+               approved_sub(src), value, on ? L"020000000000000000000000" : L"030000000000000000000000");
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    sei.hwnd = g_main;
+    sei.lpVerb = L"runas";
+    sei.lpFile = L"reg.exe";
+    sei.lpParameters = params;
+    sei.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess) return FALSE;
+    WaitForSingleObject(sei.hProcess, 120000);
+    GetExitCodeProcess(sei.hProcess, &code);
+    CloseHandle(sei.hProcess);
+    return !code;
+}
+
 static void add_startup(int src, const WCHAR *value, const WCHAR *cmd)
 {
     startup_t *s;
@@ -1058,7 +1082,7 @@ static void toggle_startup(void)
 {
     startup_t *s = selected_startup();
     if (!s) return;
-    if (!set_approved(s->src, s->value, !s->enabled))
+    if (!set_approved(s->src, s->value, !s->enabled) && !set_approved_elevated(s->src, s->value, !s->enabled))
     {
         MessageBoxW(g_main, L"You need administrator rights to change this item.", L"Task Manager", MB_ICONWARNING | MB_OK);
         return;
