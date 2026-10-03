@@ -56,8 +56,8 @@ static const struct category CATS[] = {
       { PG_S_EOA_DISPLAY, PG_S_EOA_MAGNIFIER, PG_S_EOA_KEYBOARD, PG_S_EOA_MOUSE, PG_COUNT } },
     { L"Privacy", L"Microphone, camera, location", IC_G_PRIVACY,
       { PG_S_PRIV_GENERAL, PG_S_PRIV_MIC, PG_S_PRIV_CAMERA, PG_S_PRIV_LOCATION, PG_COUNT } },
-    { L"Update & Security", L"Updates, recovery", IC_G_UPDATE,
-      { PG_S_UPDATE, PG_S_RECOVERY, PG_COUNT } },
+    { L"Update & Security", L"Updates, virus protection, recovery", IC_G_UPDATE,
+      { PG_S_UPDATE, PG_S_DEFENDER, PG_S_RECOVERY, PG_COUNT } },
 };
 #define NCATS ((int)ARRAYSIZE(CATS))
 
@@ -102,6 +102,7 @@ static const struct { enum page_id page; const WCHAR *words; } KEYWORDS[] = {
     { PG_S_PRIV_CAMERA, L"camera webcam access" },
     { PG_S_PRIV_LOCATION, L"location gps" },
     { PG_S_UPDATE, L"windows update check for updates install restart history" },
+    { PG_S_DEFENDER, L"virus antivirus malware threat protection defender security scan quarantine clamav" },
     { PG_S_RECOVERY, L"reset restart advanced startup recovery" },
 };
 
@@ -153,7 +154,7 @@ static const struct { const WCHAR *uri; enum page_id page; } URIS[] = {
     { L"windowsupdate", PG_S_UPDATE }, { L"windowsupdate-action", PG_S_UPDATE },
     { L"windowsupdate-history", PG_S_UPDATE }, { L"windowsupdate-options", PG_S_UPDATE },
     { L"windowsupdate-restartoptions", PG_S_UPDATE }, { L"recovery", PG_S_RECOVERY },
-    { L"troubleshoot", PG_S_RECOVERY }, { L"activation", PG_S_ABOUT }, { L"windowsdefender", PG_S_UPDATE },
+    { L"troubleshoot", PG_S_RECOVERY }, { L"activation", PG_S_ABOUT }, { L"windowsdefender", PG_S_DEFENDER },
 };
 
 /* the page a command line names: ms-settings:NAME, --page NAME or a bare NAME */

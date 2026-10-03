@@ -894,6 +894,10 @@ int admin_main(int argc, WCHAR **argv)
         const WCHAR *req[] = { L"timezone-auto", argv[1] };
         return do_one(L"Set time zone automatically", req, 2);
     }
+    if (!lstrcmpW(argv[0], L"defender") && argc > 1) {
+        const WCHAR *req[] = { L"defender", argv[1] };
+        return do_one(L"Virus & threat protection", req, 2);
+    }
     if (!lstrcmpW(argv[0], L"ntp") && argc > 1) {
         const WCHAR *req[] = { L"ntp", argv[1] };
         return do_one(L"Set time automatically", req, 2);

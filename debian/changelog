@@ -1,3 +1,15 @@
+sg-shell (0.1.0-100) unstable; urgency=medium
+
+  * Settings > Update & Security > Virus & threat protection (David
+    2026-10-03; ms-settings:windowsdefender): how SG Defender stands -- on
+    or off, programs checked, the ClamAV definitions -- and what it
+    quarantined from this person's files; its switch turns it off or on for
+    the machine (an administrator: sg-admind "defender on|off" writes
+    /etc/stained-glass/defender.conf and stops or starts ClamAV's daemons).
+    Gate test/defender-page-check.sh; admind-check covers the op.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 15:50:00 +0000
+
 sg-shell (0.1.0-99) unstable; urgency=medium
 
   * SG Store: several apps at once, the administrator asked once (David

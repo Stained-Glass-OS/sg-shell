@@ -121,6 +121,7 @@ for pair in "ms-settings:|Home" "ms-settings:display|Display" "ms-settings:netwo
             "ms-settings:dateandtime|Date & time" "ms-settings:personalization-background|Background" \
             "ms-settings:colors|Colors" "ms-settings:about|About" "ms-settings:bluetooth|Bluetooth & other devices" \
             "ms-settings:network-proxy|Proxy" "ms-settings:speech|Speech Recognition" "ms-settings:lockscreen|Lock screen" \
+            "ms-settings:windowsdefender|Virus & threat protection" \
             "ms-settings:display?activationSource=x|Display" "ms-settings:no-such-page|Home"; do
     uri=${pair%%|*}; want=${pair#*|}
     got=$(resolve "$uri")

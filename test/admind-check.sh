@@ -68,7 +68,7 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto"
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -145,6 +145,12 @@ grep -q '^timedatectl set-timezone America/Denver ' "$CALLS" && pass "sets the t
 [ "$(cat "$T/tz-auto" 2>/dev/null)" = off ] && pass "...and a zone chosen by hand turns 'automatically' off" || fail "tz-auto after a zone: $(cat "$T/tz-auto" 2>/dev/null)"
 r=$(ask timezone-auto on)
 [ "$(first "$r")" = OK ] && [ "$(cat "$T/tz-auto")" = on ] && pass "turns 'Set time zone automatically' on" || fail "timezone-auto on: $r"
+r=$(ask defender off)
+[ "$(first "$r")" = OK ] && grep -qx "enabled=0" "$T/defender.conf" && pass "turns SG Defender off" || fail "defender off: $r"
+r=$(ask defender on)
+[ "$(first "$r")" = OK ] && grep -qx "enabled=1" "$T/defender.conf" && pass "...and on" || fail "defender on: $r"
+r=$(ask defender sometimes)
+case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted defender sometimes" ;; esac
 r=$(ask timezone-auto maybe)
 case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted timezone-auto maybe" ;; esac
 : > "$CALLS"

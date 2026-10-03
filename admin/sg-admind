@@ -391,6 +391,34 @@ def op_timezone_auto(args):
     return []
 
 
+DEFENDER_CONF = os.environ.get("SG_ADMIN_DEFENDER_CONF", "/etc/stained-glass/defender.conf")
+
+
+def op_defender(args):
+    """SG Defender, on or off (Settings > Virus & threat protection): its
+    setting for sg-defender, and ClamAV's daemons with it -- off gives back
+    the memory its definitions hold."""
+    (v,) = args
+    if v not in ("on", "off"):
+        raise Refused("Virus & threat protection is on or off.")
+    try:
+        os.makedirs(os.path.dirname(DEFENDER_CONF), exist_ok=True)
+        with open(DEFENDER_CONF + ".sg-new", "w") as f:
+            f.write("# SG Defender: scan downloaded programs (Settings > Virus & threat protection)\n"
+                    "enabled=%d\n" % (v == "on"))
+        os.chmod(DEFENDER_CONF + ".sg-new", 0o644)
+        os.replace(DEFENDER_CONF + ".sg-new", DEFENDER_CONF)
+    except OSError as e:
+        raise Refused("The setting could not be saved: %s" % e)
+    if not TEST:
+        units = ["clamav-daemon.service", "clamav-freshclam.service"]
+        subprocess.run(["systemctl", "enable" if v == "on" else "disable", "--now", "--no-block"] + units,
+                       capture_output=True, check=False)
+        subprocess.run(["systemctl", "restart", "--no-block", "sg-defender.service"], capture_output=True,
+                       check=False)
+    return []
+
+
 def op_ntp(args):
     (v,) = args
     if v not in ("on", "off"):
@@ -1082,6 +1110,7 @@ OPS = {
     "timezone": (op_timezone, 1),
     "timezone-auto": (op_timezone_auto, 1),
     "ntp": (op_ntp, 1),
+    "defender": (op_defender, 1),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
     "source-add": (op_source_add, 4),

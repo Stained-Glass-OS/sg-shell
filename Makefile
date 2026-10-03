@@ -307,6 +307,7 @@ test: build
 	@sh test/timezone-auto-test.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
+	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-check.sh
 	@sh test/terminal-panes-check.sh
 	@sh test/terminal-settings-check.sh

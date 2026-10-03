@@ -59,7 +59,8 @@
     [PG_S_PRIV_CAMERA]  = { L"Camera",                       PG_S_HOME, set_build_priv_camera, set_cmd_privacy }, \
     [PG_S_PRIV_LOCATION]= { L"Location",                     PG_S_HOME, set_build_priv_location, set_cmd_privacy }, \
     [PG_S_UPDATE]       = { L"Updates",                      PG_S_HOME, set_build_update,    set_cmd_update, NULL, set_timer_update }, \
-    [PG_S_RECOVERY]     = { L"Recovery",                     PG_S_HOME, set_build_recovery,  set_cmd_recovery },
+    [PG_S_RECOVERY]     = { L"Recovery",                     PG_S_HOME, set_build_recovery,  set_cmd_recovery }, \
+    [PG_S_DEFENDER]     = { L"Virus & threat protection",    PG_S_HOME, set_build_defender,  set_cmd_defender },
 
 /* ---- building a Settings page (settings.c) ----------------------------------------------- */
 int  st_x(void);                        /* the page's left margin */
@@ -125,6 +126,7 @@ void set_build_priv_general(void); void set_build_priv_mic(void); void set_build
 void set_build_priv_location(void); BOOL set_cmd_privacy(int, int, HWND);
 void set_build_update(void);    BOOL set_cmd_update(int, int, HWND);    void set_timer_update(void);
 void set_build_recovery(void);  BOOL set_cmd_recovery(int, int, HWND);
+void set_build_defender(void);  BOOL set_cmd_defender(int, int, HWND);
 
 /* the microphone switch voice typing honours (privacy) */
 BOOL privacy_mic_allowed(void);
