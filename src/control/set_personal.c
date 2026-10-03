@@ -46,21 +46,26 @@ static BOOL browse_picture(WCHAR *file)
 }
 
 /* ---- Background ------------------------------------------------------------------------------- */
-enum { CMD_BGTYPE = CMD_PAGE_FIRST + 1, CMD_FIT, CMD_BROWSE, CMD_ANIMBG, CMD_PIC_FIRST = CMD_PAGE_FIRST + 100,
+enum { CMD_BGTYPE = CMD_PAGE_FIRST + 1, CMD_FIT, CMD_BROWSE, CMD_PIC_FIRST = CMD_PAGE_FIRST + 100,
        CMD_BG_FIRST = CMD_PAGE_FIRST + 200 };
 static WCHAR g_pics[12][MAX_PATH];
 static int g_npics;
 
 void set_build_background(void)
 {
-    static const WCHAR *const types[] = { L"Picture", L"Solid color" };
+    /* the moving ones (sg-deskcomp draws them; still under a full-screen
+     * program and on battery saver) are kinds of picture, in the one list
+     * (David 2026-10-03: a menu of their own overrode this one) */
+    static const WCHAR *const types[] = { L"Picture", L"Solid color", L"Picture, lit through the glass where the pointer is",
+                                          L"Living glass: the picture as stained glass round your windows" };
     struct pstate st;
-    int y = st_title(L"Background"), i, cols, tw = S(120), th = S(68);
+    int y = st_title(L"Background"), i, cols, tw = S(120), th = S(68), kind;
     pers_read(&st);
+    kind = st.solid ? 1 : effects_background() == 1 ? 2 : effects_background() == 2 ? 3 : 0;
     g_preview_pic = !st.solid && st.source[0] ? pers_thumb(st.source, S(192), S(108)) : NULL;
     pg_control(L"SgCplPreview", L"", 0, st_x(), y, S(320), S(210), -1);
     y += S(228);
-    st_combo(&y, L"Background", types, 2, st.solid ? 1 : 0, CMD_BGTYPE);
+    st_combo(&y, L"Background", types, 4, kind, CMD_BGTYPE);
     if (!st.solid) {
         g_npics = pers_pictures(g_pics, ARRAYSIZE(g_pics));
         y = st_text(y, L"Choose your picture");
@@ -86,15 +91,6 @@ void set_build_background(void)
         }
         y += S(112);
     }
-    {
-        /* a background that moves (sg-deskcomp draws it, off by default; it
-         * stops while a full-screen program is on top and on battery saver):
-         * light passing behind the picture, or glass cells that gather round
-         * the open windows (David 2026-10-02) */
-        static const WCHAR *const kinds[] = { L"Off (the default)", L"Light through the glass",
-                                              L"Living glass: cells that gather round your windows" };
-        st_combo(&y, L"Animated background", kinds, BACKGROUND_COUNT, (int)effects_background(), CMD_ANIMBG);
-    }
 }
 
 BOOL set_cmd_background(int id, int code, HWND ctl)
@@ -113,8 +109,11 @@ BOOL set_cmd_background(int id, int code, HWND ctl)
     case CMD_BGTYPE:
         if (code == CBN_SELCHANGE) {
             LRESULT sel = SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            /* the picture's effect: none for Picture and Solid color */
+            if (sel >= 0 && sel < 4 && (DWORD)(sel >= 2 ? sel - 1 : 0) != effects_background())
+                failed(effects_set_background(BACKGROUND_KEYS[sel >= 2 ? sel - 1 : 0]));
             if (sel == 1 && !st.solid) failed(pers_set_background(st.background));
-            else if (sel == 0 && st.solid) {
+            else if (sel != 1 && st.solid) {
                 WCHAR pic[MAX_PATH] = L"";
                 reg_sz(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers",
                        L"BackgroundHistoryPath0", pic, MAX_PATH);
@@ -138,12 +137,6 @@ BOOL set_cmd_background(int id, int code, HWND ctl)
         if (browse_picture(file)) failed(pers_set_wallpaper(file, st.style));
         return TRUE;
     }
-    case CMD_ANIMBG:
-        if (code == CBN_SELCHANGE) {
-            int sel = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
-            if (sel >= 0 && sel < BACKGROUND_COUNT) failed(effects_set_background(BACKGROUND_KEYS[sel]));
-        }
-        return TRUE;
     }
     return FALSE;
 }

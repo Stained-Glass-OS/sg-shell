@@ -1,3 +1,12 @@
+sg-shell (0.1.0-98) unstable; urgency=medium
+
+  * Settings > Background: the moving backgrounds are in the Background list
+    beside Picture and Solid color ("Picture, lit through the glass where
+    the pointer is", "Living glass"), not a second menu that overrode it
+    (David 2026-10-03). Gate: test/settings-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 03:30:00 +0000
+
 sg-shell (0.1.0-97) unstable; urgency=medium
 
   * Start: an app's menu has "Start at sign-in" / "Don't start at sign-in"

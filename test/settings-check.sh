@@ -197,6 +197,20 @@ if [ $# -eq 2 ]; then
     if near "$(pixel $px 300)" "224 16 16"; then pass "the desktop shows the red picture outside the window ($px,300)"
     else fail "desktop pixel at $px,300 is $(pixel $px 300), not red"; fi
     shot background
+    # the moving backgrounds are kinds of picture in the same list (David
+    # 2026-10-03: a menu of their own overrode Picture / Solid color)
+    set -- $(ctl_at ComboBox 'Picture')
+    if [ $# -eq 2 ]; then
+        click_at "$1" "$2"; xdotool key Down Down Down Return; sleep 2
+        [ "$(regq 'HKCU\Software\Stained Glass\Effects' AnimatedBackground)" = 0x2 ] && has ": Living glass" \
+            && tr -d '\r' < "$DUMP" | grep -q 'SgCplTile.*red.png' \
+            && pass "Living glass is chosen in the Background list, the pictures still offered" \
+            || fail "Living glass from the list: $(regq 'HKCU\Software\Stained Glass\Effects' AnimatedBackground)"
+        set -- $(ctl_at ComboBox 'Living glass')
+        [ $# -eq 2 ] && { click_at "$1" "$2"; xdotool key Up Up Up Return; sleep 2; }
+        [ "$(regq 'HKCU\Software\Stained Glass\Effects' AnimatedBackground)" = 0x0 ] && has ": Picture" \
+            && pass "and Picture again turns it off" || fail "back to Picture: $(regq 'HKCU\Software\Stained Glass\Effects' AnimatedBackground)"
+    else fail "no Background list showing Picture"; fi
 else fail "no red.png tile on the Background page"; tr -d '\r' < "$DUMP" | grep '^control' | head; shot background; fi
 
 # --- Lock screen: the choice is published for the lock screen -----------------------------------
@@ -523,7 +537,7 @@ sgs title-scale on >/dev/null
 wine start ms-settings:personalization-background >/dev/null 2>&1
 page_is Background "ms-settings:personalization-background (animated)"
 sleep 0.5
-has ": Living glass: cells that gather round your windows" && pass "Background shows it" || fail "Background page: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+has ": Living glass: the picture as stained glass round your windows" && pass "Background shows it, in its one list" || fail "Background page: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 sgs background-animation static >/dev/null
 sgs look classic >/dev/null
 
