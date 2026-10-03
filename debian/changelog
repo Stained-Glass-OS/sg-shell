@@ -1,3 +1,21 @@
+sg-shell (0.1.0-101) unstable; urgency=medium
+
+  * SG Defender's notice (David 2026-10-03): sg-defender-notice, a popup
+    above the tray when a file of yours was quarantined -- which file, in
+    which folder, what was found -- with Review (Settings > Virus & threat
+    protection) and Dismiss; gone after half a minute, not while pointed
+    at; several stack. sg-session's helper loop starts it once per notice.
+    Gate test/defender-notice-check.sh.
+  * Settings > Virus & threat protection: Restore and Delete for each
+    quarantined file. Restore warns first, then sg-admind puts the file
+    back where it was, written as its owner (never through a link planted
+    there; beside a file of the same name, not over it) and with its mode,
+    and tells sg-defender to let that exact file be (its SHA-256). Delete
+    removes it for good. admind-check and the page gate cover both (the
+    page gate restores through the real buttons).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 17:30:00 +0000
+
 sg-shell (0.1.0-100) unstable; urgency=medium
 
   * Settings > Update & Security > Virus & threat protection (David

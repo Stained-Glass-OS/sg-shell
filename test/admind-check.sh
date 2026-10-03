@@ -68,7 +68,7 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf"
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -151,6 +151,34 @@ r=$(ask defender on)
 [ "$(first "$r")" = OK ] && grep -qx "enabled=1" "$T/defender.conf" && pass "...and on" || fail "defender on: $r"
 r=$(ask defender sometimes)
 case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted defender sometimes" ;; esac
+# quarantine: what sg-defender left, restored as its owner or deleted
+Q="$T/def/quarantine"; mkdir -p "$Q" "$T/def/notices/$(id -u)" "$T/dl"
+quar() {   # ID NAME CONTENT
+    printf '%s' "$3" > "$Q/$1.bin"
+    printf '{"id": "%s", "path": "%s/dl/%s", "uid": %s, "signature": "Test", "sha256": "%s", "mode": 493}' \
+        "$1" "$T" "$2" "$(id -u)" "$(printf '%s' "$3" | sha256sum | cut -d' ' -f1)" > "$Q/$1.json"
+    echo '{}' > "$T/def/notices/$(id -u)/$1.json"
+}
+quar 20261003-160447-aaaaaa setup.exe "infected-ish"
+r=$(ask defender-restore 20261003-160447-aaaaaa)
+[ "$(first "$r")" = OK ] && [ "$(cat "$T/dl/setup.exe" 2>/dev/null)" = infected-ish ] && [ -x "$T/dl/setup.exe" ] \
+    && [ ! -e "$Q/20261003-160447-aaaaaa.bin" ] && [ ! -e "$T/def/notices/$(id -u)/20261003-160447-aaaaaa.json" ] \
+    && pass "Restore puts a quarantined file back where it was, runnable as it was, and clears it" || fail "restore: $r"
+grep -q "^$(printf infected-ish | sha256sum | cut -d' ' -f1) setup.exe" "$T/def/allowed" 2>/dev/null \
+    && pass "...and sg-defender is told to let that file be" || fail "not on the allowed list"
+quar 20261003-160447-bbbbbb setup.exe "second"
+r=$(ask defender-restore 20261003-160447-bbbbbb)
+[ "$(cat "$T/dl/setup (restored).exe" 2>/dev/null)" = second ] && [ "$(cat "$T/dl/setup.exe")" = infected-ish ] \
+    && pass "...beside a file of the same name, not over it" || fail "restore beside: $r"
+quar 20261003-160447-cccccc planted.exe "third"; echo keep > "$T/victim"; ln -s "$T/victim" "$T/dl/planted.exe"
+r=$(ask defender-restore 20261003-160447-cccccc)
+[ "$(cat "$T/victim")" = keep ] && pass "...never through a link planted where it was" || fail "followed a planted link"
+quar 20261003-160447-dddddd gone.exe "fourth"
+r=$(ask defender-delete 20261003-160447-dddddd)
+[ "$(first "$r")" = OK ] && [ ! -e "$Q/20261003-160447-dddddd.bin" ] && [ ! -e "$T/dl/gone.exe" ] \
+    && pass "Delete removes a quarantined file for good" || fail "delete: $r"
+r=$(ask defender-restore ../../etc/passwd)
+case "$(first "$r")" in "FAILED "*) pass "...only quarantine ids" ;; *) fail "accepted a path as a quarantine id" ;; esac
 r=$(ask timezone-auto maybe)
 case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted timezone-auto maybe" ;; esac
 : > "$CALLS"

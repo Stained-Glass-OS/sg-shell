@@ -43,7 +43,7 @@ cat > "$D/status.json" <<'J'
  "since": "2026-10-03T08:00:00"
 }
 J
-printf '{"id": "x1", "name": "free-game-setup.exe", "folder": "/home/jane/Downloads", "signature": "Win.Test.EICAR_HDB-1", "time": "2026-10-03T09:10:11"}' \
+printf '{"id": "20261003-091011-abcdef", "name": "free-game-setup.exe", "folder": "/home/jane/Downloads", "signature": "Win.Test.EICAR_HDB-1", "time": "2026-10-03T09:10:11"}' \
     > "$D/notices/$(id -u)/x1.json"
 export SG_DEFENDER_DIR
 SG_DEFENDER_DIR=$(wine winepath -w "$D" 2>/dev/null | tr -d '\r')
@@ -62,7 +62,36 @@ printf '%s\n' "$out" | grep -q "On. 42 programs checked" && pass "it reads sg-de
 printf '%s\n' "$out" | grep -q "Definitions: ClamAV 1.4.3/27780" && pass "...and the definitions in use" || fail "no definitions"
 printf '%s\n' "$out" | grep -q "free-game-setup.exe -- Win.Test.EICAR_HDB-1" && pass "lists what was quarantined from this person's files" \
     || fail "the detection is not listed"
+printf '%s\n' "$out" | grep -q ": Restore$" && printf '%s\n' "$out" | grep -q ": Delete$" \
+    && pass "...each with Restore and Delete" || fail "no Restore/Delete: $(printf '%s\n' "$out" | grep -i "restore\|delete")"
 printf '%s\n' "$out" | grep -q "state=1 .*: Scan downloaded programs" && pass "the switch shows it on" || fail "the switch is not on"
+
+# Restore, for real: the page's button, its warning answered Yes, the elevated
+# half's request carried out by sg-admind (test mode) -- the file is back
+if command -v xdotool >/dev/null && command -v python3 >/dev/null; then
+    QID=20261003-091011-abcdef
+    S="$T/spool"; mkdir -p "$S/requests" "$S/replies" "$D/quarantine" "$T/dl"; chmod 700 "$S/requests"
+    printf 'MZ quarantined' > "$D/quarantine/$QID.bin"
+    printf '{"id": "%s", "path": "%s/dl/free-game-setup.exe", "uid": %s, "signature": "Win.Test.EICAR_HDB-1", "sha256": "%s", "mode": 420}' \
+        "$QID" "$T" "$(id -u)" "$(printf 'MZ quarantined' | sha256sum | cut -d' ' -f1)" > "$D/quarantine/$QID.json"
+    export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_DEFENDER_STATE="$D"
+    ( while :; do for f in "$S"/requests/*.req; do [ -e "$f" ] && python3 "$HERE/admin/sg-admind" 2>>"$T/admind.log"; break; done; sleep 0.2; done ) &
+    LOOP=$!
+    rm -f "$T/dump.txt"
+    SG_SETTINGS_DUMP=$(wine winepath -w "$T/dump.txt" 2>/dev/null | tr -d '\r') wine "$EXE" ms-settings:windowsdefender >/dev/null 2>&1 &
+    i=0; while [ $i -lt 60 ] && ! grep -q ": Restore" "$T/dump.txt" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+    at=$(tr -d '\r' < "$T/dump.txt" | sed -n 's/.* at=\([0-9]*\),\([0-9]*\): Restore$/\1 \2/p' | head -1)
+    # shellcheck disable=SC2086  # x y
+    xdotool mousemove $at click 1; sleep 2
+    W=$(xdotool search --name '^Virus & threat protection$' 2>/dev/null | head -1)
+    [ -n "$W" ] && pass "Restore warns first" || fail "no warning before restoring"
+    [ -n "$W" ] && { xdotool windowactivate --sync "$W" 2>/dev/null; xdotool key --window "$W" y 2>/dev/null; }
+    i=0; while [ $i -lt 40 ] && [ ! -e "$T/dl/free-game-setup.exe" ]; do sleep 0.5; i=$((i + 1)); done
+    [ "$(cat "$T/dl/free-game-setup.exe" 2>/dev/null)" = "MZ quarantined" ] && [ ! -e "$D/quarantine/$QID.bin" ] \
+        && pass "...and Yes puts the file back where it was (through sg-admind)" || fail "not restored: $(ls "$T/dl") $(tail -3 "$T/admind.log" 2>/dev/null)"
+    [ -n "${KEEP_SHOT:-}" ] && import -window root "$KEEP_SHOT" 2>/dev/null
+    kill "$LOOP" 2>/dev/null; wineserver -k 2>/dev/null; sleep 1
+fi
 
 sed -i 's/"enabled": true/"enabled": false/' "$D/status.json"; rm -f "$D/notices/$(id -u)/x1.json"
 out=$(show ms-settings:windowsdefender)

@@ -16,7 +16,11 @@
 #define DEFENDER_DIR L"Z:\\var\\lib\\stained-glass\\defender"   /* SG_DEFENDER_DIR: the gate's */
 #define DEFENDER_DOCS L"https://freesoft.page/docs/guide/06-viruses.html"
 
-enum { CMD_DEF_TOGGLE = CMD_PAGE_FIRST + 1, CMD_DEF_LEARN };
+enum {
+    CMD_DEF_TOGGLE = SHIELD_ID(CMD_PAGE_FIRST + 1), CMD_DEF_LEARN = CMD_PAGE_FIRST + 2,
+    CMD_DEF_RESTORE = SHIELD_ID(CMD_PAGE_FIRST + 100),     /* + the item */
+    CMD_DEF_DELETE = SHIELD_ID(CMD_PAGE_FIRST + 200),
+};
 
 static char *slurp(const WCHAR *path, DWORD max)
 {
@@ -68,7 +72,9 @@ static const WCHAR *defender_dir(void)
     return dir;
 }
 
-struct found { WCHAR name[MAX_PATH], signature[128], time[32], folder[MAX_PATH]; };
+struct found { WCHAR id[32], name[MAX_PATH], signature[128], time[32], folder[MAX_PATH]; };
+static struct found g_items[10];   /* what the page shows, for its buttons */
+static int g_nitems;
 
 static int found_items(struct found *items, int max)
 {
@@ -83,12 +89,13 @@ static int found_items(struct found *items, int max)
         if (n >= max) break;
         _snwprintf(path, MAX_PATH, L"%ls\\notices\\%lu\\%ls", defender_dir(), unix_uid(), fd.cFileName);
         if (!(t = slurp(path, 8192))) continue;
+        json_field(t, "id", items[n].id, 32);
         json_field(t, "name", items[n].name, MAX_PATH);
         json_field(t, "signature", items[n].signature, 128);
         json_field(t, "time", items[n].time, 32);
         json_field(t, "folder", items[n].folder, MAX_PATH);
         free(t);
-        if (items[n].name[0]) n++;
+        if (items[n].name[0] && items[n].id[0]) n++;
     } while (FindNextFileW(h, &fd));
     FindClose(h);
     for (i = 1; i < n; i++)          /* newest first */
@@ -103,7 +110,7 @@ void set_build_defender(void)
     int y = st_title(L"Virus & threat protection"), i, n;
     WCHAR on[16], engine[200], found[16], scanned[16], line[400], path[MAX_PATH];
     char *status;
-    struct found items[10];
+    struct found *items = g_items;
     HWND c;
 
     _snwprintf(path, MAX_PATH, L"%ls\\status.json", defender_dir());
@@ -131,12 +138,27 @@ void set_build_defender(void)
         y = st_text(y, line);
     }
     y = st_head(y, L"Found and quarantined");
-    n = found_items(items, ARRAYSIZE(items));
+    n = g_nitems = found_items(items, ARRAYSIZE(g_items));
     if (!n) y = st_para(y, L"Nothing has been found in your files.");
+    else y = st_para(y, L"These files were moved where nothing can run them. Delete them, or restore one you know is "
+                        L"safe -- it goes back where it was and is not stopped again.");
     for (i = 0; i < n; i++) {
+        HDC dc;
+        SIZE sz;
+        HWND b;
         _snwprintf(line, ARRAYSIZE(line), L"%ls -- %ls (%ls, in %ls)", items[i].name, items[i].signature,
                    items[i].time, items[i].folder);
         y = st_text(y, line);
+        dc = GetDC(g_page);
+        SelectObject(dc, g_font_body);
+        GetTextExtentPoint32W(dc, L"Restore", 7, &sz);
+        ReleaseDC(g_page, dc);
+        b = pg_control(L"BUTTON", L"Delete", WS_TABSTOP | BS_PUSHBUTTON, st_x(), y, S(120), S(32), CMD_DEF_DELETE + i);
+        SendMessageW(b, BCM_SETSHIELD, 0, TRUE);
+        b = pg_control(L"BUTTON", L"Restore", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(132), y,
+                       sz.cx + S(40) < S(120) ? S(120) : sz.cx + S(40), S(32), CMD_DEF_RESTORE + i);
+        SendMessageW(b, BCM_SETSHIELD, 0, TRUE);
+        y += S(46);
     }
     st_link(&y, L"How SG Defender protects this PC", CMD_DEF_LEARN);
     free(status);
@@ -144,8 +166,26 @@ void set_build_defender(void)
 
 BOOL set_cmd_defender(int id, int code, HWND ctl)
 {
-    WCHAR args[64];
+    WCHAR args[96], msg[700];
+    int i;
     (void)code;
+    if (id >= CMD_DEF_RESTORE && id < CMD_DEF_RESTORE + g_nitems) {
+        i = id - CMD_DEF_RESTORE;
+        _snwprintf(msg, ARRAYSIZE(msg), L"Restore %ls?\n\nSG Defender found %ls in it. Restore it only if you know it "
+                   L"is safe: it goes back to %ls, and SG Defender will not stop this file again.",
+                   g_items[i].name, g_items[i].signature, g_items[i].folder);
+        if (MessageBoxW(GetAncestor(ctl, GA_ROOT), msg, L"Virus & threat protection",
+                        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return TRUE;
+        _snwprintf(args, ARRAYSIZE(args), L"/admin defender-restore %ls", g_items[i].id);
+        if (run_elevated(args)) refresh_when_back();
+        return TRUE;
+    }
+    if (id >= CMD_DEF_DELETE && id < CMD_DEF_DELETE + g_nitems) {
+        i = id - CMD_DEF_DELETE;
+        _snwprintf(args, ARRAYSIZE(args), L"/admin defender-delete %ls", g_items[i].id);
+        if (run_elevated(args)) refresh_when_back();
+        return TRUE;
+    }
     switch (id) {
     case CMD_DEF_TOGGLE:
         _snwprintf(args, ARRAYSIZE(args), L"/admin defender %ls", st_checked(ctl) ? L"on" : L"off");

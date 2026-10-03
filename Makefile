@@ -117,6 +117,8 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe src/sg-battery.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-battery (64-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-defender-notice64.exe src/sg-defender-notice.c \
+	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-defender-notice (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe src/sg-volume.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-volume (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
@@ -308,6 +310,7 @@ test: build
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/defender-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-check.sh
 	@sh test/terminal-panes-check.sh
 	@sh test/terminal-settings-check.sh

@@ -419,6 +419,103 @@ def op_defender(args):
     return []
 
 
+DEFENDER_STATE = os.environ.get("SG_ADMIN_DEFENDER_STATE", "/var/lib/stained-glass/defender")
+QUARANTINE_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
+
+
+def quarantined(qid):
+    """a quarantined file's record (sg-defender's quarantine/<id>.json)"""
+    if not QUARANTINE_ID.fullmatch(qid):
+        raise Refused("That is not a quarantined file.")
+    import json
+    try:
+        with open(os.path.join(DEFENDER_STATE, "quarantine", qid + ".json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        raise Refused("That file is no longer in quarantine.")
+
+
+def forget_quarantined(qid, meta):
+    for name in (qid + ".bin", qid + ".json"):
+        try:
+            os.unlink(os.path.join(DEFENDER_STATE, "quarantine", name))
+        except FileNotFoundError:
+            pass
+    try:
+        os.unlink(os.path.join(DEFENDER_STATE, "notices", str(int(meta.get("uid", -1))), qid + ".json"))
+    except (FileNotFoundError, ValueError):
+        pass
+
+
+def write_as(uid, path, data, mode):
+    """Create PATH (not an existing one) holding DATA, as UID: the folder is
+    theirs, so root writing there could be led elsewhere by a link they
+    planted. Returns the name used: "x (restored).exe" if x.exe is taken."""
+    import pwd
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            os.close(r)
+            if not TEST:
+                pw = pwd.getpwuid(uid)
+                os.setgroups([])
+                os.setgid(pw.pw_gid)
+                os.setuid(uid)
+            base, ext = os.path.splitext(path)
+            for n in range(0, 20):
+                cand = path if n == 0 else "%s (restored%s)%s" % (base, "" if n == 1 else " %d" % n, ext)
+                try:
+                    fd = os.open(cand, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+                except FileExistsError:
+                    continue
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                os.write(w, cand.encode())
+                os._exit(0)
+            os._exit(2)
+        except BaseException:
+            os._exit(1)
+    os.close(w)
+    with os.fdopen(r, "rb") as f:
+        name = f.read().decode(errors="replace")
+    _, status = os.waitpid(pid, 0)
+    if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0 or not name:
+        raise Refused("The file could not be put back in %s." % os.path.dirname(path))
+    return name
+
+
+def op_defender_restore(args):
+    """Restore a quarantined file where it was, as its owner's (Settings >
+    Virus & threat protection > Restore), and let that exact file be from
+    now on: its SHA-256 joins sg-defender's allowed list."""
+    (qid,) = args
+    meta = quarantined(qid)
+    with open(os.path.join(DEFENDER_STATE, "quarantine", qid + ".bin"), "rb") as f:
+        data = f.read()
+    import hashlib
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != meta.get("sha256", digest):
+        raise Refused("The quarantined file is not the one that was quarantined.")
+    allowed = os.path.join(DEFENDER_STATE, "allowed")
+    with open(allowed, "a") as f:     # first: the restored file must not be caught again
+        f.write("%s %s\n" % (digest, os.path.basename(meta["path"])))
+    os.chmod(allowed, 0o644)
+    name = write_as(int(meta["uid"]), meta["path"], data, int(meta.get("mode", 0o644)) & 0o755)
+    forget_quarantined(qid, meta)
+    log("restored %s (%s) to %s" % (qid, meta.get("signature"), name))
+    return [name]
+
+
+def op_defender_delete(args):
+    """Delete a quarantined file for good (Settings > Virus & threat protection)."""
+    (qid,) = args
+    meta = quarantined(qid)
+    forget_quarantined(qid, meta)
+    log("deleted quarantined %s (%s)" % (qid, meta.get("signature")))
+    return []
+
+
 def op_ntp(args):
     (v,) = args
     if v not in ("on", "off"):
@@ -1111,6 +1208,8 @@ OPS = {
     "timezone-auto": (op_timezone_auto, 1),
     "ntp": (op_ntp, 1),
     "defender": (op_defender, 1),
+    "defender-restore": (op_defender_restore, 1),
+    "defender-delete": (op_defender_delete, 1),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
     "source-add": (op_source_add, 4),

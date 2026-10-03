@@ -894,6 +894,10 @@ int admin_main(int argc, WCHAR **argv)
         const WCHAR *req[] = { L"timezone-auto", argv[1] };
         return do_one(L"Set time zone automatically", req, 2);
     }
+    if ((!lstrcmpW(argv[0], L"defender-restore") || !lstrcmpW(argv[0], L"defender-delete")) && argc > 1) {
+        const WCHAR *req[] = { argv[0], argv[1] };
+        return do_one(argv[0][9] == 'r' ? L"Restore a quarantined file" : L"Delete a quarantined file", req, 2);
+    }
     if (!lstrcmpW(argv[0], L"defender") && argc > 1) {
         const WCHAR *req[] = { L"defender", argv[1] };
         return do_one(L"Virus & threat protection", req, 2);
