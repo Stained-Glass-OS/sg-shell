@@ -266,11 +266,21 @@ void pkg_cleanup(package_t *p)
 
 /* ---- running an installer ----------------------------------------------------------------------- */
 
+BOOL (*g_runas_hook)(const WCHAR *file, const WCHAR *args, DWORD *code);
+
 static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, BOOL *elevated, WCHAR *err, int cch)
 {
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     int attempt;
     for (attempt = admin ? 1 : 0; attempt < 2; attempt++) {
+        if (attempt && g_runas_hook) {   /* the store's batch: its one administrator's helper */
+            if (!g_runas_hook(file, args, code)) {
+                seterr(err, cch, L"The installer was not run: an administrator did not allow it.");
+                return FALSE;
+            }
+            if (elevated) *elevated = TRUE;
+            return TRUE;
+        }
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
         sei.lpFile = file;

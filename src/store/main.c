@@ -13,6 +13,8 @@
  *   sg-store64.exe --deb FILE      "Install a Linux package": what a .deb is,
  *                                  and Install (File Explorer's .deb verb)
  *   --elevated-apt / --elevated-apt-remove / --elevated-deb
+ *   --install-batch ORD...   install them as Install selected does: one consent
+ *   --elevated-helper FILE   that consent's helper (sysinstall.c)
  *                                  the elevated half (sysinstall.c)
  *
  * SG_STORE_DUMP=<file> (a Windows path) receives the catalogue, each app's
@@ -47,6 +49,7 @@ static int g_busy = -1;                   /* the app being installed (or removed
 static int g_queue[MAX_APPS], g_qn;
 static BOOL g_qremove[MAX_APPS];          /* by app: its turn removes it */
 static CRITICAL_SECTION g_qlock;
+static volatile LONG g_batch;             /* the queue holds checked apps: one consent (sysinstall.c) */
 static WCHAR g_query[128];                /* the search box */
 static int g_cat;                         /* the chosen category: 0 = all */
 static int g_sel = -1;                    /* the selected app (keyboard), or -1 */
@@ -66,7 +69,8 @@ static const WCHAR *const g_cats[] = {
 #define NCATS ((int)ARRAYSIZE(g_cats))
 
 /* hit rectangles, for the mouse and the gate */
-enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON };
+enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON,
+       H_CHECK, H_INSTALLSEL };
 typedef struct { int verb, idx; RECT rc; } hit_t;
 static hit_t g_hits[MAX_APPS * 3 + 32];
 static int g_nhits;
@@ -268,8 +272,10 @@ static void dump(void)
             dumpf(f, L"pair %ls %ls choice=%ls target=%ls\n", a->ord, g_apps[a->alt].ord,
                   a->use_alt ? L"linux" : L"windows", g_apps[card_target(i)].ord);
         if (a->queued) dumpf(f, L"queued %ls %ls\n", a->ord, g_qremove[i] ? L"remove" : L"install");
+        if (a->checked) dumpf(f, L"checked %ls\n", a->ord);
     }
     dumpf(f, L"icons %d\n", icons_ready());
+    dumpf(f, L"batch %d\n", g_batch);
     /* the list's order: ordinals, first to last */
     {
         int view[MAX_APPS];
@@ -284,7 +290,7 @@ static void dump(void)
     for (i = 0; i < g_nhits; i++) {
         POINT pt = { (g_hits[i].rc.left + g_hits[i].rc.right) / 2, (g_hits[i].rc.top + g_hits[i].rc.bottom) / 2 };
         static const WCHAR *const verbs[] = { L"install", L"open", L"update", L"checkall", L"category", L"fromfile", L"card",
-                                              L"build", L"uninstall", L"unqueue", L"icon" };
+                                              L"build", L"uninstall", L"unqueue", L"icon", L"check", L"installsel" };
         if (g_wnd) ClientToScreen(g_wnd, &pt);
         dumpf(f, L"hit %ls %ls %d %d\n", verbs[g_hits[i].verb],
               g_hits[i].verb == H_CAT ? g_cats[g_hits[i].idx] : g_hits[i].idx >= 0 ? g_apps[g_hits[i].idx].ord : L"-",
@@ -411,6 +417,7 @@ static DWORD WINAPI queue_worker(void *arg)
             g_busy = i;
         } else g_busy = -1;
         LeaveCriticalSection(&g_qlock);
+        if (g_busy < 0 && InterlockedExchange(&g_batch, 0)) sys_batch_end();   /* the batch is done: its helper goes */
         if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
         if (g_busy < 0) return 0;
     }
@@ -435,6 +442,43 @@ static void enqueue(int i, BOOL remove)
 }
 
 static void start_install(int i) { enqueue(i, FALSE); }
+
+/* ---- several at once (David 2026-10-03: install many apps via a checkbox,
+ * the administrator asked once for all of them) ---- */
+
+static BOOL checkable(int idx)
+{
+    int t = card_target(idx);
+    return !has_it(&g_apps[t]) && !in_hand(t);
+}
+
+static int count_checked(void)
+{
+    int i, n = 0;
+    for (i = 0; i < g_napps; i++) if (g_apps[i].checked) n++;
+    return n;
+}
+
+static void toggle_check(int idx)
+{
+    if (idx < 0 || idx >= g_napps || !checkable(idx)) return;
+    g_apps[idx].checked = !g_apps[idx].checked;
+    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+}
+
+static void install_selected(void)
+{
+    int i, n = count_checked();
+    if (!n) return;
+    /* two or more: what needs an administrator goes to one elevated helper */
+    if (n > 1 && !InterlockedExchange(&g_batch, 1)) sys_batch_begin();
+    for (i = 0; i < g_napps; i++)
+        if (g_apps[i].checked) {
+            g_apps[i].checked = FALSE;
+            if (checkable(i)) enqueue(card_target(i), FALSE);
+        }
+    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+}
 
 static void unqueue(int i)
 {
@@ -636,6 +680,27 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
     }
 
     r.left = x + pad + badge + dpx(14); r.right = textright; r.top = y + dpx(12); r.bottom = y + dpx(36);
+    if (a->checked && !checkable(idx)) a->checked = FALSE;   /* installed meanwhile */
+    if (checkable(idx)) {   /* a box to check it, before its name */
+        int sz = dpx(16);
+        RECT box = { r.left, (r.top + r.bottom - sz) / 2, r.left + sz, (r.top + r.bottom + sz) / 2 }, hit = box;
+        HBRUSH bb = CreateSolidBrush(a->checked ? C_ACCENT : C_CARD);
+        HPEN bp = CreatePen(PS_SOLID, 1, a->checked ? C_ACCENT : C_SUB), op = SelectObject(dc, bp);
+        HBRUSH ob = SelectObject(dc, bb);
+        RoundRect(dc, box.left, box.top, box.right, box.bottom, dpx(3), dpx(3));
+        SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(bb); DeleteObject(bp);
+        if (a->checked) {
+            HPEN tick = CreatePen(PS_SOLID, max(2, dpx(2)), RGB(255, 255, 255));
+            op = SelectObject(dc, tick);
+            MoveToEx(dc, box.left + sz * 3 / 16, box.top + sz / 2, NULL);
+            LineTo(dc, box.left + sz * 7 / 16, box.top + sz * 3 / 4);
+            LineTo(dc, box.left + sz * 13 / 16, box.top + sz / 4);
+            SelectObject(dc, op); DeleteObject(tick);
+        }
+        InflateRect(&hit, dpx(4), dpx(4));
+        add_list_hit(H_CHECK, idx, hit, client_bottom);
+        r.left += sz + dpx(10);
+    }
     text(dc, g_f_head, C_TEXT, r, a->name, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     r.top = r.bottom; r.bottom = y + dpx(54);
     {
@@ -772,8 +837,20 @@ static void paint(HWND hwnd)
             cx = chip.right + dpx(6);
         }
     }
-    { RECT sub = { x, dpx(134), x + w, dpx(154) };
-      text(dc, g_f_small, C_SUB, sub, L"App and system updates are handled in Settings > Update & Security.", DT_LEFT | DT_VCENTER | DT_SINGLELINE); }
+    {
+        int n = count_checked();
+        RECT sub = { x, dpx(134), x + w, dpx(154) };
+        if (n) {
+            WCHAR lab[48];
+            RECT bt = { x + w - dpx(190), dpx(128), x + w, dpx(158) };
+            swprintf(lab, ARRAYSIZE(lab), L"Install selected (%d)", n);
+            button(dc, bt, lab, TRUE);
+            add_hit(H_INSTALLSEL, -1, bt);
+            sub.right = bt.left - dpx(10);
+        }
+        text(dc, g_f_small, C_SUB, sub, L"App and system updates are handled in Settings > Update & Security.",
+             DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    }
 
     BitBlt(wdc, 0, 0, rc.right, rc.bottom, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbmp);
@@ -797,7 +874,8 @@ static int hit_at(int cx, int cy, int *verb, int *idx)
     int i;
     if (cy < header_height()) {
         for (i = 0; i < g_nhits; i++)
-            if ((g_hits[i].verb == H_CHECKALL || g_hits[i].verb == H_CAT || g_hits[i].verb == H_FROMFILE) && PtInRect(&g_hits[i].rc, pt))
+            if ((g_hits[i].verb == H_CHECKALL || g_hits[i].verb == H_CAT || g_hits[i].verb == H_FROMFILE ||
+                 g_hits[i].verb == H_INSTALLSEL) && PtInRect(&g_hits[i].rc, pt))
                 { *verb = g_hits[i].verb; *idx = g_hits[i].idx; return 1; }
         return 0;
     }
@@ -926,6 +1004,8 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             else if (verb == H_UNQUEUE) unqueue(idx);
             else if (verb == H_BUILD) { POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) }; choose_build(hwnd, idx, pt); }
             else if (verb == H_CHECKALL) do_checkall();
+            else if (verb == H_CHECK) toggle_check(idx);
+            else if (verb == H_INSTALLSEL) install_selected();
             else if (verb == H_FROMFILE) install_from_file();
             else if (verb == H_CAT) set_category(hwnd, idx);
             else if (verb == H_CARD) { g_sel = idx; SetFocus(hwnd); InvalidateRect(hwnd, NULL, FALSE); }
@@ -940,7 +1020,12 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case VK_PRIOR: move_selection(hwnd, -5); return 0;
         case VK_HOME: g_sel = -1; move_selection(hwnd, 1); return 0;
         case VK_END: g_sel = -1; move_selection(hwnd, -1); return 0;
-        case VK_RETURN: case VK_SPACE: activate(g_sel); InvalidateRect(hwnd, NULL, FALSE); return 0;
+        case VK_RETURN: activate(g_sel); InvalidateRect(hwnd, NULL, FALSE); return 0;
+        case VK_SPACE:   /* as a list of check boxes: Space checks it; one that cannot be checked, as Enter */
+            if (g_sel >= 0 && checkable(g_sel)) toggle_check(g_sel);
+            else activate(g_sel);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
         case VK_ESCAPE: case VK_TAB: SetFocus(g_search); SendMessageW(g_search, EM_SETSEL, 0, -1); dump(); return 0;
         }
         return 0;
@@ -1064,6 +1149,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             LocalFree(argv);
             return rc;
         }
+        if (!lstrcmpiW(argv[i], L"--elevated-helper") && i + 1 < argc) {
+            rc = sys_helper_main(argv[i + 1]);
+            LocalFree(argv);
+            return rc;
+        }
         if (!lstrcmpiW(argv[i], L"--elevated-apt") || !lstrcmpiW(argv[i], L"--elevated-apt-remove") ||
             !lstrcmpiW(argv[i], L"--elevated-deb")) {
             rc = sys_elevated_main(argc, argv, i);
@@ -1102,6 +1192,26 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             }
             LocalFree(argv);
             return rc ? 1 : 0;
+        }
+        if (!lstrcmpiW(argv[i], L"--install-batch") && i + 1 < argc) {
+            /* several apps as Install selected does them: under one consent */
+            int k, j, fails = 0;
+            WCHAR err[512], tmp[MAX_PATH + 8];
+            FILE *f = NULL;
+            load_all(FALSE);
+            if (argc - i - 1 > 1) sys_batch_begin();
+            if (g_dump[0]) { swprintf(tmp, ARRAYSIZE(tmp), L"%ls.result", g_dump); f = _wfopen(tmp, L"wb"); }
+            for (j = i + 1; j < argc; j++) {
+                if ((k = find_app(argv[j])) < 0) { fails++; continue; }
+                app_detect(&g_apps[k]);
+                rc = app_install(&g_apps[k], progress_cb, NULL, &g_cancel, err, ARRAYSIZE(err));
+                if (rc) fails++;
+                if (f) { dumpf(f, L"result %ls %ls %d %ls\n", g_apps[k].ord, rc ? L"fail" : L"ok", rc, rc ? err : L"Installed."); fflush(f); }
+            }
+            sys_batch_end();
+            if (f) fclose(f);
+            LocalFree(argv);
+            return fails ? 1 : 0;
         }
         if (!lstrcmpiW(argv[i], L"--install") && i + 1 < argc) {
             int k;

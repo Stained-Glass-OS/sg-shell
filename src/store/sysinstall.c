@@ -131,6 +131,10 @@ static int elevate_wait(const WCHAR *args)
     HANDLE process = NULL;
     DWORD code = SYS_FAILED;
     GetModuleFileNameW(NULL, self, MAX_PATH);
+    if (g_runas_hook) {   /* several apps: the one administrator's helper runs it */
+        if (!g_runas_hook(self, args, &code)) return SYS_DENIED;
+        return (int)code;
+    }
     GetEnvironmentVariableW(L"SG_STORE_DIRECT", direct, ARRAYSIZE(direct));
     if (direct[0] == L'1') {
         WCHAR cmd[4096];
@@ -156,6 +160,209 @@ static int elevate_wait(const WCHAR *args)
     GetExitCodeProcess(process, &code);
     CloseHandle(process);
     return (int)code;
+}
+
+/* ---- several apps under one consent ----------------------------------------------------------------
+ *
+ * Installing the apps checked in the list (David 2026-10-03: "ask for the
+ * admin credentials just once for all the selected apps"): the first that
+ * needs an administrator starts this program elevated once more, as a
+ * helper -- one consent -- and every administrator's step after it (apt
+ * through --elevated-apt, an installer that must run elevated) is run by
+ * that helper instead of a consent each. What needs no administrator still
+ * runs as the person (a per-user installer stays the person's).
+ *
+ *   sg-store64.exe --elevated-helper FILE   (runas) FILE: its pipe's name
+ *                                           and the store's process id
+ *
+ * The helper answers only the store that started it: its pipe's name is
+ * random (and only in a file of the person's), the client must be that
+ * process (GetNamedPipeClientProcessId), and it ends when the store does. */
+
+static WCHAR g_helper_pipe[96];
+static BOOL g_helper_up, g_helper_denied;
+
+static BOOL random_id(WCHAR *out);
+static char *read_small(const WCHAR *path, DWORD max);
+
+static BOOL helper_start(void)
+{
+    WCHAR id[40], dir[MAX_PATH], file[MAX_PATH], self[MAX_PATH], args[MAX_PATH + 32], direct[8] = L"";
+    char body[160];
+    HANDLE h;
+    DWORD put, start;
+    if (g_helper_up) return TRUE;
+    if (g_helper_denied || !random_id(id)) return FALSE;
+    _snwprintf(g_helper_pipe, ARRAYSIZE(g_helper_pipe), L"\\\\.\\pipe\\sg-store-helper-%ls", id);
+    GetTempPathW(MAX_PATH, dir);
+    _snwprintf(file, MAX_PATH, L"%lssg-store-helper-%ls.txt", dir, id);
+    file[MAX_PATH - 1] = 0;
+    h = CreateFileW(file, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY, NULL);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    put = (DWORD)_snprintf(body, sizeof(body), "%ls\n%lu\n", g_helper_pipe, GetCurrentProcessId());
+    WriteFile(h, body, put, &put, NULL);
+    CloseHandle(h);
+    GetModuleFileNameW(NULL, self, MAX_PATH);
+    _snwprintf(args, ARRAYSIZE(args), L"--elevated-helper \"%ls\"", file);
+    args[ARRAYSIZE(args) - 1] = 0;
+    GetEnvironmentVariableW(L"SG_STORE_DIRECT", direct, ARRAYSIZE(direct));
+    if (direct[0] == L'1') {   /* the gate: no broker */
+        WCHAR cmd[MAX_PATH * 2 + 40];
+        STARTUPINFOW si = { sizeof(si) };
+        PROCESS_INFORMATION pi;
+        _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" %ls", self, args);
+        cmd[ARRAYSIZE(cmd) - 1] = 0;
+        if (!CreateProcessW(self, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) { DeleteFileW(file); return FALSE; }
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    } else {
+        SHELLEXECUTEINFOW sei = { sizeof(sei) };
+        sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        sei.lpVerb = L"runas";
+        sei.lpFile = self;
+        sei.lpParameters = args;
+        sei.nShow = SW_HIDE;
+        if (!ShellExecuteExW(&sei)) {
+            if (GetLastError() == ERROR_CANCELLED) g_helper_denied = TRUE;   /* not asked again in this batch */
+            DeleteFileW(file);
+            return FALSE;
+        }
+    }
+    /* its pipe comes up once it is running (after the consent) */
+    for (start = GetTickCount(); GetTickCount() - start < 180000; Sleep(100))
+        if (WaitNamedPipeW(g_helper_pipe, 100)) { g_helper_up = TRUE; break; }
+        else if (GetFileAttributesW(file) == INVALID_FILE_ATTRIBUTES && GetTickCount() - start < 170000)
+            start = GetTickCount() - 170000;   /* read by the helper: its pipe is moments away */
+    DeleteFileW(file);
+    return g_helper_up;
+}
+
+/* one request to the helper: RUN FILE ARGS (its exit code back), or QUIT */
+static BOOL helper_call(const WCHAR *verb, const WCHAR *file, const WCHAR *args, DWORD *code)
+{
+    WCHAR req[4096], reply[32] = L"";
+    DWORD got = 0;
+    HANDLE p;
+    int len;
+    len = _snwprintf(req, ARRAYSIZE(req), L"%ls\n%ls\n%ls", verb, file ? file : L"", args ? args : L"");
+    if (len < 0) return FALSE;
+    p = CreateFileW(g_helper_pipe, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    if (p == INVALID_HANDLE_VALUE) {
+        if (!WaitNamedPipeW(g_helper_pipe, 5000)) return FALSE;
+        p = CreateFileW(g_helper_pipe, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+        if (p == INVALID_HANDLE_VALUE) return FALSE;
+    }
+    if (!WriteFile(p, req, (DWORD)(len + 1) * sizeof(WCHAR), &got, NULL) ||
+        !ReadFile(p, reply, sizeof(reply) - sizeof(WCHAR), &got, NULL)) { CloseHandle(p); return FALSE; }
+    CloseHandle(p);
+    reply[got / sizeof(WCHAR)] = 0;
+    if (code) *code = (DWORD)_wtoi(reply);
+    return reply[0] != L'!';
+}
+
+/* fetch.c's hook: an installer that must run elevated, by the helper */
+static BOOL helper_runas(const WCHAR *file, const WCHAR *args, DWORD *code)
+{
+    return helper_start() && helper_call(L"RUN", file, args, code);
+}
+
+void sys_batch_begin(void)
+{
+#ifndef SG_MUTANT_BATCH_PER_APP
+    g_helper_denied = FALSE;
+    g_runas_hook = helper_runas;
+#endif
+}
+
+void sys_batch_end(void)
+{
+    g_runas_hook = NULL;
+    if (g_helper_up) helper_call(L"QUIT", NULL, NULL, NULL);
+    g_helper_up = FALSE;
+}
+
+/* the helper itself (elevated): runs what its store asks, until the store
+ * says QUIT or ends */
+static DWORD WINAPI helper_watch(void *arg)
+{
+    WaitForSingleObject((HANDLE)arg, INFINITE);
+    ExitProcess(0);
+}
+
+static DWORD g_helper_store_pid;
+
+/* one client of the helper: only the store that started it */
+static DWORD WINAPI helper_client(void *arg)
+{
+    HANDLE p = arg;
+    WCHAR req[4096], reply[32], *f, *a;
+    DWORD got = 0, code = 1, pid = 0;
+#ifndef SG_MUTANT_HELPER_ANYONE
+    if (!GetNamedPipeClientProcessId(p, &pid) || pid != g_helper_store_pid) {
+        WriteFile(p, L"!refused", 9 * sizeof(WCHAR), &got, NULL);
+        FlushFileBuffers(p); DisconnectNamedPipe(p); CloseHandle(p);
+        return 0;
+    }
+#else
+    (void)pid;
+#endif
+    if (!ReadFile(p, req, sizeof(req) - sizeof(WCHAR), &got, NULL)) { DisconnectNamedPipe(p); CloseHandle(p); return 0; }
+    req[got / sizeof(WCHAR)] = 0;
+    if (!wcsncmp(req, L"QUIT\n", 5)) {
+        WriteFile(p, L"0", 2 * sizeof(WCHAR), &got, NULL);
+        FlushFileBuffers(p); DisconnectNamedPipe(p); CloseHandle(p);
+        ExitProcess(SYS_OK);
+    }
+    if (!wcsncmp(req, L"RUN\n", 4) && (f = req + 4) && (a = wcschr(f, L'\n'))) {
+        SHELLEXECUTEINFOW sei = { sizeof(sei) };
+        *a++ = 0;
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        sei.lpFile = f;
+        sei.lpParameters = a[0] ? a : NULL;
+        sei.nShow = SW_SHOWNORMAL;
+        if (ShellExecuteExW(&sei) && sei.hProcess) {
+            WaitForSingleObject(sei.hProcess, INFINITE);
+            GetExitCodeProcess(sei.hProcess, &code);
+            CloseHandle(sei.hProcess);
+            _snwprintf(reply, ARRAYSIZE(reply), L"%lu", code);
+        } else _snwprintf(reply, ARRAYSIZE(reply), L"!%lu", GetLastError());
+    } else lstrcpyW(reply, L"!bad");
+    WriteFile(p, reply, (DWORD)(lstrlenW(reply) + 1) * sizeof(WCHAR), &got, NULL);
+    FlushFileBuffers(p); DisconnectNamedPipe(p); CloseHandle(p);
+    return 0;
+}
+
+int sys_helper_main(const WCHAR *file)
+{
+    char *t = read_small(file, 512), *nl;
+    WCHAR pipe[96];
+    DWORD store_pid;
+    HANDLE store, p;
+    if (!t || !(nl = strchr(t, '\n'))) { free(t); return SYS_FAILED; }
+    *nl = 0;
+    MultiByteToWideChar(CP_UTF8, 0, t, -1, pipe, ARRAYSIZE(pipe));
+    store_pid = strtoul(nl + 1, NULL, 10);
+    free(t);
+    DeleteFileW(file);   /* read: the store sees it is running */
+    {   /* the gate counts the consents: SG_STORE_DUMP's .helper */
+        WCHAR d[MAX_PATH], line[200];
+        FILE *f;
+        if (GetEnvironmentVariableW(L"SG_STORE_DUMP", d, MAX_PATH - 8) && lstrcatW(d, L".helper") && (f = _wfopen(d, L"ab"))) {
+            _snwprintf(line, ARRAYSIZE(line), L"helper %lu %ls\n", GetCurrentProcessId(), pipe);
+            fprintf(f, "%ls", line);
+            fclose(f);
+        }
+    }
+    if (wcsncmp(pipe, L"\\\\.\\pipe\\sg-store-helper-", 25) || !(store = OpenProcess(SYNCHRONIZE, FALSE, store_pid)))
+        return SYS_FAILED;
+    CloseHandle(CreateThread(NULL, 0, helper_watch, store, 0, NULL));
+    g_helper_store_pid = store_pid;
+    for (;;) {   /* a listening instance always; each client on a thread of its own */
+        p = CreateNamedPipeW(pipe, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                             PIPE_UNLIMITED_INSTANCES, 8192, 8192, 0, NULL);
+        if (p == INVALID_HANDLE_VALUE) return SYS_FAILED;
+        if (!ConnectNamedPipe(p, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) { CloseHandle(p); continue; }
+        CloseHandle(CreateThread(NULL, 0, helper_client, p, 0, NULL));
+    }
 }
 
 static void outcome_text(int code, const WCHAR *what, BOOL removing, WCHAR *err, int cch)

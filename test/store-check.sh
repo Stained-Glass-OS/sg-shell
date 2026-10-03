@@ -40,6 +40,10 @@
 #      a second Install waits its turn (the queue); Uninstall runs a Windows
 #      program's QuietUninstallString, and apt-get remove (sg-admind's
 #      apt-remove) for a Linux app -- never one of the system's own packages
+#   M. David 2026-10-03: several apps at once, the administrator asked once:
+#      --install-batch of two Linux apps starts one elevated helper, which
+#      runs both apt installs and then goes; another process is refused by
+#      it; in the window, check boxes and Install selected (N) install them
 #
 # Mutants (built here from source) -- each must turn it red:
 #   SG_MUTANT_NOHASH      installs an unverified download
@@ -58,6 +62,8 @@
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
 #   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
 #   SG_MUTANT_NOPAIR      lists both builds of an app as apps of their own
+#   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
+#   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
 #   SG_MUTANT_NOICON      keeps the letter badges
 #   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
@@ -96,7 +102,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS BATCH_PER_APP HELPER_ANYONE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -866,6 +872,52 @@ SG_MUT="$T/mut-noquiet.exe" run --uninstall 01
 grep -q '/ui' "$G/uninstall.log" 2>/dev/null && ! grep -q '/quiet' "$G/uninstall.log" && pass "MUTANT NOQUIET runs the uninstaller's UI (gate catches it)" \
     || fail "NOQUIET not detected: $(cat "$G/uninstall.log" 2>/dev/null)"
 ununinstall FakeApp; sleep 0.5
+
+# --- M. several apps, one consent ------------------------------------------------------------------
+"$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"
+app L3 'Gate Two' Utilities linux 'linux:apt:sg-gate-two'
+app L4 'Gate Three' Utilities linux 'linux:apt:sg-gate-three'
+sleep 1   # (the desktop is up: wineserver -w would wait for it forever)
+batch() { # exe -- installs L3 and L4 as one batch; the probe asks its helper too
+    rm -f "$D" "$D.result" "$D.helper" "$G/pwned"; : > "$T/apt.log"
+    wine "$1" --install-batch L3 L4 >/dev/null 2>&1 & BP=$!
+    waitfor "$D.helper" '^helper ' 120
+    hp=$(sed -n 's/^helper [0-9]* //p' "$D.helper" | head -1 | tr -d '\r')
+    [ -n "$hp" ] && wine "$T/helperprobe.exe" "$hp" 'C:\windows\system32\cmd.exe' '/c echo x > C:\gate\pwned' > "$T/probe.out" 2>&1
+    i=0; while kill -0 $BP 2>/dev/null && [ $i -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
+    kill $BP 2>/dev/null; wait $BP 2>/dev/null
+}
+batch "$EXE"
+grep -q '^result L3 ok' "$D.result" 2>/dev/null && grep -q '^result L4 ok' "$D.result" 2>/dev/null \
+    && grep -q 'install sg-gate-two' "$T/apt.log" && grep -q 'install sg-gate-three' "$T/apt.log" \
+    && pass "a batch of two Linux apps: both installed (apt-get install each)" || fail "batch: $(cat "$D.result" 2>/dev/null) / $(cat "$T/apt.log")"
+[ "$(grep -c '^helper ' "$D.helper" 2>/dev/null)" = 1 ] && pass "under one consent: one elevated helper for both" \
+    || fail "consents in the batch: $(grep -c '^helper ' "$D.helper" 2>/dev/null)"
+grep -q 'reply !refused' "$T/probe.out" && [ ! -e "$G/pwned" ] && pass "the helper refuses another process (it ran nothing for it)" \
+    || fail "the helper answered another process: $(cat "$T/probe.out") $(ls "$G/pwned" 2>/dev/null)"
+sleep 1; pgrep -f -- '[-]-elevated-helper' >/dev/null && fail "the helper stayed after the batch" || pass "and the helper goes when the batch is done"
+# mutants: a consent per app; a helper that runs anyone's request
+wine reg add 'HKLM\Software\Stained Glass\Store' /f >/dev/null 2>&1
+for n in two three; do awk -v p="Package: sg-gate-$n" 'BEGIN { RS = ""; ORS = "\n\n" } index($0 "\n", p "\n") != 1' "$T/dpkg-status" > "$T/dpkg-status.n"; mv "$T/dpkg-status.n" "$T/dpkg-status"; grep -v "^sg-gate-$n " "$T/installed" > "$T/installed.n"; mv "$T/installed.n" "$T/installed"; done
+batch "$T/mut-batch_per_app.exe"
+[ "$(grep -c '^helper ' "$D.helper" 2>/dev/null || echo 0)" != 1 ] && pass "MUTANT BATCH_PER_APP: no one helper (gate catches it)" || fail "BATCH_PER_APP not detected"
+for n in two three; do awk -v p="Package: sg-gate-$n" 'BEGIN { RS = ""; ORS = "\n\n" } index($0 "\n", p "\n") != 1' "$T/dpkg-status" > "$T/dpkg-status.n"; mv "$T/dpkg-status.n" "$T/dpkg-status"; grep -v "^sg-gate-$n " "$T/installed" > "$T/installed.n"; mv "$T/installed.n" "$T/installed"; done
+batch "$T/mut-helper_anyone.exe"
+[ -e "$G/pwned" ] && pass "MUTANT HELPER_ANYONE runs another process's request (gate catches it)" || fail "HELPER_ANYONE not detected: $(cat "$T/probe.out")"
+# the window: check boxes, Install selected (2)
+ununinstall FakeApp; ununinstall PickApp; sleep 0.5
+if store_window "$EXE"; then
+    click "$D" "check 01"; sleep 0.8; click "$D" "check 08"; sleep 0.8
+    grep -q '^checked 01' "$D" && grep -q '^checked 08' "$D" && grep -q '^hit installsel ' "$D" \
+        && pass "two apps checked: Install selected appears" || fail "checks: $(grep -E '^(checked|hit installsel)' "$D")"
+    click "$D" "installsel -"; sleep 1.5
+    grep -q '^batch 1' "$D" && pass "Install selected installs them as one batch" || fail "no batch: $(grep '^batch' "$D")"
+    i=0; while ! { grep -q '^app 01 .*state=\(installed\|done\)' "$D" && grep -q '^app 08 .*state=\(installed\|done\)' "$D" && grep -q '^batch 0' "$D"; } && [ $i -lt 120 ]; do sleep 0.5; i=$((i + 1)); done
+    grep -q '^app 01 .*state=\(installed\|done\)' "$D" && grep -q '^app 08 .*state=\(installed\|done\)' "$D" && grep -q '^batch 0' "$D" \
+        && pass "both installed, and the batch is over" || fail "after Install selected: $(appline 01) / $(appline 08) / $(grep '^batch' "$D")"
+else fail "the window (check boxes) did not open"; fi
+wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+ununinstall FakeApp; ununinstall PickApp
 
 [ $RC = 0 ] && echo "store-check: all passed" || echo "store-check: FAILED"
 exit $RC

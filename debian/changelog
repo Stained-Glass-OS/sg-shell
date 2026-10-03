@@ -1,3 +1,18 @@
+sg-shell (0.1.0-99) unstable; urgency=medium
+
+  * SG Store: several apps at once, the administrator asked once (David
+    2026-10-03): a box on each card (Space checks the selected one) and
+    "Install selected (N)" queue them; the first step that needs an
+    administrator starts one elevated helper, which runs every such step of
+    the batch (apt installs, installers that must run elevated) and goes
+    when the batch is done; what needs no administrator still runs as the
+    person. The helper answers only the store that started it (a random
+    pipe name, the client's process id). --install-batch ORD... for the
+    same from the command line. Gate: test/store-check.sh section M
+    (mutants BATCH_PER_APP, HELPER_ANYONE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 08:30:00 +0000
+
 sg-shell (0.1.0-98) unstable; urgency=medium
 
   * Settings > Background: the moving backgrounds are in the Background list

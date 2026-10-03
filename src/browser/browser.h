@@ -42,6 +42,10 @@ typedef void (*progress_fn)(void *ctx, int stage, ULONGLONG done, ULONGLONG tota
 BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch);
 BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 BOOL pkg_install(package_t *p, WCHAR *err, int cch);
+/* set by the store while it installs several apps under one consent: an
+ * installer that must run as an administrator is run by this instead of
+ * "runas" (its exit code to *code); FALSE: it could not be run */
+extern BOOL (*g_runas_hook)(const WCHAR *file, const WCHAR *args, DWORD *code);
 void pkg_cleanup(package_t *p);
 BOOL winget_path(WCHAR *out, int cch);
 BOOL winget_install(const WCHAR *winget, package_t *p, WCHAR *err, int cch);

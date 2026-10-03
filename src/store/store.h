@@ -80,6 +80,7 @@ typedef struct {
     BOOL  msg_error;              /* msg says what went wrong (an uninstall that failed) */
     BOOL  ran_elevated;           /* its installer was started as an administrator */
     BOOL  queued;                 /* waiting for the install before it */
+    BOOL  checked;                /* the card is checked: Install selected installs it */
 } app_t;
 
 #define MAX_APPS 512   /* the catalogue: 200-odd apps, Linux ones among them */
@@ -112,6 +113,9 @@ enum { SYS_OK = 0, SYS_DENIED = 1, SYS_FAILED = 10, SYS_CANCELLED = 11 };
 int  sys_install_apt(const app_t *a, WCHAR *err, int cch);     /* from the store: elevate, wait */
 int  sys_remove_apt(const app_t *a, WCHAR *err, int cch);      /* Uninstall: elevate, wait */
 int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / -apt-remove / -deb */
+void sys_batch_begin(void);                                     /* several apps, one consent */
+void sys_batch_end(void);
+int  sys_helper_main(const WCHAR *file);                        /* --elevated-helper FILE */
 int  sys_deb_window(HINSTANCE inst, const WCHAR *file);         /* --deb FILE */
 BOOL sys_unix_path(const WCHAR *dos, char *out, int cch);
 void sys_run_linux(const WCHAR *unix_path);
