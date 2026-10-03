@@ -1,3 +1,15 @@
+sg-shell (0.1.0-103) unstable; urgency=medium
+
+  * Settings > Updates: "Check for updates" that found nothing stayed on
+    "Downloading updates / Preparing the download" until you went away and
+    back (David 2026-10-03). The page's timer compared each look with its
+    own last look, not with what the page showed: a check over within a
+    tick of the page drawing it was never seen to end. Now it compares with
+    the page. Gate test/updates-page-check.sh (mutant
+    SG_MUTANT_UPD_TICK_MEMORY fails it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 18:05:00 +0000
+
 sg-shell (0.1.0-102) unstable; urgency=medium
 
   * SG Store: GNOME Secrets, the password manager (David 2026-10-03), in

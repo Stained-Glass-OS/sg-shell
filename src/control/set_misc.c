@@ -384,6 +384,7 @@ static void fmt_bytes(double b, WCHAR *out, int cch)
 static char *g_upd_list;        /* the last full "updates" answer */
 static BOOL g_upd_fast;         /* this rebuild is the timer's: progress only */
 static int g_upd_watch;         /* ticks left to watch after "Check for updates" */
+static BOOL g_upd_shown;        /* the page as built shows a download under way */
 
 static BOOL upd_download(const char *prog, const WCHAR *pkg, double *size, double *done)
 {
@@ -484,6 +485,7 @@ void set_build_update(void)
                               : L"Updates download in the background and install the next time you restart.");
     } else if (!ok && err[0]) y = st_para(y, err);
     if (prog != ans) free(prog);
+    g_upd_shown = downloading;
     if (downloading || g_upd_watch > 0) pg_timer(1500);
     y = st_head(y, L"Update history");
     nh = update_history(h, ARRAYSIZE(h));
@@ -500,21 +502,34 @@ void set_build_update(void)
 }
 
 /* each tick while downloading (or just after a check): the progress again;
- * the whole list when the download starts or ends */
+ * the whole list when the download starts or ends. Measured against what
+ * the page shows, not what the last tick saw: a check that finds nothing
+ * is over within a tick of the page showing it started, and the page then
+ * said "Preparing the download" for good (David 2026-10-03). */
 void set_timer_update(void)
 {
     BOOL ok = FALSE;
     char *prog = ctl_run(L"updates progress", &ok, NULL, 0, 10000), buf[64];
     BOOL downloading = prog && ctl_line(prog, "DOWNLOADING", NULL, buf, sizeof(buf)) && !strcmp(buf, "yes");
-    static BOOL was;
     free(prog);
     if (g_upd_watch > 0) g_upd_watch--;
-    if (!downloading && !was) {         /* nothing started yet: no rebuild */
+#ifdef SG_MUTANT_UPD_TICK_MEMORY
+    {
+        static BOOL was;
+        BOOL shown = was;
+        was = downloading;
+        if (!downloading && !shown) { if (!g_upd_watch) KillTimer(g_page, 1); return; }
+        g_upd_fast = downloading && shown;
+        refresh_page();
+        return;
+    }
+#endif
+    if (!ok) return;                    /* not answered this time: ask again next tick */
+    if (!downloading && !g_upd_shown) { /* nothing started yet: no rebuild */
         if (!g_upd_watch) KillTimer(g_page, 1);
         return;
     }
-    g_upd_fast = downloading && was;    /* a start or an end re-reads the list */
-    was = downloading;
+    g_upd_fast = downloading && g_upd_shown;    /* a start or an end re-reads the list */
     refresh_page();
 }
 
