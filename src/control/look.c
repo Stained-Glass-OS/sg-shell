@@ -13,6 +13,19 @@
  *   HKCU\Software\Stained Glass\Taskbar Style       wine-sg 0600 (0 flat, 1 Horizon, 2 Glass)
  *   HKCU\Software\Stained Glass\Start Centered      sg-start
  *
+ * Each part has the four looks of its own (David 2026-10-02: "Every aspect
+ * has Classic, Rounded, Horizon, Glass as a choice ... Themes should show
+ * Custom when you start mixing and matching"):
+ *   window frames  Style\Rounded + Style\Frame (above)
+ *   the taskbar    Taskbar\Look 0-3 (wine-sg 0802; Taskbar\Style kept for it)
+ *   Start          Start\Look 0-3 (sg-start; Start\Centered kept for it)
+ * A look sets all three; Themes shows the look they share, or Custom.
+ *
+ * The title bars take a share of the screen: their sizes are the look's at
+ * up to 800 px of height and grow with it in eighths (1080 p: 11/8), unless
+ * Style\ScaleWithScreen is 0 (David 2026-10-02: "kinda small on a 1080p
+ * screen ... we need it to take up a % of the screen").
+ *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #define COBJMACROS
@@ -75,23 +88,63 @@ int look_frame_style(void)
     return look_rounded() ? LOOK_ROUNDED : LOOK_CLASSIC;
 }
 
+/* the title bars' scale for this screen, in eighths: 8 up to 800 px of
+ * height, then with it (900 p 9, 1080 p 11, 1440 p 14, 2160 p 22), at most 24 */
+int look_scale8(void)
+{
+    DEVMODEW dm = { .dmSize = sizeof(dm) };
+    int h = GetSystemMetrics(SM_CYSCREEN), s;
+    /* the mode just set (a resolution change in this process) before the metric follows */
+    if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsHeight >= 200) h = (int)dm.dmPelsHeight;
+    {
+        /* the gates' stand-in for a bigger screen than their X server's */
+        WCHAR fake[16];
+        if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN_HEIGHT", fake, ARRAYSIZE(fake)) && _wtoi(fake) >= 200) h = _wtoi(fake);
+    }
+    if (!reg_dword(HKEY_CURRENT_USER, STYLE, L"ScaleWithScreen", 1)) return 8;
+#ifdef SG_MUTANT_NOSCALE
+    return 8;
+#endif
+    s = (h * 8 + 400) / 800;
+    return s < 8 ? 8 : s > 24 ? 24 : s;
+}
+
+static int scaled(int px, int s8) { return (px * s8 + 4) / 8; }
+
 /* each style's title bar and frame sizes, as its era had them, in pixels at
- * 96 DPI, and whether the title is bold (Horizon's was) */
+ * 96 DPI and up to 800 px of screen, and whether the title is bold
+ * (Horizon's was); scaled to the screen (look_scale8). The caption font
+ * grows with them: its size at scale 1 is kept (Style\CaptionFontBase). */
 static void look_metrics(int style)
 {
     static const int caption[LOOK_COUNT] = { 18, 18, 25, 21 }, button[LOOK_COUNT] = { 18, 18, 25, 26 };
     static const int border[LOOK_COUNT] = { 1, 1, 2, 7 };   /* Wine keeps the padded border in this one */
     NONCLIENTMETRICSW ncm;
+    int s8 = look_scale8(), font_base;
+    LONG font;
 
     memset(&ncm, 0, sizeof(ncm));
     ncm.cbSize = sizeof(ncm);
     if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0)) return;
-    if (ncm.iCaptionHeight == caption[style] && ncm.iCaptionWidth == button[style] && ncm.iBorderWidth == border[style] &&
+    /* the caption font's height at scale 1: as it was found the first time */
+    font_base = (int)reg_dword(HKEY_CURRENT_USER, STYLE, L"CaptionFontBase", 0);
+    if (!font_base || font_base > 64) {
+        DWORD was = reg_dword(HKEY_CURRENT_USER, STYLE, L"Scale8", 8);
+        font_base = ncm.lfCaptionFont.lfHeight < 0 ? -ncm.lfCaptionFont.lfHeight : 12;
+        if (was > 8 && was <= 24) font_base = (font_base * 8 + (int)was / 2) / (int)was;
+        if (font_base < 8 || font_base > 64) font_base = 12;
+        reg_set_dword(HKEY_CURRENT_USER, STYLE, L"CaptionFontBase", font_base);
+    }
+    font = -scaled(font_base, s8);
+    reg_set_dword(HKEY_CURRENT_USER, STYLE, L"Scale8", s8);
+    if (ncm.iCaptionHeight == scaled(caption[style], s8) && ncm.iCaptionWidth == scaled(button[style], s8) &&
+        ncm.iBorderWidth == scaled(border[style], s8) && ncm.lfCaptionFont.lfHeight == font &&
         (ncm.lfCaptionFont.lfWeight >= FW_BOLD) == (style == LOOK_HORIZON))
         return;
-    ncm.iCaptionHeight = caption[style];
-    ncm.iCaptionWidth = button[style];
-    ncm.iBorderWidth = border[style];
+    ncm.iCaptionHeight = scaled(caption[style], s8);
+    ncm.iCaptionWidth = scaled(button[style], s8);
+    ncm.iBorderWidth = scaled(border[style], s8);
+    ncm.lfCaptionFont.lfHeight = font;
     ncm.lfCaptionFont.lfWeight = style == LOOK_HORIZON ? FW_BOLD : FW_NORMAL;
 #ifndef SG_MUTANT_NOMETRICS
     SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(ncm), &ncm, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
@@ -117,6 +170,18 @@ const WCHAR *look_set_frame(int style)
 const WCHAR *look_set_style(BOOL rounded)
 {
     return look_set_frame(rounded ? LOOK_ROUNDED : LOOK_CLASSIC);
+}
+
+/* the screen changed size (the session's watcher, Settings' resolution):
+ * the title bars take their share of the new one, the compositor's for
+ * Linux programs too */
+const WCHAR *look_rescale(void)
+{
+    look_metrics(look_frame_style());
+    effects_write_conf();
+    if (g_reframe) CloseHandle(g_reframe);
+    g_reframe = CreateThread(NULL, 0, reframe_later, NULL, 0, NULL);
+    return NULL;
 }
 
 /* before the program ends (--set): the windows have their new corners */
@@ -189,25 +254,78 @@ static void default_pins(void)
     }
 }
 
-/* the whole look: Classic (the default), Rounded, Horizon or Glass. Horizon
- * and Glass keep square windows and Start at the left; Horizon's buttons
- * have labels (combined when the bar is full), Glass's are icons with the
- * pins, as those desktops had them; neither had Task View. */
-const WCHAR *look_apply(int look)
+/* the taskbar's look: Taskbar\Look, or as an older Settings left it (the
+ * Horizon and Glass bars by Taskbar\Style, the Rounded one by the window style) */
+int look_taskbar_look(void)
+{
+    DWORD v = reg_dword(HKEY_CURRENT_USER, TASKBAR, L"Look", 0xffffffff);
+    if (v < LOOK_COUNT) return (int)v;
+    v = look_taskbar_style();
+    return v == 1 ? LOOK_HORIZON : v == 2 ? LOOK_GLASS : look_rounded() ? LOOK_ROUNDED : LOOK_CLASSIC;
+}
+
+/* Start's look: Start\Look, or as an older Settings left it */
+int look_start_look(void)
+{
+    DWORD v = reg_dword(HKEY_CURRENT_USER, START, L"Look", 0xffffffff);
+    if (v < LOOK_COUNT) return (int)v;
+    if (reg_dword(HKEY_CURRENT_USER, START, L"Centered", 0)) return LOOK_ROUNDED;
+    v = look_taskbar_style();
+    return v == 1 ? LOOK_HORIZON : v == 2 ? LOOK_GLASS : LOOK_CLASSIC;
+}
+
+/* the look the window frames, the taskbar and Start share, or -1: Custom */
+int look_whole(void)
+{
+    int f = look_frame_style();
+#ifdef SG_MUTANT_NOCUSTOM
+    return f;
+#endif
+    return look_taskbar_look() == f && look_start_look() == f ? f : -1;
+}
+
+/* the taskbar in a look: Classic (labelled buttons at the left, Task View),
+ * Rounded (taller, icons in the middle, a search box), Horizon (a bright blue
+ * bar, labelled buttons combined when full) or Glass (a dark glass bar, icon
+ * buttons with pins); neither older bar had Task View */
+const WCHAR *look_set_taskbar(int look)
 {
     BOOL rounded = look == LOOK_ROUNDED;
     DWORD glom = look == LOOK_ROUNDED || look == LOOK_GLASS ? 0 : look == LOOK_HORIZON ? 1 : 2;
 
     if (look < 0 || look >= LOOK_COUNT) return L"unknown look";
+    if (!reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Look", look)) return L"the setting could not be saved";
+    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Style", look == LOOK_HORIZON ? 1 : look == LOOK_GLASS ? 2 : 0);
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarAl", rounded ? 1 : 0);
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarGlomLevel", glom);
     reg_set_dword(HKEY_CURRENT_USER, SEARCHKEY, L"SearchboxTaskbarMode", rounded ? 1 : 0);
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"ShowTaskViewButton", look == LOOK_HORIZON || look == LOOK_GLASS ? 0 : 1);
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"ShowDesktops", 0);   /* off by default in every look; the Taskbar toggle turns it on */
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Color", 0);
-    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Style", look == LOOK_HORIZON ? 1 : look == LOOK_GLASS ? 2 : 0);
-    reg_set_dword(HKEY_CURRENT_USER, START, L"Centered", rounded ? 1 : 0);
     if (rounded || look == LOOK_GLASS) default_pins();
     broadcast(L"TraySettings");
+    broadcast(L"ImmersiveColorSet");   /* the taskbar takes the look's height and colours */
+    return NULL;
+}
+
+/* Start in a look: Classic (tiles), Rounded (centred, pinned and
+ * recommended), Horizon (two columns, All Programs) or Glass (two columns,
+ * a search box); sg-start reads it each time it opens */
+const WCHAR *look_set_start(int look)
+{
+    if (look < 0 || look >= LOOK_COUNT) return L"unknown look";
+    if (!reg_set_dword(HKEY_CURRENT_USER, START, L"Look", look)) return L"the setting could not be saved";
+    reg_set_dword(HKEY_CURRENT_USER, START, L"Centered", look == LOOK_ROUNDED);
+    return NULL;
+}
+
+/* the whole look: Classic (the default), Rounded, Horizon or Glass -- the
+ * window frames, the taskbar and Start each in it; afterwards each can be
+ * changed on its own page (Themes then says Custom) */
+const WCHAR *look_apply(int look)
+{
+    const WCHAR *why;
+    if (look < 0 || look >= LOOK_COUNT) return L"unknown look";
+    if ((why = look_set_taskbar(look)) || (why = look_set_start(look))) return why;
     return look_set_frame(look);   /* the windows' frames: the look's own */
 }

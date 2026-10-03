@@ -37,14 +37,18 @@ static const struct choice { const WCHAR *section, *name, *key, *value; DWORD ma
     { L"Taskbar", L"AutoHide",    SG_TASKBAR, L"AutoHide", 1 },
     { L"Taskbar", L"Color",       SG_TASKBAR, L"Color", 4 },
     { L"Taskbar", L"Style",       SG_TASKBAR, L"Style", 2 },
+    { L"Taskbar", L"Look",        SG_TASKBAR, L"Look", 3 },   /* each part's own look (look.c) */
     { L"Taskbar", L"Desktops",    SG_TASKBAR, L"ShowDesktops", 1 },
     { L"Start",   L"Centered",    SG_START,   L"Centered", 1 },
+    { L"Start",   L"Look",        SG_START,   L"Look", 3 },
     { L"Start",   L"MoreTiles",   SG_START,   L"MoreTiles", 1 },
     { L"Start",   L"AppList",     SG_START,   L"ShowAppList", 1 },
     { L"Start",   L"RecentlyAdded", SG_START, L"ShowRecentlyAdded", 1 },
     { L"Start",   L"FullScreen",  SG_START,   L"FullScreen", 1 },
     { L"Start",   L"MostUsed",    ADVANCED,   L"Start_TrackProgs", 1 },
     { L"Colors",  L"Transparency", PERSONALIZE, L"EnableTransparency", 1 },
+    { L"Colors",  L"ScaleTitleBars", L"Software\\Stained Glass\\Style", L"ScaleWithScreen", 1 },
+    { L"Background", L"Animated", L"Software\\Stained Glass\\Effects", L"AnimatedBackground", 2 },
 };
 
 static BOOL value_of(HKEY root, const WCHAR *key, const WCHAR *value, DWORD *out)

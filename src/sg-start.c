@@ -2809,15 +2809,34 @@ static void search_changed(void)
     InvalidateRect(g_panel, NULL, FALSE);
 }
 
+/* Start's own look (Settings > Personalization > Start > Start style; David
+ * 2026-10-02: "select Rounded, then go to Start and select Horizon"):
+ * Start\Look 0 Classic tiles, 1 Rounded (centred), 2 Horizon, 3 Glass; or,
+ * as an older Settings left it, Start\Centered and the taskbar's Style */
+static int start_look(void)
+{
+    DWORD look = reg_value(START_KEY, L"Look", 0xffffffff), bar;
+#ifdef SG_MUTANT_START_FOLLOWS_TASKBAR
+    look = 0xffffffff;
+#endif
+    if (look <= 3) return (int)look;
+    if (reg_value(START_KEY, L"Centered", 0)) return 1;
+    bar = reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0);
+    return bar == 1 ? 2 : bar == 2 ? 3 : 0;
+}
+
 static void load_start_settings(void)
 {
     g_app_list = reg_value(START_KEY, L"ShowAppList", 1) != 0;
     g_show_list = g_app_list;
     g_fullscreen = reg_value(START_KEY, L"FullScreen", 0) != 0;
     g_tile_cols = reg_value(START_KEY, L"MoreTiles", 0) ? 4 : 3;
-    g_centered = reg_value(START_KEY, L"Centered", 0) != 0;
-    g_seven = !g_centered && reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0) == 2;
-    g_xp = !g_centered && (reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0) == 1 || g_seven);
+    {
+        int look = start_look();
+        g_centered = look == 1;
+        g_seven = look == 3;
+        g_xp = look == 2 || look == 3;
+    }
     if (g_xp)
     {
         g_app_list = FALSE;          /* the list shows for a search and All Programs */
@@ -2893,6 +2912,11 @@ static void layout_panel(void)
         g_panel_w = min(S(g_seven ? G_W : X_W), work.right - work.left);
         g_panel_h = min(S(g_seven ? G_H : X_H), work.bottom - work.top);
         x = abd.uEdge == ABE_RIGHT ? work.right - g_panel_w : work.left;
+        /* a centred taskbar's Start button is in the middle: the menu over
+         * it, in the middle (the Rounded taskbar with the Horizon or Glass
+         * Start: David 2026-10-02) */
+        if ((abd.uEdge == ABE_BOTTOM || abd.uEdge == ABE_TOP) && reg_value(ADVANCED_KEY, L"TaskbarAl", 0) == 1)
+            x = (work.left + work.right - g_panel_w) / 2;
         y = abd.uEdge == ABE_TOP ? work.top : work.bottom - g_panel_h;
         /* Horizon's round at the top only; Glass's all round */
         round = CreateRoundRectRgn(0, 0, g_panel_w + 1, g_panel_h + (g_seven ? 1 : S(12)), S(12), S(12));
@@ -2938,10 +2962,10 @@ static void show_panel(BOOL show)
         QueryPerformanceCounter(&g_open_start);
         g_open_ms = -1;
         g_pal = sg_system_dark() ? &dark_palette : &light_palette;
-        switch (reg_value(L"Software\\Stained Glass\\Taskbar", L"Style", 0))
+        switch (start_look())
         {
-        case 1: g_pal = &horizon_palette; g_look_frame = 0; break;   /* draw_xp draws its own */
-        case 2: g_pal = &glass_palette; g_look_frame = 2; break;
+        case 2: g_pal = &horizon_palette; g_look_frame = 0; break;   /* draw_xp draws its own */
+        case 3: g_pal = &glass_palette; g_look_frame = 2; break;
         default: g_look_frame = 0; break;
         }
         build_list();

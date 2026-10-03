@@ -1,3 +1,33 @@
+sg-shell (0.1.0-96) unstable; urgency=medium
+
+  * Every part of the look has its own Classic, Rounded, Horizon or Glass
+    (David 2026-10-02: "select Rounded, then go to Start and select Horizon
+    ... Themes should show Custom when you start mixing and matching"):
+    the window frames (Colors > Window style), the taskbar (Taskbar >
+    Taskbar style: Taskbar\Look, wine-sg 0802) and Start (Start > Start
+    style: Start\Look, sg-start); Themes > Look sets all three and says
+    Custom when they differ. sg-start's Horizon and Glass menus stand over a
+    centred Start button in the middle. --set taskbar-look|start-look.
+    Tests: test/settings-check.sh, test/start-check.sh (mutants NOCUSTOM,
+    START_FOLLOWS_TASKBAR).
+  * The title bars take a share of the screen (David: "kinda small on a
+    1080p screen ... take up a % of the screen"): each look's caption,
+    buttons, frame and title font grow with the screen's height in eighths
+    past 800 px (1080 p: 11/8), at sign-in and when the screen changes
+    (--set metrics, sg-session); Colors > Size title bars to the screen
+    turns it off. Test: test/settings-check.sh (mutant NOSCALE).
+  * effects.conf tells the compositors the frames' look and sizes (frame=,
+    caption=, button=, border=, scale8=; sg-compositor sg27's Linux title
+    bars match them), the Glass frames' see-through (glass=62 with
+    Transparency effects) and the animated background (background=).
+  * Background > Animated background: Off (the default), Light through the
+    glass, or Living glass (cells that gather round the windows), drawn by
+    sg-deskcomp. --set background-animation static|light|cells.
+  * settings-check.sh: the volume slider's check reads the last volume
+    asked for (the volume chime's "sound chime" now follows each change).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 00:40:00 +0000
+
 sg-shell (0.1.0-95) unstable; urgency=medium
 
   * Linux apps are in Settings > Default apps: sg-linuxapp gives each app

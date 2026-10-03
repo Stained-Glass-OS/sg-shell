@@ -232,6 +232,13 @@ const WCHAR *look_set_frame(int style);   /* LOOK_*: the window style alone */
 int look_frame_style(void);
 const WCHAR *look_apply(int look);
 void look_wait(void);
+int look_taskbar_look(void);              /* LOOK_*: the taskbar's own look */
+int look_start_look(void);                /* LOOK_*: Start's own look */
+const WCHAR *look_set_taskbar(int look);
+const WCHAR *look_set_start(int look);
+int look_whole(void);                     /* the look all three share, or -1 (Custom) */
+int look_scale8(void);                    /* the title bars' scale for this screen, in eighths */
+const WCHAR *look_rescale(void);          /* the screen changed: the title bars follow */
 /* lookshare.c: a look saved to an .sglook file, read back, or put back as new */
 const WCHAR *look_export(const WCHAR *path);
 const WCHAR *look_import(const WCHAR *path);
@@ -241,7 +248,11 @@ void desktop_follow(int w, int h);
 /* set_personal.c: Settings > Personalization > Effects */
 const WCHAR *effects_set(const WCHAR *what, BOOL on);
 const WCHAR *effects_set_kind(const WCHAR *what, const WCHAR *kind);   /* open|minimize none|fade|zoom|scale|lamp */
-const WCHAR *effects_write_conf(void);   /* the desktop compositor's effects.conf, from the choices */
+const WCHAR *effects_write_conf(void);
+#define BACKGROUND_COUNT 3
+extern const WCHAR *const BACKGROUND_KEYS[BACKGROUND_COUNT];   /* static, light, cells: the animated background */
+DWORD effects_background(void);
+const WCHAR *effects_set_background(const WCHAR *kind);   /* the desktop compositor's effects.conf, from the choices */
 BOOL effects_animations(void);
 extern const COLORREF PERS_ACCENTS[20], PERS_BACKGROUNDS[12];
 extern const WCHAR *const PERS_FIT_NAMES[];

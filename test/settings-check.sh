@@ -271,7 +271,8 @@ if [ $# -eq 3 ] && [ "$1" = 40 ]; then
     click_at "$2" "$3"
     # the click moved the thumb somewhere; Home then one step right is exactly 1
     xdotool key Home; sleep 0.8; xdotool key Right; sleep 1.2
-    tail -1 "$LOG" | grep -q '^sound volume sink spk.0 1$' && pass "the slider asks sg-settingsctl for that volume" || fail "sg-settingsctl heard: $(cat "$LOG")"
+    # (the volume chime's "sound chime" follows each change: the last volume asked)
+    grep '^sound volume ' "$LOG" | tail -1 | grep -q '^sound volume sink spk.0 1$' && pass "the slider asks sg-settingsctl for that volume" || fail "sg-settingsctl heard: $(cat "$LOG")"
 else fail "no master volume slider at 40 ($*)"; fi
 shot sound
 
@@ -400,12 +401,12 @@ has ": Rounded" && ! has "a centered taskbar an" && pass "Themes shows the Round
 wine start ms-settings:colors >/dev/null 2>&1
 page_is Colors "ms-settings:colors (style)"
 sleep 0.5
-has ": Rounded: round corners, a taller taskbar" && pass "Colors shows the Rounded window style" || fail "Colors style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+has ": Rounded: round corners" && pass "Colors shows the Rounded window style" || fail "Colors style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 wine "$T/sg-settings64.exe" --set style classic >/dev/null 2>&1
 wine start ms-settings:themes >/dev/null 2>&1
 page_is Themes "ms-settings:themes (mixed)"
 sleep 0.5
-has ": Mixed" && pass "square windows with the centred taskbar: the look is Mixed" || fail "mixed look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+tr -d '\r' < "$DUMP" | grep -q '^control ComboBox .*: Custom$' && pass "square windows with the centred taskbar: the look is Custom" || fail "mixed look: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
 wine reg add 'HKCU\Software\Stained Glass\Taskbar' /v Color /t REG_DWORD /d 3 /f >/dev/null 2>&1
 wine start ms-settings:taskbar >/dev/null 2>&1
 page_is Taskbar "ms-settings:taskbar (color)"
@@ -470,6 +471,61 @@ wine "$T/sg-settings64.exe" --set style glass 2>/dev/null | tr -d '\r' | grep -q
     && wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r' | grep -qx 'style=glass' \
     && pass "--set style glass: Glass frames with the flat taskbar (the looks mix)" || fail "style glass: frame $(regq 'HKCU\Software\Stained Glass\Style' Frame) bar $(TBS)"
 wine "$T/sg-settings64.exe" --set style classic >/dev/null 2>&1
+
+# --- every part its own look: frames, taskbar, Start; Themes says Custom (David 2026-10-02) --------
+sgs() { wine "$T/sg-settings64.exe" --set "$@" 2>/dev/null | tr -d '\r'; }
+pdump() { wine "$T/sg-settings64.exe" --dump personalization 2>/dev/null | tr -d '\r'; }
+SGK='HKCU\Software\Stained Glass'
+sgs look rounded >/dev/null
+[ "$(sgs start-look horizon)" = OK ] && [ "$(regq "$SGK\Start" Look)" = 0x2 ] && [ "$(regq "$SGK\Taskbar" Look)" = 0x1 ] \
+    && [ "$(regq "$SGK\Style" Rounded)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x1 ] && pdump | grep -qx 'look=custom' \
+    && pdump | grep -qx 'start.look=horizon' \
+    && pass "Rounded, then Start's own look Horizon: the centred Rounded taskbar and round windows stay, the look is custom" \
+    || fail "start-look: start $(regq "$SGK\Start" Look) bar $(regq "$SGK\Taskbar" Look) rounded $(regq "$SGK\Style" Rounded) $(pdump | grep '^look=')"
+wine start ms-settings:themes >/dev/null 2>&1
+page_is Themes "ms-settings:themes (custom)"
+sleep 0.5
+tr -d '\r' < "$DUMP" | grep -q '^control ComboBox .*: Custom$' && pass "Themes shows Custom" || fail "Themes custom: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+wine start ms-settings:personalization-start >/dev/null 2>&1
+page_is Start "ms-settings:personalization-start (style)"
+sleep 0.5
+has ": Horizon: two columns and All Programs" && pass "Start shows its own style: Horizon" || fail "Start style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+[ "$(sgs taskbar-look glass)" = OK ] && [ "$(regq "$SGK\Taskbar" Look)" = 0x3 ] && [ "$(TBS)" = 0x2 ] && pdump | grep -qx 'taskbar.look=glass' \
+    && pass "the taskbar's own look: Glass (Taskbar Look 3, Style 2)" || fail "taskbar-look glass: $(regq "$SGK\Taskbar" Look) $(TBS)"
+wine start ms-settings:taskbar >/dev/null 2>&1
+page_is Taskbar "ms-settings:taskbar (look)"
+sleep 0.5
+has ": Glass: dark glass" && pass "Taskbar shows its own style: Glass" || fail "Taskbar style: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+sgs look glass >/dev/null
+pdump | grep -qx 'look=glass' && [ "$(regq "$SGK\Start" Look)" = 0x3 ] && [ "$(regq "$SGK\Taskbar" Look)" = 0x3 ] && [ "$(regq "$SGK\Style" Frame)" = 0x2 ] \
+    && pass "a look chosen again sets every part to it: all Glass" || fail "look glass: $(pdump | grep 'look=')"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/stained-glass/effects.conf"
+grep -qx 'frame=glass' "$CONF" && grep -qx 'glass=62' "$CONF" && grep -qx "caption=$(( 21 + 1 ))" "$CONF" \
+    && pass "the compositor learns the frames' look and sizes, and Glass's see-through (frame=glass caption=22 glass=62)" \
+    || fail "effects.conf: $(tr '\n' ' ' < "$CONF")"
+sgs effects transparency off >/dev/null
+grep -qx 'glass=0' "$CONF" && pass "Transparency effects off: the Glass frames solid (glass=0)" || fail "transparency off: $(grep glass= "$CONF")"
+sgs effects transparency on >/dev/null
+# the title bars take a share of the screen: at 1080 px the Glass caption 21 -> 29, its frame 7 -> 10
+# (as the session asks at sign-in and when the screen changes: --set metrics;
+# the X server here is 768 px tall, so its height is said)
+SG_FAKE_SCREEN_HEIGHT=1080 sgs metrics >/dev/null
+[ "$(regq "$WM" CaptionHeight)" = 29 ] && [ "$(regq "$WM" BorderWidth)" = 10 ] && [ "$(regq "$SGK\\Style" Scale8)" = 0xb ] \
+    && pass "at 1080 px the title bars are 11/8 of their size: caption 29, frame 10" \
+    || fail "1080p: caption $(regq "$WM" CaptionHeight) border $(regq "$WM" BorderWidth) scale $(regq "$SGK\\Style" Scale8)"
+SG_FAKE_SCREEN_HEIGHT=1080 sgs title-scale off >/dev/null
+[ "$(regq "$WM" CaptionHeight)" = 21 ] && pass "Size title bars to the screen off: their own size (21)" || fail "title-scale off: $(regq "$WM" CaptionHeight)"
+sgs title-scale on >/dev/null
+[ "$(regq "$WM" CaptionHeight)" = 21 ] && [ "$(regq "$WM" BorderWidth)" = 7 ] && pass "back at 1024x768: their own size again" \
+    || fail "back at 1024x768: caption $(regq "$WM" CaptionHeight) border $(regq "$WM" BorderWidth)"
+[ "$(sgs background-animation cells)" = OK ] && [ "$(regq "$SGK\Effects" AnimatedBackground)" = 0x2 ] && grep -qx 'background=cells' "$CONF" \
+    && pass "the animated background: Living glass (background=cells for the compositor)" || fail "background animation: $(regq "$SGK\Effects" AnimatedBackground) $(grep background= "$CONF")"
+wine start ms-settings:personalization-background >/dev/null 2>&1
+page_is Background "ms-settings:personalization-background (animated)"
+sleep 0.5
+has ": Living glass: cells that gather round your windows" && pass "Background shows it" || fail "Background page: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox')"
+sgs background-animation static >/dev/null
+sgs look classic >/dev/null
 
 # --- Share & reset: a look saved, reset, read back; a shared file sets only look choices ---------
 SG='C:\users\Public'
@@ -557,19 +613,20 @@ has ": Zoom" && has ": Magic lamp" && has "Wobbly windows while dragging" && has
 sgset effects shadows on >/dev/null; sgset effects wobbly off >/dev/null; sgset effects open none >/dev/null
 sgset effects minimize none >/dev/null; sgset effects moving off >/dev/null
 
-# --- Start layout: Tiles is the default, the Centred option is not 'Recommended' (David 2026-09-29) ---
+# --- Start style: Classic tiles is the default, the Rounded option is not 'Recommended' (David 2026-09-29) ---
 # the combo dump shows only the selected item, so check each selection in turn
+wine reg delete 'HKCU\Software\Stained Glass\Start' /v Look /f >/dev/null 2>&1
 wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1
 wine start ms-settings:personalization-start >/dev/null 2>&1
 page_is Start "ms-settings:personalization-start (Tiles default)"
 sleep 0.5
-tr -d '\r' < "$DUMP" | grep -q '^control ComboBox id=2007 .*: Tiles (the default)' \
-    && pass "Start layout defaults to Tiles" || fail "Start default: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox id=2007')"
+tr -d '\r' < "$DUMP" | grep -q '^control ComboBox id=2007 .*: Classic: tiles (the default)' \
+    && pass "Start style defaults to Classic tiles" || fail "Start default: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox id=2007')"
 wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 1 /f >/dev/null 2>&1
 wine start ms-settings:personalization-start >/dev/null 2>&1
 page_is Start "ms-settings:personalization-start (centred label)"
 sleep 0.5
-has "Centered: pinned and recent apps" && ! has "Pinned and Recommended" \
+has "Rounded: pinned and recent apps, centered" && ! has "Pinned and Recommended" \
     && pass "Centred option is labelled without 'Recommended'" \
     || fail "Centred label: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox id=2007')"
 wine reg add 'HKCU\Software\Stained Glass\Start' /v Centered /t REG_DWORD /d 0 /f >/dev/null 2>&1

@@ -186,6 +186,22 @@ click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
 [ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists the programs in place" || fail "Glass All Programs: $(val list)"
 click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
 [ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Glass Back: $(val list)"
+# Start's own look (Start\Look, David 2026-10-02: "select Rounded, then go to
+# Start and select Horizon giving you the XP start menu with the centered
+# look"): Horizon's Start with the flat bar centred -- over the middle;
+# Classic tiles with the Glass bar
+SLOOK() { "$WINE" reg add 'HKCU\Software\Stained Glass\Start' /v Look /t REG_DWORD /d "$1" /f >/dev/null 2>&1; }
+ALIGN() { "$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' /v TaskbarAl /t REG_DWORD /d "$1" /f >/dev/null 2>&1; }
+TBSTYLE 0; SLOOK 2; ALIGN 1; poke; poke; shot horizon-centred
+cr=$(val rect); cx=$(echo "$cr" | cut -d, -f1); cx2=$(echo "$cr" | cut -d, -f3)
+[ "$(val look)" = horizon ] && [ "$(val xp)" = 1 ] && [ $((cx2 - cx)) = 384 ] && [ "$cx" = $(( (W - 384) / 2 )) ] \
+    && pass "Start's own look Horizon with a centred flat bar: that era's Start, over the middle ($cr)" \
+    || fail "Start Look 2: look $(val look) xp $(val xp) rect $cr (want x $(( (W - 384) / 2 )))"
+ALIGN 0; TBSTYLE 2; SLOOK 0; poke; poke
+[ "$(val look)" = flat ] && [ "$(val xp)" = 0 ] && [ "$(val seven)" = 0 ] \
+    && pass "Start's own look Classic with the Glass bar: the tiles" || fail "Start Look 0 with Glass bar: look $(val look) xp $(val xp) seven $(val seven)"
+"$WINE" reg delete 'HKCU\Software\Stained Glass\Start' /v Look /f >/dev/null 2>&1
+"$WINE" reg delete 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' /v TaskbarAl /f >/dev/null 2>&1
 TBSTYLE 0
 "$WINE" reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v SystemUsesLightTheme /t REG_DWORD /d 0 /f >/dev/null 2>&1
 poke; poke

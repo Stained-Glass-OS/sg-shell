@@ -640,7 +640,9 @@ static BOOL parse_rgb(const WCHAR *s, COLORREF *c)
 int personalize_set(int argc, WCHAR **argv)
 {
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
-                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving|transparency on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH";
+                       L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving|transparency on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH | "
+                       L"taskbar-look|start-look classic|rounded|horizon|glass | background-animation static|light|cells | "
+                       L"title-scale on|off | metrics";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {
@@ -675,12 +677,31 @@ int personalize_set(int argc, WCHAR **argv)
             desktop_follow(w, h);
             why = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && (int)dm.dmPelsWidth == w && (int)dm.dmPelsHeight == h
                   ? NULL : L"the desktop did not take that size";
+            if (!why) { look_rescale(); look_wait(); }   /* the title bars: their share of the new size */
         } else why = L"a size is WIDTHxHEIGHT";
     }
     else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[2], L"on") || !lstrcmpW(argv[2], L"off")))
         why = effects_set(argv[1], !lstrcmpW(argv[2], L"on"));
     else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[1], L"open") || !lstrcmpW(argv[1], L"minimize")))
         why = effects_set_kind(argv[1], argv[2]);
+    else if (argc == 2 && (!lstrcmpW(argv[0], L"taskbar-look") || !lstrcmpW(argv[0], L"start-look"))) {
+        /* one part's own look (David 2026-10-02: every part mixes and matches) */
+        int look;
+        for (look = 0; look < LOOK_COUNT; look++) if (!lstrcmpW(argv[1], LOOK_KEYS[look])) break;
+        why = look == LOOK_COUNT ? L"unknown look" : argv[0][0] == L't' ? look_set_taskbar(look) : look_set_start(look);
+    }
+    else if (argc == 2 && !lstrcmpW(argv[0], L"background-animation")) why = effects_set_background(argv[1]);
+    else if (argc == 2 && !lstrcmpW(argv[0], L"title-scale") && (!lstrcmpW(argv[1], L"on") || !lstrcmpW(argv[1], L"off"))) {
+        reg_set_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Style", L"ScaleWithScreen", !lstrcmpW(argv[1], L"on"));
+        why = look_rescale();
+        look_wait();
+    }
+    else if (argc == 1 && !lstrcmpW(argv[0], L"metrics")) {
+        /* the session, at sign-in and when the screen changes size: the
+         * title bars take their share of the screen (sg-session) */
+        why = look_rescale();
+        look_wait();
+    }
     else if (argc == 2 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"reset")) why = look_reset();
     else if (argc == 3 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"export")) why = look_export(argv[2]);
     else if (argc == 3 && !lstrcmpW(argv[0], L"look") && !lstrcmpW(argv[1], L"import")) why = look_import(argv[2]);
@@ -704,4 +725,9 @@ void dump_personalize(void)
     wprintf(L"mode.system=%ls\n", s.system_light ? L"light" : L"dark");
     wprintf(L"style=%ls\n", LOOK_KEYS[look_frame_style()]);
     wprintf(L"taskbar.style=%ls\n", look_taskbar_style() == 1 ? L"horizon" : look_taskbar_style() == 2 ? L"glass" : L"flat");
+    wprintf(L"taskbar.look=%ls\n", LOOK_KEYS[look_taskbar_look()]);
+    wprintf(L"start.look=%ls\n", LOOK_KEYS[look_start_look()]);
+    wprintf(L"look=%ls\n", look_whole() < 0 ? L"custom" : LOOK_KEYS[look_whole()]);
+    wprintf(L"title.scale8=%d\n", look_scale8());
+    wprintf(L"background.animation=%ls\n", BACKGROUND_KEYS[effects_background()]);
 }

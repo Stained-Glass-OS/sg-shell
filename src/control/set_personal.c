@@ -46,7 +46,7 @@ static BOOL browse_picture(WCHAR *file)
 }
 
 /* ---- Background ------------------------------------------------------------------------------- */
-enum { CMD_BGTYPE = CMD_PAGE_FIRST + 1, CMD_FIT, CMD_BROWSE, CMD_PIC_FIRST = CMD_PAGE_FIRST + 100,
+enum { CMD_BGTYPE = CMD_PAGE_FIRST + 1, CMD_FIT, CMD_BROWSE, CMD_ANIMBG, CMD_PIC_FIRST = CMD_PAGE_FIRST + 100,
        CMD_BG_FIRST = CMD_PAGE_FIRST + 200 };
 static WCHAR g_pics[12][MAX_PATH];
 static int g_npics;
@@ -84,6 +84,16 @@ void set_build_background(void)
             SendMessageW(t, TILE_SETCOLOR, PERS_BACKGROUNDS[i], 0);
             SendMessageW(t, TILE_SETSEL, PERS_BACKGROUNDS[i] == st.background, 0);
         }
+        y += S(112);
+    }
+    {
+        /* a background that moves (sg-deskcomp draws it, off by default; it
+         * stops while a full-screen program is on top and on battery saver):
+         * light passing behind the picture, or glass cells that gather round
+         * the open windows (David 2026-10-02) */
+        static const WCHAR *const kinds[] = { L"Off (the default)", L"Light through the glass",
+                                              L"Living glass: cells that gather round your windows" };
+        st_combo(&y, L"Animated background", kinds, BACKGROUND_COUNT, (int)effects_background(), CMD_ANIMBG);
     }
 }
 
@@ -128,20 +138,26 @@ BOOL set_cmd_background(int id, int code, HWND ctl)
         if (browse_picture(file)) failed(pers_set_wallpaper(file, st.style));
         return TRUE;
     }
+    case CMD_ANIMBG:
+        if (code == CBN_SELCHANGE) {
+            int sel = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            if (sel >= 0 && sel < BACKGROUND_COUNT) failed(effects_set_background(BACKGROUND_KEYS[sel]));
+        }
+        return TRUE;
     }
     return FALSE;
 }
 
 /* ---- Colors --------------------------------------------------------------------------------- */
-enum { CMD_MODE = CMD_PAGE_FIRST + 1, CMD_APPS_MODE, CMD_SYS_MODE, CMD_TRANSPARENCY, CMD_STYLE, CMD_ACC_FIRST = CMD_PAGE_FIRST + 300,
+enum { CMD_MODE = CMD_PAGE_FIRST + 1, CMD_APPS_MODE, CMD_SYS_MODE, CMD_TRANSPARENCY, CMD_STYLE, CMD_SCALE, CMD_ACC_FIRST = CMD_PAGE_FIRST + 300,
        CMD_CUSTOM = CMD_PAGE_FIRST + 400 };
 
 void set_build_colors(void)
 {
     static const WCHAR *const modes[] = { L"Light", L"Dark", L"Custom" };
     static const WCHAR *const ld[] = { L"Light", L"Dark" };
-    static const WCHAR *const styles[] = { L"Classic: square corners", L"Rounded: round corners, a taller taskbar",
-                                           L"Horizon: a blue title bar", L"Glass: a pale glass frame" };
+    static const WCHAR *const styles[] = { L"Classic: square corners", L"Rounded: round corners",
+                                           L"Horizon: a blue title bar", L"Glass: a see-through glass frame" };
     struct pstate st;
     int y = st_title(L"Colors"), i, mode;
     pers_read(&st);
@@ -155,6 +171,8 @@ void set_build_colors(void)
         st_combo(&y, L"Choose your default app mode", ld, 2, st.apps_light ? 0 : 1, CMD_APPS_MODE);
     }
     st_combo(&y, L"Window style", styles, 4, look_frame_style(), CMD_STYLE);
+    /* the title bars a share of the screen: larger on a larger one (look.c) */
+    st_toggle(&y, L"Size title bars to the screen", reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Style", L"ScaleWithScreen", 1) != 0, CMD_SCALE);
     st_toggle(&y, L"Transparency effects", reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1) != 0, CMD_TRANSPARENCY);
     y = st_head(y, L"Choose your accent color");
     y = st_text(y, L"Accent colors");
@@ -194,6 +212,10 @@ BOOL set_cmd_colors(int id, int code, HWND ctl)
     case CMD_TRANSPARENCY: failed(effects_set(L"transparency", st_checked(ctl))); return TRUE;
     case CMD_STYLE:
         if (code == CBN_SELCHANGE) failed(look_set_frame((int)SendMessageW(ctl, CB_GETCURSEL, 0, 0)));
+        return TRUE;
+    case CMD_SCALE:
+        reg_set_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Style", L"ScaleWithScreen", st_checked(ctl));
+        failed(look_rescale());
         return TRUE;
     case CMD_CUSTOM: {
         static COLORREF custom[16];
@@ -325,22 +347,18 @@ void set_build_themes(void)
     y = st_head(y, L"Look");
     {
         /* short names: the descriptions did not fit the box (David 2026-09-29) */
-        static const WCHAR *const looks[] = { L"Classic", L"Rounded", L"Horizon", L"Glass", L"Mixed" };
-        BOOL r = look_rounded(), centred = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1,
-             cstart = reg_dword(HKEY_CURRENT_USER, L"Software\\Stained Glass\\Start", L"Centered", 0) != 0;
-        DWORD bar = look_taskbar_style();
-        int frame = look_frame_style();   /* the windows' frames are part of a look too */
-        int look = r || centred || cstart ? (r && centred && cstart && !bar ? LOOK_ROUNDED : 4)
-                 : bar == 1 ? (frame == LOOK_HORIZON ? LOOK_HORIZON : 4) : bar == 2 ? (frame == LOOK_GLASS ? LOOK_GLASS : 4)
-                 : frame == LOOK_CLASSIC ? LOOK_CLASSIC : 4;
-        st_combo(&y, L"Choose a look", looks, look == 4 ? 5 : 4, look, CMD_LOOK);
+        /* the window frames, the taskbar and Start in one look, or each in
+         * its own (Custom: David 2026-10-02) */
+        static const WCHAR *const looks[] = { L"Classic", L"Rounded", L"Horizon", L"Glass", L"Custom" };
+        int look = look_whole();
+        st_combo(&y, L"Choose a look", looks, look < 0 ? 5 : 4, look < 0 ? 4 : look, CMD_LOOK);
     }
     y = st_para(y, L"Classic: square windows, with the taskbar's buttons and Start at the left. "
                    L"Rounded: round corners, with the taskbar's buttons and Start in the middle. "
-                   L"Horizon: a bright blue taskbar with a green Start button. "
-                   L"Glass: a dark glass taskbar with a round Start button and big icons.");
+                   L"Horizon: blue title bars, a bright blue taskbar with a green Start button. "
+                   L"Glass: see-through glass frames, a dark glass taskbar with a round Start button and big icons.");
     y = st_para(y, L"A look sets the window style, the taskbar and Start together. Each can still be changed on its own "
-                   L"under Colors, Taskbar and Start, to mix them (Mixed).");
+                   L"under Colors (Window style), Taskbar (Taskbar style) and Start (Start style), to mix them: the look is then Custom.");
 }
 
 BOOL set_cmd_themes(int id, int code, HWND ctl)
@@ -372,12 +390,14 @@ static void tray_settings_changed(void);
 
 void set_build_start(void)
 {
-    static const WCHAR *layouts[] = { L"Tiles (the default)", L"Centered: pinned and recent apps" };
+    static const WCHAR *layouts[] = { L"Classic: tiles (the default)", L"Rounded: pinned and recent apps, centered",
+                                      L"Horizon: two columns and All Programs", L"Glass: two columns with a search box" };
     int y = st_title(L"Start");
-    /* the newer look: Start and the taskbar's buttons in the middle, Start
-     * as a grid of pinned apps over recommended ones (sg-start's centred
-     * layout); Tiles is the classic one, as installed */
-    st_combo(&y, L"Start layout", layouts, 2, reg_dword(HKEY_CURRENT_USER, SG_START, L"Centered", 0) ? 1 : 0, CMD_LAYOUT);
+    /* Start's own look, whatever the rest is (David 2026-10-02: "select
+     * Rounded, then go to Start and select Horizon"): Classic tiles, the
+     * Rounded grid of pinned apps over recommended ones, or the Horizon and
+     * Glass menus (sg-start); Themes then says Custom */
+    st_combo(&y, L"Start style", layouts, 4, look_start_look(), CMD_LAYOUT);
     st_toggle(&y, L"Show more tiles on Start", reg_dword(HKEY_CURRENT_USER, SG_START, L"MoreTiles", 0) != 0, CMD_MORETILES);
     st_toggle(&y, L"Show app list in Start menu", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowAppList", 1) != 0, CMD_APPLIST);
     st_toggle(&y, L"Show recently added apps", reg_dword(HKEY_CURRENT_USER, SG_START, L"ShowRecentlyAdded", 1) != 0, CMD_RECENT);
@@ -395,10 +415,7 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
     {
         int sel = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
         if (code != CBN_SELCHANGE || sel < 0) return TRUE;
-        reg_set_dword(HKEY_CURRENT_USER, SG_START, L"Centered", sel == 1);
-        /* the taskbar's buttons move to the middle with it, and back */
-        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", sel == 1);
-        tray_settings_changed();
+        failed(look_set_start(sel));
         return TRUE;
     }
     (void)code;
@@ -427,7 +444,8 @@ void set_build_taskbar(void)
     static const WCHAR *const combine[] = { L"Always, hide labels", L"When taskbar is full", L"Never" };
     static const WCHAR *const search[] = { L"Hidden", L"Show search icon", L"Show search box" };
     static const WCHAR *const colors[] = { L"Follow the system mode", L"Dark", L"Light", L"Light blue", L"Accent color" };
-    static const WCHAR *const styles[] = { L"Flat (the default)", L"Horizon: bright blue", L"Glass: dark glass" };
+    static const WCHAR *const styles[] = { L"Classic: flat (the default)", L"Rounded: taller, icons in the middle",
+                                           L"Horizon: bright blue", L"Glass: dark glass" };
     DWORD color;
     DWORD pos = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Position", 3), glom = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarGlomLevel", 2);
     DWORD box = reg_dword(HKEY_CURRENT_USER, SEARCH_KEY, L"SearchboxTaskbarMode", 0);
@@ -447,8 +465,10 @@ void set_build_taskbar(void)
     st_combo(&y, L"Taskbar alignment", align, 2, reg_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", 0) == 1 ? 1 : 0, CMD_ALIGN);
     color = reg_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", 0);
     st_combo(&y, L"Taskbar color", colors, 5, color <= 4 ? (int)color : 0, CMD_TBCOLOR);
-    /* the taskbar of older desktops (wine-sg 0600); its own colours replace Taskbar color */
-    st_combo(&y, L"Taskbar style", styles, 3, (int)look_taskbar_style(), CMD_TBSTYLE);
+    /* the taskbar's own look (wine-sg 0600, 0802): the Horizon and Glass bars'
+     * colours replace Taskbar color; choosing one sets its alignment,
+     * combining and buttons, which can be changed after */
+    st_combo(&y, L"Taskbar style", styles, 4, look_taskbar_look(), CMD_TBSTYLE);
 }
 
 static void tray_settings_changed(void)
@@ -473,9 +493,10 @@ BOOL set_cmd_taskbar(int id, int code, HWND ctl)
         reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", sel);
         break;
     case CMD_TBSTYLE:
-        if (code != CBN_SELCHANGE || sel < 0 || sel > 2) return TRUE;
-        reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Style", sel);
-        break;
+        if (code != CBN_SELCHANGE || sel < 0 || sel >= LOOK_COUNT) return TRUE;
+        failed(look_set_taskbar(sel));
+        refresh_page();   /* its alignment, combining and buttons changed with it */
+        return TRUE;
     case CMD_ALIGN:
         if (code != CBN_SELCHANGE) return TRUE;
         reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"TaskbarAl", sel == 1);
@@ -570,6 +591,7 @@ enum { CMD_ANIMATIONS = CMD_PAGE_FIRST + 1, CMD_SLIDE, CMD_SHADOWS, CMD_OPEN, CM
  * look's shadow and "Show animations". */
 static const WCHAR *const OPEN_KEYS[] = { L"none", L"fade", L"zoom" };
 static const WCHAR *const MINIMIZE_KEYS[] = { L"none", L"scale", L"lamp" };
+const WCHAR *const BACKGROUND_KEYS[BACKGROUND_COUNT] = { L"static", L"light", L"cells" };
 
 static DWORD effects_choice(const WCHAR *name, DWORD def, DWORD max)
 {
@@ -577,12 +599,36 @@ static DWORD effects_choice(const WCHAR *name, DWORD def, DWORD max)
     return v <= max ? v : def;
 }
 
+DWORD effects_background(void)
+{
+    return effects_choice(L"AnimatedBackground", 0, BACKGROUND_COUNT - 1);
+}
+
+/* the animated background by name: static (off), light, cells */
+const WCHAR *effects_set_background(const WCHAR *kind)
+{
+    int i;
+    for (i = 0; i < BACKGROUND_COUNT; i++)
+        if (!lstrcmpiW(kind, BACKGROUND_KEYS[i]))
+        {
+            const WCHAR *why;
+            if (!reg_set_dword(HKEY_CURRENT_USER, SG_EFFECTS, L"AnimatedBackground", i)) return L"the setting could not be saved";
+            why = effects_write_conf();
+            /* the desktop drawn again: explorer hands the compositor the
+             * picture without its icons too (wine-sg 0804) */
+            RedrawWindow(GetDesktopWindow(), NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+            return why;
+        }
+    return L"unknown background";
+}
+
 const WCHAR *effects_write_conf(void)
 {
     WCHAR home[MAX_PATH] = L"", dir[MAX_PATH], path[MAX_PATH], *dos;
     WCHAR *(CDECL *to_dos)(const char *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
-    char unix_dir[MAX_PATH * 3], text[512];
-    int frame = look_frame_style();
+    char unix_dir[MAX_PATH * 3], text[1024];
+    int frame = look_frame_style(), glass;
+    DWORD transparency = reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1);
     HANDLE f;
     DWORD done;
 
@@ -608,14 +654,25 @@ const WCHAR *effects_write_conf(void)
     else return L"no home folder to keep the effects in";
     SHCreateDirectoryExW(NULL, path, NULL);
     lstrcatW(path, L"\\effects.conf");
+    /* the Glass look's frames see-through, this opaque (sg-deskcomp), with
+     * Transparency effects on (Colors) */
+    glass = frame == LOOK_GLASS && transparency ? 62 : 0;
+    /* the window frames' look and sizes: the compositor's title bars for
+     * Linux programs not (yet) in a Wine frame match them (sg-compositor's
+     * decor.c): frame, the title bar's height (SM_CYCAPTION), the caption
+     * buttons' size, the frame's thickness; the desktop's background */
     _snprintf(text, sizeof(text),
-              "# Written by Settings > Personalization > Effects; read by sg-deskcomp.\n"
-              "shadows=%d\nshadow=%s\nanimations=%d\nopen=%ls\nminimize=%ls\nwobbly=%d\nmoving=%d\n",
+              "# Written by Settings > Personalization; read by sg-deskcomp and sg-compositor.\n"
+              "shadows=%d\nshadow=%s\nanimations=%d\nopen=%ls\nminimize=%ls\nwobbly=%d\nmoving=%d\nglass=%d\n"
+              "frame=%ls\ncaption=%d\nbutton=%d\nbuttonh=%d\nborder=%d\nscale8=%d\nbackground=%ls\n",
               effects_choice(L"Shadows", 1, 1) != 0,
               frame == LOOK_HORIZON ? "horizon" : frame == LOOK_GLASS ? "glass" : "modern",
               effects_animations(),
               OPEN_KEYS[effects_choice(L"WindowOpen", 0, 2)], MINIMIZE_KEYS[effects_choice(L"WindowMinimize", 0, 2)],
-              effects_choice(L"Wobbly", 0, 1) != 0, effects_choice(L"MovingTranslucent", 0, 1) != 0);
+              effects_choice(L"Wobbly", 0, 1) != 0, effects_choice(L"MovingTranslucent", 0, 1) != 0, glass,
+              LOOK_KEYS[frame], GetSystemMetrics(SM_CYCAPTION), GetSystemMetrics(SM_CXSIZE), GetSystemMetrics(SM_CYSIZE),
+              GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER), look_scale8(),
+              BACKGROUND_KEYS[effects_background()]);
     text[sizeof(text) - 1] = 0;
     f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return L"the effects could not be saved for the compositor";
@@ -651,6 +708,7 @@ const WCHAR *effects_set(const WCHAR *what, BOOL on)
          * 0745); the taskbar reads it again on "ImmersiveColorSet" */
         DWORD_PTR r;
         if (!reg_set_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", on)) return L"the setting could not be saved";
+        effects_write_conf();   /* the Glass frames' see-through goes with it */
 #ifndef SG_MUTANT_NOTRANSPARENCYNOTE
         SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"ImmersiveColorSet", SMTO_ABORTIFHUNG, 2000, &r);
 #endif
