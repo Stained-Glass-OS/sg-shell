@@ -1,3 +1,13 @@
+sg-shell (0.1.0-102) unstable; urgency=medium
+
+  * SG Store: GNOME Secrets, the password manager (David 2026-10-03), in
+    the Linux apps (Debian's "secrets"; runs on our desktop, checked).
+    New test/store-catalog-check.sh on the real catalogue: every Linux
+    app's package is one apt knows (Chrome and Edge from their makers'
+    repositories), each has a Run program, no key is used twice.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 17:45:00 +0000
+
 sg-shell (0.1.0-101) unstable; urgency=medium
 
   * SG Defender's notice (David 2026-10-03): sg-defender-notice, a popup

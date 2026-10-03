@@ -3528,3 +3528,14 @@ Windows Registry Editor Version 5.00
 "Source"="linux:apt:firefox"
 "Run"="/usr/bin/firefox"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.mozilla.firefox.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L188]
+"Name"="Secrets"
+"Publisher"="GNOME"
+"Description"="A simple password manager for GNOME: keeps your passwords in a KeePass database, with one-time codes."
+"Category"="Productivity"
+"Colour"=dword:009141ac
+"Tier"="linux"
+"Source"="linux:apt:secrets"
+"Run"="/usr/bin/secrets"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.World.Secrets.png"
