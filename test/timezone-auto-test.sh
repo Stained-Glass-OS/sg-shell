@@ -42,5 +42,13 @@ echo 'Mars/Olympus' > "$T/zone"; [ -z "$(run UTC on)" ] && pass "a zone this PC 
 echo '../../etc/passwd' > "$T/zone"; [ -z "$(run UTC on)" ] && pass "a path is refused" || fail "a path was set"
 kill "$SP"; SP=; echo America/Denver > "$T/zone"
 [ -z "$(run UTC on)" ] && pass "offline: nothing changes" || fail "offline set a zone"
+# offline is a temporary failure (75): the unit tries again soon, not in 6 h
+echo UTC > "$T/current"; echo on > "$T/setting"
+SG_TZ_URL="http://127.0.0.1:1/api/timezone" SG_TZ_SETTING="$T/setting" SG_TZ_CURRENT="$T/current" \
+    SG_TZ_SET="$T/setset" python3 "$HERE/admin/sg-timezone-auto" >/dev/null 2>&1; rc=$?
+[ "$rc" = 75 ] && pass "offline exits 75, so it is tried again in 90 s" || fail "offline exited $rc"
+grep -qx 'Restart=on-failure' "$HERE/admin/sg-timezone-auto.service" && grep -qx 'RestartSec=90' "$HERE/admin/sg-timezone-auto.service" \
+    && grep -q 'nm-dispatcher.*dispatcher.d/90-sg-timezone-auto' "$HERE/debian/rules" \
+    && pass "the unit retries after a failure, and a network coming up starts it" || fail "no retry or no dispatcher hook"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

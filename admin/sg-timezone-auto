@@ -56,8 +56,13 @@ def main():
         with urllib.request.urlopen(req, timeout=20) as r:
             zone = json.loads(r.read().decode()).get("timezone", "")
     except (OSError, ValueError) as e:
+        # offline -- a laptop's Wi-Fi often joins only after its owner signs
+        # in, long after the boot's first try (David's X1 2026-10-03: left in
+        # UTC until the next try, six hours on). Exit 75 (EX_TEMPFAIL): the
+        # unit tries again in a minute and a half; and NetworkManager starts
+        # it when a connection comes up (sg-timezone-auto.nm-dispatcher).
         print("sg-timezone-auto: the server could not be asked: %s" % e)
-        return 0   # offline: tried again later
+        return 0 if os.environ.get("SG_MUTANT_TZ_GIVE_UP") else 75
     path = os.path.realpath(os.path.join(ZONEINFO, zone))
     if not ZONE_RE.match(zone) or ".." in zone or not (
             path.startswith(os.path.realpath(ZONEINFO) + os.sep) and os.path.isfile(path)):

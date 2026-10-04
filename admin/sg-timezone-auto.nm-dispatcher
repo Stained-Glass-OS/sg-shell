@@ -1,0 +1,8 @@
+#!/bin/sh
+# NetworkManager dispatcher (sg-shell): a connection came up -- if the time
+# zone is set automatically, look where this PC is now (a laptop's Wi-Fi
+# joins after sign-in; it moves). sg-timezone-auto decides whether it is on.
+case "$2" in
+up|connectivity-change) systemctl start --no-block sg-timezone-auto.service >/dev/null 2>&1 ;;
+esac
+exit 0

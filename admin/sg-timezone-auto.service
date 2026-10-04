@@ -4,7 +4,14 @@ Documentation=https://freesoft.page/
 Wants=network-online.target
 After=network-online.target time-sync.target
 
+# offline (exit 75): again in 90 s, for half an hour at most
+StartLimitIntervalSec=40min
+StartLimitBurst=20
+
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/stained-glass/sg-timezone-auto
 TimeoutStartSec=60
+Restart=on-failure
+RestartSec=90
+RestartPreventExitStatus=1

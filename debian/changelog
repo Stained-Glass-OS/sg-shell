@@ -7,6 +7,11 @@ sg-shell (0.1.0-105) unstable; urgency=medium
     "undo that" go the same way. SendInput reached only the frame.
     Depends: xdotool. Gate test/dictate-linux-check.sh (mutant
     SG_MUTANT_LINUX_BY_SENDINPUT).
+  * Set time zone automatically tries again soon when offline: the boot's
+    try came before a laptop's Wi-Fi joined (it joins after sign-in), and
+    the next was six hours on -- David's X1 sat in UTC. Offline is exit 75,
+    retried every 90 s for half an hour, and NetworkManager starts it when
+    a connection comes up (dispatcher.d/90-sg-timezone-auto).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 02:40:00 +0000
 
