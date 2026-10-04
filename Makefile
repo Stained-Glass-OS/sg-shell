@@ -101,8 +101,12 @@ build:
 	@$(WINDRES32) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res32.o
 	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) && echo "built sg-mstsc (64-bit)"
 	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) && echo "built sg-mstsc (32-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
-	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
+	@# Control Panel, with its own icon (src/control/gen-icon.py: smooth at every size)
+	@python3 src/control/gen-icon.py $(BUILD)/sg-control.ico
+	@$(WINDRES64) -I src/control -I $(BUILD) src/control/control.rc -O coff -o $(BUILD)/sg-control-res64.o
+	@$(WINDRES32) -I src/control -I $(BUILD) src/control/control.rc -O coff -o $(BUILD)/sg-control-res32.o
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control64.exe $(CONTROL_SRC) $(BUILD)/sg-control-res64.o $(CONTROL_LIBS) && echo "built sg-control (64-bit)"
+	@$(MINGW32) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-control32.exe $(CONTROL_SRC) $(BUILD)/sg-control-res32.o $(CONTROL_LIBS) && echo "built sg-control (32-bit)"
 	@# Settings (SystemSettings, ms-settings:) is the Control Panel's program in its own frame
 	@# (src/control/settings.c), with its own icon and a common-controls 6 manifest.
 	@python3 src/settings/gen-icon.py $(BUILD)/sg-settings.ico
@@ -316,6 +320,7 @@ test: build
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/power-buttons-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/envreload-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/control-icon-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-check.sh
 	@sh test/terminal-handoff-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

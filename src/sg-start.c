@@ -1663,7 +1663,7 @@ static void draw_list(HDC dc)
         if (i == g_hot_row) fill(dc, &r, COL_HOVER);
         if (i == g_sel_row) frame(dc, &r, COL_SUBTLE, S(1) + (g_dpi >= 144));
         if (rw->type == R_BEST && i != g_hot_row) fill(dc, &r, g_pal->best);
-        if (e && (e->kind == K_SETTING || !e->icon || is_control_panel(e)))
+        if (e && (e->kind == K_SETTING || !e->icon))
             draw_badge(dc, r.left + S(10), (r.top + r.bottom) / 2, rw->type == R_BEST ? S(32) : S(24));
         else if (e && e->icon)
         {
@@ -1709,7 +1709,9 @@ static void draw_tiles(HDC dc)
         r = tile_rect(i);
         fill(dc, &r, i == g_hot_tile ? COL_ACCENT_HI : COL_ACCENT);
         if (i == g_hot_tile || i == g_sel_tile) frame(dc, &r, i == g_sel_tile ? COL_TEXT : RGB(0xB8, 0x8C, 0xE8), S(2));
-        if (is_control_panel(&g_apps[a]))
+        /* Control Panel: its own icon (smooth at every size, sg-shell -112);
+         * the drawn gear only where its program carries none */
+        if (is_control_panel(&g_apps[a]) && !g_apps[a].icon)
         {
             RECT gr = { (r.left + r.right) / 2 - S(16), r.top + S(22), (r.left + r.right) / 2 + S(16), r.top + S(54) };
             draw_glyph_scaled(dc, RAIL_SETTINGS, (gr.left + gr.right) / 2, (gr.top + gr.bottom) / 2, COL_ON_ACCENT, 2);
@@ -1808,7 +1810,7 @@ static int c_hit(POINT pt)
 
 static void draw_entry_icon(HDC dc, const struct entry *e, int x, int y, int size)
 {
-    if (e->kind == K_SETTING || !e->icon || is_control_panel(e)) draw_badge(dc, x, y + size / 2, size);
+    if (e->kind == K_SETTING || !e->icon) draw_badge(dc, x, y + size / 2, size);
     else DrawIconEx(dc, x, y, e->icon, size, size, 0, NULL, DI_NORMAL);
 }
 

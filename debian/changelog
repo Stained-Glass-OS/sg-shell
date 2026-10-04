@@ -1,3 +1,15 @@
+sg-shell (0.1.0-112) unstable; urgency=medium
+
+  * Control Panel has an icon of its own, smooth at every size (David
+    2026-10-04: it looked like it needed anti-aliasing -- Start drew a gear
+    of one-pixel lines, and the program carried no icon): a panel of
+    sliders in the logo's colours on the accent purple, drawn at 1024 px
+    and scaled down (a simpler drawing at 24 px and under). Start's tile and
+    list, the taskbar and the window use it. control-icon-check (mutant: a
+    build without src/control/control.rc).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 22:40:00 +0000
+
 sg-shell (0.1.0-111) unstable; urgency=medium
 
   * SG Store follows dark mode (David 2026-10-02: it switched only half --

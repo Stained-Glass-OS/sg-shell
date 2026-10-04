@@ -1047,7 +1047,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     wc.lpfnWndProc = addr_proc; wc.lpszClassName = L"SgCplAddress";
     RegisterClassW(&wc);
     wc.lpfnWndProc = main_proc; wc.lpszClassName = L"SgControlWindow";
-    wc.hIcon = LoadIconW(NULL, (LPCWSTR)IDI_APPLICATION);
+    /* its own icon (control.rc; Settings' in sg-settings64.exe) */
+    if (!(wc.hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(1)))) wc.hIcon = LoadIconW(NULL, (LPCWSTR)IDI_APPLICATION);
     RegisterClassW(&wc);
 
     g_main = CreateWindowExW(WS_EX_CONTROLPARENT, L"SgControlWindow", L"Control Panel",

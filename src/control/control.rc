@@ -1,0 +1,2 @@
+/* Control Panel's resources: its icon (drawn at build time by gen-icon.py). */
+1 ICON "sg-control.ico"
