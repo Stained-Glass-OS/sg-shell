@@ -18,6 +18,9 @@ fail() { echo "FAIL  $*"; RC=1; }
 unset DISPLAY WAYLAND_DISPLAY
 export HOME="$T/home" WINEPREFIX="$T/pfx" WINEDEBUG=-all WINEDLLOVERRIDES="winemenubuilder.exe=d;mscoree,mshtml="
 export XDG_DATA_HOME="$T/home/.local/share" XDG_DATA_DIRS="$T/share" SG_LINUXAPPS_HIDDEN="$T/hidden"
+# ~/.config as a session has it: no XDG_CONFIG_HOME, and Wine shows its
+# programs no HOME (sg-linuxapp finds it through WINEHOMEDIR)
+unset XDG_CONFIG_HOME
 trap '"${WINESERVER:-wineserver}" -k 2>/dev/null; rm -rf "$T"' EXIT INT TERM
 mkdir -p "$HOME" "$T/share/applications" "$T/share/icons/hicolor/48x48/apps" "$T/share/icons/hicolor/256x256/apps" \
     "$XDG_DATA_HOME/applications"
@@ -169,6 +172,38 @@ if [ -x /usr/bin/gio ]; then
     timeout 60 "$WINE" "$EXE" --open "Z:$(echo "$T" | tr / '\\')\\share\\applications\\gate-browser.desktop" 'https://example.org/gate'
     for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$T/opened" ] && break; sleep 0.5; done
     [ "$(cat "$T/opened" 2>/dev/null)" = "https://example.org/gate" ] && pass "--open hands the app the link (gio launch)" || fail "--open: '$(cat "$T/opened" 2>/dev/null)'"
+fi
+# the default browser (David 2026-10-03: Linux Firefox chosen at
+# installation was not the default; Firefox's "make default" did not reach
+# Default apps). One browser installed and none chosen: it is the default,
+# both sides. Chosen on the Linux side later (xdg-settings, mimeapps.list):
+# the Windows side follows, also while --watch runs. A choice made before is
+# not undone the first time.
+uc() { rq 'HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' ProgId | awk '$1 == "ProgId" { print $3 }'; }
+lin() { sed -n 's/^x-scheme-handler\/http=\([^;]*\).*/\1/p' "$HOME/.config/mimeapps.list" 2>/dev/null | head -1; }
+if [ -x /usr/bin/xdg-mime ]; then
+    [ "$(uc)" = SG.LinuxApp.gate-browser ] && [ "$(lin)" = gate-browser.desktop ] \
+        && pass "the one browser installed is the default, Windows and Linux (UserChoice, mimeapps.list)" || fail "one browser: UserChoice '$(uc)', Linux '$(lin)' [$(tr '\n' ' ' < "$HOME/.config/mimeapps.list" 2>&1)]"
+    rq 'HKCU\Software\Classes\https\shell\open\command' | grep -q -- '--open .*gate-browser.desktop' && pass "https opens with it" || fail "https not given to it"
+    app gate-browser2 'Type=Application' 'Name=Gate Browser Two' 'MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;' 'Exec=true'
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    [ "$(uc)" = SG.LinuxApp.gate-browser ] && pass "a second browser installed does not take over" || fail "a second browser took over: '$(uc)'"
+    XDG_DATA_DIRS="$T/share" xdg-mime default gate-browser2.desktop x-scheme-handler/http x-scheme-handler/https text/html
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    [ "$(uc)" = SG.LinuxApp.gate-browser2 ] && pass "made default on the Linux side (xdg-mime), Default apps follows" || fail "Linux choice not followed: '$(uc)'"
+    "$WINE" "$EXE" --watch & WP=$!
+    sleep 4
+    XDG_DATA_DIRS="$T/share" xdg-mime default gate-browser.desktop x-scheme-handler/http x-scheme-handler/https text/html
+    i=0; while [ "$(uc)" != SG.LinuxApp.gate-browser ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
+    [ "$(uc)" = SG.LinuxApp.gate-browser ] && pass "while --watch runs, a Linux-side choice reaches Default apps within seconds" || fail "--watch did not follow: '$(uc)'"
+    kill "$WP" 2>/dev/null; "${WINESERVER:-wineserver}" -k 2>/dev/null; sleep 1
+    "$WINE" reg delete 'HKCU\Software\Stained Glass\Default browser' /f >/dev/null 2>&1
+    XDG_DATA_DIRS="$T/share" xdg-mime default gate-browser2.desktop x-scheme-handler/http
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    [ "$(uc)" = SG.LinuxApp.gate-browser ] && pass "the first time, a choice already made in Settings stays" || fail "first sync undid the choice: '$(uc)'"
+    rm -f "$T/share/applications/gate-browser2.desktop"
+else
+    echo "SKIP  the default browser (no xdg-mime)"
 fi
 rm "$T/share/applications/gate-viewer.desktop"
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w

@@ -1,3 +1,25 @@
+sg-shell (0.1.0-107) unstable; urgency=medium
+
+  * The default browser, both sides (David 2026-10-03: Linux Firefox chosen
+    at installation was not the default in Settings > Default apps, and
+    Firefox's own "make default" did not reach it -- "Linux apps can't set
+    their default system wide"; "If you only have one browser installed, it
+    should default"). sg-linuxapp, at each sync and whenever the user's
+    mimeapps.list changes: a default browser chosen on the Linux side
+    (xdg-settings, a browser's own prompt) that is one of the Linux apps
+    becomes the Windows side's; with none chosen and one browser installed
+    (Windows or Linux; not Wine's Internet Explorer), that browser is the
+    default on both sides. A choice made in Settings before is not undone.
+    Wine's default UserChoice ("http") counts as none.
+  * sg-linuxapp finds the user's home folder through WINEHOMEDIR (Wine gives
+    its programs no HOME): ~/.local/share's apps and ~/.config were missed.
+    linuxapps-check: one browser made the default both sides, a second does
+    not take over, a Linux-side choice followed (also under --watch), an
+    earlier choice kept (mutants SG_MUTANT_NO_DEFAULT_BROWSER_SYNC,
+    SG_MUTANT_HOME_ENV_ONLY).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 05:20:00 +0000
+
 sg-shell (0.1.0-106) unstable; urgency=medium
 
   * Task Manager lists the machine's Linux processes (David 2026-10-03, his

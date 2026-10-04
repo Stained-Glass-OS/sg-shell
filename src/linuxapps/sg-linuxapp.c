@@ -96,6 +96,25 @@ static BOOL env_a(const char *name, char *out, int len)
     return n > 0 && (int)n < len;
 }
 
+/* the user's Unix home: Wine gives its programs no HOME, but WINEHOMEDIR
+ * (\??\Z:\home\user) -- without it ~/.local/share and ~/.config were missed */
+static BOOL home_unix(char *out, int len)
+{
+    WCHAR w[MAX_PATH];
+    DWORD n;
+    char *u;
+    if (env_a("HOME", out, len) && out[0]) return TRUE;
+#ifdef SG_MUTANT_HOME_ENV_ONLY
+    return FALSE;
+#endif
+    n = GetEnvironmentVariableW(L"WINEHOMEDIR", w, MAX_PATH);
+    if (!n || n >= MAX_PATH || !p_unix_name) return FALSE;
+    if (!(u = p_unix_name(!wcsncmp(w, L"\\??\\", 4) ? w + 4 : w))) return FALSE;
+    lstrcpynA(out, u, len);
+    HeapFree(GetProcessHeap(), 0, u);
+    return out[0] != 0;
+}
+
 /* ---- the .desktop files ------------------------------------------------ */
 
 struct app {
@@ -268,7 +287,7 @@ static int data_dirs(char dirs[][MAX_PATH], int max)
     char home[MAX_PATH] = "", buf[4096], *p, *next;
     int n = 0;
 
-    env_a("HOME", home, sizeof(home));
+    home_unix(home, sizeof(home));
     if (env_a("XDG_DATA_HOME", dirs[n], MAX_PATH)) n++;
     else if (home[0] && _snprintf(dirs[n], MAX_PATH, "%s/.local/share", home) > 0) n++;
     if (home[0] && n < max && _snprintf(dirs[n], MAX_PATH, "%s/.local/share/flatpak/exports/share", home) > 0) n++;
@@ -695,6 +714,8 @@ static void unregister_gone(WCHAR (*made)[128], int nmade)
     }
 }
 
+static void sync_default_browser(void);
+
 static int sync_apps(void)
 {
     WCHAR programs[MAX_PATH], common[MAX_PATH], folder[MAX_PATH], icons[MAX_PATH], self[MAX_PATH], pattern[MAX_PATH];
@@ -757,7 +778,189 @@ static int sync_apps(void)
     if (!nmade) RemoveDirectoryW(folder);
     free(made);
     SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, folder, NULL);
+    sync_default_browser();
     return 0;
+}
+
+/* ---- the default browser, both sides ------------------------------------ */
+
+/* David 2026-10-03: Linux Firefox chosen at installation was not the default
+ * browser in Settings > Default apps, and Firefox's own "make default"
+ * (xdg-settings, the user's mimeapps.list) did not reach it either. At each
+ * sync, and whenever the user's mimeapps.list changes:
+ *  - a default browser newly chosen on the Linux side that is one of these
+ *    Linux apps becomes the Windows side's too;
+ *  - with no default chosen and one browser installed (Windows or Linux),
+ *    that browser is the default, on both sides.
+ * The Linux side's last seen choice is kept (HKCU\Software\Stained Glass\
+ * Default browser, LinuxSeen); the first time it is only noted, so an
+ * earlier choice made in Settings is not undone. */
+#define DEFBROWSER_KEY L"Software\\Stained Glass\\Default browser"
+
+static BOOL progid_opens(const WCHAR *progid)
+{
+    WCHAR sub[300];
+    HKEY k;
+    _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\shell\\open\\command", progid);
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_READ, &k)) { RegCloseKey(k); return TRUE; }
+    _snwprintf(sub, ARRAYSIZE(sub), L"%ls\\shell\\open\\command", progid);
+    if (!RegOpenKeyExW(HKEY_CLASSES_ROOT, sub, 0, KEY_READ, &k)) { RegCloseKey(k); return TRUE; }
+    return FALSE;
+}
+
+/* the installed browsers' ProgIDs (Software\Clients\StartMenuInternet, HKCU and HKLM) */
+static int installed_browsers(WCHAR (*out)[128], int max)
+{
+    HKEY roots[2] = { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE }, key;
+    WCHAR name[200], assoc[300], progid[128];
+    DWORD i, n, cb;
+    int r, c = 0, j;
+    for (r = 0; r < 2; r++) {
+        if (RegOpenKeyExW(roots[r], L"Software\\Clients\\StartMenuInternet", 0, KEY_READ, &key)) continue;
+        for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(key, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+            BOOL dup = FALSE;
+            if (!_wcsicmp(name, L"IEXPLORE.EXE")) continue;     /* Wine's own, as sg-browser counts them */
+            cb = sizeof(progid);
+            _snwprintf(assoc, ARRAYSIZE(assoc), L"%ls\\Capabilities\\URLAssociations", name);
+            if (RegGetValueW(key, assoc, L"http", RRF_RT_REG_SZ, NULL, progid, &cb) || !progid[0] || !progid_opens(progid)) continue;
+            for (j = 0; j < c; j++) dup |= !lstrcmpiW(out[j], progid);
+            if (!dup && c < max) lstrcpynW(out[c++], progid, 128);
+        }
+        RegCloseKey(key);
+    }
+    return c;
+}
+
+/* the user's default browser on the Linux side: mimeapps.list's x-scheme-handler/http */
+static BOOL linux_default_browser(WCHAR *desk, int cch)
+{
+    char cfg[MAX_PATH] = "", path[MAX_PATH], *buf, *l, *e;
+    WCHAR w[MAX_PATH];
+    BOOL in_defaults = FALSE, found = FALSE;
+    desk[0] = 0;
+    if (!env_a("XDG_CONFIG_HOME", cfg, sizeof(cfg)) || !cfg[0]) {
+        char home[MAX_PATH] = "";
+        if (!home_unix(home, sizeof(home)) || !home[0]) return FALSE;
+        _snprintf(cfg, sizeof(cfg), "%s/.config", home);
+    }
+    if (_snprintf(path, sizeof(path), "%s/mimeapps.list", cfg) < 0 || !dos_path(path, w, MAX_PATH)) return FALSE;
+    if (!(buf = read_file(w, 1 << 20, NULL))) return FALSE;
+    for (l = buf; l && *l && !found; l = e ? e + 1 : NULL) {
+        if ((e = strchr(l, '\n'))) *e = 0;
+        if (l[0] == '[') { in_defaults = !strncmp(l, "[Default Applications]", 22); continue; }
+        if (in_defaults && !strncmp(l, "x-scheme-handler/http=", 22)) {
+            char *v = l + 22, *semi = strchr(v, ';');
+            if (semi) *semi = 0;
+            while (*v == ' ') v++;
+            if (*v) { MultiByteToWideChar(CP_UTF8, 0, v, -1, desk, cch); desk[cch - 1] = 0; found = TRUE; }
+        }
+    }
+    free(buf);
+    return found;
+}
+
+static void copy_tree(HKEY from, HKEY to)
+{
+    DWORD i, n, cb, type;
+    WCHAR name[256];
+    BYTE data[4096];
+    for (i = 0; n = ARRAYSIZE(name), cb = sizeof(data), !RegEnumValueW(from, i, name, &n, NULL, &type, data, &cb); i++)
+        RegSetValueExW(to, name, 0, type, data, cb);
+    for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(from, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+        HKEY a, b;
+        if (RegOpenKeyExW(from, name, 0, KEY_READ, &a)) continue;
+        if (!RegCreateKeyExW(to, name, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &b, NULL)) { copy_tree(a, b); RegCloseKey(b); }
+        RegCloseKey(a);
+    }
+}
+
+/* the browser for the Windows side, as Settings > Default apps makes it
+ * (set_apps.c's set_default): .htm/.html, http and https, UserChoice */
+static void set_windows_browser(const WCHAR *progid)
+{
+    static const WCHAR *const exts[] = { L".htm", L".html" }, *const protos[] = { L"http", L"https" };
+    WCHAR sub[300];
+    HKEY from, to;
+    int i;
+    for (i = 0; i < 2; i++) {
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", exts[i]);
+        set_sz(HKEY_CURRENT_USER, sub, NULL, progid);
+    }
+    for (i = 0; i < 2; i++) {
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", protos[i]);
+        RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", progid);
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_READ, &from) && RegOpenKeyExW(HKEY_CLASSES_ROOT, progid, 0, KEY_READ, &from))
+            continue;
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls", protos[i]);
+        if (!RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &to, NULL)) {
+            copy_tree(from, to);
+            RegSetValueExW(to, L"URL Protocol", 0, REG_SZ, (const BYTE *)L"", sizeof(WCHAR));
+            RegCloseKey(to);
+        }
+        RegCloseKey(from);
+    }
+    set_sz(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice", L"ProgId", progid);
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
+}
+
+/* the Linux side's, for a Linux app (xdg-mime, as Settings does) */
+static void set_linux_browser(const WCHAR *desk)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait) =
+        (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    char d[160], tool[] = "/usr/bin/xdg-mime", verb[] = "default", m1[] = "x-scheme-handler/http",
+         m2[] = "x-scheme-handler/https", m3[] = "text/html", *argv[] = { tool, verb, d, m1, m2, m3, NULL };
+    char cfg[MAX_PATH] = "", home[MAX_PATH] = "";
+    WCHAR wcfg[MAX_PATH];
+    if (!spawnvp) return;
+    /* xdg-mime loses the first type when the folder is not there yet */
+    if ((env_a("XDG_CONFIG_HOME", cfg, sizeof(cfg)) && cfg[0]) ||
+        (home_unix(home, sizeof(home)) && home[0] && _snprintf(cfg, sizeof(cfg), "%s/.config", home) > 0))
+        if (dos_path(cfg, wcfg, MAX_PATH)) CreateDirectoryW(wcfg, NULL);
+    WideCharToMultiByte(CP_UTF8, 0, desk, -1, d, sizeof(d), NULL, NULL);
+    spawnvp(argv, TRUE);
+}
+
+static void sync_default_browser(void)
+{
+    WCHAR win[128] = L"", desk[160], seen[160] = L"", lprogid[200] = L"", browsers[16][128];
+    DWORD cb = sizeof(win);
+    BOOL have_seen, have_linux, linux_app = FALSE;
+    int n;
+
+#ifdef SG_MUTANT_NO_DEFAULT_BROWSER_SYNC
+    return;
+#endif
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice",
+                     L"ProgId", RRF_RT_REG_SZ, NULL, win, &cb) || !progid_opens(win)
+        || !lstrcmpiW(win, L"http"))    /* Wine's default: the protocol itself, no browser chosen */
+        win[0] = 0;
+    cb = sizeof(seen);
+    have_seen = !RegGetValueW(HKEY_CURRENT_USER, DEFBROWSER_KEY, L"LinuxSeen", RRF_RT_REG_SZ, NULL, seen, &cb);
+    have_linux = linux_default_browser(desk, ARRAYSIZE(desk));
+    if (have_linux) {
+        WCHAR id[160], *dot;
+        lstrcpynW(id, desk, ARRAYSIZE(id));
+        if ((dot = wcsstr(id, L".desktop")) && !dot[8]) *dot = 0;
+        _snwprintf(lprogid, ARRAYSIZE(lprogid), PROGID_PREFIX L"%ls", id);
+        linux_app = progid_opens(lprogid);
+    }
+    if (have_linux && linux_app && lstrcmpiW(win, lprogid) && ((have_seen && lstrcmpiW(desk, seen)) || !win[0])) {
+        /* chosen on the Linux side (Firefox's "make default", xdg-settings) */
+        set_windows_browser(lprogid);
+    } else if (!win[0] && (n = installed_browsers(browsers, 16)) == 1) {
+        /* one browser: the default, both sides */
+        set_windows_browser(browsers[0]);
+        if (!_wcsnicmp(browsers[0], PROGID_PREFIX, lstrlenW(PROGID_PREFIX))) {
+            WCHAR d[160];
+            _snwprintf(d, ARRAYSIZE(d), L"%ls.desktop", browsers[0] + lstrlenW(PROGID_PREFIX));
+            set_linux_browser(d);
+        }
+        linux_default_browser(desk, ARRAYSIZE(desk));
+        have_linux = desk[0] != 0;
+    }
+    set_sz(HKEY_CURRENT_USER, DEFBROWSER_KEY, L"LinuxSeen", have_linux ? desk : L"");
 }
 
 /* ---- starting an app --------------------------------------------------- */
@@ -828,6 +1031,10 @@ static int watch_apps(void)
         int nd = data_dirs(dirs, 16), nev = 0, i;
         DWORD r;
 
+        int cfg_ev = -1;
+        char cfg[MAX_PATH] = "", home[MAX_PATH] = "";
+        WCHAR wcfg[MAX_PATH];
+
         sync_apps();
         for (i = 0; i < nd; i++) {
             char dir[MAX_PATH];
@@ -837,8 +1044,22 @@ static int watch_apps(void)
             e = FindFirstChangeNotificationW(w, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE);
             if (e != INVALID_HANDLE_VALUE) ev[nev++] = e;
         }
+        /* the user's config folder, where mimeapps.list is: the default browser only */
+        if ((env_a("XDG_CONFIG_HOME", cfg, sizeof(cfg)) && cfg[0]) ||
+            (home_unix(home, sizeof(home)) && home[0] && _snprintf(cfg, sizeof(cfg), "%s/.config", home) > 0)) {
+            HANDLE e;
+            if (nev < 16 && dos_path(cfg, wcfg, MAX_PATH) &&
+                (e = FindFirstChangeNotificationW(wcfg, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE)) != INVALID_HANDLE_VALUE)
+                { cfg_ev = nev; ev[nev++] = e; }
+        }
         /* a change, or every ten minutes (a folder made since: Flatpak's first app) */
-        r = nev ? WaitForMultipleObjects(nev, ev, FALSE, 600000) : (Sleep(600000), WAIT_TIMEOUT);
+        for (;;) {
+            r = nev ? WaitForMultipleObjects(nev, ev, FALSE, 600000) : (Sleep(600000), WAIT_TIMEOUT);
+            if (cfg_ev < 0 || r != WAIT_OBJECT_0 + (DWORD)cfg_ev) break;
+            Sleep(500);
+            sync_default_browser();
+            FindNextChangeNotification(ev[cfg_ev]);
+        }
         for (i = 0; i < nev; i++) FindCloseChangeNotification(ev[i]);
         if (r != WAIT_TIMEOUT) Sleep(2000);   /* a package puts in several files: once, after */
     }
