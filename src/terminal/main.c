@@ -51,6 +51,7 @@
 #include <limits.h>
 #include "vt.h"
 #include "wtsettings.h"
+#include "../sg-envreload.h"
 
 #define MAX_TABS 32
 #define MAX_PANES 64
@@ -2390,6 +2391,10 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_CREATE: return 0;
+    case WM_SETTINGCHANGE:
+        /* a new tab gets environment variables changed since (PATH) */
+        if (sg_env_changed(msg, lp)) sg_env_reload();
+        break;
     case WM_SIZE:
         layout_tabs();
         layout_panes();

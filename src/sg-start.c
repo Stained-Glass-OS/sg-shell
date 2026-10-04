@@ -37,6 +37,7 @@
 #include <wctype.h>
 #include "sg-mode.h"
 #include "sg-round.h"
+#include "sg-envreload.h"
 
 #define SG_START_TOGGLE (WM_USER + 10)
 
@@ -3337,6 +3338,8 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SETTINGCHANGE:
         /* the taskbar moved (Settings > Taskbar) */
         if (lp && !lstrcmpW((const WCHAR *)lp, L"TraySettings")) g_bar_known = FALSE;
+        /* what Start starts gets environment variables changed since (PATH) */
+        if (sg_env_changed(msg, lp)) sg_env_reload();
         break;
     case WM_DISPLAYCHANGE:
         g_bar_known = FALSE;
