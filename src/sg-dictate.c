@@ -261,6 +261,74 @@ static void add_key(INPUT *in, int *n, WORD vk, WORD scan, DWORD flags)
     (*n)++;
 }
 
+/* ---- Linux programs (David 2026-10-03: "voice typing doesn't make it into
+ * the Linux side, like Firefox for Linux") -------------------------------
+ * A Linux program's window is in a Wine frame (SgLinuxWindow, explorer's)
+ * but is an X client with the X focus of its own: SendInput reaches the
+ * frame, never the program. Its text goes to xdotool instead, which types
+ * into the X window that has the focus -- any character, mapping a spare key
+ * for those the keyboard has not. SG_XDOTOOL: the gate's stand-in. */
+static BOOL linux_in_front(HWND fg)
+{
+    WCHAR cls[32] = L"";
+#ifdef SG_MUTANT_LINUX_BY_SENDINPUT
+    return FALSE;
+#endif
+    return fg && GetClassNameW(fg, cls, ARRAYSIZE(cls)) && !lstrcmpW(cls, L"SgLinuxWindow");
+}
+
+/* append ARG quoted as CommandLineToArgvW reads it back */
+static void append_arg(WCHAR *cmd, size_t cap, const WCHAR *a)
+{
+    WCHAR *o = cmd + wcslen(cmd), *end = cmd + cap - 4;
+    if (o != cmd) *o++ = ' ';   /* the program's name first, with nothing before it */
+    *o++ = '"';
+    while (*a && o < end)
+    {
+        int bs = 0;
+        while (*a == '\\') { bs++; a++; }
+        if (!*a) { while (bs-- && o < end) { *o++ = '\\'; *o++ = '\\'; } break; }
+        if (*a == '"') { while (bs-- && o < end) { *o++ = '\\'; *o++ = '\\'; } *o++ = '\\'; *o++ = '"'; a++; }
+        else { while (bs-- && o < end) *o++ = '\\'; *o++ = *a++; }
+    }
+    *o++ = '"'; *o = 0;
+}
+
+/* xdotool ARGS... (the last one may be long text) */
+static BOOL run_xdotool(const WCHAR *const *args, int n)
+{
+    WCHAR tool[MAX_PATH] = L"Z:\\usr\\bin\\xdotool", *cmd;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    size_t cap = 64 + MAX_PATH;
+    int i;
+    BOOL ok;
+    GetEnvironmentVariableW(L"SG_XDOTOOL", tool, MAX_PATH);
+    for (i = 0; i < n; i++) cap += wcslen(args[i]) * 2 + 4;
+    if (!(cmd = calloc(cap, sizeof(WCHAR)))) return FALSE;
+    cmd[0] = 0;
+    append_arg(cmd, cap, tool);
+    for (i = 0; i < n; i++) append_arg(cmd, cap, args[i]);
+    ok = CreateProcessW(tool, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+    if (ok)
+    {
+        /* a Linux program's handle is signalled at once: give it the time
+         * its typing takes, so the next text comes after this one */
+        WaitForSingleObject(pi.hProcess, 5000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    else report("sg-dictate: xdotool did not start (%lu)\n", GetLastError());
+    free(cmd);
+    return ok;
+}
+
+static void type_text_linux(const WCHAR *text)
+{
+    const WCHAR *args[] = { L"type", L"--clearmodifiers", L"--delay", L"6", L"--", text };
+    run_xdotool(args, ARRAYSIZE(args));
+}
+
 static void type_text(const WCHAR *text)
 {
     size_t len = wcslen(text), i;
@@ -592,11 +660,16 @@ static void insert_now(WCHAR *text)
      * and any key pressed meanwhile went into the middle of it */
     BOOL paste = g_set.paste || wcslen(text) > 200;
     if (fg) GetClassNameW(fg, cls, 64);
-    if (paste) paste_text(text); else type_text(text);
+    if (linux_in_front(fg))
+    {
+        type_text_linux(text);
+        paste = FALSE;
+    }
+    else if (paste) paste_text(text); else type_text(text);
     g_last_len = (int)wcslen(text);
     g_last_target = fg;
     report("sg-dictate: inserted %d characters into %ls by %s\n", (int)wcslen(text), cls,
-           paste ? "paste" : "typing");
+           linux_in_front(fg) ? "xdotool" : paste ? "paste" : "typing");
     free(text);
 }
 
@@ -784,6 +857,17 @@ static void spoken_command(const char *what)
             report("sg-dictate: nothing to delete\n");
             return;
         }
+        if (linux_in_front(fg))
+        {
+            WCHAR count[16];
+            const WCHAR *args[] = { L"key", L"--clearmodifiers", L"--repeat", count, L"BackSpace" };
+            swprintf(count, 16, L"%d", g_last_len);
+            run_xdotool(args, ARRAYSIZE(args));
+            report("sg-dictate: deleted %d characters\n", g_last_len);
+            g_last_len = 0;
+            dump();
+            return;
+        }
         if (!(in = calloc(g_last_len * 2, sizeof(INPUT)))) return;
         for (i = 0; i < g_last_len; i++)
         {
@@ -794,6 +878,13 @@ static void spoken_command(const char *what)
         free(in);
         report("sg-dictate: deleted %d characters\n", g_last_len);
         g_last_len = 0;
+    }
+    else if (!strcmp(what, "undo") && linux_in_front(fg))
+    {
+        const WCHAR *args[] = { L"key", L"--clearmodifiers", L"ctrl+z" };
+        run_xdotool(args, ARRAYSIZE(args));
+        g_last_len = 0;
+        report("sg-dictate: undo\n");
     }
     else if (!strcmp(what, "undo"))
     {

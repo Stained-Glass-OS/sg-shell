@@ -308,6 +308,7 @@ test: build
 	@sh test/admind-check.sh
 	@sh test/store-catalog-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/updates-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/dictate-linux-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/timezone-auto-test.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh

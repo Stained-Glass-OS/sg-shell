@@ -1,3 +1,15 @@
+sg-shell (0.1.0-105) unstable; urgency=medium
+
+  * Voice typing reaches Linux programs (David 2026-10-03: "doesn't make it
+    into the Linux side, like Firefox for Linux"): with a Linux program's
+    frame in front (SgLinuxWindow), sg-dictate hands the words to xdotool,
+    which types into the X window that has the focus; "delete that" and
+    "undo that" go the same way. SendInput reached only the frame.
+    Depends: xdotool. Gate test/dictate-linux-check.sh (mutant
+    SG_MUTANT_LINUX_BY_SENDINPUT).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 02:40:00 +0000
+
 sg-shell (0.1.0-104) unstable; urgency=medium
 
   * Task Manager: right-click a column header to choose the columns (David
