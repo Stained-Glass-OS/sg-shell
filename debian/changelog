@@ -17,6 +17,17 @@ sg-shell (0.1.0-107) unstable; urgency=medium
     not take over, a Linux-side choice followed (also under --watch), an
     earlier choice kept (mutants SG_MUTANT_NO_DEFAULT_BROWSER_SYNC,
     SG_MUTANT_HOME_ENV_ONLY).
+  * What the power button and closing the lid do (David 2026-10-03: power
+    settings in Control Panel "for things like a laptop lid close"). Settings
+    > Power & sleep has Power buttons and lid -- the power button, and on a
+    laptop the lid on battery and plugged in: Do nothing, Sleep, Hibernate or
+    Shut down. They are systemd-logind's, for the whole machine: sg-admind's
+    new power-buttons op (as an administrator) writes
+    /etc/systemd/logind.conf.d/60-stained-glass-power.conf and logind reads
+    it again at once (SIGHUP; QA VM). Control Panel's Hardware and Sound
+    lists Power Options (choose what the power buttons do, what closing the
+    lid does, when the computer sleeps). Gates power-buttons-check (mutant
+    SG_MUTANT_NO_POWER_BUTTONS) and admind-check.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 05:20:00 +0000
 

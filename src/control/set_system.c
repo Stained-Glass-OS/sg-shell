@@ -465,7 +465,59 @@ BOOL set_cmd_notify(int id, int code, HWND ctl)
 }
 
 /* ---- Power & sleep --------------------------------------------------------------------------- */
-enum { CMD_SCREEN = CMD_PAGE_FIRST + 1, CMD_SLEEP, CMD_POWEROPTS };
+enum { CMD_SCREEN = CMD_PAGE_FIRST + 1, CMD_SLEEP, CMD_POWEROPTS, CMD_LID, CMD_LID_AC, CMD_POWERKEY };
+
+/* What the power button and closing the lid do (David 2026-10-03): systemd-
+ * logind's settings, for the whole machine, kept in our own drop-in (sg-admind
+ * power-buttons, as an administrator). Unset, logind's own defaults: the lid
+ * sleeps, plugged in as on battery; the power button shuts down. */
+static const WCHAR *const PB_ACTION[] = { L"ignore", L"suspend", L"hibernate", L"poweroff" };
+static const WCHAR *const PB_LABEL[] = { L"Do nothing", L"Sleep", L"Hibernate", L"Shut down" };
+static int g_pb[3];     /* lid on battery, lid plugged in, power button: PB_ACTION indexes */
+
+static int pb_index(const char *v)
+{
+    int i;
+    for (i = 0; i < (int)ARRAYSIZE(PB_ACTION); i++) {
+        char a[16];
+        WideCharToMultiByte(CP_UTF8, 0, PB_ACTION[i], -1, a, sizeof(a), NULL, NULL);
+        if (!strcmp(v, a)) return i;
+    }
+    return -1;
+}
+
+static void pb_load(void)
+{
+    WCHAR path[MAX_PATH] = L"Z:\\etc\\systemd\\logind.conf.d\\60-stained-glass-power.conf";
+    char buf[1024], *l, *e;
+    DWORD n = 0;
+    HANDLE h;
+    BOOL ac_set = FALSE;
+    g_pb[0] = 1; g_pb[1] = -1; g_pb[2] = 3;
+    GetEnvironmentVariableW(L"SG_LOGIND_DROPIN", path, MAX_PATH);
+    h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE) { if (!ReadFile(h, buf, sizeof(buf) - 1, &n, NULL)) n = 0; CloseHandle(h); }
+    buf[n] = 0;
+    for (l = buf; l && *l; l = e ? e + 1 : NULL) {
+        int i;
+        if ((e = strchr(l, '\n'))) *e = 0;
+        if (e && e > l && e[-1] == '\r') e[-1] = 0;
+        if (!strncmp(l, "HandleLidSwitch=", 16) && (i = pb_index(l + 16)) >= 0) g_pb[0] = i;
+        else if (!strncmp(l, "HandleLidSwitchExternalPower=", 29) && (i = pb_index(l + 29)) >= 0) { g_pb[1] = i; ac_set = TRUE; }
+        else if (!strncmp(l, "HandlePowerKey=", 15) && (i = pb_index(l + 15)) >= 0) g_pb[2] = i;
+    }
+    if (!ac_set) g_pb[1] = g_pb[0];
+}
+
+/* a laptop: a battery, or a lid (the rows for the lid only then) */
+static BOOL has_lid(void)
+{
+    SYSTEM_POWER_STATUS ps;
+    WCHAR v[8];
+    if (GetEnvironmentVariableW(L"SG_POWER_LID", v, ARRAYSIZE(v))) return v[0] == L'1';
+    if (GetFileAttributesW(L"Z:\\proc\\acpi\\button\\lid") != INVALID_FILE_ATTRIBUTES) return TRUE;
+    return GetSystemPowerStatus(&ps) && !(ps.BatteryFlag & 128) && ps.BatteryFlag != 255;
+}
 static const int MINUTES[] = { 1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60, 120, 180, 240, 300, 0 };
 
 static int minutes_index(int m)
@@ -507,16 +559,35 @@ void set_build_power(void)
     if (!avail)
         y = st_para(y, ok ? L"These take effect in a Stained Glass session: they are saved, and applied the next time you sign in."
                           : L"Power settings are not available right now.");
+#ifndef SG_MUTANT_NO_POWER_BUTTONS
+    y = st_head(y, L"Power buttons and lid");
+#endif
+    pb_load();
+    st_combo(&y, L"When I press the power button", PB_LABEL, ARRAYSIZE(PB_LABEL), g_pb[2], CMD_POWERKEY);
+    if (has_lid()) {
+        st_combo(&y, L"When I close the lid, on battery", PB_LABEL, ARRAYSIZE(PB_LABEL), g_pb[0], CMD_LID);
+        st_combo(&y, L"When I close the lid, plugged in", PB_LABEL, ARRAYSIZE(PB_LABEL), g_pb[1], CMD_LID_AC);
+    }
+    y = st_para(y, L"These are for everyone who uses this PC, so changing them needs an administrator.");
     y = st_head(y, L"Save energy and battery life");
     y = st_para(y, L"Set shorter times above to save energy. The screen turns off first; the PC sleeps later.");
 }
 
 BOOL set_cmd_power(int id, int code, HWND ctl)
 {
-    WCHAR args[64], err[256];
+    WCHAR args[128], err[256];
     BOOL ok;
     int i;
-    if ((id != CMD_SCREEN && id != CMD_SLEEP) || code != CBN_SELCHANGE) return id == CMD_POWEROPTS;
+    if ((id == CMD_LID || id == CMD_LID_AC || id == CMD_POWERKEY) && code == CBN_SELCHANGE) {
+        int v[3] = { g_pb[0], g_pb[1], g_pb[2] };
+        i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+        if (i < 0 || i >= (int)ARRAYSIZE(PB_ACTION)) return TRUE;
+        v[id == CMD_LID ? 0 : id == CMD_LID_AC ? 1 : 2] = i;
+        _snwprintf(args, ARRAYSIZE(args), L"/admin power-buttons %ls %ls %ls", PB_ACTION[v[0]], PB_ACTION[v[1]], PB_ACTION[v[2]]);
+        if (run_elevated(args)) refresh_when_back(); else refresh_page();
+        return TRUE;
+    }
+    if ((id != CMD_SCREEN && id != CMD_SLEEP) || code != CBN_SELCHANGE) return id == CMD_POWEROPTS || id == CMD_LID || id == CMD_LID_AC || id == CMD_POWERKEY;
     i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
     if (i < 0 || i >= (int)ARRAYSIZE(MINUTES)) return TRUE;
     _snwprintf(args, ARRAYSIZE(args), L"power %ls %d", id == CMD_SCREEN ? L"--screen" : L"--sleep", MINUTES[i]);

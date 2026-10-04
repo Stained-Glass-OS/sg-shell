@@ -902,6 +902,10 @@ int admin_main(int argc, WCHAR **argv)
         const WCHAR *req[] = { L"defender", argv[1] };
         return do_one(L"Virus & threat protection", req, 2);
     }
+    if (!lstrcmpW(argv[0], L"power-buttons") && argc > 3) {
+        const WCHAR *req[] = { L"power-buttons", argv[1], argv[2], argv[3] };
+        return do_one(L"Power buttons and lid", req, 4);
+    }
     if (!lstrcmpW(argv[0], L"ntp") && argc > 1) {
         const WCHAR *req[] = { L"ntp", argv[1] };
         return do_one(L"Set time automatically", req, 2);

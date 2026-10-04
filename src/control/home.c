@@ -9,7 +9,7 @@
 
 /* commands the navigation pages share */
 enum {
-    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A,
+    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A, CMD_POWER,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -45,6 +45,11 @@ static const struct applet DATETIME_A = { L"Date and Time", IC_DATETIME, NAV(PG_
     { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } } };
 static const struct applet SPEECH_A = { L"Speech Recognition", IC_SPEECH, NAV(PG_SPEECH), L"speech voice typing dictation microphone dictate talk",
     { { L"Set up voice typing", NAV(PG_SPEECH) }, { L"Set up a microphone", NAV(PG_SPEECH) } } };
+/* Power Options: the power button, the lid, sleep -- Settings > Power & sleep (David 2026-10-03) */
+static const struct applet POWER_A = { L"Power Options", IC_SYSTEM, CMD_POWER,
+    L"power options lid close laptop power button sleep hibernate shut down battery powercfg",
+    { { L"Choose what the power buttons do", CMD_POWER }, { L"Choose what closing the lid does", CMD_POWER },
+      { L"Change when the computer sleeps", CMD_POWER } } };
 static const struct applet ADMIN_A = { L"Administrative Tools", IC_ADMINTOOLS, NAV(PG_ADMINTOOLS),
     L"administrative tools services event viewer device manager disk management computer management msinfo resource monitor cleanup",
     { { L"View event logs", NAV(PG_ADMINTOOLS) }, { L"Free up disk space", NAV(PG_ADMINTOOLS) } } };
@@ -54,7 +59,7 @@ static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, 
 
 static const struct applet *const ALL[] = {
     &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[4]; };
@@ -67,7 +72,7 @@ static const struct category CATS[] = {
       { &NETCENTER_A, &INET_A } },
     { PG_CAT_HW, IC_HW, L"Hardware and Sound",
       { { L"Set up game controllers", CMD_JOY }, { L"Adjust screen resolution", CMD_DESK } },
-      { &DISPLAY_A, &GAME_A, &SPEECH_A } },
+      { &DISPLAY_A, &GAME_A, &SPEECH_A, &POWER_A } },
     { PG_CAT_PROG, IC_PROG, L"Programs",
       { { L"Uninstall a program", NAV(PG_PROGRAMS) } },
       { &PROGRAMS_A } },
@@ -216,6 +221,7 @@ BOOL cmd_home(int id, int code, HWND ctl)
     case CMD_INET: cpl_open_file(L"inetcpl.cpl", NULL); return TRUE;
     case CMD_JOY: cpl_open_file(L"joy.cpl", NULL); return TRUE;
     case CMD_DESK: cpl_open_file(L"desk.cpl", NULL); return TRUE;
+    case CMD_POWER: ShellExecuteW(g_main, NULL, L"ms-settings:powersleep", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_NCPA: if (!open_network_connections()) navigate(PG_NETWORK); return TRUE;
     case CMD_FONTS: open_fonts_folder(); return TRUE;
     case CMD_RENAME: if (run_elevated(L"/admin rename")) refresh_when_back(); return TRUE;

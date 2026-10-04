@@ -391,6 +391,32 @@ def op_timezone_auto(args):
     return []
 
 
+LOGIND_DROPIN = os.environ.get("SG_ADMIN_LOGIND_DROPIN", "/etc/systemd/logind.conf.d/60-stained-glass-power.conf")
+POWER_ACTIONS = ("ignore", "lock", "suspend", "hibernate", "poweroff")
+
+
+def op_power_buttons(args):
+    """What the power button and closing the lid do (Settings > Power & sleep,
+    Control Panel's Power Options; David 2026-10-03): systemd-logind's, for
+    the whole machine -- the lid on battery, the lid plugged in, the power
+    button -- as a drop-in of our own, which logind reads again at once."""
+    lid, lid_ac, power = args
+    for v in (lid, lid_ac, power):
+        if v not in POWER_ACTIONS:
+            raise Refused("A power action is one of: " + ", ".join(POWER_ACTIONS) + ".")
+    os.makedirs(os.path.dirname(LOGIND_DROPIN), exist_ok=True)
+    body = ("# Stained Glass OS: Settings > Power & sleep (sg-admind power-buttons).\n"
+            "[Login]\nHandleLidSwitch=%s\nHandleLidSwitchExternalPower=%s\nHandlePowerKey=%s\n" % (lid, lid_ac, power))
+    tmp = LOGIND_DROPIN + ".new"
+    with open(tmp, "w") as f:
+        f.write(body)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, LOGIND_DROPIN)
+    if not TEST:
+        subprocess.run(["systemctl", "kill", "-s", "HUP", "systemd-logind"], check=False)
+    return []
+
+
 DEFENDER_CONF = os.environ.get("SG_ADMIN_DEFENDER_CONF", "/etc/stained-glass/defender.conf")
 
 
@@ -1208,6 +1234,7 @@ OPS = {
     "timezone-auto": (op_timezone_auto, 1),
     "ntp": (op_ntp, 1),
     "defender": (op_defender, 1),
+    "power-buttons": (op_power_buttons, 3),
     "defender-restore": (op_defender_restore, 1),
     "defender-delete": (op_defender_delete, 1),
     "time": (op_time, 1),

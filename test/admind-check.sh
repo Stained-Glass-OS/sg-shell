@@ -68,7 +68,7 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def"
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -145,6 +145,14 @@ grep -q '^timedatectl set-timezone America/Denver ' "$CALLS" && pass "sets the t
 [ "$(cat "$T/tz-auto" 2>/dev/null)" = off ] && pass "...and a zone chosen by hand turns 'automatically' off" || fail "tz-auto after a zone: $(cat "$T/tz-auto" 2>/dev/null)"
 r=$(ask timezone-auto on)
 [ "$(first "$r")" = OK ] && [ "$(cat "$T/tz-auto")" = on ] && pass "turns 'Set time zone automatically' on" || fail "timezone-auto on: $r"
+# what the power button and the lid do (Power & sleep): logind's, a drop-in of our own
+r=$(ask power-buttons ignore suspend hibernate)
+[ "$(first "$r")" = OK ] && grep -qx 'HandleLidSwitch=ignore' "$T/logind.d/60-sg-power.conf" \
+    && grep -qx 'HandleLidSwitchExternalPower=suspend' "$T/logind.d/60-sg-power.conf" && grep -qx 'HandlePowerKey=hibernate' "$T/logind.d/60-sg-power.conf" \
+    && grep -qx '\[Login\]' "$T/logind.d/60-sg-power.conf" && pass "sets what the lid (on battery, plugged in) and the power button do" || fail "power-buttons: $r $(cat "$T/logind.d/60-sg-power.conf" 2>&1)"
+r=$(ask power-buttons ignore suspend 'poweroff
+HandleSuspendKey=ignore')
+case "$(first "$r")" in "FAILED "*) pass "...only the actions logind knows (no lines slipped in)" ;; *) fail "accepted a made-up action: $r" ;; esac
 r=$(ask defender off)
 [ "$(first "$r")" = OK ] && grep -qx "enabled=0" "$T/defender.conf" && pass "turns SG Defender off" || fail "defender off: $r"
 r=$(ask defender on)
