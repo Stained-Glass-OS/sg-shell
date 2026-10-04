@@ -25,6 +25,17 @@ sg-shell (0.1.0-105) unstable; urgency=medium
     without LXTerminal) never applied: -class renamed xterm's resource class
     and every "XTerm*" setting matched nothing. They name no class now;
     test/xterm-copypaste-check.sh runs xterm with the launcher's own -class.
+  * Terminal is the default terminal (David 2026-10-03: "All the terminal
+    apps should support Tabs. Including the Linux and Windows terminal."):
+    PowerShell, cmd or any console program started from the Start menu, a
+    shortcut or Explorer opens as a Terminal tab, with tabs and panes,
+    instead of a console window. wine-sg 0787 hands sg-terminal the new
+    console (--sg-handoff); it runs a headless conhost on it, follows the
+    tab's size (the signal pipe), and closes the tab when the program ends;
+    the program keeps its exit code. 66-sg-terminal.reg says Terminal takes
+    handed consoles (SgConsoleHandoff = 1). Gate
+    test/terminal-handoff-check.sh (mutants SG_MUTANT_IGNORE_HANDOFF,
+    SG_MUTANT_NORESIZE).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 02:40:00 +0000
 

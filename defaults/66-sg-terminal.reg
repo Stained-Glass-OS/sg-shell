@@ -7,6 +7,12 @@ Windows Registry Editor Version 5.00
 ;
 ; The path is the package's install location reached through Z:. If Z: is ever
 ; removed from the prefix for isolation, this must move with it.
+;
+; SgConsoleHandoff: sg-terminal takes a new console handed to it (--sg-handoff,
+; wine-sg 0787) -- PowerShell or cmd from the Start menu or a shortcut opens as
+; a tab here, as Windows 11 opens it in Windows Terminal. Wine hands consoles
+; only to a terminal that says so.
 
 [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\wt.exe]
 @="Z:\\usr\\libexec\\stained-glass\\shell\\sg-terminal64.exe"
+"SgConsoleHandoff"=dword:00000001

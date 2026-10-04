@@ -316,6 +316,7 @@ test: build
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-check.sh
+	@sh test/terminal-handoff-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-panes-check.sh
 	@sh test/terminal-settings-check.sh
 	@sh test/clock-check.sh

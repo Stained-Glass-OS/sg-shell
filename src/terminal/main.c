@@ -13,7 +13,9 @@
  * (wtsettings.c), re-read when the file changes. A pane divider is dragged
  * with the mouse. wt.exe's command line: -p PROFILE, -d DIR, --title T, a command
  * line, and new-tab (nt), split-pane (sp; -H, -V, -s), move-focus (mf) and
- * focus-tab (ft -t) subcommands separated by ';'.
+ * focus-tab (ft -t) subcommands separated by ';'. It is also the default
+ * terminal: a console program started with a console of its own is handed
+ * to it (--sg-handoff, wine-sg 0787) and opens as a tab.
  *
  * Keys: Ctrl+Shift+T new tab, Ctrl+Shift+W close the pane (the tab with its
  * last pane), Ctrl+Tab/Ctrl+Shift+Tab, Ctrl+Alt+1..9 go to a tab,
@@ -208,6 +210,7 @@ struct pane {
     struct vt vt;
     HPCON pc;
     HANDLE in_w, out_r, process, reader;
+    HANDLE handoff, signal_w;       /* a console handed over by a program's start (--sg-handoff), its conhost's signal pipe */
     BOOL alive;
     DWORD exit_code;
     WCHAR title[160], cmd[1024], dir[MAX_PATH];
@@ -236,6 +239,8 @@ static int g_order[MAX_TABS], g_ntabs, g_active = -1, g_next_id = 1;
 
 static HWND g_wnd;
 static HINSTANCE g_inst;
+static HANDLE g_handoff;            /* --sg-handoff: the console server the next pane serves */
+static WCHAR g_handoff_title[160];
 static HFONT g_font, g_font_bold, g_ui_font, g_ui_small;
 static WCHAR g_face[LF_FACESIZE] = L"Consolas";
 static int g_font_pt = 12, g_dpi = 96, g_cw = 8, g_ch = 16, g_cols = 120, g_rows = 30, g_zoom;
@@ -365,6 +370,91 @@ static void layout_panes(void);
 static void write_dump(BOOL force);
 static void find_close(struct pane *p);
 
+/* The default terminal (wine-sg 0787): a console program started with a new
+ * console -- from the Start menu, a shortcut, Explorer -- is handed to us
+ * with its console's server handle instead of opening a console window.
+ * We run a headless conhost on it, as CreatePseudoConsole would, and the
+ * pane ends when conhost does, with the program. The signal pipe must be
+ * overlapped: conhost reads it asynchronously. */
+static BOOL spawn_handoff(struct pane *p)
+{
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+    HANDLE in_r = NULL, out_w = NULL, sig_r, list[4];
+    STARTUPINFOEXW si;
+    PROCESS_INFORMATION pi;
+    SIZE_T len = 0;
+    WCHAR cmd[MAX_PATH + 160], sys[MAX_PATH], name[80];
+    struct wait_arg *w;
+    BOOL ok;
+
+    _snwprintf(name, ARRAYSIZE(name), L"\\\\.\\pipe\\sg_terminal_signal_%lx_%x", GetCurrentProcessId(), p->id);
+    sig_r = CreateNamedPipeW(name, PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE, 1, 4096, 4096, 0, &sa);
+    if (sig_r == INVALID_HANDLE_VALUE) return FALSE;
+    p->signal_w = CreateFileW(name, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    if (p->signal_w == INVALID_HANDLE_VALUE) p->signal_w = NULL;
+    if (!p->signal_w || !CreatePipe(&in_r, &p->in_w, &sa, 0) || !CreatePipe(&p->out_r, &out_w, &sa, 0)) {
+        CloseHandle(sig_r);
+        return FALSE;
+    }
+    SetHandleInformation(p->in_w, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(p->out_r, HANDLE_FLAG_INHERIT, 0);
+    memset(&si, 0, sizeof(si));
+    si.StartupInfo.cb = sizeof(si);
+    si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    si.StartupInfo.hStdInput = in_r;
+    si.StartupInfo.hStdOutput = si.StartupInfo.hStdError = out_w;
+    list[0] = in_r; list[1] = out_w; list[2] = sig_r; list[3] = p->handoff;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &len);
+    si.lpAttributeList = HeapAlloc(GetProcessHeap(), 0, len);
+    InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &len);
+    UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, list, sizeof(list), NULL, NULL);
+    GetSystemDirectoryW(sys, MAX_PATH);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\conhost.exe\" --headless --width %d --height %d --signal 0x%lx --server 0x%lx",
+               sys, p->cols, p->rows, (unsigned long)(ULONG_PTR)sig_r, (unsigned long)(ULONG_PTR)p->handoff);
+    ok = CreateProcessW(NULL, cmd, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | DETACHED_PROCESS, NULL, NULL, &si.StartupInfo, &pi);
+    DeleteProcThreadAttributeList(si.lpAttributeList);
+    HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
+    CloseHandle(in_r); CloseHandle(out_w); CloseHandle(sig_r);
+    if (!ok) return FALSE;
+    CloseHandle(p->handoff); p->handoff = NULL;
+    CloseHandle(pi.hThread);
+    p->process = pi.hProcess;
+    p->alive = TRUE;
+    if (p->reader) CloseHandle(p->reader);
+    p->reader = CreateThread(NULL, 0, reader_thread, p, 0, NULL);
+    if ((w = malloc(sizeof(*w)))) {
+        w->id = p->id;
+        DuplicateHandle(GetCurrentProcess(), pi.hProcess, GetCurrentProcess(), &w->process, SYNCHRONIZE, FALSE, 0);
+        CloseHandle(CreateThread(NULL, 0, exit_watch, w, 0, NULL));
+    }
+    return TRUE;
+}
+
+/* A handoff we could not serve: the program still needs its console, so it
+ * gets conhost's own window rather than none. */
+static void handoff_fallback(struct pane *p)
+{
+    STARTUPINFOEXW si;
+    PROCESS_INFORMATION pi;
+    SIZE_T len = 0;
+    WCHAR cmd[MAX_PATH + 64], sys[MAX_PATH];
+    memset(&si, 0, sizeof(si));
+    si.StartupInfo.cb = sizeof(si);
+    si.StartupInfo.lpTitle = p->title;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &len);
+    si.lpAttributeList = HeapAlloc(GetProcessHeap(), 0, len);
+    InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &len);
+    UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, &p->handoff, sizeof(p->handoff), NULL, NULL);
+    GetSystemDirectoryW(sys, MAX_PATH);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\conhost.exe\" --server 0x%lx", sys, (unsigned long)(ULONG_PTR)p->handoff);
+    if (CreateProcessW(NULL, cmd, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | DETACHED_PROCESS, NULL, NULL, &si.StartupInfo, &pi)) {
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    }
+    DeleteProcThreadAttributeList(si.lpAttributeList);
+    HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
+    CloseHandle(p->handoff); p->handoff = NULL;
+}
+
 static BOOL spawn(struct pane *p)
 {
     HANDLE in_r = NULL, out_w = NULL;
@@ -376,6 +466,14 @@ static BOOL spawn(struct pane *p)
     HRESULT hr;
     struct wait_arg *w;
 
+    if (p->handoff) {
+        if (spawn_handoff(p)) return TRUE;
+        if (p->in_w) { CloseHandle(p->in_w); p->in_w = NULL; }
+        if (p->out_r) { CloseHandle(p->out_r); p->out_r = NULL; }
+        if (p->signal_w) { CloseHandle(p->signal_w); p->signal_w = NULL; }
+        handoff_fallback(p);
+        return FALSE;
+    }
     if (!CreatePipe(&in_r, &p->in_w, NULL, 0) || !CreatePipe(&p->out_r, &out_w, NULL, 0)) return FALSE;
     hr = CreatePseudoConsole(size, in_r, out_w, 0, &p->pc);
     CloseHandle(in_r); CloseHandle(out_w);
@@ -455,6 +553,10 @@ static int new_pane(int tab, int profile, const WCHAR *cmd, const WCHAR *dir)
     }
     else SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, p->dir);       /* Windows Terminal starts in %USERPROFILE% */
     lstrcpynW(p->title, g_profiles[profile].name, ARRAYSIZE(p->title));
+    if (g_handoff) {
+        p->handoff = g_handoff; g_handoff = NULL;
+        if (g_handoff_title[0]) lstrcpynW(p->title, g_handoff_title, ARRAYSIZE(p->title));
+    }
     p->view = CreateWindowExW(0, L"SgTerminalView", L"", WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN, 0, 0, 0, 0, g_wnd, NULL, g_inst, NULL);
     SetWindowLongPtrW(p->view, GWLP_USERDATA, slot + 1);
     return slot;
@@ -465,6 +567,8 @@ static void free_pane(struct pane *p)
     if (p->alive && p->process) TerminateProcess(p->process, 1);
     if (p->pc) { CloseHandle(CreateThread(NULL, 0, closer_thread, p->pc, 0, NULL)); p->pc = NULL; }
     if (p->in_w) CloseHandle(p->in_w);
+    if (p->signal_w) CloseHandle(p->signal_w);      /* a handed console's conhost ends with it */
+    if (p->handoff) CloseHandle(p->handoff);
     /* the reader ends when the pipe does, and closes it */
     if (p->reader) CloseHandle(p->reader);
     if (p->process) CloseHandle(p->process);
@@ -776,6 +880,11 @@ static void pane_grid(struct pane *p, BOOL force)
     vt_resize(&p->vt, cols, rows);
 #ifndef SG_MUTANT_NORESIZE
     if (p->pc) { COORD c = { (SHORT)cols, (SHORT)rows }; ResizePseudoConsole(p->pc, c); }
+    else if (p->signal_w) {
+        unsigned short msg[3] = { 8, (unsigned short)cols, (unsigned short)rows };     /* as ResizePseudoConsole writes it */
+        DWORD done;
+        WriteFile(p->signal_w, msg, sizeof(msg), &done, NULL);
+    }
 #endif
     if (p->scroll > p->vt.sb_count) p->scroll = p->vt.sb_count;
     write_dump(TRUE);
@@ -2368,6 +2477,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         t->alive = FALSE;
         if (t->pc) { CloseHandle(CreateThread(NULL, 0, closer_thread, t->pc, 0, NULL)); t->pc = NULL; }
         if (t->in_w) { CloseHandle(t->in_w); t->in_w = NULL; }
+        if (t->signal_w) { CloseHandle(t->signal_w); t->signal_w = NULL; t->exit_code = 0; }     /* a handed console: its program is gone */
         CloseHandle(t->process); t->process = NULL;
         if (!t->exit_code) { close_pane(t); return 0; }     /* a graceful exit closes the pane, as Windows Terminal's default */
         {
@@ -2535,7 +2645,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     make_fonts();
     g_ui_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
     g_ui_small = CreateFontW(-MulDiv(7, g_dpi, 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    n = parse_command_line(argc, argv, req, ARRAYSIZE(req), &maximized, &full);
+    /* --sg-handoff SERVER [--title T]: a program's new console, as its one tab */
+    for (i = 1; i + 1 < argc; i++) {
+#ifndef SG_MUTANT_IGNORE_HANDOFF
+        if (!lstrcmpW(argv[i], L"--sg-handoff")) g_handoff = (HANDLE)(ULONG_PTR)wcstoul(argv[i + 1], NULL, 0);
+#endif
+        if (!lstrcmpiW(argv[i], L"--title")) lstrcpynW(g_handoff_title, argv[i + 1], ARRAYSIZE(g_handoff_title));
+    }
+    n = g_handoff ? 0 : parse_command_line(argc, argv, req, ARRAYSIZE(req), &maximized, &full);
 
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_IBEAM);
@@ -2561,6 +2678,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     if (!g_wnd) return 1;
     default_grid();
     for (i = 0; i < n; i++) run_request(&req[i]);
+    if (g_handoff) {
+        int prof = g_handoff_title[0] ? profile_for_command(g_handoff_title) : -1;
+        new_tab(prof >= 0 ? prof : g_default_profile, NULL, NULL, NULL);
+    }
     if (!g_ntabs) new_tab(g_default_profile, NULL, NULL, NULL);
     for (i = 0; i < n && req[i].kind != REQ_FOCUS_TAB; i++) ;
     if (i == n) activate(0);        /* the first tab in front, unless focus-tab named one */
