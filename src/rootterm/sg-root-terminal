@@ -12,9 +12,9 @@ MSG='Linux Terminal (Administrator): what you run here runs as root, for the who
 # did nothing, and nothing could be copied out): what you select is copied,
 # a right-click pastes; Ctrl+Shift+C / Ctrl+Shift+V and Shift+Insert too.
 # xterm's own default pasted only with the middle button.
-SG_XTERM_COPY_PASTE='XTerm*VT100.translations: #override \nCtrl Shift <Key>C: copy-selection(CLIPBOARD) \nCtrl Shift <Key>V: insert-selection(CLIPBOARD) \nShift <Key>Insert: insert-selection(CLIPBOARD) \n<Btn1Up>: select-end(CLIPBOARD, PRIMARY) \n<Btn3Down>: ignore() \n<Btn3Up>: insert-selection(CLIPBOARD)'
+SG_XTERM_COPY_PASTE='*VT100.translations: #override \nCtrl Shift <Key>C: copy-selection(CLIPBOARD) \nCtrl Shift <Key>V: insert-selection(CLIPBOARD) \nShift <Key>Insert: insert-selection(CLIPBOARD) \n<Btn1Up>: select-end(CLIPBOARD, PRIMARY) \n<Btn3Down>: ignore() \n<Btn3Up>: insert-selection(CLIPBOARD)'
 exec xterm -class SgRootTerminal -title 'Administrator: Linux Terminal' \
     -fa 'Cascadia Mono' -fs 11 -bg '#0c0c0c' -fg '#cccccc' -cr '#cccccc' \
-    -geometry 110x30 -sl 5000 -xrm 'XTerm*selectToClipboard: true' -xrm "$SG_XTERM_COPY_PASTE" \
+    -geometry 110x30 -sl 5000 -xrm '*selectToClipboard: true' -xrm "$SG_XTERM_COPY_PASTE" \
     -e sh -c 'printf "%s\n\n" "$1"; sudo -i || { printf "\nOnly an administrator can open this terminal. Press Enter to close it."; read -r _; }' \
     sg-root-terminal "$MSG"

@@ -5,11 +5,58 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 cd "${HOME:-/}" 2>/dev/null || cd /
-# Copy and paste as in the Windows console (David 2026-10-01: Ctrl+Shift+V
-# did nothing, and nothing could be copied out): what you select is copied,
-# a right-click pastes; Ctrl+Shift+C / Ctrl+Shift+V and Shift+Insert too.
-# xterm's own default pasted only with the middle button.
-SG_XTERM_COPY_PASTE='XTerm*VT100.translations: #override \nCtrl Shift <Key>C: copy-selection(CLIPBOARD) \nCtrl Shift <Key>V: insert-selection(CLIPBOARD) \nShift <Key>Insert: insert-selection(CLIPBOARD) \n<Btn1Up>: select-end(CLIPBOARD, PRIMARY) \n<Btn3Down>: ignore() \n<Btn3Up>: insert-selection(CLIPBOARD)'
+# Tabs, and copy and paste as in Windows Terminal (David 2026-10-03: "All the
+# terminal apps should support Tabs", Ctrl+Shift+C did not copy): LXTerminal,
+# a light VTE terminal -- Ctrl+Shift+T a new tab, Ctrl+Shift+C / Ctrl+Shift+V,
+# a right-click menu with Copy and Paste. An X11 client like every Linux app
+# here, so it opens in a Wine frame (GTK would otherwise go to Wayland, full
+# screen outside the desktop). Its look starts as the Windows console's
+# (Cascadia Mono, Campbell colours); the user's own preferences are kept.
+if command -v lxterminal >/dev/null 2>&1; then
+    conf="${XDG_CONFIG_HOME:-$HOME/.config}/lxterminal/lxterminal.conf"
+    if [ ! -e "$conf" ] && mkdir -p "${conf%/*}" 2>/dev/null; then
+        cat > "$conf.sg$$" <<'EOF' && mv -f "$conf.sg$$" "$conf"
+[general]
+fontname=Cascadia Mono 11
+selchars=-A-Za-z0-9,./?%&#:_~
+scrollback=5000
+bgcolor=rgb(12,12,12)
+fgcolor=rgb(204,204,204)
+color_preset=Custom
+palette_color_0=rgb(12,12,12)
+palette_color_1=rgb(197,15,31)
+palette_color_2=rgb(19,161,14)
+palette_color_3=rgb(193,156,0)
+palette_color_4=rgb(0,55,218)
+palette_color_5=rgb(136,23,152)
+palette_color_6=rgb(58,150,221)
+palette_color_7=rgb(204,204,204)
+palette_color_8=rgb(118,118,118)
+palette_color_9=rgb(231,72,86)
+palette_color_10=rgb(22,198,12)
+palette_color_11=rgb(249,241,165)
+palette_color_12=rgb(59,120,255)
+palette_color_13=rgb(180,0,158)
+palette_color_14=rgb(97,214,214)
+palette_color_15=rgb(242,242,242)
+boldbright=true
+geometry_columns=110
+geometry_rows=30
+hidemenubar=true
+hidescrollbar=false
+disablef10=true
+disablealt=true
+disableconfirm=false
+tabpos=top
+EOF
+    fi
+    GDK_BACKEND=x11 exec lxterminal --working-directory="$PWD" -t 'Linux Terminal' "$@"
+fi
+# Without LXTerminal: xterm, with copy and paste as in the Windows console --
+# what you select is copied, a right-click pastes; Ctrl+Shift+C / Ctrl+Shift+V
+# and Shift+Insert too. The resources name no class: -class renames it, and
+# "XTerm*" then matched nothing (David 2026-10-03, Ctrl+Shift+C did nothing).
+SG_XTERM_COPY_PASTE='*VT100.translations: #override \nCtrl Shift <Key>C: copy-selection(CLIPBOARD) \nCtrl Shift <Key>V: insert-selection(CLIPBOARD) \nShift <Key>Insert: insert-selection(CLIPBOARD) \n<Btn1Up>: select-end(CLIPBOARD, PRIMARY) \n<Btn3Down>: ignore() \n<Btn3Up>: insert-selection(CLIPBOARD)'
 exec xterm -class SgLinuxTerminal -title 'Linux Terminal' \
     -fa 'Cascadia Mono' -fs 11 -bg '#0c0c0c' -fg '#cccccc' -cr '#cccccc' \
-    -geometry 110x30 -sl 5000 -xrm 'XTerm*selectToClipboard: true' -xrm "$SG_XTERM_COPY_PASTE" -ls
+    -geometry 110x30 -sl 5000 -xrm '*selectToClipboard: true' -xrm "$SG_XTERM_COPY_PASTE" -ls

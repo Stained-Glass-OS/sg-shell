@@ -3,7 +3,9 @@
 # 2026-10-01: Ctrl+Shift+V did nothing, nothing could be copied out):
 # selected text is on the clipboard, a right-click pastes the clipboard, and
 # Ctrl+Shift+V pastes too. In xterm, on an X server of its own (Xvfb), with
-# the launcher's own settings.
+# the launcher's own settings and its own -class (David 2026-10-03: -class
+# renamed the resource class and "XTerm*" settings matched nothing).
+# The root terminal is xterm; the user's is LXTerminal, xterm only without it.
 # shellcheck disable=SC2015  # pass/fail one-liners
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -19,8 +21,14 @@ TP=
 export DISPLAY=":$n"
 i=0; while [ ! -e "/tmp/.X11-unix/X$n" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
 # the launcher's settings, read from it (not copied into this test)
-TBL=$(sed -n "s/^SG_XTERM_COPY_PASTE='\(.*\)'$/\1/p" "$HERE/src/rootterm/sg-linux-terminal")
-[ -n "$TBL" ] || { fail "no copy/paste settings in sg-linux-terminal"; exit 1; }
+R="$HERE/src/rootterm/sg-root-terminal"
+TBL=$(sed -n "s/^SG_XTERM_COPY_PASTE='\(.*\)'$/\1/p" "$R")
+[ -n "$TBL" ] || { fail "no copy/paste settings in sg-root-terminal"; exit 1; }
+[ "$TBL" = "$(sed -n "s/^SG_XTERM_COPY_PASTE='\(.*\)'$/\1/p" "$HERE/src/rootterm/sg-linux-terminal")" ] \
+    && pass "both terminals' xterm settings are the same" || fail "the two launchers' settings differ"
+CLS=$(sed -n 's/^exec xterm -class \([A-Za-z]*\) .*/\1/p' "$R")
+SEL=$(sed -n "s/.*-xrm '\([^']*selectToClipboard: true\)'.*/\1/p" "$R")
+[ -n "$CLS" ] && [ -n "$SEL" ] || { fail "no -class or selectToClipboard in sg-root-terminal"; exit 1; }
 grep -q -- '-xrm "$SG_XTERM_COPY_PASTE"' "$HERE/src/rootterm/sg-linux-terminal" && grep -q -- '-xrm "$SG_XTERM_COPY_PASTE"' "$HERE/src/rootterm/sg-root-terminal" \
     && pass "both terminals use them" || fail "a terminal does not use them"
 # a terminal at the top-left that shows a word, then records two lines typed
@@ -30,7 +38,7 @@ read -r a; printf '%s\n' "\$a" > "$T/line1"
 read -r b; printf '%s\n' "\$b" > "$T/line2"
 sleep 30
 IN
-xterm -geometry 80x10+0+0 -fa 'DejaVu Sans Mono' -fs 11 -xrm 'XTerm*selectToClipboard: true' -xrm "$TBL" \
+xterm -class "$CLS" -geometry 80x10+0+0 -fa 'DejaVu Sans Mono' -fs 11 -xrm "$SEL" -xrm "$TBL" \
     -e sh "$T/inner.sh" 2> "$T/xterm.err" & TP=$!
 sleep 2
 W=$(xdotool search --pid $TP 2>/dev/null | tail -1)

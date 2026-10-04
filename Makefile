@@ -302,6 +302,7 @@ test: build
 	@sh test/mstsc-check.sh
 	@sh test/rootterm-check.sh
 	@sh test/xterm-copypaste-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/linux-terminal-tabs-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/bugreport-check.sh
 	@sh test/settings-teardown-check.sh
 	@sh test/recovery-check.sh

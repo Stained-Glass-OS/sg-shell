@@ -13,6 +13,19 @@ sg-shell (0.1.0-105) unstable; urgency=medium
     retried every 90 s for half an hour, and NetworkManager starts it when
     a connection comes up (dispatcher.d/90-sg-timezone-auto).
 
+  * Linux Terminal has tabs and copies as Windows Terminal does (David
+    2026-10-03: "All the terminal apps should support Tabs", and Ctrl+Shift+C
+    or a right-click did not copy from it): it is LXTerminal now, a light VTE
+    terminal -- Ctrl+Shift+T a new tab, Ctrl+Shift+C / Ctrl+Shift+V, a
+    right-click menu with Copy and Paste -- started as an X11 client so it
+    opens in a Wine frame, with the console's look (Cascadia Mono, Campbell
+    colours) seeded for a new user. Depends: lxterminal. Gate
+    test/linux-terminal-tabs-check.sh.
+  * xterm's copy and paste settings (the root terminal's, and the user's
+    without LXTerminal) never applied: -class renamed xterm's resource class
+    and every "XTerm*" setting matched nothing. They name no class now;
+    test/xterm-copypaste-check.sh runs xterm with the launcher's own -class.
+
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 02:40:00 +0000
 
 sg-shell (0.1.0-104) unstable; urgency=medium

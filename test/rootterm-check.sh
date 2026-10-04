@@ -21,7 +21,7 @@ grep -q 'L"runas") && wcsstr(e->path, L"sg-rootterm64.exe")' "$HERE/src/sg-start
     && pass "Start's Run as administrator opens it with --admin" || fail "Run as administrator not wired"
 U="$HERE/src/rootterm/sg-linux-terminal"
 command -v shellcheck >/dev/null && { shellcheck -s sh "$U" && pass "the user terminal's script is clean sh" || fail "shellcheck user"; }
-grep -q '^exec xterm ' "$U" && ! grep -q 'sudo' "$U" && pass "the user terminal is a plain shell, no sudo" || fail "user terminal"
+grep -q 'exec lxterminal ' "$U" && grep -q '^exec xterm ' "$U" && ! grep -q 'sudo' "$U" && pass "the user terminal is a plain shell, no sudo (LXTerminal, xterm without it)" || fail "user terminal"
 # the launcher itself: plain, the user's; --admin, the root one (stand-in scripts)
 W=${SG_WINE:-}
 if [ -n "$W" ] && [ -x "$W" ] && [ -f "$HERE/build/sg-rootterm64.exe" ]; then
