@@ -3,6 +3,8 @@
 # (the .desktop file's name without .desktop); "prefix*" for a family.
 debian-xterm
 debian-uxterm
+# LXTerminal is the Linux Terminal (its own entry in Start)
+lxterminal
 python3*
 sdl-freerdp*
 org.freedesktop.Xwayland

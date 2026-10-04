@@ -34,6 +34,8 @@ sg-shell (0.1.0-107) unstable; urgency=medium
     and DelegationConsole), which wine-sg 0787 honours: a way back to
     console windows. terminal-handoff-check (mutant
     SG_MUTANT_DEFTERM_NOT_SAVED).
+  * Start lists Linux Terminal once: LXTerminal's own entry is on the
+    hidden list, as xterm's is.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 05:20:00 +0000
 

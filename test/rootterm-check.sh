@@ -43,5 +43,6 @@ if [ -f "$HERE/build/sg-rootterm64.exe" ] && command -v wrestool >/dev/null; the
 fi
 grep -q 'sg-rootterm64.exe src/rootterm/sg-root-terminal src/rootterm/sg-linux-terminal' "$HERE/debian/rules" && pass "packaged" || fail "not in debian/rules"
 grep -q 'xterm' "$HERE/debian/control" && pass "xterm is a dependency" || fail "xterm not depended on"
+grep -qx 'lxterminal' "$HERE/src/linuxapps/linux-apps-hidden" && pass "Start lists Linux Terminal, not LXTerminal's own entry too" || fail "LXTerminal's own entry not hidden"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"
