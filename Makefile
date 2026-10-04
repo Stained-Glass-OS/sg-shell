@@ -168,7 +168,7 @@ build:
 	@python3 src/rootterm/gen-icon.py $(BUILD)/sg-rootterm.ico
 	@$(WINDRES64) -I src/rootterm -I $(BUILD) src/rootterm/sg-rootterm.rc -O coff -o $(BUILD)/sg-rootterm-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -municode -mwindows -o $(BUILD)/sg-rootterm64.exe src/rootterm/sg-rootterm.c \
-	    $(BUILD)/sg-rootterm-res64.o -luser32 && echo "built sg-rootterm (64-bit)"
+	    $(BUILD)/sg-rootterm-res64.o -luser32 -lshell32 -ladvapi32 && echo "built sg-rootterm (64-bit)"
 	@python3 src/charmap/gen-icon.py $(BUILD)/sg-charmap.ico
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \

@@ -7,7 +7,7 @@
  * draws with a fixed-pitch font. A tab is a tree of panes: a leaf is a pane,
  * a split puts two subtrees side by side or one above the other. Keys go to
  * the focused pane as the VT sequences conhost understands. Profiles are
- * found on the machine (PowerShell 7, Command Prompt, Git Bash, Windows
+ * found on the machine (PowerShell 7, Command Prompt, Linux, Git Bash, Windows
  * PowerShell) and merged with settings.json's -- the user's own profiles,
  * colour schemes, fonts and keys, as Windows Terminal keeps them
  * (wtsettings.c), re-read when the file changes. A pane divider is dragged
@@ -137,6 +137,10 @@ static void load_profiles(void)
     if (!GetEnvironmentVariableW(L"ComSpec", path, MAX_PATH) || !exists(path)) lstrcpyW(path, L"cmd.exe");
     _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path);
     add_found(L"{0caa0dad-35be-5f56-a8ff-afceeeaa6101}", L"Command Prompt", cmd, L'C', RGB(0x4A, 0x4A, 0x4A));
+    /* Linux itself: bash.exe runs the Linux side's bash on a terminal of its
+     * own (wine-sg 0790) -- the Linux Terminal in Start opens this profile */
+    ExpandEnvironmentStringsW(L"%SystemRoot%\\System32\\bash.exe", path, MAX_PATH);
+    if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", path); add_found(L"{5e7f2c4a-9d1b-4c3e-8f60-53474c696e78}", L"Linux", cmd, L'L', RGB(0xD9, 0x8E, 0x04)); }
     ExpandEnvironmentStringsW(L"%ProgramFiles%\\Git\\bin\\bash.exe", path, MAX_PATH);
     if (exists(path)) { _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --login -i", path); add_found(L"{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}", L"Git Bash", cmd, L'G', RGB(0xE0, 0x5A, 0x2B)); }
     ExpandEnvironmentStringsW(L"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", path, MAX_PATH);

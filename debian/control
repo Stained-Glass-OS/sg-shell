@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: sg-shell
 Architecture: all
-Depends: ${misc:Depends}, wine-sg | wine, fonts-inter, fonts-liberation, xdotool,
+Depends: ${misc:Depends}, wine-sg (>= 10.0-156) | wine, fonts-inter, fonts-liberation, xdotool,
          fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code,
          fonts-noto-cjk,
          python3, sg-session (>= 0.1.0-91), xterm, lxterminal, libglib2.0-bin,

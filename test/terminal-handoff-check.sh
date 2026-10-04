@@ -106,5 +106,25 @@ v=$("$W" reg query 'HKCU\Console\%%Startup' /v DelegationTerminal 2>/dev/null | 
 "$W" start cmd /k "title SGCONWIN" >/dev/null 2>&1 &
 i=0; CW=; while [ -z "$CW" ] && [ $i -lt 40 ]; do sleep 0.5; CW=$(xdotool search --classname 'conhost.exe' 2>/dev/null | head -1); i=$((i + 1)); done
 [ -n "$CW" ] && pass "...and a new console opens in a console window again" || fail "no console window with the console host chosen"
+# The Linux Terminal in Start: a Terminal tab of the Linux profile, with
+# Terminal's tabs (David 2026-10-04) -- bash on a terminal of its own (0790)
+BX=$(for k in "$(dirname "$W")/../lib/wine/x86_64-windows/bash.exe" "$(dirname "$W")/programs/bash/x86_64-windows/bash.exe"; do [ -f "$k" ] && echo "$k"; done | head -1)
+RT="${SG_ROOTTERM_EXE:-$HERE/build/sg-rootterm64.exe}"
+if [ -n "$BX" ] && strings -el "$BX" | grep -q mkfifo && [ -f "$RT" ]; then
+    "$W" taskkill /f /im cmd.exe >/dev/null 2>&1; "$W" taskkill /f /im sg-terminal64.exe >/dev/null 2>&1; sleep 1
+    rm -f "$DUMP"
+    cp "$RT" "$T/sg-rootterm64.exe"
+    "$W" "$T/sg-rootterm64.exe" >/dev/null 2>&1 &
+    if wait_grep '^tab 1 .*profile=Linux alive=1' 40; then pass "Linux Terminal opens as a Terminal tab (the Linux profile)"
+    else fail "Linux Terminal: $(grep '^tab\|^profile ' "$DUMP" 2>/dev/null | tr '\n' '|')"; fi
+    sleep 4
+    # shellcheck disable=SC2046
+    set -- $(D origin); xdotool mousemove $(( ${1:-100} + 300 )) $(( ${2:-100} + 200 )) click 1; sleep 0.4
+    xdotool type --delay 60 'echo LNX-$((2+3))'; xdotool key Return
+    wait_grep '^row [0-9]*: LNX-5' 20 && pass "...and what is typed there reaches bash (LNX-5)" || fail "no LNX-5: $(grep '^row' "$DUMP" | tail -4 | tr '\n' '|')"
+    grep -q '^profile [0-9]* Linux' "$DUMP" && pass "the Linux profile is in Terminal's list (its + menu)" || fail "no Linux profile listed"
+else
+    echo "SKIP  the Linux profile (this Wine's bash.exe has no terminal of its own: wine-sg 0790)"
+fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"
