@@ -10,7 +10,7 @@
 # stand-in xdotool (SG_XDOTOOL) that records what it is asked.
 #
 # Needs wine-sg, Xvfb, python3, mingw; skips (77) without. SG_DICTATE_EXE:
-# another build (mutant SG_MUTANT_LINUX_BY_SENDINPUT).
+# another build (mutants SG_MUTANT_LINUX_BY_SENDINPUT, SG_MUTANT_XDOTOOL_OVERLAP).
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -36,10 +36,12 @@ chmod 755 "$T/fake-engine"
 grep -q -- '--bridge' "$T/fake-engine" || { fail "no stand-in engine taken from dictate-check.sh"; exit 1; }
 # what is "heard": quotes, accents and a dash, then a phrase and "delete that"
 printf '%s' '["H\u00e9llo \"Linux\" \u2013 c\u00f4t\u00e9", {"text": " two words", "after": 3, "cmd": "delete"}]' > "$T/texts.json"
+# typing takes its time (4 s here): what comes next must wait for its end
 cat > "$T/xdotool" <<EOS
 #!/bin/sh
 for a in "\$@"; do printf '[%s]' "\$a"; done >> "$T/xdotool.log"
 echo >> "$T/xdotool.log"
+if [ "\$1" = type ]; then sleep 4; for a in "\$@"; do last=\$a; done; echo "end-type[\$last]" >> "$T/xdotool.log"; fi
 EOS
 chmod 755 "$T/xdotool"
 export FAKE_LOG="$T/engine.log" FAKE_ERR="$T/bar.log" FAKE_TEXTS="$T/texts.json" FAKE_N="$T/n"
@@ -68,6 +70,11 @@ grep -qxF '[type][--clearmodifiers][--delay][6][--][ two words]' "$T/xdotool.log
 grep -qxF '[key][--clearmodifiers][--repeat][10][BackSpace]' "$T/xdotool.log" \
     && pass "\"delete that\" is as many BackSpaces as the text had characters (10), through xdotool" \
     || fail "delete: $(cat "$T/xdotool.log" 2>/dev/null)"
+# one at a time (David 2026-10-04: two phrases' letters came out mixed): the
+# BackSpaces of "delete that" only once " two words" is typed to its end
+awk '/^end-type\[ two words\]$/ { e = NR } /BackSpace/ { b = NR } END { exit !(e && b > e) }' "$T/xdotool.log" \
+    && pass "one xdotool at a time: \"delete that\" waits for the typing before it to end" \
+    || fail "they overlapped: $(tr '\n' '|' < "$T/xdotool.log")"
 grep -q "inserted .* into SgLinuxWindow by xdotool" "$T/bar.log" && pass "the bar reports it typed into the Linux program by xdotool" \
     || fail "bar log: $(grep inserted "$T/bar.log")"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"

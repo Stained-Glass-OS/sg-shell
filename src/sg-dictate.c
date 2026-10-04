@@ -277,50 +277,81 @@ static BOOL linux_in_front(HWND fg)
     return fg && GetClassNameW(fg, cls, ARRAYSIZE(cls)) && !lstrcmpW(cls, L"SgLinuxWindow");
 }
 
-/* append ARG quoted as CommandLineToArgvW reads it back */
-static void append_arg(WCHAR *cmd, size_t cap, const WCHAR *a)
+/* xdotool ARGS... (the last one may be long text), one after another.
+ * Wine signals a Unix program's handle as soon as it starts, so waiting on
+ * it waited for nothing: a phrase typed while the last one still was mixed
+ * their letters (David 2026-10-04, "nWuiet hs wtihtec ..."). A worker runs
+ * them in order, each to its end (__wine_unix_spawnvp, waiting). */
+struct xjob { struct xjob *next; char **argv; };
+static CRITICAL_SECTION g_xlock;
+static struct xjob *g_xhead, *g_xtail;
+static HANDLE g_xevent;
+
+static DWORD WINAPI xdotool_worker(void *arg)
 {
-    WCHAR *o = cmd + wcslen(cmd), *end = cmd + cap - 4;
-    if (o != cmd) *o++ = ' ';   /* the program's name first, with nothing before it */
-    *o++ = '"';
-    while (*a && o < end)
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait) =
+        (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    (void)arg;
+    for (;;)
     {
-        int bs = 0;
-        while (*a == '\\') { bs++; a++; }
-        if (!*a) { while (bs-- && o < end) { *o++ = '\\'; *o++ = '\\'; } break; }
-        if (*a == '"') { while (bs-- && o < end) { *o++ = '\\'; *o++ = '\\'; } *o++ = '\\'; *o++ = '"'; a++; }
-        else { while (bs-- && o < end) *o++ = '\\'; *o++ = *a++; }
+        struct xjob *j;
+        WaitForSingleObject(g_xevent, INFINITE);
+        for (;;)
+        {
+            char **a;
+            EnterCriticalSection(&g_xlock);
+            if ((j = g_xhead) && !(g_xhead = j->next)) g_xtail = NULL;
+            LeaveCriticalSection(&g_xlock);
+            if (!j) break;
+#ifndef SG_MUTANT_XDOTOOL_OVERLAP
+            if (spawnvp) spawnvp(j->argv, TRUE);
+#else
+            if (spawnvp) spawnvp(j->argv, FALSE);
+#endif
+            for (a = j->argv; *a; a++) free(*a);
+            free(j->argv);
+            free(j);
+        }
     }
-    *o++ = '"'; *o = 0;
+    return 0;
 }
 
-/* xdotool ARGS... (the last one may be long text) */
+static char *utf8(const WCHAR *w)
+{
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, NULL, 0, NULL, NULL);
+    char *s = malloc(n > 0 ? n : 1);
+    if (s) { if (n > 0) WideCharToMultiByte(CP_UTF8, 0, w, -1, s, n, NULL, NULL); else s[0] = 0; }
+    return s;
+}
+
 static BOOL run_xdotool(const WCHAR *const *args, int n)
 {
-    WCHAR tool[MAX_PATH] = L"Z:\\usr\\bin\\xdotool", *cmd;
-    STARTUPINFOW si = { sizeof(si) };
-    PROCESS_INFORMATION pi;
-    size_t cap = 64 + MAX_PATH;
+    static char *(CDECL *unix_name)(const WCHAR *);
+    WCHAR tool[MAX_PATH] = L"";
+    struct xjob *j;
     int i;
-    BOOL ok;
-    GetEnvironmentVariableW(L"SG_XDOTOOL", tool, MAX_PATH);
-    for (i = 0; i < n; i++) cap += wcslen(args[i]) * 2 + 4;
-    if (!(cmd = calloc(cap, sizeof(WCHAR)))) return FALSE;
-    cmd[0] = 0;
-    append_arg(cmd, cap, tool);
-    for (i = 0; i < n; i++) append_arg(cmd, cap, args[i]);
-    ok = CreateProcessW(tool, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
-    if (ok)
+    if (!g_xevent)
     {
-        /* a Linux program's handle is signalled at once: give it the time
-         * its typing takes, so the next text comes after this one */
-        WaitForSingleObject(pi.hProcess, 5000);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
+        InitializeCriticalSection(&g_xlock);
+        g_xevent = CreateEventW(NULL, FALSE, FALSE, NULL);
+        CloseHandle(CreateThread(NULL, 0, xdotool_worker, NULL, 0, NULL));
+        unix_name = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
     }
-    else report("sg-dictate: xdotool did not start (%lu)\n", GetLastError());
-    free(cmd);
-    return ok;
+    if (!(j = calloc(1, sizeof(*j))) || !(j->argv = calloc(n + 2, sizeof(char *)))) { free(j); return FALSE; }
+    /* SG_XDOTOOL: another one (the gate's), a Windows path */
+    if (GetEnvironmentVariableW(L"SG_XDOTOOL", tool, MAX_PATH) && unix_name)
+    {
+        char *u = unix_name(tool);
+        if (u) { j->argv[0] = _strdup(u); HeapFree(GetProcessHeap(), 0, u); }
+    }
+    if (!j->argv[0]) j->argv[0] = _strdup("/usr/bin/xdotool");
+    for (i = 0; i < n; i++) j->argv[i + 1] = utf8(args[i]);
+    EnterCriticalSection(&g_xlock);
+    if (g_xtail) g_xtail->next = j; else g_xhead = j;
+    g_xtail = j;
+    LeaveCriticalSection(&g_xlock);
+    SetEvent(g_xevent);
+    return TRUE;
 }
 
 static void type_text_linux(const WCHAR *text)
