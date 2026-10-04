@@ -57,6 +57,7 @@
 #   SG_MUTANT_ANYTYPE     picks a portable zip over a runnable installer
 #   SG_MUTANT_NOZIP       does not unpack a zipped installer
 #   SG_MUTANT_NOSEARCH    the search box filters nothing
+#   SG_MUTANT_STORE_ALWAYS_LIGHT  draws light in dark mode (David 2026-10-02: it switched only half)
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
@@ -105,7 +106,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS BATCH_PER_APP HELPER_ANYONE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -818,6 +819,29 @@ wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")
 [ "$v" != NOWINDOW ] && [ "$v" != "2 05 L1" ] && pass "MUTANT NOSEARCH lists everything after \"gimp\" (gate catches it)" || fail "NOSEARCH not detected ('$v')"
 wine taskkill /f /im mut-nosearch.exe >/dev/null 2>&1
+
+# --- K3. dark mode: what it draws is dark too, not only its search box -------------------------
+dark_check() { # exe -- "MODE LUMA": the dump's mode and the window's background's brightness
+    rm -f "$D"
+    wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 0 /f >/dev/null 2>&1
+    wine "$1" >/dev/null 2>&1 &
+    waitfor "$D" '^window 1' 60 || { echo "NOWINDOW"; return; }
+    sleep 1.2
+    w=$(xdotool search --name 'SG Store' 2>/dev/null | tail -1)
+    eval "$(xdotool getwindowgeometry --shell "$w" 2>/dev/null)"
+    # the background, left of the cards near the window's bottom
+    l=$(import -window root -crop "1x1+$((X + 6))+$((Y + HEIGHT - 8))" -colorspace gray -format '%[fx:int(255*u)]' info: 2>/dev/null)
+    echo "$(field mode) ${l:-?}"
+    wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 1 /f >/dev/null 2>&1
+}
+v=$(dark_check "$EXE")
+case "$v" in "dark "[0-9]*) [ "${v#dark }" -lt 80 ] && pass "in dark mode the Store draws dark (mode dark, background $v)" || fail "dark mode, light background: $v";;
+    *) fail "dark mode: '$v'";; esac
+import -window root "$OUT/store-dark.png" 2>/dev/null
+wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+v=$(dark_check "$T/mut-store_always_light.exe")
+case "$v" in "light "*|*" "2[0-9][0-9]) pass "MUTANT STORE_ALWAYS_LIGHT draws light in dark mode (gate catches it: $v)";; *) fail "STORE_ALWAYS_LIGHT not detected ('$v')";; esac
+wine taskkill /f /im mut-store_always_light.exe >/dev/null 2>&1; sleep 0.5
 
 # --- K2. an app's page (David 2026-10-04): a click on it, not its buttons, says more -------------
 # where it comes from, the whole description, its site and licence; Back

@@ -32,6 +32,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "store.h"
+#include "../sg-mode.h"
+
+static BOOL g_dark;   /* the app mode: dark (follow_mode) */
 #include <shellapi.h>
 #include <commdlg.h>
 
@@ -260,6 +263,7 @@ static void dump(void)
     if (!(f = _wfopen(tmp, L"wb"))) return;
     dumpf(f, L"window %d\n", g_wnd ? 1 : 0);
     dumpf(f, L"columns %d\n", g_cols);
+    dumpf(f, L"mode %ls\n", g_dark ? L"dark" : L"light");
     dumpf(f, L"search %ls\n", g_query);
     dumpf(f, L"category %ls\n", g_cats[g_cat]);
     dumpf(f, L"catalog %d\n", g_napps);
@@ -565,15 +569,28 @@ static void activate(int i)
 
 /* ---- drawing --------------------------------------------------------------------------------------- */
 
-#define C_BG      RGB(0xf3, 0xf3, 0xf3)
-#define C_CARD    RGB(0xff, 0xff, 0xff)
-#define C_LINE    RGB(0xe1, 0xe1, 0xe1)
-#define C_TEXT    RGB(0x20, 0x20, 0x20)
-#define C_SUB     RGB(0x60, 0x60, 0x60)
-#define C_ACCENT  RGB(0x10, 0x7c, 0x41)
-#define C_OK      RGB(0x10, 0x7c, 0x41)
-#define C_ERR     RGB(0xc4, 0x2b, 0x1c)
-#define C_SEL     RGB(0x00, 0x5a, 0x9e)
+/* the app mode (Settings > Colors, AppsUseLightTheme) picks the palette;
+ * WM_SETTINGCHANGE "ImmersiveColorSet" switches it live (David 2026-10-02:
+ * in dark mode the Store switched only half -- its search box, not what it
+ * draws) */
+#define C_BG      (g_dark ? RGB(0x20, 0x20, 0x20) : RGB(0xf3, 0xf3, 0xf3))
+#define C_CARD    (g_dark ? RGB(0x2d, 0x2d, 0x2d) : RGB(0xff, 0xff, 0xff))
+#define C_LINE    (g_dark ? RGB(0x40, 0x40, 0x40) : RGB(0xe1, 0xe1, 0xe1))
+#define C_TEXT    (g_dark ? RGB(0xf2, 0xf2, 0xf2) : RGB(0x20, 0x20, 0x20))
+#define C_SUB     (g_dark ? RGB(0xb0, 0xb0, 0xb0) : RGB(0x60, 0x60, 0x60))
+#define C_ACCENT  (g_dark ? RGB(0x2e, 0xa0, 0x5f) : RGB(0x10, 0x7c, 0x41))
+#define C_OK      (g_dark ? RGB(0x5c, 0xc8, 0x84) : RGB(0x10, 0x7c, 0x41))
+#define C_ERR     (g_dark ? RGB(0xff, 0x7b, 0x6b) : RGB(0xc4, 0x2b, 0x1c))
+#define C_SEL     (g_dark ? RGB(0x4c, 0xa0, 0xe8) : RGB(0x00, 0x5a, 0x9e))
+
+static void follow_mode(HWND hwnd)
+{
+#ifndef SG_MUTANT_STORE_ALWAYS_LIGHT
+    g_dark = sg_apps_dark();
+#endif
+    sg_mode_title(hwnd, g_dark);
+    InvalidateRect(hwnd, NULL, TRUE);
+}
 
 static int header_height(void) { return dpx(160); }
 
@@ -1189,7 +1206,18 @@ static LRESULT CALLBACK search_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_mode_changed(msg, lp)) follow_mode(hwnd);
     switch (msg) {
+    case WM_CTLCOLOREDIT:
+        /* the search box in the Store's own colours, whatever the visual style does */
+        if (g_dark) {
+            static HBRUSH dark_edit;
+            if (!dark_edit) dark_edit = CreateSolidBrush(C_CARD);
+            SetTextColor((HDC)wp, C_TEXT);
+            SetBkColor((HDC)wp, C_CARD);
+            return (LRESULT)dark_edit;
+        }
+        break;
     case WM_CREATE:
         g_search = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                    0, 0, 10, 10, hwnd, (HMENU)100, ((CREATESTRUCTW *)lp)->hInstance, NULL);
@@ -1197,6 +1225,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         SendMessageW(g_search, EM_LIMITTEXT, ARRAYSIZE(g_query) - 1, 0);
         g_search_proc = (WNDPROC)SetWindowLongPtrW(g_search, GWLP_WNDPROC, (LONG_PTR)search_proc);
         layout_search(hwnd);
+        follow_mode(hwnd);
         return 0;
     case WM_COMMAND:
         if (LOWORD(wp) == 100 && HIWORD(wp) == EN_CHANGE) {

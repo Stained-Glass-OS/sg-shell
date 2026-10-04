@@ -1,3 +1,12 @@
+sg-shell (0.1.0-111) unstable; urgency=medium
+
+  * SG Store follows dark mode (David 2026-10-02: it switched only half --
+    its search box, not what it draws): its page, cards, text, buttons and
+    search box take the dark palette with Settings > Colors' app mode, and
+    switch live. store-check K3 (mutant SG_MUTANT_STORE_ALWAYS_LIGHT).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 22:10:00 +0000
+
 sg-shell (0.1.0-110) unstable; urgency=medium
 
   * Linux apps by name, as Windows programs are (David 2026-10-04: Windows
