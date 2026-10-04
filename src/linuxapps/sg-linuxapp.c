@@ -7,6 +7,9 @@
  *   sg-linuxapp64.exe --open FILE.desktop ARG   the same, opening ARG (a file
  *                                          or a URL) -- an app chosen in
  *                                          Settings > Default apps
+ *   sg-linuxapp64.exe --launch FILE.desktop ARG...   the same, with any
+ *                                          number of files or URLs -- the
+ *                                          app by its name (below)
  *   sg-linuxapp64.exe --sync               Start's "Linux apps" folder, once
  *   sg-linuxapp64.exe --watch              the same, then again whenever the
  *                                          applications folders change (Start
@@ -24,6 +27,13 @@
  * the user's classes, offered for the extensions of its types
  * (OpenWithProgids), and a browser or mail program among the clients
  * (Software\Clients). Firefox ESR could not be made the default browser.
+ * Each app can also be started by its program's name, as a Windows program
+ * by its App Paths name: start firefox, Win+R gimp, Start-Process vlc
+ * (David 2026-10-04: Windows programs and the command line could not open
+ * Linux Firefox). The user's App Paths (wine-sg 0793 reads them, after the
+ * machine's) get NAME.exe -> this program, SgArguments "--launch FILE"; a
+ * name a Windows program has -- the machine's App Paths, the Windows
+ * folders -- is left to it.
  * Shortcuts in that folder whose app has gone are removed; the folder is ours.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -714,15 +724,129 @@ static void unregister_gone(WCHAR (*made)[128], int nmade)
     }
 }
 
+/* ---- a Linux app by its name ------------------------------------------- */
+
+#define APPPATHS_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\App Paths"
+#define MAX_APP_NAMES 4
+
+/* a name a Windows program answers to already */
+static BOOL name_is_windows(const WCHAR *exe)
+{
+    WCHAR sub[300], path[MAX_PATH], dir[MAX_PATH];
+    HKEY k;
+    _snwprintf(sub, ARRAYSIZE(sub), APPPATHS_KEY L"\\%ls", exe);
+    sub[ARRAYSIZE(sub) - 1] = 0;
+    if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, sub, 0, KEY_READ, &k)) { RegCloseKey(k); return TRUE; }
+    if (GetSystemDirectoryW(dir, MAX_PATH)) {
+        _snwprintf(path, MAX_PATH, L"%ls\\%ls", dir, exe);
+        path[MAX_PATH - 1] = 0;
+        if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) return TRUE;
+    }
+    if (GetWindowsDirectoryW(dir, MAX_PATH)) {
+        _snwprintf(path, MAX_PATH, L"%ls\\%ls", dir, exe);
+        path[MAX_PATH - 1] = 0;
+        if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) return TRUE;
+    }
+    return FALSE;
+}
+
+static void add_name(WCHAR names[][64], int *n, const char *base, size_t len)
+{
+    WCHAR w[64];
+    size_t i;
+    int j;
+    if (!len || len > 50 || *n >= MAX_APP_NAMES) return;
+    for (i = 0; i < len; i++) {
+        char c = base[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '+')) {
+            if (c >= 'A' && c <= 'Z') continue;
+            return;   /* not a plain program name */
+        }
+    }
+    for (i = 0; i < len; i++) w[i] = (WCHAR)(unsigned char)base[i];
+    w[len] = 0;
+    CharLowerW(w);
+    lstrcatW(w, L".exe");
+    for (j = 0; j < *n; j++) if (!lstrcmpiW(names[j], w)) return;
+    lstrcpyW(names[(*n)++], w);
+}
+
+/* the names it answers to: its program's (firefox-esr), its own (the
+ * .desktop file's), each without an -esr */
+static int app_names(const struct app *a, WCHAR names[][64])
+{
+    const char *bases[2] = { a->exe, a->id };
+    int n = 0, i;
+    for (i = 0; i < 2; i++) {
+        const char *b = bases[i];
+        size_t len = strlen(b);
+        if (i == 1 && strchr(b, '.')) continue;   /* org.gnome.Foo: not a name anyone types */
+        add_name(names, &n, b, len);
+        if (len > 4 && !strcmp(b + len - 4, "-esr")) add_name(names, &n, b, len - 4);
+    }
+    return n;
+}
+
+static void register_app_paths(const struct app *a, const WCHAR *self, const WCHAR *desktop, WCHAR (*made)[64], int *nmade, int cap)
+{
+#ifndef SG_MUTANT_NO_APP_PATHS
+    WCHAR names[MAX_APP_NAMES][64], sub[300], args[MAX_PATH + 16];
+    int n = app_names(a, names), i, j;
+    for (i = 0; i < n; i++) {
+        BOOL taken = FALSE;
+        for (j = 0; j < *nmade; j++) if (!lstrcmpiW(made[j], names[i])) taken = TRUE;   /* the first app keeps it */
+        if (taken || name_is_windows(names[i]) || *nmade >= cap) continue;
+        _snwprintf(sub, ARRAYSIZE(sub), APPPATHS_KEY L"\\%ls", names[i]);
+        sub[ARRAYSIZE(sub) - 1] = 0;
+        _snwprintf(args, ARRAYSIZE(args), L"--launch \"%ls\"", desktop);
+        args[ARRAYSIZE(args) - 1] = 0;
+        set_sz(HKEY_CURRENT_USER, sub, NULL, self);
+        set_sz(HKEY_CURRENT_USER, sub, L"SgArguments", args);
+        set_sz(HKEY_CURRENT_USER, sub, L"SgLinuxApp", desktop);   /* ours: kept up to date, removed when gone */
+        lstrcpyW(made[(*nmade)++], names[i]);
+    }
+#else
+    (void)a; (void)self; (void)desktop; (void)made; (void)nmade; (void)cap;
+#endif
+}
+
+/* ours whose app has gone, or whose name a Windows program has taken since */
+static void unregister_gone_app_paths(WCHAR (*made)[64], int nmade)
+{
+    WCHAR name[260], gone[64][64], sub[300];
+    DWORD n, i;
+    int ng = 0, j;
+    HKEY k, e;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, APPPATHS_KEY, 0, KEY_READ, &k)) return;
+    for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(k, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+        BOOL ours, keep = FALSE;
+        _snwprintf(sub, ARRAYSIZE(sub), APPPATHS_KEY L"\\%ls", name);
+        sub[ARRAYSIZE(sub) - 1] = 0;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_READ, &e)) continue;
+        ours = !RegQueryValueExW(e, L"SgLinuxApp", NULL, NULL, NULL, NULL);
+        RegCloseKey(e);
+        if (!ours) continue;
+        for (j = 0; j < nmade && !keep; j++) keep = !lstrcmpiW(made[j], name);
+        if (!keep && ng < 64 && lstrlenW(name) < 64) lstrcpyW(gone[ng++], name);
+    }
+    RegCloseKey(k);
+    for (j = 0; j < ng; j++) {
+        _snwprintf(sub, ARRAYSIZE(sub), APPPATHS_KEY L"\\%ls", gone[j]);
+        sub[ARRAYSIZE(sub) - 1] = 0;
+        RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+        RegDeleteKeyW(HKEY_CURRENT_USER, sub);
+    }
+}
+
 static void sync_default_browser(void);
 
 static int sync_apps(void)
 {
     WCHAR programs[MAX_PATH], common[MAX_PATH], folder[MAX_PATH], icons[MAX_PATH], self[MAX_PATH], pattern[MAX_PATH];
-    WCHAR (*made)[MAX_PATH], (*progids)[128];
+    WCHAR (*made)[MAX_PATH], (*progids)[128], (*named)[64];
     WIN32_FIND_DATAW fd;
     HANDLE h;
-    int i, j, nmade = 0, nprogids = 0;
+    int i, j, nmade = 0, nprogids = 0, nnamed = 0;
 
     if (!SHGetSpecialFolderPathW(NULL, programs, CSIDL_PROGRAMS, TRUE)) return 1;
     if (!SHGetSpecialFolderPathW(NULL, icons, CSIDL_LOCAL_APPDATA, TRUE)) return 1;
@@ -738,6 +862,7 @@ static int sync_apps(void)
     scan_apps();
     if (!(made = calloc(g_napps + 1, sizeof(*made)))) return 1;
     if (!(progids = calloc(g_napps + 1, sizeof(*progids)))) { free(made); return 1; }
+    if (!(named = calloc(g_napps * MAX_APP_NAMES + 1, sizeof(*named)))) { free(made); free(progids); return 1; }
     if (g_napps) CreateDirectoryW(folder, NULL);
     for (i = 0; i < g_napps; i++) {
         WCHAR name[140], lnk[MAX_PATH], args[1024], file[MAX_PATH], ico[MAX_PATH];
@@ -759,7 +884,10 @@ static int sync_apps(void)
 #ifndef SG_MUTANT_NO_PROGIDS
         if (register_app(&g_apps[i], self, file, has_icon ? ico : NULL, progids[nprogids], 128)) nprogids++;
 #endif
+        register_app_paths(&g_apps[i], self, file, named, &nnamed, g_napps * MAX_APP_NAMES);
     }
+    unregister_gone_app_paths(named, nnamed);
+    free(named);
     unregister_gone(progids, nprogids);
     free(progids);
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
@@ -1019,6 +1147,43 @@ static int open_with_app(const WCHAR *desktop, const WCHAR *arg)
     return r ? 1 : 0;
 }
 
+/* the app by its name: FILE.desktop with the files (Windows paths: given as
+ * the Unix ones) and URLs the command line gave */
+static int launch_app(const WCHAR *desktop, WCHAR **args, int nargs)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char **argv, gio[] = "/usr/bin/gio", launch[] = "launch";
+    LONG r = 1;
+    int i, n = 0;
+
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (!(argv = calloc(nargs + 4, sizeof(*argv)))) return 1;
+    argv[n++] = gio; argv[n++] = launch;
+    if (p_unix_name) argv[n++] = p_unix_name(desktop);
+    for (i = 0; i < nargs && argv[2]; i++) {
+        const WCHAR *a = args[i];
+        BOOL is_path = a[0] && (a[1] == L':' || (a[0] == L'\\' && a[1] == L'\\'));
+        char *u = NULL;
+        if (is_path && p_unix_name) u = p_unix_name(a);
+        if (!u) {
+            int len = WideCharToMultiByte(CP_UTF8, 0, a, -1, NULL, 0, NULL, NULL);
+            if ((u = HeapAlloc(GetProcessHeap(), 0, max(len, 1)))) WideCharToMultiByte(CP_UTF8, 0, a, -1, u, len, NULL, NULL);
+        }
+        if (u) argv[n++] = u;
+    }
+    argv[n] = NULL;
+    if (spawnvp && argv[2]) r = spawnvp(argv, FALSE);
+    for (i = 2; i < n; i++) HeapFree(GetProcessHeap(), 0, argv[i]);
+    free(argv);
+    if (r) {
+        WCHAR msg[MAX_PATH + 64];
+        _snwprintf(msg, ARRAYSIZE(msg), L"The Linux app could not be started:\n%ls", desktop);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        MessageBoxW(NULL, msg, L"Linux apps", MB_OK | MB_ICONERROR);
+    }
+    return r ? 1 : 0;
+}
+
 /* ---- keeping Start up to date ------------------------------------------ */
 
 static int watch_apps(void)
@@ -1077,6 +1242,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--run")) ret = run_app(argv[2]);
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--open")) ret = open_with_app(argv[2], argc >= 4 ? argv[3] : L"");
+    else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--launch")) ret = launch_app(argv[2], argv + 3, argc - 3);
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--sync")) ret = sync_apps();
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--watch")) ret = watch_apps();
     CoUninitialize();

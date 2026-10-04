@@ -205,6 +205,34 @@ if [ -x /usr/bin/xdg-mime ]; then
 else
     echo "SKIP  the default browser (no xdg-mime)"
 fi
+# the app by its program's name (David 2026-10-04: Windows programs and the
+# command line could not open Linux Firefox): the user's App Paths get
+# NAME.exe -> --launch FILE.desktop, with -esr dropped too; a name a Windows
+# program has is left alone; --launch hands every file (as a Unix path) and
+# URL to the app; gone with the app
+mkdir -p "$T/bin"
+printf '#!/bin/sh\nfor a; do echo "$a"; done > %s/named\n' "$T" > "$T/bin/gatenamer-esr"; chmod +x "$T/bin/gatenamer-esr"
+app gate-namer 'Type=Application' 'Name=Gate Namer' "Exec=$T/bin/gatenamer-esr %U"
+app gate-notepad 'Type=Application' 'Name=Gate Notepad' "Exec=$T/bin/notepad %F"
+"$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+AP='HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths'
+args=$(rq "$AP\\gatenamer.exe" SgArguments | sed -n 's/.*REG_SZ *//p')
+case "$args" in *'--launch "Z:'*'gate-namer.desktop"') pass "a Linux app answers to its program's name: gatenamer.exe -> --launch its .desktop";;
+    *) fail "App Paths gatenamer.exe: '$args'";; esac
+rq "$AP\\gatenamer-esr.exe" | grep -q SgArguments && rq "$AP\\gate-namer.exe" | grep -q SgArguments \
+    && pass "and to gatenamer-esr and gate-namer (its program, its .desktop name)" || fail "the other names: $(rq "$AP" | tr '\n' ' ')"
+rq "$AP\\notepad.exe" | grep -q SgArguments && fail "a Linux app took notepad.exe from Windows' own Notepad" || pass "a name a Windows program has (notepad.exe) is left to it"
+if [ -x /usr/bin/gio ]; then
+    rm -f "$T/named"; : > "$WINEPREFIX/drive_c/gate doc.txt"
+    eval "set -- $args"
+    timeout 60 "$WINE" "$EXE" "$@" 'C:\gate doc.txt' 'https://example.org/?a=1&b=2'
+    for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$T/named" ] && break; sleep 0.5; done
+    [ "$(realpath "$(sed -n 1p "$T/named" 2>/dev/null)" 2>/dev/null)" = "$(realpath "$WINEPREFIX/drive_c/gate doc.txt")" ] && [ "$(sed -n 2p "$T/named" 2>/dev/null)" = 'https://example.org/?a=1&b=2' ] \
+        && pass "--launch gives the app the file (its Unix path) and the URL" || fail "--launch gave: $(tr '\n' '|' < "$T/named" 2>/dev/null)"
+fi
+rm "$T/share/applications/gate-namer.desktop" "$T/share/applications/gate-notepad.desktop"
+"$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+rq "$AP\\gatenamer.exe" | grep -q SgArguments && fail "an app gone kept its name" || pass "an app that goes loses its names"
 rm "$T/share/applications/gate-viewer.desktop"
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
 ! rq 'HKCU\Software\Classes\SG.LinuxApp.gate-viewer' | grep -q '^HKEY_' && ! rq 'HKCU\Software\Classes\.png\OpenWithProgids' | grep -q 'gate-viewer' \
