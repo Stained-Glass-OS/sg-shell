@@ -2084,6 +2084,33 @@ static void show_menu(void)
 /* Settings: the default profile, the font and its size -- kept in settings.json (wtsettings.c) */
 static HWND g_set_dlg;
 
+/* Default terminal application (Windows Terminal's Startup setting): where a
+ * new console opens -- a Terminal tab (wine-sg 0787), or a console window of
+ * its own. Kept where Windows keeps it, HKCU\Console\%%Startup. */
+#define CONHOST_CLSID L"{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}"
+static BOOL defterm_is_conhost(void)
+{
+    WCHAR v[64];
+    DWORD cb = sizeof(v);
+    return !RegGetValueW(HKEY_CURRENT_USER, L"Console\\%%Startup", L"DelegationTerminal", RRF_RT_REG_SZ, NULL, v, &cb)
+           && !lstrcmpiW(v, CONHOST_CLSID);
+}
+
+static void defterm_set(BOOL conhost)
+{
+    HKEY k;
+    /* Windows Terminal's own two, or the console host's for both */
+    const WCHAR *term = conhost ? CONHOST_CLSID : L"{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}";
+    const WCHAR *con = conhost ? CONHOST_CLSID : L"{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}";
+#ifdef SG_MUTANT_DEFTERM_NOT_SAVED
+    return;
+#endif
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Console\\%%Startup", 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
+    RegSetValueExW(k, L"DelegationTerminal", 0, REG_SZ, (const BYTE *)term, (lstrlenW(term) + 1) * sizeof(WCHAR));
+    RegSetValueExW(k, L"DelegationConsole", 0, REG_SZ, (const BYTE *)con, (lstrlenW(con) + 1) * sizeof(WCHAR));
+    RegCloseKey(k);
+}
+
 /* the settings (re)read: profiles, schemes, keys, fonts; panes keep their profiles by GUID */
 static void apply_settings(void)
 {
@@ -2111,6 +2138,7 @@ static LRESULT CALLBACK settings_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             GetDlgItemTextW(hwnd, 11, face, LF_FACESIZE);
             GetDlgItemTextW(hwnd, 12, size, 8);
             pt = _wtoi(size);
+            defterm_set(SendDlgItemMessageW(hwnd, 14, CB_GETCURSEL, 0, 0) == 1);
             /* into settings.json, keeping everything else there; then applied as any edit of it is */
             if (!ts_save_prefs(&g_set, p >= 0 && p < g_nprofiles ? g_profiles[p].guid : NULL, face, pt))
                 MessageBoxW(hwnd, g_set.error[0] ? g_set.error : L"The settings file could not be written.", L"Settings", MB_OK | MB_ICONWARNING);
@@ -2146,13 +2174,18 @@ static void show_settings(void)
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     RegisterClassW(&wc);
     g_set_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT, L"SgTerminalSettings", L"Settings",
-                                WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, S(400), S(330), g_wnd, NULL, g_inst, NULL);
+                                WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, S(400), S(400), g_wnd, NULL, g_inst, NULL);
 #define ADD(cls, txt, style, X, Y, W, H, id) do { c = CreateWindowExW(0, cls, txt, WS_CHILD | WS_VISIBLE | (style), X, Y, W, H, g_set_dlg, (HMENU)(INT_PTR)(id), g_inst, NULL); \
         SendMessageW(c, WM_SETFONT, (WPARAM)g_ui_font, TRUE); } while (0)
     ADD(L"STATIC", L"Default profile", 0, x, y, w, S(20), -1); y += S(22);
     ADD(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, x, y, w, S(200), 10); y += S(36);
     for (i = 0; i < g_nprofiles; i++) SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)g_profiles[i].name);
     SendMessageW(c, CB_SETCURSEL, g_default_profile, 0);
+    ADD(L"STATIC", L"Default terminal application", 0, x, y, w, S(20), -1); y += S(22);
+    ADD(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST, x, y, w, S(120), 14); y += S(36);
+    SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)L"Terminal");
+    SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)L"Console window (Console Host)");
+    SendMessageW(c, CB_SETCURSEL, defterm_is_conhost() ? 1 : 0, 0);
     ADD(L"STATIC", L"Font face", 0, x, y, w, S(20), -1); y += S(22);
     ADD(L"EDIT", g_face, WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL, x, y, w, S(26), 11); y += S(36);
     ADD(L"STATIC", L"Font size", 0, x, y, w, S(20), -1); y += S(22);
@@ -2226,7 +2259,7 @@ static void write_dump(BOOL force)
                 g_profiles[i].hidden, g_profiles[i].user, g_icons[i] != NULL, sch, "", profile_font(i)->pt, dir);
     }
     if (g_set_dlg) {
-        static const int ids[] = { 10, 11, 12, 13, IDOK, IDCANCEL };
+        static const int ids[] = { 10, 11, 12, 13, 14, IDOK, IDCANCEL };
         size_t k;
         for (k = 0; k < ARRAYSIZE(ids); k++) {
             HWND c = GetDlgItem(g_set_dlg, ids[k]);

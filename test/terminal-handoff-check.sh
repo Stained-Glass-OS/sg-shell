@@ -91,5 +91,20 @@ i=0; while [ ! -s "$T/rc" ] && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
 [ "$(cat "$T/rc" 2>/dev/null)" = 7 ] && pass "it is still the program: start /wait gives its exit code (7)" || fail "start /wait gave '$(cat "$T/rc" 2>/dev/null)'"
 i=0; while grep -q '^tabs [1-9]' "$DUMP" 2>/dev/null && pgrep -f '[s]g-terminal64.exe --sg-handoff' >/dev/null && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
 pgrep -f '[s]g-terminal64.exe --sg-handoff' >/dev/null && fail "Terminal stayed open after the program ended: $(D tabs); $(pgrep -a -f '[.]exe' | grep -v -e services -e winedevice -e plugplay -e svchost -e rpcss -e explorer | cut -c1-90 | tr '\n' '|')" || pass "the tab, and Terminal, closed with the program"
+# Terminal's Settings: Default terminal application -- Console window turns it off
+"$W" start "$winexe" >/dev/null 2>&1
+wait_grep '^tab 1 ' 30 || fail "Terminal did not open"
+sleep 1; xdotool key ctrl+comma
+wait_grep '^setctl 14 ' 15 || fail "no Default terminal application in Settings"
+# shellcheck disable=SC2046
+set -- $(sed -n 's/^setctl 14 //p' "$DUMP" | head -1); xdotool mousemove "$1" "$2" click 1; sleep 0.8; xdotool key End Return; sleep 0.5
+# shellcheck disable=SC2046
+set -- $(sed -n 's/^setctl 1 //p' "$DUMP" | head -1); xdotool mousemove "$1" "$2" click 1; sleep 1.5
+v=$("$W" reg query 'HKCU\Console\%%Startup' /v DelegationTerminal 2>/dev/null | tr -d '\r' | awk '$1 == "DelegationTerminal" { print $3 }')
+[ "$v" = '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}' ] && pass "Settings > Default terminal application: Console window (DelegationTerminal = the console host)" \
+    || fail "DelegationTerminal is '$v'"
+"$W" start cmd /k "title SGCONWIN" >/dev/null 2>&1 &
+i=0; CW=; while [ -z "$CW" ] && [ $i -lt 40 ]; do sleep 0.5; CW=$(xdotool search --classname 'conhost.exe' 2>/dev/null | head -1); i=$((i + 1)); done
+[ -n "$CW" ] && pass "...and a new console opens in a console window again" || fail "no console window with the console host chosen"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"
