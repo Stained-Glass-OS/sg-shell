@@ -882,6 +882,39 @@ static void field(const char *text, const char *key, WCHAR *out, int cch)
     }
 }
 
+/* sg-appinfo (a Unix helper, apt-cache's reading of the package lists): what
+ * SG Store's details page shows about a Linux app or one of ours. The text it
+ * wrote (free it), or NULL. SG_APPINFO: another helper (the gate). */
+char *sys_appinfo(const WCHAR *pkg)
+{
+    WCHAR helper[MAX_PATH] = L"/usr/libexec/stained-glass/shell/sg-appinfo", args[1024], tmpdir[MAX_PATH], out[MAX_PATH], wuout[MAX_PATH * 3];
+    char uout[MAX_PATH * 3], *text;
+    static LONG seq;
+    HANDLE process;
+    DWORD waited;
+    const WCHAR *c;
+    for (c = pkg; *c; c++)      /* a package name, nothing else reaches the command line */
+        if (!iswalnum(*c) && *c != '.' && *c != '+' && *c != '-') return NULL;
+    if (!pkg[0]) return NULL;
+    GetEnvironmentVariableW(L"SG_APPINFO", helper, MAX_PATH);
+    GetTempPathW(MAX_PATH, tmpdir);
+    _snwprintf(out, MAX_PATH, L"%lssg-appinfo-%lu-%ld.txt", tmpdir, GetCurrentProcessId(), InterlockedIncrement(&seq));
+    DeleteFileW(out);
+    CloseHandle(CreateFileW(out, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL));   /* so it has a Unix name */
+    if (!sys_unix_path(out, uout, sizeof(uout))) { DeleteFileW(out); return NULL; }
+    DeleteFileW(out);
+    MultiByteToWideChar(CP_UTF8, 0, uout, -1, wuout, ARRAYSIZE(wuout));
+    _snwprintf(args, ARRAYSIZE(args), L"%ls \"%ls\"", pkg, wuout);
+    args[ARRAYSIZE(args) - 1] = 0;
+    if (!run_unix(helper, args, &process)) return NULL;
+    WaitForSingleObject(process, 30000);
+    CloseHandle(process);
+    for (waited = 0; GetFileAttributesW(out) == INVALID_FILE_ATTRIBUTES && waited < 15000; waited += 50) Sleep(50);
+    text = read_small(out, 1 << 18);
+    DeleteFileW(out);
+    return text;
+}
+
 /* sg-debinfo (a Unix helper, dpkg-deb's reading of the file) */
 static void deb_read_info(debwin_t *d)
 {

@@ -8,6 +8,16 @@ sg-shell (0.1.0-108) unstable; urgency=medium
     terminal window as before. Run as administrator stays the root
     terminal. Depends: wine-sg (>= 10.0-156). terminal-handoff-check (mutant
     SG_MUTANT_LINUX_TERMINAL_NOT_TABBED).
+  * SG Store: a click on an app -- not its Install button or its box --
+    opens its page (David 2026-10-04: "more information, like what source
+    they're coming from, and full length descriptions"): where it comes
+    from (the maker's site as the winget repository lists it, checked by
+    SHA-256; or the package and the repository apt gets it from), its whole
+    description (winget's locale manifest; the package lists through the
+    new sg-appinfo helper, apt-cache), website, licence, versions, size,
+    publisher or maintainer; Install, Open, Update and Uninstall there too;
+    Back, Esc or the mouse's back button return to the list as it was.
+    store-check K2 (mutant SG_MUTANT_NODETAILS).
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 16:10:00 +0000
 

@@ -40,6 +40,9 @@
 #      a second Install waits its turn (the queue); Uninstall runs a Windows
 #      program's QuietUninstallString, and apt-get remove (sg-admind's
 #      apt-remove) for a Linux app -- never one of the system's own packages
+#   K2. David 2026-10-04: a click on an app opens its page -- where it comes
+#      from, its whole description (winget's locale manifest; apt-cache for a
+#      Linux app), site, licence, size; Back and Esc return to the list
 #   M. David 2026-10-03: several apps at once, the administrator asked once:
 #      --install-batch of two Linux apps starts one elevated helper, which
 #      runs both apt installs and then goes; another process is refused by
@@ -95,7 +98,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-STORE_SRC="$HERE/src/store/main.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
+STORE_SRC="$HERE/src/store/main.c $HERE/src/store/details.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
 STORE_LIBS="-lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
 build_mut() { # define outfile
     # shellcheck disable=SC2086
@@ -203,6 +206,25 @@ Installers:
   InstallerSha256: $ZSHA
 ManifestType: installer
 EOF
+# what Fake App says about itself (its locale manifest): the details page's text
+cat > "$W/raw/f/Fake/App/1.10.0/Fake.App.locale.en-US.yaml" <<'EOF'
+PackageIdentifier: Fake.App
+PackageVersion: 1.10.0
+PackageLocale: en-US
+Publisher: Fake Makers
+PublisherUrl: https://fake.example
+PackageName: Fake App
+PackageUrl: https://fake.example/app
+License: MIT
+ShortDescription: A fake app for the gate.
+Description: |-
+  Fake App's first paragraph, the long one,
+  over two lines.
+
+  Its second paragraph: everything it does.
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
+EOF
 (cd "$W" && exec python3 -m http.server "$PORT" --bind 127.0.0.1 > "$T/http.log" 2>&1) & HP=$!
 
 Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display" >/dev/null 2>&1 & XP=$!
@@ -263,7 +285,16 @@ chmod +x "$B"/*
 SG_ADMIN_SYSTEM_UID=$(id -u)
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_SYSTEM_UID SG_ADMIN_DEBS="$DEBS" SG_ADMIN_WORK="$T/work"
 ( while :; do python3 "$HERE/admin/sg-admind" 2>>"$T/admind.log"; sleep 0.3; done ) & AP=$!
-export SG_STORE_DIRECT=1 SG_DEBINFO="$HERE/src/store/sg-debinfo"
+export SG_STORE_DIRECT=1 SG_DEBINFO="$HERE/src/store/sg-debinfo" SG_APPINFO="$HERE/src/store/sg-appinfo" SG_APTCACHE="$B/apt-cache"
+# the package lists, as apt-cache reads them, for the details page
+cat > "$B/apt-cache" <<'EOF'
+#!/bin/sh
+case "$1 $*" in
+show*sg-gate-tool*) printf 'Package: sg-gate-tool\nVersion: 2.5-1\nInstalled-Size: 2048\nMaintainer: Gate Team <gate@example.org>\nSection: utils\nHomepage: https://gate.example.org\nDescription-en: a tool for the gate\n The gate tool long description, first paragraph.\n .\n Second paragraph of the gate tool.\nDescription-md5: 0\n' ;;
+policy*sg-gate-tool*) printf 'sg-gate-tool:\n  Installed: (none)\n  Candidate: 2.5-1\n  Version table:\n     2.5-1 500\n        500 http://deb.debian.org/debian trixie/main amd64 Packages\n' ;;
+esac
+EOF
+chmod 755 "$B/apt-cache"
 SG_DPKG_STATUS=$(wine winepath -w "$T/dpkg-status" 2>/dev/null | tr -d '\r'); export SG_DPKG_STATUS
 
 # --- the gate's catalogue ------------------------------------------------------------------------
@@ -787,6 +818,40 @@ wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")
 [ "$v" != NOWINDOW ] && [ "$v" != "2 05 L1" ] && pass "MUTANT NOSEARCH lists everything after \"gimp\" (gate catches it)" || fail "NOSEARCH not detected ('$v')"
 wine taskkill /f /im mut-nosearch.exe >/dev/null 2>&1
+
+# --- K2. an app's page (David 2026-10-04): a click on it, not its buttons, says more -------------
+# where it comes from, the whole description, its site and licence; Back
+rm -f "$D"
+wine "$EXE" >/dev/null 2>&1 &
+if waitfor "$D" '^window 1' 60; then
+    sleep 0.8
+    click "$D" "search -"; sleep 0.4; xdotool type --delay 60 fake; sleep 1
+    click "$D" "card 01" && waitfor "$D" '^detail 01 ready=1' 60
+    if grep -q '^detail 01 ready=1' "$D"; then
+        pass "a click on Fake App opens its page"
+        grep -q "^detail-desc Fake App's first paragraph, the long one,|over two lines.||Its second paragraph: everything it does.$" "$D" \
+            && pass "...with its whole description, from the winget repository's locale manifest" || fail "description: $(field detail-desc)"
+        grep -q '^detail-source .*winget community repository lists it (Fake.App).*SHA-256' "$D" && pass "...where it comes from (its maker's site, as winget lists it, checked)" \
+            || fail "source: $(field detail-source)"
+        [ "$(field detail-homepage)" = https://fake.example/app ] && [ "$(field detail-license)" = MIT ] && [ "$(field detail-version)" = 1.10.0 ] \
+            && pass "...its site, licence and latest version" || fail "facts: $(field detail-homepage) $(field detail-license) $(field detail-version)"
+        grep -q '^hit install 01 ' "$D" && pass "...and its Install button" || fail "no Install on the page"
+        import -window root "$OUT/store-details.png" 2>/dev/null
+        click "$D" "back -"; sleep 1
+        [ "$(field detail)" = - ] && [ "$(field search)" = fake ] && pass "Back returns to the list as it was (the search kept)" || fail "after Back: detail '$(field detail)' search '$(field search)'"
+    else fail "a click on the card did not open its page: $(grep '^detail' "$D" | head -3 | tr '\n' '|')"; fi
+    xdotool key Escape; sleep 0.4; xdotool key Escape; sleep 0.6     # to the search box, then cleared
+    click "$D" "category Linux" && sleep 0.8
+    click "$D" "card L2" && waitfor "$D" '^detail L2 ready=1' 60
+    grep -q '^detail-desc The gate tool long description, first paragraph.||Second paragraph of the gate tool.$' "$D" \
+        && pass "a Linux app's page has the package's long description (apt-cache)" || fail "Linux description: $(field detail-desc)"
+    grep -q "^detail-source .*package sg-gate-tool from deb.debian.org (Debian's own repository)" "$D" \
+        && pass "...and the repository apt gets it from" || fail "Linux source: $(field detail-source)"
+    [ "$(field detail-size)" = "2.0 MB" ] && pass "...and its installed size" || fail "size: $(field detail-size)"
+    xdotool key Escape; sleep 0.8
+    [ "$(field detail)" = - ] && pass "Esc closes the page" || fail "Esc: detail '$(field detail)'"
+else fail "the window did not open (details)"; fi
+wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 
 # --- L. one app, two builds; its picture; the queue; Uninstall -----------------------------------
 reg "$K\\05" /v Linux /d L1

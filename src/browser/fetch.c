@@ -178,6 +178,40 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     return TRUE;
 }
 
+/* What a package says about itself, for SG Store's details page: its
+ * newest version's locale manifest -- the user's language, else en-US, else
+ * an older package's single file -- as text (free it), and that version. */
+char *winget_locale_manifest(const WCHAR *id, WCHAR *version, int vcch, WCHAR *err, int cch)
+{
+    WCHAR base[1024], path[512], url[2048], locale[LOCALE_NAME_MAX_LENGTH] = L"en-US";
+    const WCHAR *tries[3];
+    char *json, *yaml = NULL, ver[64];
+    DWORD status = 0;
+    int k;
+    if (!id_path(id, path, 512)) { seterr(err, cch, L"'%ls' is not a package name.", id); return NULL; }
+    source_url(L"ListUrl", DEFAULT_LIST, base, 1024);
+    swprintf(url, 2048, L"%ls%ls", base, path);
+    if (!(json = http_get(url, &status, err, cch))) return NULL;
+    k = mf_newest_version(json, ver, sizeof(ver));
+    free(json);
+    if (!k) { seterr(err, cch, L"No version of %ls was found.", id); return NULL; }
+    MultiByteToWideChar(CP_UTF8, 0, ver, -1, version, vcch);
+    source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
+    GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH);
+    tries[0] = locale; tries[1] = L"en-US"; tries[2] = NULL;
+    for (k = 0; k < 2 && !yaml; k++) {
+        if (k && !lstrcmpiW(tries[0], tries[1])) break;
+        swprintf(url, 2048, L"%ls%ls/%ls/%ls.locale.%ls.yaml", base, path, version, id, tries[k]);
+        yaml = http_get(url, &status, err, cch);
+    }
+    if (!yaml) {
+        swprintf(url, 2048, L"%ls%ls/%ls/%ls.yaml", base, path, version, id);
+        yaml = http_get(url, &status, err, cch);
+    }
+    if (yaml) err[0] = 0;
+    return yaml;
+}
+
 /* ---- download and check ------------------------------------------------------------------------- */
 
 static void file_name_from_url(const WCHAR *url, const WCHAR *type, WCHAR *out, int cch)

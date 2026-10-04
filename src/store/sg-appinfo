@@ -1,0 +1,54 @@
+#!/bin/sh
+# sg-appinfo PACKAGE OUT -- what SG Store's details page says about a Linux
+# app or one of ours: the system's package lists (apt-cache), read only.
+#
+# OUT receives, one per line (written whole: renamed into place):
+#   VERSION the version that would be installed / INSTALLED the one that is, or -
+#   SUMMARY the one-line description / DESC a line of the long one (as many
+#   as it has; an empty one between paragraphs) / HOMEPAGE url / SECTION s /
+#   SIZE installed size in KB / MAINTAINER who / ORIGIN where apt gets it
+#   (the repository's address and suite)
+#   OK
+# or ERROR <why>.
+# SG_APTCACHE: another apt-cache (the gate's).
+#
+# Copyright (C) 2026 Stained Glass OS contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -u
+[ $# -eq 2 ] || { echo "usage: sg-appinfo PACKAGE OUT" >&2; exit 2; }
+pkg=$1 out=$2
+part="$out.part"
+: > "$part" || exit 1
+say() { printf '%s\n' "$*" >> "$part"; }
+finish() { mv -f "$part" "$out"; exit 0; }
+# what the lists say is shown, not trusted: no control characters, bounded
+clean() { tr -d '\000-\010\013-\037\177' | cut -c1-400; }
+case "$pkg" in
+    ''|*[!a-z0-9.+-]*) say "ERROR invalid package name"; finish ;;
+esac
+APTCACHE=${SG_APTCACHE:-apt-cache}
+info=$("$APTCACHE" show --no-all-versions "$pkg" 2>/dev/null | head -n 400)
+[ -n "$info" ] || { say "ERROR unknown package"; finish; }
+field() { printf '%s\n' "$info" | sed -n "s/^$1: //p" | head -n 1 | clean; }
+say "VERSION $(field Version)"
+say "HOMEPAGE $(field Homepage)"
+say "SECTION $(field Section)"
+say "SIZE $(field Installed-Size)"
+say "MAINTAINER $(field Maintainer)"
+printf '%s\n' "$info" | awk '
+    /^Description(-[A-Za-z_]+)?: / { if (seen) exit; seen = 1; p = 1; sub(/^Description(-[A-Za-z_]+)?: /, ""); print "SUMMARY " $0; next }
+    p && /^ / { l = substr($0, 2); if (l == ".") l = ""; print "DESC " l; next }
+    p { p = 0 }' | head -n 120 | clean >> "$part"
+# where it comes from: the candidate version's first source
+policy=$("$APTCACHE" policy "$pkg" 2>/dev/null | head -n 60)
+cand=$(printf '%s\n' "$policy" | sed -n 's/^ *Candidate: //p' | head -n 1)
+inst=$(printf '%s\n' "$policy" | sed -n 's/^ *Installed: //p' | head -n 1)
+[ "$inst" = "(none)" ] && inst=-
+say "INSTALLED ${inst:--}"
+origin=$(printf '%s\n' "$policy" | awk -v c="$cand" '
+    $1 == "***" { v = $2; next }                        # " *** VERSION PRIORITY": installed
+    NF == 2 && $2 ~ /^[0-9]+$/ && $1 !~ /^[0-9]+$/ { v = $1; next }   # "     VERSION PRIORITY"
+    v == c && $2 ~ /^(https?|file|ftp):/ { print $2 " " $3; exit }' | clean)
+say "ORIGIN ${origin:--}"
+say OK
+finish

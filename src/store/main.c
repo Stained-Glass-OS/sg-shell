@@ -35,10 +35,13 @@
 #include <shellapi.h>
 #include <commdlg.h>
 
-static app_t g_apps[MAX_APPS];
-static int g_napps;
+app_t g_apps[MAX_APPS];      /* details.c reads them */
+int g_napps;
 static WCHAR g_dump[MAX_PATH];
-static HWND g_wnd, g_search;
+HWND g_wnd;
+static HWND g_search;
+static int g_detail = -1;                 /* the app whose details page is open, or -1: the list */
+static int g_list_scroll;                 /* the list's scroll while a details page is open */
 static WNDPROC g_search_proc;
 static HFONT g_f_title, g_f_head, g_f_body, g_f_small;
 static int g_dpi = 96, g_scroll, g_extent;
@@ -70,7 +73,7 @@ static const WCHAR *const g_cats[] = {
 
 /* hit rectangles, for the mouse and the gate */
 enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON,
-       H_CHECK, H_INSTALLSEL };
+       H_CHECK, H_INSTALLSEL, H_BACK, H_HOMEPAGE };
 typedef struct { int verb, idx; RECT rc; } hit_t;
 static hit_t g_hits[MAX_APPS * 3 + 32];
 static int g_nhits;
@@ -286,11 +289,36 @@ static void dump(void)
     }
     dumpf(f, L"\n");
     dumpf(f, L"selected %ls\n", g_sel >= 0 ? g_apps[g_sel].ord : L"-");
+    if (g_detail >= 0) {
+        int t = card_target(g_detail);
+        details_t *d = details_get(t);
+        WCHAR src[1024], first[400];
+        int k;
+        details_source(&g_apps[t], d, src, ARRAYSIZE(src));
+        dumpf(f, L"detail %ls ready=%d\n", g_apps[t].ord, d && d->state == 2);
+        dumpf(f, L"detail-source %ls\n", src);
+        if (d && d->state == 2) {
+            lstrcpynW(first, d->desc, ARRAYSIZE(first));
+            for (k = 0; first[k]; k++) if (first[k] == '\n') first[k] = '|';
+            dumpf(f, L"detail-desc %ls\n", first);
+            dumpf(f, L"detail-desc-length %d\n", lstrlenW(d->desc));
+            dumpf(f, L"detail-version %ls\n", d->version[0] ? d->version : L"-");
+            dumpf(f, L"detail-homepage %ls\n", d->homepage[0] ? d->homepage : L"-");
+            dumpf(f, L"detail-license %ls\n", d->license[0] ? d->license : L"-");
+            dumpf(f, L"detail-size %ls\n", d->size[0] ? d->size : L"-");
+            if (d->error[0]) dumpf(f, L"detail-error %ls\n", d->error);
+        }
+    } else dumpf(f, L"detail -\n");
     dumpf(f, L"focus %ls\n", g_wnd && GetFocus() == g_search ? L"search" : L"list");
     for (i = 0; i < g_nhits; i++) {
         POINT pt = { (g_hits[i].rc.left + g_hits[i].rc.right) / 2, (g_hits[i].rc.top + g_hits[i].rc.bottom) / 2 };
+        if (g_hits[i].verb == H_CARD) {     /* a point of the card that is no button: its name's row */
+            pt.x = g_hits[i].rc.left + (g_hits[i].rc.right - g_hits[i].rc.left) / 4;
+            pt.y = g_hits[i].rc.top + dpx(22);
+        }
         static const WCHAR *const verbs[] = { L"install", L"open", L"update", L"checkall", L"category", L"fromfile", L"card",
-                                              L"build", L"uninstall", L"unqueue", L"icon", L"check", L"installsel" };
+                                              L"build", L"uninstall", L"unqueue", L"icon", L"check", L"installsel",
+                                              L"back", L"homepage" };
         if (g_wnd) ClientToScreen(g_wnd, &pt);
         dumpf(f, L"hit %ls %ls %d %d\n", verbs[g_hits[i].verb],
               g_hits[i].verb == H_CAT ? g_cats[g_hits[i].idx] : g_hits[i].idx >= 0 ? g_apps[g_hits[i].idx].ord : L"-",
@@ -741,6 +769,196 @@ static void layout_search(HWND hwnd)
     if (g_search) MoveWindow(g_search, x + dpx(70), dpx(66), w - dpx(70), dpx(28), TRUE);
 }
 
+/* ---- an app's details page ------------------------------------------------------------------------- */
+
+/* text wrapped in a width: drawn at y, the height it took */
+static int wrapped(HDC dc, HFONT font, COLORREF col, int x, int w, int y, const WCHAR *s, int client_bottom)
+{
+    RECT r = { x, y, x + w, y + 10 };
+    HFONT of = SelectObject(dc, font);
+    DrawTextW(dc, s, -1, &r, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
+    SelectObject(dc, of);
+    if (r.bottom >= 0 && r.top <= client_bottom) text(dc, font, col, r, s, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX);
+    return r.bottom - r.top;
+}
+
+static int fact(HDC dc, int x, int w, int y, const WCHAR *label, const WCHAR *value, int client_bottom)
+{
+    int h;
+    RECT l = { x, y, x + dpx(150), y + dpx(22) };
+    if (!value || !value[0]) return 0;
+    text(dc, g_f_body, C_SUB, l, label, DT_LEFT | DT_TOP | DT_SINGLELINE);
+    h = wrapped(dc, g_f_body, C_TEXT, x + dpx(160), w - dpx(160), y, value, client_bottom);
+    return max(h, dpx(22)) + dpx(6);
+}
+
+static void paint_details(HDC dc, const RECT *rc)
+{
+    int t = card_target(g_detail), x, w, y, head = dpx(64), badge = dpx(72), bx;
+    app_t *a = &g_apps[g_detail], *s = &g_apps[t];
+    details_t *d = details_get(t);
+    BOOL ready = d && d->state == 2;
+    WCHAR line[1024];
+    HBITMAP pic;
+
+    content_box(rc, &x, &w);
+    if (w > dpx(900)) { x += (w - dpx(900)) / 2; w = dpx(900); }
+    y = head + dpx(16) - g_scroll;
+
+    /* what it is */
+    pic = icon_for(a);
+    if (!pic) pic = icon_for(s);
+    if (pic) {
+        HDC mdc = CreateCompatibleDC(dc);
+        HBITMAP ob = SelectObject(mdc, pic);
+        BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+        BITMAP bm;
+        GetObjectW(pic, sizeof(bm), &bm);
+        AlphaBlend(dc, x, y, badge, badge, mdc, 0, 0, bm.bmWidth, bm.bmHeight, bf);
+        SelectObject(mdc, ob);
+        DeleteDC(mdc);
+    } else {
+        DWORD c = a->colour;
+        HBRUSH bb = CreateSolidBrush(RGB((c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff)), ob = SelectObject(dc, bb);
+        HPEN np = SelectObject(dc, GetStockObject(NULL_PEN));
+        WCHAR letter[2] = { a->name[0], 0 };
+        RECT br = { x, y, x + badge, y + badge };
+        RoundRect(dc, br.left, br.top, br.right, br.bottom, dpx(10), dpx(10));
+        SelectObject(dc, ob); SelectObject(dc, np); DeleteObject(bb);
+        text(dc, g_f_title, RGB(255, 255, 255), br, letter, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+    {
+        RECT n = { x + badge + dpx(18), y, x + w, y + dpx(40) };
+        text(dc, g_f_title, C_TEXT, n, a->name, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        n.top = n.bottom; n.bottom = n.top + dpx(22);
+        swprintf(line, ARRAYSIZE(line), L"%ls  \x00b7  %ls  \x00b7  %ls", a->publisher, a->category,
+                 s->tier == TIER_LINUX ? L"Linux app" : s->tier == TIER_OURS ? L"Made for Stained Glass OS" : L"Windows program");
+        text(dc, g_f_body, C_SUB, n, line, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    }
+    y += badge + dpx(14);
+
+    /* what it can do: the card's buttons */
+    bx = x;
+    {
+        RECT bt = { bx, y, bx + dpx(140), y + dpx(34) };
+        if (t == g_busy || s->state == AST_INSTALLING || s->state == AST_REMOVING) {
+            text(dc, g_f_body, C_SUB, bt, s->state == AST_REMOVING ? L"Uninstalling..." : L"Installing...", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        } else if (s->queued) {
+            button(dc, bt, L"Cancel", FALSE); add_hit(H_UNQUEUE, t, bt);
+        } else if (has_it(s)) {
+            button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", TRUE);
+            add_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt);
+            if (can_uninstall(s)) {
+                RECT b2 = { bt.right + dpx(10), bt.top, bt.right + dpx(150), bt.bottom };
+                button(dc, b2, L"Uninstall", FALSE); add_hit(H_UNINSTALL, t, b2);
+            }
+        } else {
+            button(dc, bt, s->state == AST_FAILED ? L"Try again" : L"Install", TRUE);
+            add_hit(H_INSTALL, t, bt);
+            if (a->alt >= 0) {
+                RECT b2 = { bt.right + dpx(10), bt.top, bt.right + dpx(190), bt.bottom };
+                button(dc, b2, a->use_alt ? L"Linux app  \x25be" : L"Windows program  \x25be", FALSE);
+                add_hit(H_BUILD, g_detail, b2);
+            }
+        }
+        y += dpx(48);
+    }
+    if (s->msg[0]) { y += wrapped(dc, g_f_small, s->msg_error || s->state == AST_FAILED ? C_ERR : C_SUB, x, w, y, s->msg, rc->bottom) + dpx(8); }
+
+    /* where it comes from */
+    {
+        RECT h = { x, y, x + w, y + dpx(28) };
+        text(dc, g_f_head, C_TEXT, h, L"Where it comes from", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        y += dpx(32);
+        details_source(s, ready ? d : NULL, line, ARRAYSIZE(line));
+        y += wrapped(dc, g_f_body, C_TEXT, x, w, y, line, rc->bottom) + dpx(18);
+    }
+
+    /* what it is, in its maker's words */
+    {
+        RECT h = { x, y, x + w, y + dpx(28) };
+        text(dc, g_f_head, C_TEXT, h, L"About", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        y += dpx(32);
+        if (!ready) y += wrapped(dc, g_f_body, C_SUB, x, w, y, L"Fetching its description...", rc->bottom) + dpx(18);
+        else {
+            if (d->summary[0] && lstrcmpW(d->summary, d->desc)) y += wrapped(dc, g_f_head, C_TEXT, x, w, y, d->summary, rc->bottom) + dpx(8);
+            y += wrapped(dc, g_f_body, C_TEXT, x, w, y, d->desc, rc->bottom) + dpx(18);
+        }
+    }
+
+    /* the facts */
+    {
+        RECT h = { x, y, x + w, y + dpx(28) };
+        WCHAR id[160] = L"";
+        text(dc, g_f_head, C_TEXT, h, L"Details", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        y += dpx(34);
+        if (ready && d->version[0]) y += fact(dc, x, w, y, s->tier == TIER_WINDOWS ? L"Latest version" : L"Version", d->version, rc->bottom);
+        else if (s->available_version[0]) y += fact(dc, x, w, y, L"Latest version", s->available_version, rc->bottom);
+        if (s->installed_version[0]) y += fact(dc, x, w, y, L"Installed", s->installed_version, rc->bottom);
+        if (ready) {
+            if (d->homepage[0]) {
+                RECT l = { x, y, x + dpx(150), y + dpx(22) }, v = { x + dpx(160), y, x + w, y + dpx(22) };
+                HFONT of = SelectObject(dc, g_f_body);
+                SIZE sz;
+                text(dc, g_f_body, C_SUB, l, L"Website", DT_LEFT | DT_TOP | DT_SINGLELINE);
+                GetTextExtentPoint32W(dc, d->homepage, lstrlenW(d->homepage), &sz);
+                SelectObject(dc, of);
+                v.right = min(v.left + sz.cx, x + w);
+                text(dc, g_f_body, C_SEL, v, d->homepage, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS);
+                add_hit(H_HOMEPAGE, t, v);
+                y += dpx(28);
+            }
+            y += fact(dc, x, w, y, L"License", d->license, rc->bottom);
+            y += fact(dc, x, w, y, L"Installed size", d->size, rc->bottom);
+            y += fact(dc, x, w, y, s->tier == TIER_WINDOWS ? L"Publisher" : L"Maintainer", d->maintainer, rc->bottom);
+            if (d->origin[0] && s->tier != TIER_WINDOWS) y += fact(dc, x, w, y, L"Repository", d->origin, rc->bottom);
+            if (d->error[0]) y += fact(dc, x, w, y, L"Note", d->error, rc->bottom);
+        }
+        if (s->method == SRC_WINGET) swprintf(id, ARRAYSIZE(id), L"%ls (winget)", s->winget_id);
+        else if (s->apt_pkg[0]) swprintf(id, ARRAYSIZE(id), L"%ls (apt)", s->apt_pkg);
+        y += fact(dc, x, w, y, L"Package", id, rc->bottom);
+    }
+    g_extent = y + g_scroll + dpx(30);
+
+    /* the bar over it: Back */
+    {
+        RECT hb = { 0, 0, rc->right, head }, bt = { x, dpx(14), x + dpx(110), dpx(48) }, tt;
+        HBRUSH bg = CreateSolidBrush(C_BG);
+        HPEN pen = CreatePen(PS_SOLID, 1, C_LINE), op;
+        FillRect(dc, &hb, bg); DeleteObject(bg);
+        op = SelectObject(dc, pen);
+        MoveToEx(dc, 0, head - 1, NULL); LineTo(dc, rc->right, head - 1);
+        SelectObject(dc, op); DeleteObject(pen);
+        button(dc, bt, L"\x2190  Back", FALSE);
+        add_hit(H_BACK, -1, bt);
+        tt.left = bt.right + dpx(16); tt.top = bt.top; tt.right = x + w; tt.bottom = bt.bottom;
+        text(dc, g_f_head, C_TEXT, tt, L"SG Store", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
+static void open_details(HWND hwnd, int i)
+{
+    if (i < 0 || i >= g_napps) return;
+    g_detail = i;
+    g_sel = i;
+    g_list_scroll = g_scroll;
+    g_scroll = 0;
+    details_get(card_target(i));
+    ShowWindow(g_search, SW_HIDE);
+    SetFocus(hwnd);
+    InvalidateRect(hwnd, NULL, FALSE);
+}
+
+static void close_details(HWND hwnd)
+{
+    if (g_detail < 0) return;
+    g_detail = -1;
+    g_scroll = g_list_scroll;
+    ShowWindow(g_search, SW_SHOW);
+    SetFocus(hwnd);
+    InvalidateRect(hwnd, NULL, FALSE);
+}
+
 static void paint(HWND hwnd)
 {
     PAINTSTRUCT ps;
@@ -756,6 +974,7 @@ static void paint(HWND hwnd)
     { HBRUSH bg = CreateSolidBrush(C_BG); FillRect(dc, &rc, bg); DeleteObject(bg); }
 
     g_nhits = 0;
+    if (g_detail >= 0) { paint_details(dc, &rc); goto drawn; }
     g_cols = cols = content_box(&rc, &x, &w);
     colw = (w - (cols - 1) * dpx(CARD_GAP)) / cols;
 
@@ -852,6 +1071,7 @@ static void paint(HWND hwnd)
              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     }
 
+drawn:
     BitBlt(wdc, 0, 0, rc.right, rc.bottom, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbmp);
     DeleteObject(bmp);
@@ -872,7 +1092,7 @@ static int hit_at(int cx, int cy, int *verb, int *idx)
 {
     POINT pt = { cx, cy };
     int i;
-    if (cy < header_height()) {
+    if (cy < header_height() && g_detail < 0) {
         for (i = 0; i < g_nhits; i++)
             if ((g_hits[i].verb == H_CHECKALL || g_hits[i].verb == H_CAT || g_hits[i].verb == H_FROMFILE ||
                  g_hits[i].verb == H_INSTALLSEL) && PtInRect(&g_hits[i].rc, pt))
@@ -991,6 +1211,13 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (LOWORD(wp) != WA_INACTIVE) { redetect(); InvalidateRect(hwnd, NULL, FALSE); }
         if (LOWORD(wp) != WA_INACTIVE && g_sel < 0) SetFocus(g_search);
         return 0;
+    case WM_DETAILS:
+        if (g_detail >= 0) InvalidateRect(hwnd, NULL, FALSE);
+        dump();
+        return 0;
+    case WM_XBUTTONUP:
+        if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) close_details(hwnd);
+        return TRUE;
     case WM_ICONS:
         InvalidateRect(hwnd, NULL, FALSE);
         if (wp) dump();
@@ -1008,11 +1235,32 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             else if (verb == H_INSTALLSEL) install_selected();
             else if (verb == H_FROMFILE) install_from_file();
             else if (verb == H_CAT) set_category(hwnd, idx);
+#ifndef SG_MUTANT_NODETAILS
+            else if (verb == H_CARD || verb == H_ICON) open_details(hwnd, idx);   /* the card, not its buttons: its page */
+#else
             else if (verb == H_CARD) { g_sel = idx; SetFocus(hwnd); InvalidateRect(hwnd, NULL, FALSE); }
+#endif
+            else if (verb == H_BACK) close_details(hwnd);
+            else if (verb == H_HOMEPAGE) {
+                details_t *d = details_get(idx);
+                if (d && (!wcsncmp(d->homepage, L"https://", 8) || !wcsncmp(d->homepage, L"http://", 7)))
+                    ShellExecuteW(hwnd, NULL, d->homepage, NULL, NULL, SW_SHOWNORMAL);
+            }
         }
         return 0;
     }
     case WM_KEYDOWN:
+        if (g_detail >= 0) {
+            switch (wp) {
+            case VK_ESCAPE: case VK_BACK: case VK_BROWSER_BACK: close_details(hwnd); return 0;
+            case VK_RETURN: activate(g_detail); InvalidateRect(hwnd, NULL, FALSE); return 0;
+            case VK_DOWN: scroll_to(hwnd, g_scroll + dpx(40)); return 0;
+            case VK_UP: scroll_to(hwnd, g_scroll - dpx(40)); return 0;
+            case VK_NEXT: scroll_to(hwnd, g_scroll + dpx(300)); return 0;
+            case VK_PRIOR: scroll_to(hwnd, g_scroll - dpx(300)); return 0;
+            }
+            return 0;
+        }
         switch (wp) {
         case VK_DOWN: move_selection(hwnd, 1); return 0;
         case VK_UP: move_selection(hwnd, -1); return 0;
@@ -1031,7 +1279,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_CHAR:
         /* typing in the list goes to the search box */
-        if (wp >= L' ' && wp != 0x7f && GetFocus() == hwnd) {
+        if (g_detail < 0 && wp >= L' ' && wp != 0x7f && GetFocus() == hwnd) {
             SetFocus(g_search);
             SendMessageW(g_search, EM_SETSEL, -1, -1);
             SendMessageW(g_search, WM_CHAR, wp, lp);

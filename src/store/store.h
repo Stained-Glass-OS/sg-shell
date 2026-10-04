@@ -84,6 +84,7 @@ typedef struct {
 } app_t;
 
 #define MAX_APPS 512   /* the catalogue: 200-odd apps, Linux ones among them */
+#define WM_DETAILS (WM_APP + 7)   /* an app's details are in (details.c): wParam, the app */
 
 /* The categories, in the order the store shows them; Linux apps come last,
  * in a section of their own. */
@@ -119,5 +120,15 @@ int  sys_helper_main(const WCHAR *file);                        /* --elevated-he
 int  sys_deb_window(HINSTANCE inst, const WCHAR *file);         /* --deb FILE */
 BOOL sys_unix_path(const WCHAR *dos, char *out, int cch);
 void sys_run_linux(const WCHAR *unix_path);
+char *sys_appinfo(const WCHAR *pkg);
+/* the details page (details.c): what an app is, where it comes from */
+typedef struct {
+    volatile LONG state;          /* 0 not asked, 1 fetching, 2 ready */
+    WCHAR summary[512], homepage[512], license[256], version[64], installed[64], size[64];
+    WCHAR origin[512], maintainer[256], section[64], error[256];
+    WCHAR desc[12000];            /* the long description, paragraphs separated by blank lines */
+} details_t;
+details_t *details_get(int i);    /* the app's details, fetching them the first time (on a thread) */
+void details_source(const app_t *a, const details_t *d, WCHAR *out, int cch);
 
 #endif
