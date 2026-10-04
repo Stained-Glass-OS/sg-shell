@@ -1,3 +1,18 @@
+sg-shell (0.1.0-106) unstable; urgency=medium
+
+  * Task Manager lists the machine's Linux processes (David 2026-10-03, his
+    X1's fan: the CPU total said 14% and no process came near it). Under
+    "Linux processes" on the Processes tab: every process that is not a
+    Windows one, read from /proc, by name (an interpreter by its script),
+    with its CPU, memory, PID, user and command line, and the kernel's own
+    threads as one row; End task sends SIGTERM, then SIGKILL 3 s on. Read
+    only while the Processes tab is in view (a few percent of a CPU each
+    refresh otherwise). Not on Details or Users. taskmgr-check: a Linux CPU
+    burner listed at one CPU's share and ended; no Windows process listed
+    twice (mutants SG_MUTANT_NO_LINUX_PROCS; always reading /proc).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 04 Oct 2026 05:10:00 +0000
+
 sg-shell (0.1.0-105) unstable; urgency=medium
 
   * Voice typing reaches Linux programs (David 2026-10-03: "doesn't make it

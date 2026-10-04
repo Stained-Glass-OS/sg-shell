@@ -196,9 +196,45 @@ else
     fail "the Linux window is not listed: $(d | grep 'Linux Test')"
 fi
 
+# Linux processes (David 2026-10-03: the CPU total said 14% and no process
+# came near it): a Linux process that burns a CPU is listed under "Linux
+# processes" (group 3) by its script's name, busy; the kernel's threads are
+# one row; Windows processes are not listed twice; End task ends it (SIGTERM).
+printf 'while :; do :; done\n' > "$T/sglinuxburn.sh"
+sh "$T/sglinuxburn.sh" & LBURN=$!
+LKEY=$(( 0xE0000000 + LBURN ))
+if wait_dump "^PROC $LKEY	3	sh	sglinuxburn.sh	[1-9][0-9.]*	" 15; then pass "a Linux process is listed under Linux processes, busy ($(d | grep "^PROC $LKEY	" | cut -f5)%)"
+else fail "the Linux burner is not listed busy: $(d | grep -E "^PROC $LKEY	|sglinuxburn" | head -2)"; fi
+d | grep -q '^PROC 3758096384	3	kernel	Linux kernel	' && pass "the kernel's threads are one row (Linux kernel)" || fail "no Linux kernel row"
+d | grep -E '^PROC [0-9]+	3	' | cut -f3 | grep -qi '\.exe$' && fail "a Windows process is listed again as a Linux one: $(d | grep -E '^PROC [0-9]+	3	' | cut -f3 | grep -i '\.exe$' | head -3 | tr '\n' ' ')" \
+    || pass "Windows processes are not listed twice"
+one=$(d | awk '/^PERF / { for (i = 1; i < NF; i++) if ($i == "NCPU") print 100 / $(i + 1) }')
+busy=$(d | grep "^PROC $LKEY	" | cut -f5)
+awk -v b="${busy:-0}" -v o="$one" 'BEGIN { exit !(b >= o * 0.6 && b <= o * 1.2) }' \
+    && pass "its CPU is one CPU's share ($busy% of the machine, one CPU = $one%)" || fail "the burner shows ${busy:-?}%, one CPU is $one%"
+# its row: page down through the list to it
+xy=$(d | awk '$1 == "ROW" && $5 == 0 { print $3, $4; exit }')
+# shellcheck disable=SC2086
+[ -n "$xy" ] && click $xy
+n=0; while ! d | grep -q '^ROW .*sglinuxburn' && [ $n -lt 40 ]; do xdotool key Next; sleep 0.6; n=$((n + 1)); done
+xy=$(d | awk '$1 == "ROW" && /sglinuxburn/ { print $3, $4; exit }')
+if [ -n "$xy" ]; then
+    # shellcheck disable=SC2086
+    click $xy
+    set -- $(d | awk '$1 == "BUTTON" { print $2, $3 }')
+    click "$1" "$2"
+    alive() { [ -d "/proc/$1" ] && ! grep -q '^State:.*Z' "/proc/$1/status" 2>/dev/null; }   # a zombie (ours to reap) has ended
+    i=0; while alive "$LBURN" && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+    alive "$LBURN" && fail "End task did not end the Linux process" || pass "End task ends a Linux process"
+else fail "no row for the Linux burner on screen"; fi
+kill "$LBURN" 2>/dev/null
+
 # Performance
 xdotool key ctrl+Tab; sleep 1.5
 wait_dump '^TAB 1 Performance' 5 && pass "Performance tab" || fail "no Performance tab"
+sleep 1.5
+d | grep -q '^PROC [0-9]*	3	' && fail "Linux processes are still read with another tab in view" \
+    || pass "Linux processes are read only while the Processes tab is in view"
 perf=$(d | grep '^PERF ')
 cpu=$(echo "$perf" | awk '{ print $3 }')
 total=$(echo "$perf" | awk '{ for (i = 1; i < NF; i++) if ($i == "MEMTOTAL") print $(i + 1) }')

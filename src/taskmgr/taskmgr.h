@@ -38,7 +38,7 @@ HFONT make_font(int pt10, int weight);
 extern HFONT g_font, g_font_bold, g_font_small, g_font_big, g_font_head;
 
 /* ---- sampled data ------------------------------------------------------- */
-enum { GRP_APPS, GRP_BACKGROUND, GRP_WINDOWS, GRP_COUNT };
+enum { GRP_APPS, GRP_BACKGROUND, GRP_WINDOWS, GRP_LINUX, GRP_COUNT };
 
 typedef struct proc
 {
@@ -61,6 +61,8 @@ typedef struct proc
     HICON icon;
     BOOL seen;
     BOOL linux;                 /* a Linux program's window (its stand-in), not a process */
+    BOOL lproc;                 /* a Linux process (not Wine's), read from /proc; path: its command line */
+    DWORD upid;                 /* its Linux process id; 0 for the kernel's threads, one row */
 } proc_t;
 
 typedef struct perf
@@ -81,6 +83,7 @@ typedef struct perf
 extern proc_t *g_procs;
 extern int g_nprocs;
 extern perf_t g_perf;
+extern BOOL g_want_linux;           /* list Linux processes this refresh (the Processes tab is in view) */
 
 void sample(void);
 proc_t *find_proc(DWORD pid);

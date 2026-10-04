@@ -446,8 +446,8 @@ static void fill_processes(void)
     int counts[GRP_COUNT] = { 0 }, i, *pos = g_proc_pos;
     double disk = 0;
     WCHAR *t;
-    static const WCHAR *const group_names[GRP_COUNT] = { L"Apps", L"Background processes", L"System processes" };
-    static const WCHAR *const type_names[GRP_COUNT] = { L"App", L"Background process", L"System process" };
+    static const WCHAR *const group_names[GRP_COUNT] = { L"Apps", L"Background processes", L"System processes", L"Linux processes" };
+    static const WCHAR *const type_names[GRP_COUNT] = { L"App", L"Background process", L"System process", L"Linux process" };
 
     grid_begin(g);
     for (i = 0; i < g_nprocs; i++)
@@ -463,13 +463,13 @@ static void fill_processes(void)
         if ((t = CELL(r, pos, PC_TYPE))) lstrcpynW(t, p->linux ? L"Linux app" : type_names[p->group], GRID_CELL);
         if ((t = CELL(r, pos, PC_STATUS))) lstrcpynW(t, proc_status(p), GRID_CELL);
         if ((t = CELL(r, pos, PC_PUBLISHER))) lstrcpynW(t, p->company, GRID_CELL);
-        if ((t = CELL(r, pos, PC_PID)) && !p->linux) _snwprintf(t, GRID_CELL, L"%lu", p->pid);
+        if ((t = CELL(r, pos, PC_PID)) && !p->linux) { if (!p->lproc) _snwprintf(t, GRID_CELL, L"%lu", p->pid); else if (p->upid) _snwprintf(t, GRID_CELL, L"%lu", p->upid); }
         if ((t = CELL(r, pos, PC_PROCNAME))) lstrcpynW(t, p->linux ? L"" : p->name, GRID_CELL);
-        if ((t = CELL(r, pos, PC_CMDLINE)) && !p->linux) proc_cmdline(p->pid, t, GRID_CELL);
+        if ((t = CELL(r, pos, PC_CMDLINE)) && !p->linux) { if (p->lproc) lstrcpynW(t, p->path, GRID_CELL); else proc_cmdline(p->pid, t, GRID_CELL); }
         if ((t = CELL(r, pos, PC_CPU))) _snwprintf(t, GRID_CELL, L"%.1f%%", p->cpu);
         if ((t = CELL(r, pos, PC_MEM))) fmt_mem(p->ws, t, GRID_CELL);
         if ((t = CELL(r, pos, PC_DISK))) _snwprintf(t, GRID_CELL, L"%.1f MB/s", p->disk);
-        NUM(r, pos, PC_PID, p->pid); NUM(r, pos, PC_CPU, p->cpu); NUM(r, pos, PC_MEM, (double)p->ws); NUM(r, pos, PC_DISK, p->disk);
+        NUM(r, pos, PC_PID, p->lproc ? p->upid : p->pid); NUM(r, pos, PC_CPU, p->cpu); NUM(r, pos, PC_MEM, (double)p->ws); NUM(r, pos, PC_DISK, p->disk);
         disk += p->disk;
     }
     for (i = 0; i < GRP_COUNT; i++)
@@ -507,7 +507,7 @@ static void fill_details(void)
     {
         proc_t *p = &g_procs[i];
         grow_t *r;
-        if (p->linux) continue;   /* not a process of this system */
+        if (p->linux || p->lproc) continue;   /* not a process of this system */
         if (!(r = grid_add(g))) break;
         r->key = p->pid;
         r->icon = p->icon;
@@ -574,7 +574,7 @@ static void fill_users(void)
     for (i = 0; i < g_nprocs; i++)
     {
         const WCHAR *u = g_procs[i].user[0] ? g_procs[i].user : L"SYSTEM";
-        if (g_procs[i].linux) continue;
+        if (g_procs[i].linux || g_procs[i].lproc) continue;
         grow_t *r = NULL;
         for (j = 0; j < g->nrows; j++) if (!lstrcmpiW(g->rows[j].skey, u)) { r = &g->rows[j]; break; }
         if (!r)
@@ -783,6 +783,7 @@ static void dump(void)
 
 static void refresh(void)
 {
+    g_want_linux = g_more && g_tab == TAB_PROCESSES && IsWindowVisible(g_main) && !IsIconic(g_main);
     sample();
     fill_processes();
     fill_details();
@@ -1266,11 +1267,12 @@ static void context_menu(grid_t *g)
     else if (g == &g_grids[TAB_USERS]) { DestroyMenu(m); return; }
     else
     {
-        AppendMenuW(m, MF_STRING, IDM_END, L"&End task");
+        BOOL lp = p && p->lproc;     /* a Linux process: ended with a signal; no file, not on Details */
+        AppendMenuW(m, MF_STRING | (lp && !p->upid ? MF_GRAYED : 0), IDM_END, L"&End task");
         if (g == &g_grids[TAB_DETAILS]) AppendMenuW(m, MF_STRING, IDM_END_TREE, L"End process &tree");
         AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-        AppendMenuW(m, MF_STRING | (p && p->path[0] ? 0 : MF_GRAYED), IDM_LOCATION, L"&Open file location");
-        if (g == &g_grids[TAB_PROCESSES]) AppendMenuW(m, MF_STRING, IDM_DETAILS, L"&Go to details");
+        AppendMenuW(m, MF_STRING | (p && p->path[0] && !lp ? 0 : MF_GRAYED), IDM_LOCATION, L"&Open file location");
+        if (g == &g_grids[TAB_PROCESSES]) AppendMenuW(m, MF_STRING | (lp ? MF_GRAYED : 0), IDM_DETAILS, L"&Go to details");
     }
     GetCursorPos(&pt);
     cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, NULL);

@@ -8,6 +8,11 @@
  * page is the real machine's. What does not change while a process lives
  * (its path, description, user, architecture, icon) is looked up once.
  *
+ * The machine's Linux processes are listed too (David 2026-10-03: the CPU
+ * total said 14% and no process came near it), read from /proc through Z:
+ * at each refresh: every process that is not a Windows one (whose command
+ * line is a Windows path), and the kernel's own threads as one row.
+ *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -217,6 +222,199 @@ static void sample_network(double secs)
     g_perf.net = found;
 }
 
+/* ---- Linux processes ---------------------------------------------------- */
+
+/* what is known of a Linux process from one refresh to the next */
+struct lproc_hist { DWORD upid; ULONGLONG start, ticks; BOOL wine; WCHAR name[64], desc[128], user[64], cmd[MAX_PATH]; };
+static struct lproc_hist *g_lh, *g_lh_new;
+static int g_nlh, g_lh_cap;
+static ULONGLONG g_kernel_ticks, g_linux_tick;
+BOOL g_want_linux = TRUE;
+
+/* a small /proc file, read whole (they have no size to ask for) */
+static int read_small(const WCHAR *path, char *buf, int cap)
+{
+    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    DWORD n, total = 0;
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    while (total < (DWORD)cap - 1 && ReadFile(h, buf + total, cap - 1 - total, &n, NULL) && n) total += n;
+    CloseHandle(h);
+    buf[total] = 0;
+    return (int)total;
+}
+
+/* a user id's name, from /etc/passwd (read once) */
+static void uid_name(unsigned long uid, WCHAR *out, int cch)
+{
+    static char *pw;
+    char line[64], *l;
+    if (!pw && (pw = malloc(65536)) && read_small(L"Z:\\etc\\passwd", pw, 65536) < 0) pw[0] = 0;
+    _snprintf(line, sizeof(line), ":x:%lu:", uid);
+    for (l = pw; l && *l; l = strchr(l, '\n') ? strchr(l, '\n') + 1 : NULL)
+    {
+        char *c = strchr(l, ':'), *e = strchr(l, '\n');
+        if (c && (!e || c < e) && !strncmp(c, line, strlen(line)))
+        {
+            int n = (int)(c - l);
+            MultiByteToWideChar(CP_UTF8, 0, l, n, out, cch - 1);
+            out[min(n, cch - 1)] = 0;
+            return;
+        }
+    }
+    _snwprintf(out, cch, L"%lu", uid);
+}
+
+/* The rest of a new process: Windows or not (its command line), what to call
+ * it (an interpreter goes by its script), whose it is. */
+static void lproc_identify(struct lproc_hist *h, const char *comm)
+{
+    char buf[2048], *a0, *a1 = NULL, *base;
+    WCHAR path[64];
+    int n, i;
+    _snwprintf(path, ARRAYSIZE(path), L"Z:\\proc\\%lu\\cmdline", h->upid);
+    n = read_small(path, buf, sizeof(buf));
+    MultiByteToWideChar(CP_UTF8, 0, comm, -1, h->name, ARRAYSIZE(h->name));
+    lstrcpynW(h->desc, h->name, ARRAYSIZE(h->desc));
+    if (n > 0)
+    {
+        a0 = buf;
+        if ((int)strlen(a0) + 1 < n) a1 = a0 + strlen(a0) + 1;
+        /* a Windows process (Task Manager lists it already): its first argument is a Windows path */
+        if ((a0[0] && a0[1] == ':' && a0[2] == '\\') || (strlen(a0) > 4 && !_stricmp(a0 + strlen(a0) - 4, ".exe")))
+            h->wine = TRUE;
+        for (i = 0; i < n - 1; i++) if (!buf[i]) buf[i] = ' ';
+        MultiByteToWideChar(CP_UTF8, 0, buf, -1, h->cmd, ARRAYSIZE(h->cmd));
+        h->cmd[ARRAYSIZE(h->cmd) - 1] = 0;
+        /* python3 /usr/bin/x, sh -c ..., perl x: the script's name */
+        if (a1 && a1[0] != '-' && (!strncmp(comm, "python", 6) || !strcmp(comm, "sh") || !strcmp(comm, "bash")
+                                   || !strcmp(comm, "perl") || !strcmp(comm, "dash") || !strcmp(comm, "node")))
+        {
+            char *sp = strchr(a1, ' ');
+            if (sp) *sp = 0;
+            base = strrchr(a1, '/') ? strrchr(a1, '/') + 1 : a1;
+            if (*base) MultiByteToWideChar(CP_UTF8, 0, base, -1, h->desc, ARRAYSIZE(h->desc));
+        }
+    }
+    _snwprintf(path, ARRAYSIZE(path), L"Z:\\proc\\%lu\\status", h->upid);
+    if (read_small(path, buf, sizeof(buf)) > 0 && (a0 = strstr(buf, "\nUid:")))
+        uid_name(strtoul(a0 + 5, NULL, 10), h->user, ARRAYSIZE(h->user));
+}
+
+static proc_t *add_row(void)
+{
+    proc_t *p;
+    if (g_nprocs == g_cap)
+    {
+        proc_t *n = realloc(g_procs, (g_cap ? g_cap * 2 : 64) * sizeof(proc_t));
+        if (!n) return NULL;
+        g_procs = n; g_cap = g_cap ? g_cap * 2 : 64;
+    }
+    p = &g_procs[g_nprocs++];
+    memset(p, 0, sizeof(*p));
+    return p;
+}
+
+/* Linux's clock ticks are 1/100 s (USER_HZ on every Linux this runs on) */
+#define LINUX_HZ 100.0
+
+/* Reading every process's /proc file costs a few percent of a CPU a refresh:
+ * only while the Processes tab is in view (g_want_linux); the CPU shares are
+ * over the time since the last time they were read. */
+static void sample_linux(void)
+{
+    WIN32_FIND_DATAW fd;
+    HANDLE f = FindFirstFileW(L"Z:\\proc\\*", &fd);
+    ULONGLONG now = GetTickCount64();
+    double secs = g_linux_tick ? (now - g_linux_tick) / 1000.0 : 0;
+    int nnew = 0, j;
+    ULONGLONG kticks = 0;
+    double busy;
+    proc_t *k;
+
+    if (f == INVALID_HANDLE_VALUE) return;
+    do
+    {
+        WCHAR path[64], *end;
+        char buf[1024], *rp, *tok[24];
+        DWORD upid = wcstoul(fd.cFileName, &end, 10);
+        struct lproc_hist *h = NULL;
+        unsigned long flags;
+        ULONGLONG ticks, start;
+        int nt = 0;
+        proc_t *p;
+
+        if (!upid || *end || !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+        _snwprintf(path, ARRAYSIZE(path), L"Z:\\proc\\%lu\\stat", upid);
+        if (read_small(path, buf, sizeof(buf)) <= 0 || !(rp = strrchr(buf, ')'))) continue;
+        /* the fields after "pid (comm)": state ppid pgrp session tty tpgid flags ... */
+        for (rp += 2; nt < 24 && *rp; )
+        {
+            tok[nt++] = rp;
+            while (*rp && *rp != ' ') rp++;
+            if (*rp) *rp++ = 0;
+        }
+        if (nt < 22) continue;
+        flags = strtoul(tok[6], NULL, 10);
+        ticks = _strtoui64(tok[11], NULL, 10) + _strtoui64(tok[12], NULL, 10);
+        start = _strtoui64(tok[19], NULL, 10);
+        if (flags & 0x00200000 /* PF_KTHREAD */) { kticks += ticks; continue; }
+        if (nnew == g_lh_cap)
+        {
+            struct lproc_hist *n1 = realloc(g_lh, (g_lh_cap ? g_lh_cap * 2 : 256) * sizeof(*n1));
+            struct lproc_hist *n2 = n1 ? realloc(g_lh_new, (g_lh_cap ? g_lh_cap * 2 : 256) * sizeof(*n2)) : NULL;
+            if (n1) g_lh = n1;
+            if (!n2) break;
+            g_lh_new = n2; g_lh_cap = g_lh_cap ? g_lh_cap * 2 : 256;
+        }
+        for (j = 0; j < g_nlh; j++) if (g_lh[j].upid == upid && g_lh[j].start == start) { h = &g_lh[j]; break; }
+        if (h) g_lh_new[nnew] = *h;
+        else
+        {
+            char comm[64], *c0 = strchr(buf, '('), *c1 = strrchr(buf, ')');
+            int cn = c0 && c1 > c0 ? (int)min(c1 - c0 - 1, 63) : 0;
+            memset(&g_lh_new[nnew], 0, sizeof(g_lh_new[nnew]));
+            g_lh_new[nnew].upid = upid; g_lh_new[nnew].start = start; g_lh_new[nnew].ticks = ticks;
+            memcpy(comm, c0 ? c0 + 1 : "", cn); comm[cn] = 0;
+            lproc_identify(&g_lh_new[nnew], comm);
+        }
+        h = &g_lh_new[nnew++];
+        busy = (secs > 0 && ticks >= h->ticks) ? (ticks - h->ticks) / LINUX_HZ / (secs * g_perf.ncpu) * 100.0 : 0;
+        h->ticks = ticks;
+        if (h->wine || !(p = add_row())) continue;
+        p->lproc = TRUE;
+        p->upid = upid;
+        p->pid = 0xE0000000 | upid;
+        p->ppid = 0xE0000000 | (DWORD)strtoul(tok[1], NULL, 10);
+        p->group = GRP_LINUX;
+        p->cpu = min(busy, 100.0);
+        p->ws = (SIZE_T)_strtoui64(tok[21], NULL, 10) * 4096;
+        lstrcpynW(p->name, h->name, ARRAYSIZE(p->name));
+        lstrcpynW(p->desc, h->desc, ARRAYSIZE(p->desc));
+        lstrcpynW(p->user, h->user, ARRAYSIZE(p->user));
+        lstrcpynW(p->path, h->cmd, ARRAYSIZE(p->path));
+        lstrcpyW(p->arch, L"Linux");
+        p->icon = generic_icon();
+    } while (FindNextFileW(f, &fd));
+    FindClose(f);
+    { struct lproc_hist *t = g_lh; g_lh = g_lh_new; g_lh_new = t; g_nlh = nnew; }
+    /* the kernel's own threads (drivers, file systems, interrupts): one row */
+    if ((k = add_row()))
+    {
+        k->lproc = TRUE;
+        k->pid = 0xE0000000;
+        k->group = GRP_LINUX;
+        k->cpu = (secs > 0 && g_kernel_ticks && kticks >= g_kernel_ticks)
+                 ? min((kticks - g_kernel_ticks) / LINUX_HZ / (secs * g_perf.ncpu) * 100.0, 100.0) : 0;
+        lstrcpyW(k->name, L"kernel");
+        lstrcpyW(k->desc, L"Linux kernel");
+        lstrcpyW(k->user, L"root");
+        lstrcpyW(k->arch, L"Linux");
+        k->icon = generic_icon();
+    }
+    g_kernel_ticks = kticks;
+    g_linux_tick = now;
+}
+
 static void push(double *hist, double v)
 {
     memmove(hist, hist + 1, 59 * sizeof(double));
@@ -376,6 +574,11 @@ next:
     }
 #endif
 
+#ifndef SG_MUTANT_NO_LINUX_PROCS
+    if (g_want_linux) sample_linux();
+    else g_linux_tick = 0;      /* shares start afresh when the tab is back in view */
+#endif
+
     /* the machine */
     if (GetSystemTimes(&fi, &fk, &fu))
     {
@@ -447,11 +650,43 @@ static DWORD WINAPI linux_ender(void *arg)
     return 0;
 }
 
+/* a Linux process: SIGTERM, and SIGKILL when it is still there 3 s later
+ * (kill(1), which Wine starts as a Unix program; the user's own processes) */
+static BOOL linux_kill(DWORD upid, const WCHAR *sig)
+{
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    WCHAR cmd[64];
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"kill -%s %lu", sig, upid);
+    si.dwFlags = STARTF_USESHOWWINDOW; si.wShowWindow = SW_HIDE;
+    if (!CreateProcessW(L"Z:\\bin\\kill", cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return FALSE;
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    return TRUE;
+}
+
+static DWORD WINAPI linux_proc_ender(void *arg)
+{
+    DWORD upid = (DWORD)(ULONG_PTR)arg;
+    WCHAR path[48];
+    int i;
+    _snwprintf(path, ARRAYSIZE(path), L"Z:\\proc\\%lu", upid);
+    for (i = 0; i < 30 && GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES; i++) Sleep(100);
+    if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) linux_kill(upid, L"KILL");
+    return 0;
+}
+
 BOOL end_process(DWORD pid, BOOL gracefully)
 {
     proc_t *p = find_proc(pid);
     HANDLE h;
     BOOL ok;
+    if (p && p->lproc)
+    {
+        HANDLE t;
+        if (!p->upid || !linux_kill(p->upid, L"TERM")) return FALSE;
+        if ((t = CreateThread(NULL, 0, linux_proc_ender, (void *)(ULONG_PTR)p->upid, 0, NULL))) CloseHandle(t);
+        return TRUE;
+    }
     /* a Linux program's window: its stand-in asks it to close, and ends it
      * when it does not */
     if (p && p->linux)
