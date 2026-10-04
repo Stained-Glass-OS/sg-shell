@@ -90,9 +90,10 @@ void open_location(const WCHAR *path);
 HICON generic_icon(void);
 HICON load_small_icon(const WCHAR *path);
 void fmt_mem(ULONGLONG bytes, WCHAR *out, int cch);   /* "12.3 MB" */
+BOOL proc_cmdline(DWORD pid, WCHAR *out, int cch);    /* its command line, as it was started */
 
 /* ---- the list (our own control) ---------------------------------------- */
-#define GRID_MAXCOL 8
+#define GRID_MAXCOL 16
 #define GRID_CELL   128
 
 typedef struct gcol
@@ -136,7 +137,7 @@ typedef struct grid
 
 /* notifications to the parent: WM_APP_GRID, wParam = code, lParam = grid_t* */
 #define WM_APP_GRID (WM_APP + 1)
-enum { GN_SELCHANGE = 1, GN_RCLICK, GN_DBLCLK, GN_DELETE, GN_SORT };
+enum { GN_SELCHANGE = 1, GN_RCLICK, GN_DBLCLK, GN_DELETE, GN_SORT, GN_HEADRCLICK };
 
 void grid_register(HINSTANCE inst);
 HWND grid_create(grid_t *g, HWND parent, int id);

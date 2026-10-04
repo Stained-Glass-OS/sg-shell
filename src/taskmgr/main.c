@@ -350,13 +350,70 @@ static void set_col(grid_t *g, int c, const WCHAR *name, int width, BOOL right, 
     if (c >= g->ncol) g->ncol = c + 1;
 }
 
+/* The columns Processes and Details can show (David 2026-10-02: "right-click
+ * the column header ... to choose extra columns", as Windows): a right-click
+ * on the header lists them, checked; the choice is kept per tab (ColsProcesses,
+ * ColsDetails: a bit per column). Name is always there. */
+enum {
+    PC_NAME, PC_TYPE, PC_STATUS, PC_PUBLISHER, PC_PID, PC_PROCNAME, PC_CMDLINE, PC_CPU, PC_MEM, PC_DISK, PC_COUNT
+};
+enum {
+    DC_NAME, DC_PID, DC_STATUS, DC_USER, DC_SESSION, DC_CPU, DC_CPUTIME, DC_MEM, DC_THREADS, DC_HANDLES,
+    DC_ARCH, DC_DESC, DC_PUBLISHER, DC_PATH, DC_CMDLINE, DC_COUNT
+};
+struct colspec { const WCHAR *name; int width; BOOL right, heat, numeric, def; };
+static const struct colspec proc_cols[PC_COUNT] = {
+    [PC_NAME] = { L"Name", 200, 0, 0, 0, 1 }, [PC_TYPE] = { L"Type", 130, 0, 0, 0, 0 },
+    [PC_STATUS] = { L"Status", 110, 0, 0, 0, 1 }, [PC_PUBLISHER] = { L"Publisher", 150, 0, 0, 0, 0 },
+    [PC_PID] = { L"PID", 60, 1, 0, 1, 0 }, [PC_PROCNAME] = { L"Process name", 130, 0, 0, 0, 0 },
+    [PC_CMDLINE] = { L"Command line", 260, 0, 0, 0, 0 }, [PC_CPU] = { L"CPU", 76, 1, 1, 1, 1 },
+    [PC_MEM] = { L"Memory", 90, 1, 1, 1, 1 }, [PC_DISK] = { L"Disk", 80, 1, 1, 1, 1 },
+};
+static const struct colspec detail_cols[DC_COUNT] = {
+    [DC_NAME] = { L"Name", 150, 0, 0, 0, 1 }, [DC_PID] = { L"PID", 56, 1, 0, 1, 1 },
+    [DC_STATUS] = { L"Status", 90, 0, 0, 0, 1 }, [DC_USER] = { L"User name", 90, 0, 0, 0, 1 },
+    [DC_SESSION] = { L"Session ID", 70, 1, 0, 1, 0 }, [DC_CPU] = { L"CPU", 44, 1, 0, 1, 1 },
+    [DC_CPUTIME] = { L"CPU time", 80, 1, 0, 1, 0 }, [DC_MEM] = { L"Memory", 84, 1, 0, 1, 1 },
+    [DC_THREADS] = { L"Threads", 60, 1, 0, 1, 0 }, [DC_HANDLES] = { L"Handles", 64, 1, 0, 1, 0 },
+    [DC_ARCH] = { L"Architecture", 84, 0, 0, 0, 1 }, [DC_DESC] = { L"Description", 170, 0, 0, 0, 1 },
+    [DC_PUBLISHER] = { L"Publisher", 150, 0, 0, 0, 0 }, [DC_PATH] = { L"Image path name", 240, 0, 0, 0, 0 },
+    [DC_CMDLINE] = { L"Command line", 260, 0, 0, 0, 0 },
+};
+static DWORD g_proc_mask, g_detail_mask;
+static int g_proc_pos[PC_COUNT], g_detail_pos[DC_COUNT];   /* column id -> its place, -1 not shown */
+
+static DWORD default_mask(const struct colspec *spec, int n)
+{
+    DWORD m = 0;
+    int i;
+    for (i = 0; i < n; i++) if (spec[i].def) m |= 1u << i;
+    return m;
+}
+
+/* the grid's columns from a choice: in the catalogue's order, Name first */
+static void apply_columns(grid_t *g, const struct colspec *spec, int n, DWORD mask, int *pos)
+{
+    int i, c = 0;
+    mask |= 1;
+    g->ncol = 0;
+    for (i = 0; i < n; i++)
+    {
+        pos[i] = -1;
+        if (!(mask & (1u << i)) || c >= GRID_MAXCOL) continue;
+        set_col(g, c, spec[i].name, spec[i].width, spec[i].right, spec[i].heat, spec[i].numeric);
+        g->cols[c].total[0] = 0;
+        pos[i] = c++;
+    }
+    if (g->sortcol >= g->ncol) g->sortcol = -1;
+}
+
 static void setup_grids(void)
 {
     grid_t *g;
     g = &g_grids[TAB_PROCESSES];
-    set_col(g, 0, L"Name", 200, 0, 0, 0); set_col(g, 1, L"Status", 110, 0, 0, 0);
-    set_col(g, 2, L"CPU", 76, 1, 1, 1); set_col(g, 3, L"Memory", 90, 1, 1, 1); set_col(g, 4, L"Disk", 80, 1, 1, 1);
+    g_proc_mask = setting(L"ColsProcesses", default_mask(proc_cols, PC_COUNT));
     g->sortcol = -1;
+    apply_columns(g, proc_cols, PC_COUNT, g_proc_mask, g_proc_pos);
     g = &g_grids[TAB_STARTUP];
     set_col(g, 0, L"Name", 200, 0, 0, 0); set_col(g, 1, L"Publisher", 170, 0, 0, 0);
     set_col(g, 2, L"Status", 90, 0, 0, 0); set_col(g, 3, L"Startup impact", 110, 0, 0, 0);
@@ -364,9 +421,8 @@ static void setup_grids(void)
     set_col(g, 0, L"User", 200, 0, 0, 0); set_col(g, 1, L"Status", 110, 0, 0, 0);
     set_col(g, 2, L"CPU", 76, 1, 1, 1); set_col(g, 3, L"Memory", 90, 1, 1, 1);
     g = &g_grids[TAB_DETAILS];
-    set_col(g, 0, L"Name", 150, 0, 0, 0); set_col(g, 1, L"PID", 56, 1, 0, 1); set_col(g, 2, L"Status", 90, 0, 0, 0);
-    set_col(g, 3, L"User name", 90, 0, 0, 0); set_col(g, 4, L"CPU", 44, 1, 0, 1); set_col(g, 5, L"Memory", 84, 1, 0, 1);
-    set_col(g, 6, L"Architecture", 84, 0, 0, 0); set_col(g, 7, L"Description", 170, 0, 0, 0);
+    g_detail_mask = setting(L"ColsDetails", default_mask(detail_cols, DC_COUNT));
+    apply_columns(g, detail_cols, DC_COUNT, g_detail_mask, g_detail_pos);
     g = &g_grids[TAB_SERVICES];
     set_col(g, 0, L"Name", 140, 0, 0, 0); set_col(g, 1, L"PID", 56, 1, 0, 1);
     set_col(g, 2, L"Description", 250, 0, 0, 0); set_col(g, 3, L"Status", 90, 0, 0, 0);
@@ -380,12 +436,18 @@ static const WCHAR *proc_status(proc_t *p)
     return p->win && IsHungAppWindow(p->win) ? L"Not responding" : L"";
 }
 
+/* a cell of a row by its column: NULL when the column is not shown */
+#define CELL(r, pos, id) ((pos)[id] >= 0 ? (r)->text[(pos)[id]] : NULL)
+#define NUM(r, pos, id, v) do { if ((pos)[id] >= 0) (r)->num[(pos)[id]] = (v); } while (0)
+
 static void fill_processes(void)
 {
     grid_t *g = &g_grids[TAB_PROCESSES];
-    int counts[GRP_COUNT] = { 0 }, i;
+    int counts[GRP_COUNT] = { 0 }, i, *pos = g_proc_pos;
     double disk = 0;
+    WCHAR *t;
     static const WCHAR *const group_names[GRP_COUNT] = { L"Apps", L"Background processes", L"System processes" };
+    static const WCHAR *const type_names[GRP_COUNT] = { L"App", L"Background process", L"System process" };
 
     grid_begin(g);
     for (i = 0; i < g_nprocs; i++)
@@ -398,11 +460,16 @@ static void fill_processes(void)
         r->key = p->pid;
         r->icon = p->icon;
         lstrcpynW(r->text[0], p->desc, GRID_CELL);
-        lstrcpynW(r->text[1], proc_status(p), GRID_CELL);
-        _snwprintf(r->text[2], GRID_CELL, L"%.1f%%", p->cpu);
-        fmt_mem(p->ws, r->text[3], GRID_CELL);
-        _snwprintf(r->text[4], GRID_CELL, L"%.1f MB/s", p->disk);
-        r->num[2] = p->cpu; r->num[3] = (double)p->ws; r->num[4] = p->disk;
+        if ((t = CELL(r, pos, PC_TYPE))) lstrcpynW(t, p->linux ? L"Linux app" : type_names[p->group], GRID_CELL);
+        if ((t = CELL(r, pos, PC_STATUS))) lstrcpynW(t, proc_status(p), GRID_CELL);
+        if ((t = CELL(r, pos, PC_PUBLISHER))) lstrcpynW(t, p->company, GRID_CELL);
+        if ((t = CELL(r, pos, PC_PID)) && !p->linux) _snwprintf(t, GRID_CELL, L"%lu", p->pid);
+        if ((t = CELL(r, pos, PC_PROCNAME))) lstrcpynW(t, p->linux ? L"" : p->name, GRID_CELL);
+        if ((t = CELL(r, pos, PC_CMDLINE)) && !p->linux) proc_cmdline(p->pid, t, GRID_CELL);
+        if ((t = CELL(r, pos, PC_CPU))) _snwprintf(t, GRID_CELL, L"%.1f%%", p->cpu);
+        if ((t = CELL(r, pos, PC_MEM))) fmt_mem(p->ws, t, GRID_CELL);
+        if ((t = CELL(r, pos, PC_DISK))) _snwprintf(t, GRID_CELL, L"%.1f MB/s", p->disk);
+        NUM(r, pos, PC_PID, p->pid); NUM(r, pos, PC_CPU, p->cpu); NUM(r, pos, PC_MEM, (double)p->ws); NUM(r, pos, PC_DISK, p->disk);
         disk += p->disk;
     }
     for (i = 0; i < GRP_COUNT; i++)
@@ -412,39 +479,91 @@ static void fill_processes(void)
         r->group = i; r->header = TRUE;
         _snwprintf(r->text[0], GRID_CELL, L"%s (%d)", group_names[i], counts[i]);
     }
-    _snwprintf(g->cols[2].total, 24, L"%.0f%%", g_perf.cpu);
-    _snwprintf(g->cols[3].total, 24, L"%.0f%%", g_perf.mem_total ? 100.0 * (g_perf.mem_total - g_perf.mem_avail) / g_perf.mem_total : 0);
-    _snwprintf(g->cols[4].total, 24, L"%.1f MB/s", disk);
-    g->heatmax[2] = 100; g->heatmax[3] = (double)g_perf.mem_total / 8; g->heatmax[4] = 50;
+    if (pos[PC_CPU] >= 0)
+    {
+        _snwprintf(g->cols[pos[PC_CPU]].total, 24, L"%.0f%%", g_perf.cpu);
+        g->heatmax[pos[PC_CPU]] = 100;
+    }
+    if (pos[PC_MEM] >= 0)
+    {
+        _snwprintf(g->cols[pos[PC_MEM]].total, 24, L"%.0f%%", g_perf.mem_total ? 100.0 * (g_perf.mem_total - g_perf.mem_avail) / g_perf.mem_total : 0);
+        g->heatmax[pos[PC_MEM]] = (double)g_perf.mem_total / 8;
+    }
+    if (pos[PC_DISK] >= 0)
+    {
+        _snwprintf(g->cols[pos[PC_DISK]].total, 24, L"%.1f MB/s", disk);
+        g->heatmax[pos[PC_DISK]] = 50;
+    }
     grid_end(g);
 }
 
 static void fill_details(void)
 {
     grid_t *g = &g_grids[TAB_DETAILS];
-    int i;
+    int i, *pos = g_detail_pos;
+    WCHAR *t;
     grid_begin(g);
     for (i = 0; i < g_nprocs; i++)
     {
         proc_t *p = &g_procs[i];
         grow_t *r;
-        WCHAR mem[32];
         if (p->linux) continue;   /* not a process of this system */
         if (!(r = grid_add(g))) break;
         r->key = p->pid;
         r->icon = p->icon;
         lstrcpynW(r->text[0], p->name, GRID_CELL);
-        _snwprintf(r->text[1], GRID_CELL, L"%lu", p->pid);
-        lstrcpynW(r->text[2], proc_status(p)[0] ? proc_status(p) : L"Running", GRID_CELL);
-        lstrcpynW(r->text[3], p->user, GRID_CELL);
-        _snwprintf(r->text[4], GRID_CELL, L"%02.0f", p->cpu);
-        _snwprintf(mem, 32, L"%lu K", (unsigned long)(p->ws / 1024));
-        lstrcpynW(r->text[5], mem, GRID_CELL);
-        lstrcpynW(r->text[6], p->arch, GRID_CELL);
-        lstrcpynW(r->text[7], p->desc, GRID_CELL);
-        r->num[1] = p->pid; r->num[4] = p->cpu; r->num[5] = (double)p->ws;
+        if ((t = CELL(r, pos, DC_PID))) _snwprintf(t, GRID_CELL, L"%lu", p->pid);
+        if ((t = CELL(r, pos, DC_STATUS))) lstrcpynW(t, proc_status(p)[0] ? proc_status(p) : L"Running", GRID_CELL);
+        if ((t = CELL(r, pos, DC_USER))) lstrcpynW(t, p->user, GRID_CELL);
+        if ((t = CELL(r, pos, DC_SESSION))) _snwprintf(t, GRID_CELL, L"%lu", p->session);
+        if ((t = CELL(r, pos, DC_CPU))) _snwprintf(t, GRID_CELL, L"%02.0f", p->cpu);
+        if ((t = CELL(r, pos, DC_CPUTIME)))
+        {
+            ULONGLONG sec = p->cpu_time / 10000000;
+            _snwprintf(t, GRID_CELL, L"%llu:%02llu:%02llu", sec / 3600, sec / 60 % 60, sec % 60);
+        }
+        if ((t = CELL(r, pos, DC_MEM))) _snwprintf(t, GRID_CELL, L"%lu K", (unsigned long)(p->ws / 1024));
+        if ((t = CELL(r, pos, DC_THREADS))) _snwprintf(t, GRID_CELL, L"%lu", p->threads);
+        if ((t = CELL(r, pos, DC_HANDLES))) _snwprintf(t, GRID_CELL, L"%lu", p->handles);
+        if ((t = CELL(r, pos, DC_ARCH))) lstrcpynW(t, p->arch, GRID_CELL);
+        if ((t = CELL(r, pos, DC_DESC))) lstrcpynW(t, p->desc, GRID_CELL);
+        if ((t = CELL(r, pos, DC_PUBLISHER))) lstrcpynW(t, p->company, GRID_CELL);
+        if ((t = CELL(r, pos, DC_PATH))) lstrcpynW(t, p->path, GRID_CELL);
+        if ((t = CELL(r, pos, DC_CMDLINE))) proc_cmdline(p->pid, t, GRID_CELL);
+        NUM(r, pos, DC_PID, p->pid); NUM(r, pos, DC_SESSION, p->session); NUM(r, pos, DC_CPU, p->cpu);
+        NUM(r, pos, DC_CPUTIME, (double)p->cpu_time); NUM(r, pos, DC_MEM, (double)p->ws);
+        NUM(r, pos, DC_THREADS, p->threads); NUM(r, pos, DC_HANDLES, p->handles);
     }
     grid_end(g);
+}
+
+static void refresh(void);
+
+/* the header's right-click: the columns this tab can show, checked; one
+ * chosen is shown or hidden, and kept */
+static void column_menu(grid_t *g)
+{
+    BOOL procs = g == &g_grids[TAB_PROCESSES];
+    const struct colspec *spec = procs ? proc_cols : detail_cols;
+    int n = procs ? PC_COUNT : DC_COUNT, i, cmd;
+    DWORD *mask = procs ? &g_proc_mask : &g_detail_mask;
+    HMENU m;
+    POINT pt;
+    if (!procs && g != &g_grids[TAB_DETAILS]) return;
+    m = CreatePopupMenu();
+    for (i = 1; i < n; i++)   /* not Name: always shown */
+        AppendMenuW(m, MF_STRING | ((*mask & (1u << i)) ? MF_CHECKED : 0), 1 + i, spec[i].name);
+    GetCursorPos(&pt);
+    cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g->hwnd, NULL);
+    DestroyMenu(m);
+    if (cmd <= 1) return;
+    *mask ^= 1u << (cmd - 1);
+#ifdef SG_MUTANT_COLUMNS_NOT_KEPT
+    if (0)
+#endif
+    save_setting(procs ? L"ColsProcesses" : L"ColsDetails", *mask);
+    apply_columns(g, spec, n, *mask, procs ? g_proc_pos : g_detail_pos);
+    refresh();
 }
 
 static void fill_users(void)
@@ -1379,6 +1498,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
         case GN_SELCHANGE: InvalidateRect(hwnd, &g_button_rc, FALSE); dump(); break;
         case GN_RCLICK: context_menu(g); break;
+        case GN_HEADRCLICK: column_menu(g); break;
         case GN_DELETE:
             if (g == &g_grids[TAB_STARTUP]) toggle_startup();
             else if (g != &g_grids[TAB_SERVICES] && g != &g_grids[TAB_USERS]) end_selected(FALSE);

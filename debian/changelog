@@ -1,3 +1,16 @@
+sg-shell (0.1.0-104) unstable; urgency=medium
+
+  * Task Manager: right-click a column header to choose the columns (David
+    2026-10-02, item 27, as Windows). Processes: Type, Status, Publisher,
+    PID, Process name, Command line, CPU, Memory, Disk. Details: PID,
+    Status, User name, Session ID, CPU, CPU time, Memory, Threads, Handles,
+    Architecture, Description, Publisher, Image path name, Command line.
+    Kept per tab (ColsProcesses, ColsDetails); a command line is read only
+    while its column is shown. taskmgr-check: PID and Command line added
+    and filled, the choice kept (mutant COLUMNS_NOT_KEPT fails it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 03 Oct 2026 20:20:00 +0000
+
 sg-shell (0.1.0-103) unstable; urgency=medium
 
   * Settings > Updates: "Check for updates" that found nothing stayed on

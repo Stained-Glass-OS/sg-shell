@@ -123,6 +123,29 @@ d | grep -Eq '^ROW [0-9]* [0-9]* [0-9]* 1 Apps \([0-9]+\)' && pass "Apps group r
 d | grep -Eq '^COLUMN 2 CPU	[0-9]+%' && pass "the CPU column's header carries the total" || fail "no CPU total in the header"
 shot processes
 
+# the header's right-click chooses columns (David 2026-10-02): PID, then
+# Command line; shown, filled, and kept for the next time
+head_xy() { d | awk '$1 == "ROW" { print $3, $4 - 34; exit }'; }
+pick_col() {   # $1: how many Downs to the item (Type 1, Status 2, Publisher 3, PID 4, Process name 5, Command line 6)
+    xy=$(head_xy); [ -n "$xy" ] || return 1
+    # shellcheck disable=SC2086
+    xdotool mousemove $xy click 3; sleep 0.8
+    i=0; while [ $i -lt "$1" ]; do xdotool key Down; i=$((i + 1)); done
+    xdotool key Return; sleep 1.5
+}
+pick_col 4
+if wait_dump '^COLUMN [0-9]+ PID	' 5 && d | grep -Eq "^ROW .*sgburn.*	$BURN_PID(	|\$)"; then
+    pass "the header's right-click adds the PID column, filled ($BURN_PID)"
+else fail "PID column: $(d | grep -E '^COLUMN') / $(d | grep 'ROW.*sgburn')"; fi
+pick_col 6
+if wait_dump '^COLUMN [0-9]+ Command line	' 5 && d | grep -Eq '^ROW .*sgburn.*	[^	]*sgburn[^	]*\.exe'; then
+    pass "...and Command line, the process's own"
+else fail "Command line column: $(d | grep -E '^COLUMN') / $(d | grep 'ROW.*sgburn')"; fi
+cols=$(wine reg query 'HKCU\Software\Stained Glass\TaskManager' /v ColsProcesses 2>/dev/null | tr -d '\r' | awk '/ColsProcesses/ {print $3}')
+[ -n "$cols" ] && [ $((cols & 0x50)) = $((0x50)) ] && pass "the choice is kept (ColsProcesses $cols)" || fail "columns not kept: ColsProcesses '$cols'"
+shot processes-columns
+pick_col 4; pick_col 6     # back as they were
+
 # Details, before the process is ended
 xdotool key ctrl+Tab ctrl+Tab ctrl+Tab ctrl+Tab; sleep 1
 if wait_dump '^TAB 4 Details' 5; then pass "Ctrl+Tab reaches Details"; else fail "Ctrl+Tab did not reach Details: $(d | grep '^TAB')"; fi

@@ -494,3 +494,42 @@ void open_location(const WCHAR *path)
     args[ARRAYSIZE(args) - 1] = 0;
     ShellExecuteW(NULL, NULL, L"explorer.exe", args, NULL, SW_SHOWNORMAL);
 }
+
+/* a process's command line (Details' and Processes' "Command line" column):
+ * ProcessCommandLineInformation, else read from its parameters block */
+BOOL proc_cmdline(DWORD pid, WCHAR *out, int cch)
+{
+    HANDLE h;
+    BYTE buf[8192];
+    ULONG len = 0;
+    UNICODE_STRING *us = (UNICODE_STRING *)buf;
+    BOOL ok = FALSE;
+    out[0] = 0;
+    if (!(h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pid)) &&
+        !(h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)))
+        return FALSE;
+    if (!NtQueryInformationProcess(h, (PROCESSINFOCLASS)60 /* ProcessCommandLineInformation */, buf, sizeof(buf) - 2, &len)
+        && us->Buffer)
+    {
+        int n = min((int)(us->Length / sizeof(WCHAR)), cch - 1);
+        memcpy(out, us->Buffer, n * sizeof(WCHAR));
+        out[n] = 0;
+        ok = TRUE;
+    }
+    else
+    {
+        PROCESS_BASIC_INFORMATION pbi;
+        PEB peb;
+        RTL_USER_PROCESS_PARAMETERS params;
+        SIZE_T got;
+        if (!NtQueryInformationProcess(h, ProcessBasicInformation, &pbi, sizeof(pbi), NULL) && pbi.PebBaseAddress &&
+            ReadProcessMemory(h, pbi.PebBaseAddress, &peb, sizeof(peb), &got) &&
+            ReadProcessMemory(h, peb.ProcessParameters, &params, sizeof(params), &got))
+        {
+            int n = min((int)(params.CommandLine.Length / sizeof(WCHAR)), cch - 1);
+            if (ReadProcessMemory(h, params.CommandLine.Buffer, out, n * sizeof(WCHAR), &got)) { out[n] = 0; ok = TRUE; }
+        }
+    }
+    CloseHandle(h);
+    return ok;
+}

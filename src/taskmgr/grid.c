@@ -371,6 +371,7 @@ static LRESULT CALLBACK grid_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_RBUTTONUP:
+        if (hit_row(g, (short)HIWORD(lp)) == -2 && !g->noheader) { notify(g, GN_HEADRCLICK); return 0; }
         if (hit_row(g, (short)HIWORD(lp)) >= 0 && grid_selected(g)) notify(g, GN_RCLICK);
         return 0;
     case WM_LBUTTONDBLCLK:
