@@ -3496,6 +3496,20 @@ Windows Registry Editor Version 5.00
 "DetectName"="Microsoft SQL Server Compact 3.5 SP2"
 "Icon"="https://www.microsoft.com/favicon.ico"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\127]
+"Name"="Visual Basic 6 runtime"
+"Publisher"="Microsoft"
+"Description"="What programs written in Visual Basic 6 need to run (MSVBVM60.DLL): many older programs and plug-ins, such as Meedio's. It is taken from Microsoft's own download of XP Service Pack 3 (332 MB), the only place Microsoft still offers it, and only that one file is kept."
+"Category"="Development"
+"Colour"=dword:00a4373a
+"Tier"="windows"
+"Source"="pin:https://catalog.s.download.windowsupdate.com/msdownload/update/software/dflt/2008/04/windowsxp-kb936929-sp3-x86-enu_c81472f7eeea2eca421e116cd4c03e2300ebfde4.exe|62e524a552db9f6fd22d469010ea4d7e28ee06fa615a1c34362129f808916654|cab-dll|i386\\msvbvm60.dl_|msvbvm60.dll|Microsoft Visual Basic 6.0 Runtime|6.0.98.15"
+"PinVersion"="6.0.98.15"
+"DetectName"="Microsoft Visual Basic 6.0 Runtime"
+"License"="Proprietary: Microsoft's licence (free to use with the programs that need it; not open source)"
+"Homepage"="https://learn.microsoft.com/previous-versions/visualstudio/visual-basic-6/visual-basic-6-support-policy"
+"Icon"="https://www.microsoft.com/favicon.ico"
+
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L185]
 "Name"="Google Chrome"
 "Publisher"="Google"
@@ -3539,3 +3553,10 @@ Windows Registry Editor Version 5.00
 "Source"="linux:apt:secrets"
 "Run"="/usr/bin/secrets"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.World.Secrets.png"
+
+; Runtimes the store offers for programs that find them missing: a DLL's
+; name (lower case) -> the app that provides it. wine-sg's loader (patch
+; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\
+; Missing, and sg-notify asks whether to install it (sg-store --page).
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Runtimes]
+"msvbvm60.dll"="127"

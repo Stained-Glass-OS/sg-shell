@@ -19,7 +19,10 @@
 #   D. a download whose SHA-256 is not the manifest's is refused, never run
 #   E. a winget manifest install; F. an installer we can run beats a portable
 #      zip of the same arch; G. a zip holding the installer (Paint.NET's) is
-#      unpacked and run; H. a pinned install
+#      unpacked and run; H. a pinned install; H2. an IExpress package of MSIs;
+#      H3. a runtime DLL out of a self-extracting package's cabinet (the
+#      Visual Basic 6 runtime): installed, registered, detected, its page
+#      (--page) with its licence and no Open, Uninstall
 #   I. a Linux app installs through the elevated copy and sg-admind's
 #      apt-install, with the progress window, and is then detected
 #   I2. one of ours (SG Office: ours:apt:sg-office) installs the same way, is
@@ -71,6 +74,7 @@
 #   SG_MUTANT_NOICON      keeps the letter badges
 #   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
+#   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -100,13 +104,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 STORE_SRC="$HERE/src/store/main.c $HERE/src/store/details.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
-STORE_LIBS="-lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
+STORE_LIBS="-lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
 build_mut() { # define outfile
     # shellcheck disable=SC2086
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -630,6 +634,72 @@ EOF2
     wine reg delete "$K\\10" /f >/dev/null 2>&1; sleep 1
 else
     echo "NOTE  no wixl (msitools): the IExpress package install is not checked"
+fi
+
+# --- H3. a runtime out of a self-extracting package's cabinet (the Visual Basic 6 runtime) -------
+# David 2026-10-05: Meedio's plug-ins need MSVBVM60.DLL, which Microsoft now
+# offers only inside Windows XP SP3's package. Its stand-in: a program stub
+# (with a decoy "MSCF") and a cabinet holding i386\gatert.dl_, a one-file
+# cabinet of a 32-bit DLL whose DllRegisterServer marks the registry. The
+# DLL lands in the 32-bit system folder, registered, with an Uninstall entry
+# the store detects -- as an administrator, once; its page shows the
+# catalogue's licence and no Open (nothing to open); Uninstall removes it.
+if command -v i686-w64-mingw32-gcc >/dev/null; then
+    cat > "$T/gatert.c" <<'EOF2'
+#include <windows.h>
+__declspec(dllexport) HRESULT WINAPI DllRegisterServer(void)
+{
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, L"Software\\SgGateRuntime", 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return E_FAIL;
+    RegSetValueExW(k, L"Registered", 0, REG_SZ, (const BYTE *)L"1", 4);
+    RegCloseKey(k);
+    return S_OK;
+}
+EOF2
+    i686-w64-mingw32-gcc -shared -O2 -Wl,--kill-at -o "$T/gatert.dll" "$T/gatert.c" 2>>"$T/cc.log" \
+        && python3 "$HERE/test/store-cab.py" "$T/inner.cab" "gatert.dll=$T/gatert.dll" \
+        && python3 "$HERE/test/store-cab.py" "$T/outer.cab" "i386\\other.dl_=$T/gatert.c" "i386\\gatert.dl_=$T/inner.cab" \
+        && { head -c 3000 /dev/zero; printf 'MSCF\001\002\003\004'; head -c 999 /dev/zero; cat "$T/outer.cab"; } > "$W/files/gate-sp.exe" \
+        || fail "the runtime's stand-in package does not build: $(tail -3 "$T/cc.log")"
+    RSHA=$(sha256sum "$W/files/gate-sp.exe" | cut -d' ' -f1)
+    reg "$K\\11" /v Name /d 'Gate Runtime'; reg "$K\\11" /v Tier /d windows; reg "$K\\11" /v Category /d Development
+    reg "$K\\11" /v Source /d "pin:http://127.0.0.1:$PORT/files/gate-sp.exe|$RSHA|cab-dll|i386\\gatert.dl_|gatert.dll|Gate Runtime|1.2.3"
+    reg "$K\\11" /v PinVersion /d 1.2.3; reg "$K\\11" /v DetectName /d 'Gate Runtime'
+    reg "$K\\11" /v License /d 'Proprietary: the gate maker'"'"'s licence'
+    reg "$K\\11" /v Homepage /d 'https://gate.example/runtime'
+    sleep 1
+    RT="$WINEPREFIX/drive_c/windows/syswow64/gatert.dll"
+    rt_reg() { wine reg query 'HKLM\Software\SgGateRuntime' /v Registered /reg:32 2>/dev/null | grep -q 'REG_SZ *1'; }
+    wine "$EXE" --install 11 >/dev/null 2>&1; ec=$?
+    [ "$ec" = 0 ] && cmp -s "$RT" "$T/gatert.dll" && pass "a runtime is taken out of the package's cabinet (and its .dl_) into the 32-bit system folder" \
+        || fail "install 11 exit $ec: $(cat "$D.result" 2>/dev/null); $(ls -la "$RT" 2>&1)"
+    rt_reg && pass "...and registered (its 32-bit DllRegisterServer ran)" || fail "gatert.dll not registered"
+    grep -q '^elevated 11 1' "$D.result" 2>/dev/null && pass "...as an administrator" || fail "11 elevated: $(cat "$D.result" 2>/dev/null)"
+    run --list
+    [ "$(kv "$(appline 11)" state)" = installed ] && [ "$(kv "$(appline 11)" installed)" = 1.2.3 ] \
+        && pass "the store sees it installed (its Uninstall entry), version 1.2.3" || fail "after install: $(appline 11)"
+    # its page, as sg-notify's question opens it
+    rm -f "$D"
+    wine "$EXE" --page 11 >/dev/null 2>&1 &
+    if waitfor "$D" '^detail 11 ready=1' 60; then
+        sleep 1
+        [ "$(field detail-license)" = "Proprietary: the gate maker's licence" ] && [ "$(field detail-homepage)" = https://gate.example/runtime ] \
+            && pass "--page opens its page: its licence and site (the catalogue's)" || fail "page facts: $(field detail-license) | $(field detail-homepage)"
+        grep -q '^hit open 11 ' "$D" && fail "a runtime offers Open (nothing to open)" || pass "...and no Open: a runtime has nothing to open"
+        grep -q '^hit uninstall 11 ' "$D" && pass "...but Uninstall" || fail "no Uninstall on the runtime's page"
+        import -window root "$OUT/store-runtime.png" 2>/dev/null
+    else fail "--page 11 did not open its page: $(grep '^detail' "$D" 2>/dev/null | head -2 | tr '\n' '|')"; fi
+    wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+    rm -f "$D.result"
+    wine "$EXE" --uninstall 11 >/dev/null 2>&1
+    [ ! -e "$RT" ] && ! { wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\SG-gatert.dll' /reg:32 >/dev/null 2>&1; } \
+        && pass "Uninstall removes it and its entry" || fail "uninstall 11: $(cat "$D.result" 2>/dev/null); $(ls "$RT" 2>&1)"
+    wine reg delete 'HKLM\Software\SgGateRuntime' /f /reg:32 >/dev/null 2>&1
+    wine "$T/mut-nocabdll.exe" --install 11 >/dev/null 2>&1
+    [ ! -e "$RT" ] && pass "MUTANT NOCABDLL installs nothing (gate catches it)" || fail "NOCABDLL not detected"
+    wine reg delete "$K\\11" /f >/dev/null 2>&1; sleep 1
+else
+    echo "NOTE  no i686-w64-mingw32-gcc: the runtime (cab-dll) install is not checked"
 fi
 
 # --- I. a Linux app, through the consent (direct here) and sg-admind ------------------------------

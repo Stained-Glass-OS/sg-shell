@@ -697,6 +697,13 @@ static void split_command(const WCHAR *cmd, WCHAR *file, WCHAR *args, int cch)
     lstrcpynW(args, end, cch);
 }
 
+/* a runtime (Source type cab-dll: one DLL into the system folder, the
+ * Visual Basic 6 runtime): no program to open, removed as an administrator */
+BOOL app_is_runtime(const app_t *a)
+{
+    return a->method == SRC_PIN && !lstrcmpiW(a->pin_type, L"cab-dll");
+}
+
 int app_uninstall(app_t *a, WCHAR *err, int cch)
 {
     WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64];
@@ -710,7 +717,9 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
         return 1;
     }
     split_command(cmd, file, args, MAX_PATH);
-    for (attempt = 0; attempt < 2; attempt++) {
+    /* a runtime the store put in the system folder: only an administrator
+     * can take it out (its uninstaller is cmd, which never asks) */
+    for (attempt = app_is_runtime(a) ? 1 : 0; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
         sei.lpFile = file;

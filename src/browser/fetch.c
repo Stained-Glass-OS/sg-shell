@@ -23,6 +23,7 @@
 #include <bcrypt.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <setupapi.h>
 
 #define DEFAULT_LIST L"https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/"
 #define DEFAULT_RAW  L"https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/"
@@ -394,6 +395,135 @@ done:
     return ok;
 }
 
+/* One file out of a cabinet a self-extracting package carries (Microsoft's
+ * own Windows XP Service Pack 3 holds the Visual Basic 6 runtime, which the
+ * programs that need it no longer find anywhere else): the cabinet from its
+ * first "MSCF" on is copied out, the file taken from it (and from the
+ * one-file cabinet it may be compressed in, as .dl_ files are). */
+struct cab_pick { const WCHAR *want; const WCHAR *dir; WCHAR out[MAX_PATH]; BOOL found; };
+
+static UINT CALLBACK cab_cb(void *ctx, UINT note, UINT_PTR p1, UINT_PTR p2)
+{
+    struct cab_pick *pick = ctx;
+    (void)p2;
+    if (note == SPFILENOTIFY_FILEINCABINET) {
+        FILE_IN_CABINET_INFO_W *info = (FILE_IN_CABINET_INFO_W *)p1;
+        const WCHAR *name = info->NameInCabinet, *base = wcsrchr(name, '\\'), *wbase = wcsrchr(pick->want, '\\');
+        /* by its path in the cabinet, or by its name alone */
+        if (!_wcsicmp(name, pick->want) || !_wcsicmp(base ? base + 1 : name, wbase ? wbase + 1 : pick->want)) {
+            swprintf(info->FullTargetName, MAX_PATH, L"%ls\\%ls", pick->dir, base ? base + 1 : name);
+            lstrcpynW(pick->out, info->FullTargetName, MAX_PATH);
+            pick->found = TRUE;
+            return FILEOP_DOIT;
+        }
+        return FILEOP_SKIP;
+    }
+    return NO_ERROR;
+}
+
+static BOOL cab_take(const WCHAR *cab, const WCHAR *want, const WCHAR *dir, WCHAR *out)
+{
+    struct cab_pick pick = { want, dir, {0}, FALSE };
+    if (!SetupIterateCabinetW(cab, 0, cab_cb, &pick) || !pick.found) return FALSE;
+    lstrcpynW(out, pick.out, MAX_PATH);
+    return GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* the embedded cabinet, from its signature to the end, into a file of its own */
+static BOOL cab_slice(const WCHAR *exe, const WCHAR *cab)
+{
+    static BYTE buf[1 << 20];
+    HANDLE in = CreateFileW(exe, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL), out;
+    DWORD got, put, i;
+    LONGLONG at = -1, pos = 0;
+    BOOL ok = FALSE;
+    if (in == INVALID_HANDLE_VALUE) return FALSE;
+    while (at < 0 && ReadFile(in, buf, sizeof(buf), &got, NULL) && got >= 4) {
+        for (i = 0; i + 4 <= got; i++)
+            /* "MSCF", then four reserved zero bytes */
+            if (buf[i] == 'M' && buf[i + 1] == 'S' && buf[i + 2] == 'C' && buf[i + 3] == 'F' &&
+                i + 8 <= got && !buf[i + 4] && !buf[i + 5] && !buf[i + 6] && !buf[i + 7]) { at = pos + i; break; }
+        if (at >= 0) break;
+        pos += got - 8;
+        SetFilePointer(in, (LONG)(pos & 0xffffffff), ((LONG *)&pos) + 1, FILE_BEGIN);
+    }
+    if (at < 0) { CloseHandle(in); return FALSE; }
+    SetFilePointer(in, (LONG)(at & 0xffffffff), ((LONG *)&at) + 1, FILE_BEGIN);
+    out = CreateFileW(cab, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (out != INVALID_HANDLE_VALUE) {
+        ok = TRUE;
+        while (ReadFile(in, buf, sizeof(buf), &got, NULL) && got)
+            if (!WriteFile(out, buf, got, &put, NULL) || put != got) { ok = FALSE; break; }
+        CloseHandle(out);
+    }
+    CloseHandle(in);
+    return ok;
+}
+
+/* "cab-dll": Silent is IN-CABINET|NAME|DISPLAY NAME|VERSION -- the DLL put
+ * in the 32-bit system folder and registered, and an Uninstall entry
+ * written so Apps & features and the store see it installed, as an
+ * administrator under one consent. */
+static BOOL install_cab_dll(package_t *p, WCHAR *err, int cch)
+{
+    WCHAR spec[1024], *f[4] = {0}, *q, dir[MAX_PATH], cab[MAX_PATH], packed[MAX_PATH], dll[MAX_PATH], final[MAX_PATH];
+    WCHAR wow[MAX_PATH], sys[MAX_PATH], args[4096], path[MAX_PATH], *slash;
+    DWORD code = 1;
+    int n = 0;
+    BOOL ok = FALSE;
+
+    lstrcpynW(spec, p->silent, ARRAYSIZE(spec));
+    for (q = spec; n < 4; n++) { f[n] = q; if (!(q = wcschr(q, '|'))) { n++; break; } *q++ = 0; }
+    if (n < 4) { seterr(err, cch, L"%ls: the package's description is incomplete.", p->id); return FALSE; }
+    lstrcpynW(dir, p->file, MAX_PATH);
+    if (!(slash = wcsrchr(dir, '\\'))) return FALSE;
+    lstrcpyW(slash, L"\\unpacked");
+    CreateDirectoryW(dir, NULL);
+    swprintf(cab, MAX_PATH, L"%ls\\package.cab", dir);
+    if (!cab_slice(p->file, cab) || !cab_take(cab, f[0], dir, packed)) {
+        seterr(err, cch, L"%ls was not found in the download.", f[0]);
+        goto done;
+    }
+    /* compressed in a one-file cabinet of its own (a .dl_) */
+    swprintf(dll, MAX_PATH, L"%ls\\%ls", dir, f[1]);
+    if (!cab_take(packed, f[1], dir, final) && !CopyFileW(packed, dll, FALSE)) {
+        seterr(err, cch, L"%ls could not be unpacked.", f[1]);
+        goto done;
+    }
+    if (!GetSystemWow64DirectoryW(wow, MAX_PATH)) GetSystemDirectoryW(wow, MAX_PATH);
+    GetSystemDirectoryW(sys, MAX_PATH);
+    swprintf(args, ARRAYSIZE(args),
+             L"/c copy /y \"%ls\" \"%ls\\%ls\" >nul && (\"%ls\\regsvr32.exe\" /s \"%ls\\%ls\" & cd .) && "
+             L"reg add \"HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SG-%ls\" /v DisplayName /d \"%ls\" /f >nul && "
+             L"reg add \"HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SG-%ls\" /v DisplayVersion /d \"%ls\" /f >nul && "
+             L"reg add \"HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SG-%ls\" /v Publisher /d Microsoft /f >nul && "
+             L"reg add \"HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SG-%ls\" /v UninstallString /d "
+             L"\"cmd.exe /c del /f \\\"%ls\\%ls\\\" & reg delete HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SG-%ls /f\" /f >nul",
+             dll, wow, f[1], wow, wow, f[1],
+             f[1], f[2], f[1], f[3], f[1], f[1], wow, f[1], f[1]);
+    lstrcpynW(p->command, args, ARRAYSIZE(p->command));
+    swprintf(path, MAX_PATH, L"%ls\\cmd.exe", sys);
+    if (!run_wait(path, args, TRUE, &code, &p->elevated, err, cch)) goto done;
+    p->exit_code = code;
+    if (code) seterr(err, cch, L"%ls could not be put in place (code %ld).", f[1], (long)code);
+    else ok = TRUE;
+done:
+    {
+        WIN32_FIND_DATAW fd;
+        HANDLE find;
+        swprintf(path, MAX_PATH, L"%ls\\*", dir);
+        if ((find = FindFirstFileW(path, &fd)) != INVALID_HANDLE_VALUE) {
+            do {
+                swprintf(path, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) DeleteFileW(path);
+            } while (FindNextFileW(find, &fd));
+            FindClose(find);
+        }
+        RemoveDirectoryW(dir);
+    }
+    return ok;
+}
+
 BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 {
     WCHAR args[1024], msi[MAX_PATH];
@@ -410,6 +540,9 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     else if (!_wcsicmp(t, L"exe")) lstrcpynW(args, p->silent, 1024);
 #ifndef SG_MUTANT_NOIEXPRESS
     else if (!_wcsicmp(t, L"iexpress-msi")) return install_iexpress_msi(p, err, cch);
+#endif
+#ifndef SG_MUTANT_NOCABDLL
+    else if (!_wcsicmp(t, L"cab-dll")) return install_cab_dll(p, err, cch);
 #endif
     else { seterr(err, cch, L"%ls installers (%ls) can't be run here yet.", t, p->id); return FALSE; }
 #ifndef SG_MUTANT_NOCUSTOM

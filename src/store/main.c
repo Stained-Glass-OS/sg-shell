@@ -10,6 +10,7 @@
  *   sg-store64.exe --open ID       Open, as the card's button: the program
  *                                  (headless), then exit
  *   sg-store64.exe --uninstall ID  remove one app (headless), then exit
+ *   sg-store64.exe --page ID       open the store on one app's details page
  *   sg-store64.exe --deb FILE      "Install a Linux package": what a .deb is,
  *                                  and Install (File Explorer's .deb verb)
  *   --elevated-apt / --elevated-apt-remove / --elevated-deb
@@ -693,8 +694,11 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
                  DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
         } else if (has_it(s)) {
             WCHAR what[64];
-            button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", s->state == AST_UPDATE);
-            add_list_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt, client_bottom);
+            /* a runtime (the Visual Basic 6 one) has nothing to open */
+            if (!app_is_runtime(s) || s->state == AST_UPDATE) {
+                button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", s->state == AST_UPDATE);
+                add_list_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt, client_bottom);
+            }
             if (can_uninstall(s)) { button(dc, b2, L"Uninstall", FALSE); add_list_hit(H_UNINSTALL, t, b2, client_bottom); two = TRUE; }
             swprintf(what, ARRAYSIZE(what), L"Installed%ls", a->alt >= 0 ? (s->tier == TIER_LINUX ? L" (Linux app)" : L" (Windows program)") : L"");
             text(dc, g_f_small, C_OK, st, what, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
@@ -795,6 +799,7 @@ static int wrapped(HDC dc, HFONT font, COLORREF col, int x, int w, int y, const 
     HFONT of = SelectObject(dc, font);
     DrawTextW(dc, s, -1, &r, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
     SelectObject(dc, of);
+    r.right = x + w;   /* only its height was wanted: the measured width can clip the last letter ("6.0.98.1") */
     if (r.bottom >= 0 && r.top <= client_bottom) text(dc, font, col, r, s, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX);
     return r.bottom - r.top;
 }
@@ -863,10 +868,13 @@ static void paint_details(HDC dc, const RECT *rc)
         } else if (s->queued) {
             button(dc, bt, L"Cancel", FALSE); add_hit(H_UNQUEUE, t, bt);
         } else if (has_it(s)) {
-            button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", TRUE);
-            add_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt);
+            BOOL open = !app_is_runtime(s) || s->state == AST_UPDATE;   /* a runtime: nothing to open */
+            if (open) {
+                button(dc, bt, s->state == AST_UPDATE ? L"Update" : L"Open", TRUE);
+                add_hit(s->state == AST_UPDATE ? H_UPDATE : H_OPEN, t, bt);
+            }
             if (can_uninstall(s)) {
-                RECT b2 = { bt.right + dpx(10), bt.top, bt.right + dpx(150), bt.bottom };
+                RECT b2 = { open ? bt.right + dpx(10) : bt.left, bt.top, open ? bt.right + dpx(150) : bt.left + dpx(140), bt.bottom };
                 button(dc, b2, L"Uninstall", FALSE); add_hit(H_UNINSTALL, t, b2);
             }
         } else {
@@ -1360,6 +1368,8 @@ static void make_fonts(void)
     ncm.lfMessageFont.lfHeight = -dpx(24); ncm.lfMessageFont.lfWeight = FW_SEMIBOLD; g_f_title = CreateFontIndirectW(&ncm.lfMessageFont);
 }
 
+static const WCHAR *g_start_page;           /* --page: the app whose details page opens first */
+static int find_app(const WCHAR *key);
 static int window(HINSTANCE inst, const WCHAR *query)
 {
     WNDCLASSW wc = { 0 };
@@ -1379,6 +1389,8 @@ static int window(HINSTANCE inst, const WCHAR *query)
     if (!g_wnd) return 1;
     icons_fetch(g_apps, g_napps, dpx(48), g_wnd, WM_ICONS);
     if (query && query[0]) SetWindowTextW(g_search, query);
+    /* opened for one app (a program found it needs it: sg-notify's question) */
+    if (g_start_page) open_details(g_wnd, find_app(g_start_page));
     ShowWindow(g_wnd, SW_SHOWNORMAL);
     UpdateWindow(g_wnd);
     SetFocus(g_search);
@@ -1446,6 +1458,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             return k < 0 ? 2 : 0;
         }
         if (!lstrcmpiW(argv[i], L"--search") && i + 1 < argc) { query = argv[++i]; continue; }
+        if (!lstrcmpiW(argv[i], L"--page") && i + 1 < argc) { g_start_page = argv[++i]; continue; }
         if (!lstrcmpiW(argv[i], L"--uninstall") && i + 1 < argc) {
             /* the card's Uninstall, without its question (the gate) */
             int k;

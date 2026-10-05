@@ -189,6 +189,19 @@ static DWORD WINAPI fetch_thread(void *arg)
         break;
     case SRC_PIN:
         lstrcpynW(d->version, a->pin_version, ARRAYSIZE(d->version));
+        {
+            /* no manifest to read: the catalogue says what licence it comes
+             * under and where its maker describes it */
+            WCHAR key[128];
+            DWORD cb;
+            swprintf(key, ARRAYSIZE(key), L"%ls\\Apps\\%ls", STORE_KEY, a->ord);
+            cb = sizeof(d->license);
+            RegGetValueW(HKEY_LOCAL_MACHINE, key, L"License", RRF_RT_REG_SZ | RRF_ZEROONFAILURE, NULL, d->license, &cb);
+            cb = sizeof(d->homepage);
+            RegGetValueW(HKEY_LOCAL_MACHINE, key, L"Homepage", RRF_RT_REG_SZ | RRF_ZEROONFAILURE, NULL, d->homepage, &cb);
+            cb = sizeof(d->desc);   /* the whole of it (the card's copy is cut short) */
+            RegGetValueW(HKEY_LOCAL_MACHINE, key, L"Description", RRF_RT_REG_SZ | RRF_ZEROONFAILURE, NULL, d->desc, &cb);
+        }
         break;
     }
     if (!d->desc[0] && d->summary[0]) lstrcpynW(d->desc, d->summary, ARRAYSIZE(d->desc));

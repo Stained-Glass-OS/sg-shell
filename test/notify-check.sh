@@ -12,9 +12,12 @@
 #   - /toggle again closes it;
 #   - clicking one hands it to its program through wine-sg 0819's
 #     SgActivateNotification (here a program gone, so it is started), the
-#     panel closes and it leaves the history.
+#     panel closes and it leaves the history;
+#   - a runtime a program needs (wine-sg 0817 names it under
+#     Runtimes\Missing): it asks, once a session, and Yes opens SG Store on
+#     its page (sg-store --page); a DLL the store does not offer: no question.
 #
-#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutants SG_MUTANT_NOTIFY_NO_CLEAR, SG_MUTANT_NOTIFY_NO_ACTIVATE)
+#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutants SG_MUTANT_NOTIFY_NO_CLEAR, SG_MUTANT_NOTIFY_NO_ACTIVATE; SG_MUTANT_NO_RUNTIME_ASK, built here)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -108,6 +111,63 @@ if grep -aq SgActivateNotification "$WINEPREFIX/drive_c/windows/system32/windows
         || fail "click: started $([ -s "$WINEPREFIX/drive_c/clicked.txt" ] && echo 1 || echo 0) activated '$(val activated)' visible $(val visible)"
 else
     echo "SKIP  clicking one: this wine-sg has no SgActivateNotification (0819)"
+fi
+# --- a runtime a program needs (David 2026-10-05: Meedio's plug-ins and the Visual Basic 6
+# runtime). wine-sg's loader (0817) names a missing DLL the store offers in
+# HKCU\Software\Stained Glass\Runtimes\Missing; sg-notify asks whether to
+# install it, and Yes opens SG Store on its page (a stand-in sg-store.exe,
+# through App Paths, records how it was started). Asked once a session; a
+# DLL the store does not offer is not asked about.
+MINGW="${MINGW64:-x86_64-w64-mingw32-gcc}"
+if command -v "$MINGW" >/dev/null; then
+    cat > "$T/store-standin.c" <<'EOF2'
+#include <windows.h>
+#include <stdio.h>
+int main(void)
+{
+    FILE *f = fopen("C:\\store-args.txt", "a");
+    char *c = GetCommandLineA(), *p = c;
+    if (*p == '"') { p = strchr(p + 1, '"'); p = p ? p + 1 : c; } else while (*p && *p != ' ') p++;
+    while (*p == ' ') p++;
+    if (f) { fprintf(f, "%s\n", p); fclose(f); }
+    return 0;
+}
+EOF2
+    "$MINGW" -O2 -o "$WINEPREFIX/drive_c/sg-store.exe" "$T/store-standin.c" 2>"$T/cc.log" || fail "the stand-in store does not build"
+    { echo '#define SG_MUTANT_NO_RUNTIME_ASK'; cat "$HERE/src/sg-notify.c"; } > "$T/mut-notify.c"
+    "$MINGW" -O2 -municode -mwindows -Wno-missing-field-initializers -I"$HERE/src" -o "$T/mut-notify.exe" "$T/mut-notify.c" \
+        -lshell32 -luser32 -lgdi32 -ladvapi32 2>>"$T/cc.log" || fail "mutant NO_RUNTIME_ASK does not build: $(tail -3 "$T/cc.log")"
+    "$WINE" reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-store.exe' /ve /d 'C:\sg-store.exe' /f >/dev/null 2>&1
+    "$WINE" reg add 'HKLM\Software\Stained Glass\Store\Runtimes' /v msvbvm60.dll /d 127 /f >/dev/null 2>&1
+    "$WINE" reg add 'HKLM\Software\Stained Glass\Store\Apps\127' /v Name /d 'Visual Basic 6 runtime' /f >/dev/null 2>&1
+    missing() { "$WINE" reg add 'HKCU\Software\Stained Glass\Runtimes\Missing' /v "$1" /d "$2" /f >/dev/null 2>&1; }
+    asked() { i=0; while [ $i -lt "${1:-40}" ]; do w=$(xdotool search --name '^A runtime is missing$' 2>/dev/null | head -1); [ -n "$w" ] && { echo "$w"; return 0; }; sleep 0.25; i=$((i + 1)); done; return 1; }
+    rm -f "$WINEPREFIX/drive_c/store-args.txt"
+    missing msvbvm60.dll General_RemovableInsert.dll
+    if w=$(asked); then
+        pass "a plug-in missing msvbvm60.dll (the store offers it): sg-notify asks whether to install it"
+        import -window root "$HERE/build/notify-runtime.png" 2>/dev/null
+        xdotool windowactivate --sync "$w" 2>/dev/null; xdotool key Return; sleep 3
+        [ "$(tr -d '\r' < "$WINEPREFIX/drive_c/store-args.txt" 2>/dev/null)" = "--page 127" ] \
+            && pass "...Yes opens SG Store on its page (sg-store.exe --page 127)" || fail "after Yes: '$(cat "$WINEPREFIX/drive_c/store-args.txt" 2>/dev/null)'"
+        "$WINE" reg query 'HKCU\Software\Stained Glass\Runtimes\Missing' 2>/dev/null | grep -qi msvbvm60 \
+            && fail "the Missing value was kept" || pass "...and the note is taken (the Missing value goes)"
+    else fail "no question for a missing msvbvm60.dll"; fi
+    rm -f "$WINEPREFIX/drive_c/store-args.txt"
+    missing msvbvm60.dll General_HideTaskbar.dll
+    asked >/dev/null 8 && fail "asked again in the same session" || pass "asked once a session: the second plug-in is not asked about again"
+    missing sgnosuch.dll Other.dll
+    asked >/dev/null 8 && fail "asked about a DLL the store does not offer" || pass "a DLL the store does not offer is not asked about"
+    # the mutant, its own session of sg-notify
+    "$WINE" taskkill /f /im sg-notify64.exe >/dev/null 2>&1; sleep 1
+    "$WINE" "$T/mut-notify.exe" >/dev/null 2>&1 &
+    sleep 3
+    missing msvbvm60.dll General_RemovableInsert.dll
+    if asked >/dev/null 12 || [ -s "$WINEPREFIX/drive_c/store-args.txt" ]; then fail "NO_RUNTIME_ASK not detected"
+    else pass "MUTANT NO_RUNTIME_ASK never asks (gate catches it)"; fi
+    "$WINE" taskkill /f /im mut-notify.exe >/dev/null 2>&1
+else
+    echo "NOTE  no $MINGW: the runtime question is not checked"
 fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

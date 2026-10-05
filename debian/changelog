@@ -1,3 +1,32 @@
+sg-shell (0.1.0-117) unstable; urgency=medium
+
+  * SG Store offers the Visual Basic 6 runtime (MSVBVM60.DLL; David
+    2026-10-05: Meedio's plug-ins General_RemovableInsert and
+    General_HideTaskbar need it, and Wine does not have it). Microsoft
+    offers it now only inside its own XP Service Pack 3 package (332 MB):
+    the new install type cab-dll finds that package's cabinet, takes the
+    one file out (and out of its one-file .dl_ cabinet), and as an
+    administrator, under one consent, puts it in the 32-bit system
+    folder, registers it and writes an Uninstall entry, so the store sees
+    it installed. Nothing of Microsoft's is shipped: the user's machine
+    downloads it from Microsoft, checked by its SHA-256.
+  * A runtime's page has no Open (nothing to open); its Uninstall runs as
+    an administrator. A pinned app's page shows the catalogue's licence,
+    site and whole description; sg-store --page ID opens on an app's page.
+    The page's facts no longer clip their last letter.
+  * sg-notify: when a program needs a runtime the store offers and it is
+    missing (wine-sg 0817 names it under HKCU\Software\Stained Glass\
+    Runtimes\Missing), it asks, once a session, "<program> needs the
+    Visual Basic 6 runtime ... Install it from SG Store?" -- Yes opens SG
+    Store on its page (Store\Runtimes maps the DLL to the app).
+  * Gates: store-check H3 (a stand-in package and runtime DLL; installed,
+    registered, detected, --page with licence and no Open, Uninstall;
+    mutant SG_MUTANT_NOCABDLL); notify-check: the question, Yes ->
+    sg-store --page 127, once a session, not for other DLLs (mutant
+    SG_MUTANT_NO_RUNTIME_ASK).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 16:43:59 +0000
+
 sg-shell (0.1.0-116) unstable; urgency=medium
 
   * The notification centre: clicking a notification hands it to the

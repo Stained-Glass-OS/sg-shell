@@ -76,12 +76,12 @@ FONTVIEW_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -ladv
 # Get a web browser (sg-browser): src/browser/, WinINet and BCrypt; its
 # manifest reader (manifest.c) is plain C, also built natively by its gate.
 BROWSER_SRC  = $(wildcard src/browser/*.c)
-BROWSER_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
+BROWSER_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
 # SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
 # install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build
 # time. See docs/decisions/0017-sg-store.md.
 STORE_SRC  = src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
-STORE_LIBS = -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
+STORE_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 CONSOLE_TOOLS = sg-gpresult
 

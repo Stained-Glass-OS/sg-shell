@@ -19,6 +19,13 @@
  * toast with a protocol launch) opens it. Opening the panel marks them seen
  * (Notifications\Seen).
  *
+ * It also answers for runtimes a program needs and this system does not
+ * have: wine-sg's loader (0817) names a missing DLL the store offers
+ * (Store\Runtimes: msvbvm60.dll -> the Visual Basic 6 runtime) in
+ * HKCU\Software\Stained Glass\Runtimes\Missing, and this program asks,
+ * once a session for each, whether to install it -- Yes opens SG Store on
+ * its page (sg-store --page), where Install is one touch away.
+ *
  *   sg-notify              the icon (sg-session starts it with the shell)
  *   sg-notify /toggle      open or close the panel (of the running one)
  *   sg-notify --dump       what the panel would list (stderr)
@@ -41,6 +48,11 @@
 #define HISTORY_KEY L"Software\\Stained Glass\\Notifications\\History"
 #define NOTIFY_KEY  L"Software\\Stained Glass\\Notifications"
 #define MAX_ENTRIES 64
+#define MISSING_KEY  L"Software\\Stained Glass\\Runtimes\\Missing"
+#define RUNTIMES_KEY L"Software\\Stained Glass\\Store\\Runtimes"
+#define WM_MISSING (WM_APP + 3)
+static void ask_missing(void);
+static DWORD WINAPI watch_missing(void *arg);
 
 struct entry
 {
@@ -583,6 +595,9 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_TOGGLE:
         show_panel(!IsWindowVisible(g_fly));
         return 0;
+    case WM_MISSING:
+        ask_missing();
+        return 0;
     case WM_TRAY:
         if (lp == WM_LBUTTONUP) show_panel(!IsWindowVisible(g_fly));
         else if (lp == WM_RBUTTONUP || lp == WM_CONTEXTMENU)
@@ -609,6 +624,67 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/* --- runtimes a program needs ------------------------------------------------------ */
+
+static DWORD WINAPI watch_missing(void *arg)
+{
+    HKEY key;
+    HANDLE ev = CreateEventW(NULL, FALSE, FALSE, NULL);
+    (void)arg;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, MISSING_KEY, 0, NULL, 0, KEY_READ | KEY_NOTIFY, NULL, &key, NULL)) return 0;
+    PostMessageW(g_tray, WM_MISSING, 0, 0);   /* any named before this started */
+    for (;;)
+    {
+        if (RegNotifyChangeKeyValue(key, FALSE, REG_NOTIFY_CHANGE_LAST_SET, ev, TRUE)) break;
+        WaitForSingleObject(ev, INFINITE);
+        PostMessageW(g_tray, WM_MISSING, 0, 0);
+    }
+    RegCloseKey(key);
+    return 0;
+}
+
+static void ask_missing(void)
+{
+    static WCHAR asked[16][64];
+    static int nasked;
+    HKEY key;
+    WCHAR dll[64], program[MAX_PATH], ord[32], name[128], store_key[160], text[512];
+    DWORD i, n, cb, type;
+    int k;
+
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, MISSING_KEY, 0, KEY_READ | KEY_SET_VALUE, &key)) return;
+    for (i = 0; ; )
+    {
+        BOOL seen = FALSE;
+        n = ARRAYSIZE(dll); cb = sizeof(program);
+        if (RegEnumValueW(key, i, dll, &n, NULL, &type, (BYTE *)program, &cb)) break;
+        if (type != REG_SZ) program[0] = 0;
+        RegDeleteValueW(key, dll);   /* the next enumeration starts again at 0 */
+        CharLowerW(dll);
+        for (k = 0; k < nasked; k++) if (!lstrcmpW(asked[k], dll)) seen = TRUE;
+        cb = sizeof(ord);
+        if (seen || RegGetValueW(HKEY_LOCAL_MACHINE, RUNTIMES_KEY, dll, RRF_RT_REG_SZ, NULL, ord, &cb)) continue;
+        if (nasked < (int)ARRAYSIZE(asked)) lstrcpynW(asked[nasked++], dll, 64);
+        _snwprintf(store_key, ARRAYSIZE(store_key), L"Software\\Stained Glass\\Store\\Apps\\%ls", ord);
+        store_key[ARRAYSIZE(store_key) - 1] = 0;
+        cb = sizeof(name);
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, store_key, L"Name", RRF_RT_REG_SZ, NULL, name, &cb)) lstrcpynW(name, dll, 128);
+        _snwprintf(text, ARRAYSIZE(text), L"%ls needs the %ls (%ls), which is not installed.\n\n"
+                   L"Install it from SG Store?", program[0] ? program : L"A program", name, dll);
+        text[ARRAYSIZE(text) - 1] = 0;
+#ifndef SG_MUTANT_NO_RUNTIME_ASK
+        if (MessageBoxW(NULL, text, L"A runtime is missing", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST) == IDYES)
+        {
+            WCHAR args[64];
+            _snwprintf(args, ARRAYSIZE(args), L"--page %ls", ord);
+            args[ARRAYSIZE(args) - 1] = 0;
+            ShellExecuteW(NULL, NULL, L"sg-store.exe", args, NULL, SW_SHOWNORMAL);
+        }
+#endif
+    }
+    RegCloseKey(key);
 }
 
 static HFONT make_font(int height, int weight)
@@ -671,6 +747,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Notifications", WS_POPUP,
                             0, 0, U(396), 400, g_tray, NULL, inst, NULL);
     tray_update(TRUE);
+    CloseHandle(CreateThread(NULL, 0, watch_missing, NULL, 0, NULL));
     if (cmdline && wcsstr(cmdline, L"/toggle")) show_panel(TRUE);
     while (GetMessageW(&msg, NULL, 0, 0))
     {
