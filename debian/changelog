@@ -1,3 +1,13 @@
+sg-shell (0.1.0-114) unstable; urgency=medium
+
+  * Start grows with the screen as the title bars and the taskbar do: its
+    sizes and fonts follow Style\Scale8 (or the DPI if larger), read at
+    start and again when a look sets the sizes (SPI_SETNONCLIENTMETRICS).
+    start-check: at 12 eighths Start is half again as wide, back at 8 as it
+    was (mutant SG_MUTANT_START_NO_SCALE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 13:36:53 +0000
+
 sg-shell (0.1.0-113) unstable; urgency=medium
 
   * Voice typing: "/background" with hold-to-talk off leaves

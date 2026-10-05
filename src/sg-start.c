@@ -963,6 +963,7 @@ static void dump(void)
 /* ---- actions ------------------------------------------------------------------- */
 
 static void show_panel(BOOL show);
+static BOOL apply_scale(void);
 static void show_list(BOOL on);
 static void query_taskbar(void);
 
@@ -3340,6 +3341,12 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SETTINGCHANGE:
         /* the taskbar moved (Settings > Taskbar) */
         if (lp && !lstrcmpW((const WCHAR *)lp, L"TraySettings")) g_bar_known = FALSE;
+        /* a look set the sizes again: Start's scale with them (and the bar's) */
+        if ((wp == SPI_SETNONCLIENTMETRICS || (lp && !lstrcmpW((const WCHAR *)lp, L"WindowMetrics"))) && apply_scale())
+        {
+            g_bar_known = FALSE;
+            if (IsWindowVisible(hwnd)) show_panel(FALSE);
+        }
         /* what Start starts gets environment variables changed since (PATH) */
         if (sg_env_changed(msg, lp)) sg_env_reload();
         break;
@@ -3403,6 +3410,29 @@ static HFONT make_font(int pt10, int weight)
                        CLEARTYPE_QUALITY, 0, L"Segoe UI");
 }
 
+/* Start grows with the screen as the title bars and the taskbar do (the
+ * looks' Style\Scale8: the screen's height in eighths of 800 px), or with
+ * the DPI if that is larger; its fonts made again. TRUE when it changed. */
+static int g_sys_dpi = 96;
+static BOOL apply_scale(void)
+{
+    int was = g_dpi, s8 = (int)reg_value(L"Software\\Stained Glass\\Style", L"Scale8", 8);
+    if (s8 < 8) s8 = 8;
+    if (s8 > 24) s8 = 24;
+#ifdef SG_MUTANT_START_NO_SCALE
+    s8 = 8;
+#endif
+    g_dpi = max(g_sys_dpi, MulDiv(96, s8, 8));
+    if (g_font && g_dpi == was) return FALSE;
+    if (g_font) { DeleteObject(g_font); DeleteObject(g_font_small); DeleteObject(g_font_bold); DeleteObject(g_font_big); DeleteObject(g_font_glyph); }
+    g_font       = make_font(105, FW_NORMAL);
+    g_font_small = make_font(90, FW_NORMAL);
+    g_font_bold  = make_font(105, FW_SEMIBOLD);
+    g_font_big   = make_font(150, FW_NORMAL);
+    g_font_glyph = make_font(120, FW_NORMAL);
+    return TRUE;
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
     static WCHAR dump_path[MAX_PATH];
@@ -3413,16 +3443,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     (void)prev; (void)cmd; (void)show;
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);   /* shortcuts' icons come through IShellLink */
     SetProcessDPIAware();
-    g_dpi = GetDeviceCaps(screen, LOGPIXELSY);
+    g_sys_dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
-    if (g_dpi < 96) g_dpi = 96;
+    if (g_sys_dpi < 96) g_sys_dpi = 96;
+    g_dpi = g_sys_dpi;
     if (GetEnvironmentVariableW(L"SG_START_DUMP", dump_path, MAX_PATH)) g_dump_path = dump_path;
 
-    g_font       = make_font(105, FW_NORMAL);
-    g_font_small = make_font(90, FW_NORMAL);
-    g_font_bold  = make_font(105, FW_SEMIBOLD);
-    g_font_big   = make_font(150, FW_NORMAL);
-    g_font_glyph = make_font(120, FW_NORMAL);
+    apply_scale();
 
     lc.lpfnWndProc = listener_proc; lc.hInstance = inst; lc.lpszClassName = LISTENER_CLASS;
     RegisterClassW(&lc);

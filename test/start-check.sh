@@ -13,7 +13,7 @@
 # context menu pinning and unpinning, the power menu and machine policy,
 # the expanding rail, keyboard selection, click-away, and how fast it opens.
 # Start follows the Windows mode (SystemUsesLightTheme) and Settings >
-# Personalization > Start.
+# Personalization > Start, and grows with the screen as the title bars do.
 # Screenshots: build/start-{open,light,search,context,power,rail,nolist,fullscreen,horizon,horizon-allprograms,glass}.png.
 #
 #   make test, or: sh test/start-check.sh
@@ -432,6 +432,22 @@ poke
 [ "$(val centered)" = 0 ] && [ "$(val rect)" = "0,$panel_y,708,$((H - BAR))" ] && pass "and back to the tiles (the default)" || fail "back: $(val rect)"
 # the tiles layout is rebuilt with fresh settings, not left in the centred state's stale list (David 2026-09-29)
 [ "$(d | grep -c '^item')" -ge 5 ] && d | grep -q '^header ' && pass "back to Tiles restores the full app list (not blank/cut off)" || fail "tiles after centred: items=$(d | grep -c '^item') headers=$(d | grep -c '^header')"
+
+# --- the screen's scale ---------------------------------------------------------------
+# The looks size the title bars by the screen (Style\Scale8, here as on a
+# 1200-line screen: 12 eighths) and say so (SPI_SETNONCLIENTMETRICS): Start
+# grows with them, as the taskbar does.
+[ "$(val visible)" = 1 ] && { xdotool key Escape; sleep 0.5; xdotool key Escape; sleep 0.8; }
+SG_FAKE_SCREEN_HEIGHT=1200 "$WINE" "$HERE/build/sg-control64.exe" --set metrics >/dev/null 2>&1; sleep 2
+poke
+set -- $(val rect | tr ',' ' ')
+[ $# = 4 ] && [ $(( $3 - $1 )) -ge 1000 ] && [ $(( $3 - $1 )) -le 1100 ] \
+    && pass "at the screen's scale (12 eighths) Start is half again as wide: $(val rect)" || fail "Start at scale 12: $(val rect) (want about 1062 wide)"
+xdotool key Escape; sleep 0.8
+SG_FAKE_SCREEN_HEIGHT=800 "$WINE" "$HERE/build/sg-control64.exe" --set metrics >/dev/null 2>&1; sleep 2
+poke
+set -- $(val rect | tr ',' ' ')
+[ $# = 4 ] && [ $(( $3 - $1 )) = 708 ] && pass "and back at 8, as it was: $(val rect)" || fail "Start back at scale 8: $(val rect)"
 
 # --- click away --------------------------------------------------------------------------
 [ "$(val visible)" = 1 ] || poke
