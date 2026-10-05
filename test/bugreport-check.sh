@@ -22,6 +22,23 @@ for k in System Kernel CPU Memory Session Packages; do
     grep -q "^$k:" "$T/info.txt" && pass "the system details name the $k" || fail "no $k line"
 done
 
+# USB devices, for hardware problems (David 2026-10-05: the DYMO 550 not
+# found): a fake sysfs with a LabelWriter 550 on usblp, its node's mode and
+# group; its serial number is not shown. Mutant: the info without the USB part.
+F="$T/fakesys"; dv="$F/bus/usb/devices/1-2"
+mkdir -p "$dv/1-2:1.0" "$F/bus/usb/devices/usb1" "$F/drivers/usblp" "$T/dev/bus/usb/001"
+printf '0922\n' > "$dv/idVendor"; printf '0028\n' > "$dv/idProduct"
+printf 'DYMO\n' > "$dv/manufacturer"; printf 'LabelWriter 550\n' > "$dv/product"; printf 'SECRETSERIAL42\n' > "$dv/serial"
+printf '1\n' > "$dv/busnum"; printf '5\n' > "$dv/devnum"
+printf '1d6b\n' > "$F/bus/usb/devices/usb1/idVendor"
+ln -s "$F/drivers/usblp" "$dv/1-2:1.0/driver"
+: > "$T/dev/bus/usb/001/005"; chmod 664 "$T/dev/bus/usb/001/005"
+SG_SYSFS="$F" SG_DEVFS="$T/dev" sh "$B/sg-bugreport-info" "$T/usb.txt"
+grep -q '^  0922:0028 DYMO LabelWriter 550 \[usblp\] -rw-rw-r-- [^,]*, this user can open it$' "$T/usb.txt" \
+    && pass "USB devices are listed: ids, name, driver, node mode ($(grep 0922 "$T/usb.txt" | sed 's/^ *//'))" || fail "USB devices: $(sed -n '/USB devices/,/^$/p' "$T/usb.txt" | tr '\n' '|')"
+grep -q SECRETSERIAL42 "$T/usb.txt" && fail "a USB serial number is in the report" || pass "no USB serial number in it"
+grep -q '1d6b' "$T/usb.txt" && fail "a root hub is listed" || pass "root hubs left out"
+
 # a program's run: its exit status, and the log's highlights
 WINE="${WINE:-/opt/wine-sg/bin/wine}"
 if [ -x "$WINE" ]; then

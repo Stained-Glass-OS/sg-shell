@@ -1,3 +1,20 @@
+sg-shell (0.1.0-123) unstable; urgency=medium
+
+  * Start's rail glyphs (menu, documents, pictures, settings, power -- the
+    power button on every look) and the user's round letter badge are drawn
+    smooth (src/sg-smooth.h: four times larger, averaged down): GDI's lines
+    gave them stepped edges (David 2026-10-05: "low quality"). The settings
+    glyph is a cog with teeth, not a ring with spokes. Test:
+    test/start-check.sh (mutants SG_MUTANT_JAGGED_GLYPHS,
+    SG_MUTANT_JAGGED_AVATAR). wine-sg 0856 does the taskbar's.
+  * Report a problem lists the USB devices attached (ids, names, the drivers
+    their interfaces have, their device node's mode and group, and whether
+    the user may open it) and the printer queues, for hardware problems
+    such as a label printer not found (David 2026-10-05). No serial
+    numbers. Test: test/bugreport-check.sh (a fake sysfs with a DYMO 550).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 15:14:32 -0700
+
 sg-shell (0.1.0-122) unstable; urgency=medium
 
   * Settings > Display > Scale applies to the taskbar and Start at once, as

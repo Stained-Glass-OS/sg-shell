@@ -108,6 +108,16 @@ has "tile File Explorer" && has "tile Notepad" && has "tile Control Panel" && ha
 shot open
 colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
 [ "${colors:-1}" -ge 8 ] && pass "it paints icons, tiles and text ($colors colours)" || fail "flat panel ($colors colours)"
+# the rail's glyphs and the user's round badge are smooth (sg-smooth.h): GDI's
+# lines gave them stepped edges, only the bar's and the glyph's own colour
+# (David 2026-10-05: "low quality"). Edges counted in distinct colours.
+# Mutants: SG_MUTANT_JAGGED_GLYPHS (2 each), SG_MUTANT_JAGGED_AVATAR (53).
+crop_colours() { convert "$HERE/build/start-open.png" -crop "24x24+12+$(( H - BAR - $1 ))" +repage -format %k info: 2>/dev/null; }
+g=$(crop_colours 184); s=$(crop_colours 89); w=$(crop_colours 39)
+[ "${g:-0}" -ge 6 ] && [ "${s:-0}" -ge 6 ] && [ "${w:-0}" -ge 6 ] \
+    && pass "the rail's documents, settings and power glyphs are smooth ($g, $s, $w colours)" || fail "jagged rail glyphs: ${g:-?}, ${s:-?}, ${w:-?} colours (want 6 or more each)"
+a=$(crop_colours 232)
+[ "${a:-0}" -ge 70 ] && pass "the user's round badge is smooth ($a colours)" || fail "jagged user badge: ${a:-?} colours (want 70 or more)"
 
 # --- the Windows mode (SystemUsesLightTheme) --------------------------------------------
 px() { convert "$HERE/build/start-$1.png" -format "%[fx:int(255*p{$2,$3}.r)],%[fx:int(255*p{$2,$3}.g)],%[fx:int(255*p{$2,$3}.b)]" info: 2>/dev/null; }

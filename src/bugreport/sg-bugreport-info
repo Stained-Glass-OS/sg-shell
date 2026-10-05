@@ -40,6 +40,42 @@ if command -v wlr-randr >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
 fi
 line "Session" "${SG_DISPLAY_PATH:-${XDG_SESSION_TYPE:-unknown}} display, user $(id -un)$(id -Gn | grep -qw sudo && echo " (administrator)")"
 line "Language" "${LANG:-unset}"
+# USB devices: hardware problems (a label printer not found, a scanner) are
+# often a missing udev rule or driver (David 2026-10-05, the DYMO 550). Each
+# device's ids and names, the drivers its interfaces have, and its device
+# node's mode and group -- which decide whether the session may open it. No
+# serial numbers: they identify the machine. SG_SYSFS: another sysfs (the gate).
+SYS=${SG_SYSFS:-/sys}
+usb=""
+for d in "$SYS"/bus/usb/devices/*; do
+    [ -r "$d/idVendor" ] || continue
+    case "${d##*/}" in usb*) continue ;; esac   # the root hubs
+    vid=$(first "$d/idVendor"); pid=$(first "$d/idProduct")
+    name=$(printf '%s %s' "$(first "$d/manufacturer")" "$(first "$d/product")" | tr -s ' ' | sed 's/^ *//; s/ *$//')
+    drivers=$(for i in "$d"/"${d##*/}":*; do [ -e "$i/driver" ] && basename "$(readlink "$i/driver")"; done | sort -u | tr '\n' ' ' | sed 's/ $//')
+    node=""
+    bus=$(first "$d/busnum"); dev=$(first "$d/devnum")
+    if [ -n "$bus" ] && [ -n "$dev" ]; then
+        n=$(printf '%s/bus/usb/%03d/%03d' "${SG_DEVFS:-/dev}" "$bus" "$dev")
+        # the mode says nothing of the session's own access (logind's uaccess
+        # ACL): whether this user may open it, asked directly
+        [ -e "$n" ] && node="$(stat -c '%A %U:%G' "$n" 2>/dev/null), $( [ -r "$n" ] && [ -w "$n" ] && echo "this user can open it" || echo "this user cannot open it")"
+    fi
+    usb="$usb$(printf '  %s:%s %s [%s]%s' "$vid" "$pid" "${name:-?}" "${drivers:-no driver}" "${node:+ $node}")
+"
+done
+if [ -n "$usb" ]; then
+    echo
+    echo "USB devices (id, name, drivers, device node):"
+    printf '%s' "$usb"
+fi
+for lp in "${SG_DEVFS:-/dev}"/usb/lp*; do
+    [ -e "$lp" ] && line "USB printer" "${lp##*/} $(stat -c '%A %U:%G' "$lp" 2>/dev/null)"
+done
+if command -v lpstat >/dev/null 2>&1; then
+    # the queues and their devices, a USB one's serial left out
+    lpstat -v 2>/dev/null | sed 's/[?&]serial=[^ &]*//' | while read -r q; do line "Printer" "$q"; done
+fi
 echo
 echo "Packages:"
 dpkg-query -W -f '  ${Package} ${Version}\n' wine-sg sg-shell sg-session sg-compositor sg-image \

@@ -30,6 +30,7 @@
 #include <shlobj.h>
 #include <shellapi.h>
 #include <shlwapi.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@
 #include <wctype.h>
 #include "sg-mode.h"
 #include "sg-round.h"
+#include "sg-smooth.h"
 #include "sg-envreload.h"
 
 #define SG_START_TOGGLE (WM_USER + 10)
@@ -1521,51 +1523,85 @@ static const WCHAR *user_name(void)
     return name;
 }
 
-/* the rail's glyphs, drawn with lines: menu, documents, pictures, settings, power */
-static void draw_glyph_scaled(HDC dc, int which, int cx, int cy, COLORREF c, int scale)
+/* the rail's glyphs, drawn with lines: menu, documents, pictures, settings,
+ * power -- in a 24-unit square about (cx, cy), u pixels a unit, lines w wide */
+static void draw_glyph_lines(HDC dc, int which, double cx, double cy, COLORREF c, double u, int w)
 {
-    HPEN pen = CreatePen(PS_SOLID, max(1, S(1) * scale + (g_dpi >= 144)), c), old = SelectObject(dc, pen);
-    int u = S(1) * scale;
+    LOGBRUSH lb = { BS_SOLID, c, 0 };
+    HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT | PS_JOIN_MITER, max(1, w), &lb, 0, NULL);
+    HGDIOBJ old = SelectObject(dc, pen);
+#define GX(v) ((int)(cx + (v) * u + 0.5))
+#define GY(v) ((int)(cy + (v) * u + 0.5))
     SelectObject(dc, GetStockObject(NULL_BRUSH));
     switch (which)
     {
     case RAIL_MENU:
-        MoveToEx(dc, cx - 8 * u, cy - 5 * u, NULL); LineTo(dc, cx + 8 * u, cy - 5 * u);
-        MoveToEx(dc, cx - 8 * u, cy, NULL);         LineTo(dc, cx + 8 * u, cy);
-        MoveToEx(dc, cx - 8 * u, cy + 5 * u, NULL); LineTo(dc, cx + 8 * u, cy + 5 * u);
+        MoveToEx(dc, GX(-8), GY(-5), NULL); LineTo(dc, GX(8), GY(-5));
+        MoveToEx(dc, GX(-8), GY(0), NULL);  LineTo(dc, GX(8), GY(0));
+        MoveToEx(dc, GX(-8), GY(5), NULL);  LineTo(dc, GX(8), GY(5));
         break;
     case RAIL_DOCS:   /* a page with a folded corner */
-        MoveToEx(dc, cx - 6 * u, cy - 8 * u, NULL); LineTo(dc, cx + 2 * u, cy - 8 * u);
-        LineTo(dc, cx + 6 * u, cy - 4 * u); LineTo(dc, cx + 6 * u, cy + 8 * u);
-        LineTo(dc, cx - 6 * u, cy + 8 * u); LineTo(dc, cx - 6 * u, cy - 8 * u);
-        MoveToEx(dc, cx + 2 * u, cy - 8 * u, NULL); LineTo(dc, cx + 2 * u, cy - 4 * u); LineTo(dc, cx + 6 * u, cy - 4 * u);
+        MoveToEx(dc, GX(-6), GY(-8), NULL); LineTo(dc, GX(2), GY(-8));
+        LineTo(dc, GX(6), GY(-4)); LineTo(dc, GX(6), GY(8));
+        LineTo(dc, GX(-6), GY(8)); LineTo(dc, GX(-6), GY(-8));
+        MoveToEx(dc, GX(2), GY(-8), NULL); LineTo(dc, GX(2), GY(-4)); LineTo(dc, GX(6), GY(-4));
         break;
     case RAIL_PICS:   /* a frame with a mountain and the sun */
-        Rectangle(dc, cx - 8 * u, cy - 6 * u, cx + 9 * u, cy + 7 * u);
-        MoveToEx(dc, cx - 7 * u, cy + 5 * u, NULL); LineTo(dc, cx - 2 * u, cy); LineTo(dc, cx + 2 * u, cy + 4 * u);
-        LineTo(dc, cx + 4 * u, cy + 2 * u); LineTo(dc, cx + 8 * u, cy + 6 * u);
-        Ellipse(dc, cx + 2 * u, cy - 4 * u, cx + 6 * u, cy);
+        Rectangle(dc, GX(-8), GY(-6), GX(8.5), GY(6.5));
+        MoveToEx(dc, GX(-7), GY(5), NULL); LineTo(dc, GX(-2), GY(0)); LineTo(dc, GX(2), GY(4));
+        LineTo(dc, GX(4), GY(2)); LineTo(dc, GX(7.5), GY(5.5));
+        Ellipse(dc, GX(2), GY(-4), GX(5.5), GY(-0.5));
         break;
-    case RAIL_SETTINGS: /* a gear: a ring and eight teeth */
+    case RAIL_SETTINGS: /* a cog: eight square teeth round a ring, a hole in the middle */
     {
-        int i;
-        static const int dx[8] = { 0, 7, 10, 7, 0, -7, -10, -7 }, dy[8] = { -10, -7, 0, 7, 10, 7, 0, -7 };
-        Ellipse(dc, cx - 6 * u, cy - 6 * u, cx + 7 * u, cy + 7 * u);
-        Ellipse(dc, cx - 2 * u, cy - 2 * u, cx + 3 * u, cy + 3 * u);
-        for (i = 0; i < 8; i++)
+        POINT p[32];
+        int t;
+        for (t = 0; t < 8; t++)
         {
-            MoveToEx(dc, cx + dx[i] * u * 6 / 10, cy + dy[i] * u * 6 / 10, NULL);
-            LineTo(dc, cx + dx[i] * u * 9 / 10, cy + dy[i] * u * 9 / 10);
+            /* each tooth: root, tip, tip, root -- 45 degrees a tooth */
+            static const double ang[4] = { -14, -8, 8, 14 }, rad[4] = { 6.6, 9, 9, 6.6 };
+            int k;
+            for (k = 0; k < 4; k++)
+            {
+                double a = (t * 45 + ang[k]) * 3.14159265358979 / 180;
+                p[t * 4 + k].x = GX(rad[k] * sin(a));
+                p[t * 4 + k].y = GY(-rad[k] * cos(a));
+            }
         }
+        Polygon(dc, p, 32);
+        Ellipse(dc, GX(-3), GY(-3), GX(3), GY(3));
         break;
     }
     case RAIL_POWER:   /* a ring open at the top, and the stem through the gap */
-        Arc(dc, cx - 7 * u, cy - 6 * u, cx + 8 * u, cy + 9 * u, cx - 3 * u, cy - 6 * u, cx + 4 * u, cy - 6 * u);
-        MoveToEx(dc, cx, cy - 8 * u, NULL); LineTo(dc, cx, cy + 1 * u);
+        Arc(dc, GX(-7.5), GY(-6.5), GX(7.5), GY(8.5), GX(-3), GY(-6), GX(3), GY(-6));
+        MoveToEx(dc, GX(0), GY(-8), NULL); LineTo(dc, GX(0), GY(1));
         break;
     }
+#undef GX
+#undef GY
     SelectObject(dc, old);
     DeleteObject(pen);
+}
+
+struct glyph_art { int which, scale; COLORREF c; };
+
+static void glyph_art(HDC dc, int w, int h, const void *arg)
+{
+    const struct glyph_art *g = arg;
+    /* a unit is a pixel at 100%; lines 1.25 px (Windows' drawn glyphs are about that) */
+    double u = SG_SS * g_dpi / 96.0 * g->scale;
+    draw_glyph_lines(dc, g->which, w / 2.0, h / 2.0, sg_smooth_colour(g->c), u, (int)(u * 1.25 + 0.5));
+}
+
+static void draw_glyph_scaled(HDC dc, int which, int cx, int cy, COLORREF c, int scale)
+{
+#ifndef SG_MUTANT_JAGGED_GLYPHS
+    struct glyph_art g = { which, scale, c };
+    int half = S(12) * scale;
+    sg_smooth(dc, cx - half, cy - half, 2 * half, 2 * half, glyph_art, &g);
+#else
+    draw_glyph_lines(dc, which, cx, cy, c, S(1) * scale, S(1) * scale + (g_dpi >= 144));
+#endif
 }
 
 static void draw_glyph(HDC dc, int which, int cx, int cy, COLORREF c) { draw_glyph_scaled(dc, which, cx, cy, c, 1); }
@@ -1581,15 +1617,28 @@ static void draw_badge(HDC dc, int x, int cy, int size)
     draw_glyph(dc, RAIL_SETTINGS, x + size / 2, cy, COL_ON_ACCENT);
 }
 
+/* the user's round badge: an accent disc, a lighter rim; at SG_SS times its
+ * size into a DC of its own, or (arg: its rect) straight onto the panel */
+static void avatar_art(HDC dc, int w, int h, const void *arg)
+{
+    const RECT *at = arg;
+    int ox = at ? at->left : 0, oy = at ? at->top : 0, k = at ? 1 : SG_SS;
+    HBRUSH b = CreateSolidBrush(sg_smooth_colour(COL_ACCENT)), ob = SelectObject(dc, b);
+    HPEN p = CreatePen(PS_INSIDEFRAME, k, sg_smooth_colour(COL_ACCENT_BR)), op = SelectObject(dc, p);
+    Ellipse(dc, ox, oy, ox + w, oy + h);
+    SelectObject(dc, ob); SelectObject(dc, op);
+    DeleteObject(b); DeleteObject(p);
+}
+
 static void draw_avatar(HDC dc, int cx, int cy)
 {
     WCHAR initial[2] = { towupper(user_name()[0]), 0 };
-    HBRUSH b = CreateSolidBrush(COL_ACCENT), ob = SelectObject(dc, b);
-    HPEN p = CreatePen(PS_SOLID, 1, COL_ACCENT_BR), op = SelectObject(dc, p);
     RECT r = { cx - S(12), cy - S(12), cx + S(12), cy + S(12) };
-    Ellipse(dc, r.left, r.top, r.right, r.bottom);
-    SelectObject(dc, ob); SelectObject(dc, op);
-    DeleteObject(b); DeleteObject(p);
+#ifndef SG_MUTANT_JAGGED_AVATAR
+    sg_smooth(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, avatar_art, NULL);
+#else
+    avatar_art(dc, r.right - r.left, r.bottom - r.top, &r);
+#endif
     text(dc, initial, r, g_font_bold, COL_ON_ACCENT, DT_CENTER | DT_VCENTER);
 }
 
