@@ -320,6 +320,7 @@ test: build
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/optionalfeatures-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/power-buttons-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/envreload-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/control-icon-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

@@ -1,3 +1,16 @@
+sg-shell (0.1.0-118) unstable; urgency=medium
+
+  * Settings > Apps & features (ms-settings:optionalfeatures, where
+    "Turn Windows features on or off" leads) lists the optional features
+    programs ask for: .NET Framework 3.5 (includes .NET 2.0 and 3.0) and
+    .NET Framework 4.8 Advanced Services, On when the .NET Framework is
+    registered as installed (Wine Mono's NDP keys) -- the answer dism.exe,
+    fondue.exe and WMI give since wine-sg 10.0-180 (David 2026-10-05:
+    Meedio wanted .NET 3.5). test/optionalfeatures-check.sh (mutant
+    SG_MUTANT_NO_OPTIONAL_FEATURES).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 17:27:37 +0000
+
 sg-shell (0.1.0-117) unstable; urgency=medium
 
   * SG Store offers the Visual Basic 6 runtime (MSVBVM60.DLL; David

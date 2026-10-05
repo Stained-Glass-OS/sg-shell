@@ -27,11 +27,45 @@ static int cmp_size(const void *a, const void *b)
     return p->size_kb < q->size_kb ? 1 : p->size_kb > q->size_kb ? -1 : 0;
 }
 
+/* Optional features: the system features programs ask for by name
+ * (Windows' "Turn Windows features on or off", optionalfeatures.exe, which
+ * opens this page). The .NET Framework's: on when it is registered as
+ * installed -- Wine Mono's support package writes NDP\v3.5 and NDP\v4\Full
+ * Install=1 -- as dism.exe, fondue.exe and WMI's Win32_OptionalFeature answer
+ * (wine-sg 0827-0829). David 2026-10-05: Meedio wanted .NET 3.5 and could not
+ * tell it was there. */
+static const struct { const WCHAR *name, *key; } OPTIONAL_FEATURES[] = {
+    { L".NET Framework 3.5 (includes .NET 2.0 and 3.0)", L"Software\\Microsoft\\NET Framework Setup\\NDP\\v3.5" },
+    { L".NET Framework 4.8 Advanced Services", L"Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full" },
+};
+
+static BOOL feature_on(const WCHAR *key)
+{
+    DWORD v = 0, n = sizeof(v);
+    return !RegGetValueW(HKEY_LOCAL_MACHINE, key, L"Install", RRF_RT_REG_DWORD, NULL, &v, &n) && v == 1;
+}
+
+static int optional_features(int y)
+{
+    WCHAR line[200];
+    size_t i;
+    y = st_head(y, L"Optional features");
+    for (i = 0; i < ARRAYSIZE(OPTIONAL_FEATURES); i++) {
+        _snwprintf(line, ARRAYSIZE(line), L"%ls: %ls", OPTIONAL_FEATURES[i].name,
+                   feature_on(OPTIONAL_FEATURES[i].key) ? L"On" : L"Off (the .NET Framework is not installed)");
+        y = st_text(y, line);
+    }
+    return y + S(8);
+}
+
 void set_build_apps(void)
 {
     static const WCHAR *const sorts[] = { L"Sort by: Name", L"Sort by: Size" };
     int y = st_title(L"Apps & features"), n = prog_load(), i, shown = 0, m = 0;
     WCHAR line[400], size[32], lower[256], filt[128];
+#ifndef SG_MUTANT_NO_OPTIONAL_FEATURES
+    y = optional_features(y);
+#endif
     y = st_head(y, L"Apps & features");
     y = st_para(y, L"Search, sort, and filter by drive. If you would like to uninstall or move an app, select it from the list.");
     g_filter_edit = st_edit(&y, NULL, g_filter, CMD_FILTER);
