@@ -75,6 +75,7 @@
 #   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
+#   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -110,12 +111,13 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
 # the stand-ins
 "$MINGW" -municode -O1 -o "$T/store-fake.exe" "$HERE/test/sg-store-fake.c" -lole32 -luuid -lshell32 || { fail "the stand-ins do not build"; exit 1; }
+"$MINGW" -municode -O1 -o "$T/store-height.exe" "$HERE/test/sg-store-height.c" -luser32 || { fail "the stand-ins do not build"; exit 1; }
 
 # --- the source: winget-pkgs' layout on this machine ---------------------------------------------
 W="$T/www"
@@ -1063,6 +1065,28 @@ batch "$T/mut-batch_per_app.exe"
 for n in two three; do awk -v p="Package: sg-gate-$n" 'BEGIN { RS = ""; ORS = "\n\n" } index($0 "\n", p "\n") != 1' "$T/dpkg-status" > "$T/dpkg-status.n"; mv "$T/dpkg-status.n" "$T/dpkg-status"; grep -v "^sg-gate-$n " "$T/installed" > "$T/installed.n"; mv "$T/installed.n" "$T/installed"; done
 batch "$T/mut-helper_anyone.exe"
 [ -e "$G/pwned" ] && pass "MUTANT HELPER_ANYONE runs another process's request (gate catches it)" || fail "HELPER_ANYONE not detected: $(cat "$T/probe.out")"
+# --- W2. a card cut by the window's bottom edge: its button is still clickable ---------------
+# (regression walk 2026-10-05: Archive Manager's Open, the last card of a
+# search, did nothing until scrolled into full view)
+cutcard() { # exe -- "Y BOTTOM": the cut button's hit and the client area's bottom, or "none"
+    store_window "$1" || { echo none; wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; return; }
+    hl=$(grep -E '^hit (install|open) ' "$D" | head -1)
+    v=$(echo "$hl" | awk '{ print $2 " " $3 }'); y=$(echo "$hl" | awk '{ print $NF }')
+    if [ -n "$y" ]; then
+        b=$(wine "$T/store-height.exe" $((y + 4)) 2>/dev/null | tr -d '\r' | awk '{ print $2 }')
+        sleep 1; xdotool key ctrl+f; sleep 1.5
+        y2=$(grep "^hit $v " "$D" | tail -1 | awk '{ print $NF }')
+        echo "${y2:-none} ${b:-?} $v"
+    else echo none; fi
+    wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+}
+set -- $(cutcard "$EXE")
+[ "$1" != none ] && [ -n "${2:-}" ] && [ "$1" -lt "$2" ] 2>/dev/null \
+    && pass "a card cut by the window's bottom edge keeps its button clickable ($3 $4 at y $1, the window ends at $2)" \
+    || fail "the cut card's button: hit '$*'"
+set -- $(cutcard "$T/mut-wholehit.exe")
+[ "$1" = none ] && pass "MUTANT WHOLEHIT: the cut card's button is dead (gate catches it)" || fail "WHOLEHIT not detected: $*"
+
 # the window: check boxes, Install selected (2)
 ununinstall FakeApp; ununinstall PickApp; sleep 0.5
 if store_window "$EXE"; then

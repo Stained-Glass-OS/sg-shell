@@ -601,9 +601,21 @@ static void add_hit(int verb, int idx, RECT rc)
 }
 
 /* a hit in the scrolled list, only where it is visible below the header */
+/* What of a card shows between the header and the window's bottom edge is
+ * clickable: a card cut by the bottom edge had a dead Open or Install
+ * button (regression walk 2026-10-05: Archive Manager's Open, the last card
+ * of a search, did nothing until scrolled into full view). Only what is
+ * hidden -- under the header, below the edge -- is not, and a sliver
+ * thinner than a click is not offered. */
 static void add_list_hit(int verb, int idx, RECT rc, int client_bottom)
 {
+#ifdef SG_MUTANT_WHOLEHIT
     if (rc.top < header_height() || rc.bottom > client_bottom) return;
+#else
+    if (rc.top < header_height()) rc.top = header_height();
+    if (rc.bottom > client_bottom) rc.bottom = client_bottom;
+    if (rc.bottom - rc.top < dpx(8)) return;
+#endif
     add_hit(verb, idx, rc);
 }
 
