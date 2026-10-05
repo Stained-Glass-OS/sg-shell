@@ -13,3 +13,6 @@ xdg-desktop-portal*
 wine*
 org.gnome.Settings*
 nm-connection-editor
+# Thunderbird is SG Mail's engine (SG Mail is the mail program in Start; the
+# Store's Thunderbird entry still opens Thunderbird's own window)
+thunderbird

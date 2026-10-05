@@ -241,5 +241,7 @@ rm "$T/share/applications/gate-viewer.desktop"
 ! rq 'HKCU\Software\Classes\SG.LinuxApp.gate-viewer' | grep -q '^HKEY_' && ! rq 'HKCU\Software\Classes\.png\OpenWithProgids' | grep -q 'gate-viewer' \
     && rq 'HKCU\Software\Classes\SG.LinuxApp.gate-browser' | grep -q '^HKEY_' \
     && pass "an app that goes loses its ProgID and its offers; the others stay" || fail "after removal: $(rq 'HKCU\Software\Classes\.png\OpenWithProgids' | tr '\n' ' ')"
+# the image's list: SG Mail is the mail program in Start, not its engine too
+grep -qx 'thunderbird' "$HERE/src/linuxapps/linux-apps-hidden" && pass "Start lists SG Mail, not Thunderbird's own entry too" || fail "Thunderbird's own entry not hidden"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

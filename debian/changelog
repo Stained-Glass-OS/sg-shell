@@ -1,3 +1,14 @@
+sg-shell (0.1.0-125) unstable; urgency=medium
+
+  * Start lists SG Mail, not Thunderbird's own entry too: Thunderbird is SG
+    Mail's engine (now Mozilla's build, sg-image's thunderbird package), so
+    its desktop entry joins linux-apps-hidden (as LXTerminal's did for Linux
+    Terminal); mail links go to SG Mail. The Store's Thunderbird entry still
+    opens Thunderbird's own window. Test: test/linuxapps-check.sh (fails
+    without the line).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 16:30:00 -0700
+
 sg-shell (0.1.0-124) unstable; urgency=medium
 
   * SG Mail shows in Start and the Store's Open starts it (David
