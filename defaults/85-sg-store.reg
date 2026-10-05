@@ -148,7 +148,7 @@ Windows Registry Editor Version 5.00
 "Tier"="ours"
 "Source"="ours:apt:sg-mail"
 "DetectName"="SG Mail"
-"Run"="sg-mail.exe"
+"Run"="/usr/share/applications/sg-mail.desktop"
 "Icon"="https://raw.githubusercontent.com/Stained-Glass-OS/sg-mail/main/data/icons/128x128/sg-mail.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\05]

@@ -10,6 +10,11 @@
 # on it and has no entry of its own: then it is that program (the Store's
 # vim-gtk3 is GVim, from vim-gui-common; keepassxc is keepassxc-full's).
 #
+# Our own packages (sg-*) are never left out: Stained Glass OS's default
+# apps reach a machine installed before them as dependencies of sg-session
+# (so an update brings them, apt marking them "auto"), and SG Mail was then
+# missing from Start (David 2026-10-05).
+#
 # OUT gets one desktop id a line (the .desktop file's name without .desktop).
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -37,7 +42,7 @@ awk -F'\t' -v OFS='\t' '
     FILENAME == ARGV[2] { auto[$1] = 1; next }
     { if ($1 in auto && !($2 in auto) && !($2 in owns)) wrapped[$1] = 1 }
     END {
-        for (p in ids) if ((p in auto) && !(p in wrapped)) {
+        for (p in ids) if ((p in auto) && !(p in wrapped) && p !~ /^sg-/) {
             n = split(ids[p], f, " "); for (i = 1; i <= n; i++) print f[i]
         }
     }' "$T/owners" "$T/auto" "$T/rdeps" | sort -u > "$T/out"

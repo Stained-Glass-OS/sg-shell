@@ -1,3 +1,17 @@
+sg-shell (0.1.0-124) unstable; urgency=medium
+
+  * SG Mail shows in Start and the Store's Open starts it (David
+    2026-10-05: installed, but not in the menu, and Open did nothing).
+    An update brings it as sg-session's dependency, apt marks it "auto", and
+    Start left out auto packages' entries (sg-linuxapp-deps): our own
+    packages (sg-*) are never left out. Its Store entry ran an sg-mail.exe
+    nothing provides: it runs /usr/share/applications/sg-mail.desktop, as
+    the Store's Linux apps do. Tests: test/linuxapps-check.sh (an auto
+    sg-mail beside sg-session stays), test/store-check.sh (our apps' Open
+    runs something they install); each fails on the old script/entry.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 15:44:55 -0700
+
 sg-shell (0.1.0-123) unstable; urgency=medium
 
   * Start's rail glyphs (menu, documents, pictures, settings, power -- the

@@ -89,6 +89,20 @@ RC=0; XP=""; HP=""; AP=""
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 
+# Our own apps' Open runs what they install: a Linux one (SG Mail) its
+# .desktop file, a Windows one a program this package installs -- SG Mail's
+# entry named an sg-mail.exe nothing provides, and Open did nothing (David
+# 2026-10-05).
+bad=$(awk '/^\[/ { s = ""; r = "" } /^"Source"=/ { s = $0 } /^"Run"=/ { r = $0; if (s ~ /"ours:/) print r }' "$HERE/defaults/85-sg-store.reg" |
+    sed 's/^"Run"="//; s/"$//' | while IFS= read -r run; do
+        case "$run" in
+            /usr/share/applications/*.desktop|/usr/bin/*) ;;
+            /*) echo "$run" ;;
+            *.exe) grep -q "build/${run%.exe}64.exe" "$HERE/debian/rules" || echo "$run" ;;
+        esac
+    done)
+[ -z "$bad" ] && pass "our own apps' Open runs something they install" || fail "our apps' Run names nothing installed: $bad"
+
 for need in Xvfb xdotool import python3 dpkg-deb "$MINGW"; do command -v "$need" >/dev/null || { echo "SKIP: $need missing"; exit 77; }; done
 [ -x "$WINE_DIR/bin/wine" ] && [ -f "$EXE" ] || { echo "SKIP: wine-sg or $EXE missing"; exit 77; }
 
