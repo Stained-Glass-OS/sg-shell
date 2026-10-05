@@ -446,6 +446,21 @@ set -- $(val rect | tr ',' ' ')
     && pass "the title bars' screen scale (12 eighths) leaves Start as it is at 100%: $(val rect)" || fail "Start at Scale8 12: $(val rect) (want 708 wide)"
 xdotool key Escape; sleep 0.8
 SG_FAKE_SCREEN_HEIGHT=800 "$WINE" "$HERE/build/sg-control64.exe" --set metrics >/dev/null 2>&1; sleep 2
+# Settings > Display > Scale changed while Start runs: Start follows at once,
+# as Windows' does (David 2026-10-05: "changing that does not seem to
+# actually change the task bar size"; it waited for the next sign-in).
+# Mutants: SG_MUTANT_SCALE_NO_BROADCAST (sg-control), SG_MUTANT_START_SCALE_ONCE.
+"$WINE" "$HERE/build/sg-control64.exe" --set scale 150 >/dev/null 2>&1; sleep 2
+poke
+set -- $(val rect | tr ',' ' ')
+[ $# = 4 ] && [ $(( $3 - $1 )) -ge 1000 ] \
+    && pass "Scale 150% applies to a running Start at once: $(val rect)" || fail "Start after Scale 150%: $(val rect) (want ~1062 wide)"
+xdotool key Escape; sleep 0.8
+"$WINE" "$HERE/build/sg-control64.exe" --set scale 100 >/dev/null 2>&1; sleep 2
+poke
+set -- $(val rect | tr ',' ' ')
+[ $# = 4 ] && [ $(( $3 - $1 )) = 708 ] && pass "and back at 100%: $(val rect)" || fail "Start back at 100%: $(val rect)"
+xdotool key Escape; sleep 0.8
 
 # --- click away --------------------------------------------------------------------------
 [ "$(val visible)" = 1 ] || poke

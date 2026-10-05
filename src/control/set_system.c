@@ -252,7 +252,7 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
         if (code == CBN_SELCHANGE) {
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
             if (i >= 0 && i < (int)ARRAYSIZE(SCALES)) {
-                reg_set_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", MulDiv(SCALES[i], 96, 100));
+                scale_set(SCALES[i]);
                 st_status(L"Some apps won't respond to scaling changes until you close and open them again, "
                           L"or sign out.");
             }
@@ -269,6 +269,22 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
     case CMD_ADVANCED: cpl_open_file(L"desk.cpl", NULL); return TRUE;
     }
     return FALSE;
+}
+
+/* Scale: LogPixels, then the running shell told (the taskbar and Start
+ * follow at once, as Windows' do; programs read it at their start). Settings'
+ * own list and sg-control --set scale PERCENT. */
+const WCHAR *scale_set(int percent)
+{
+    DWORD_PTR r;
+    if (percent < 100 || percent > 500) return L"a scale is 100 to 500 percent";
+    reg_set_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", MulDiv(percent, 96, 100));
+#ifndef SG_MUTANT_SCALE_NO_BROADCAST
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"WindowMetrics", SMTO_ABORTIFHUNG, 2000, &r);
+#else
+    (void)r;
+#endif
+    return NULL;
 }
 
 /* ---- Sound --------------------------------------------------------------------------------- */

@@ -696,6 +696,7 @@ int personalize_set(int argc, WCHAR **argv)
         why = look_rescale();
         look_wait();
     }
+    else if (argc == 2 && !lstrcmpW(argv[0], L"scale")) why = scale_set(_wtoi(argv[1]));
     else if (argc == 1 && !lstrcmpW(argv[0], L"metrics")) {
         /* the session, at sign-in and when the screen changes size: the
          * title bars take their share of the screen (sg-session) */

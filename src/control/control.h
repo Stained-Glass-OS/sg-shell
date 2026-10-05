@@ -238,6 +238,7 @@ const WCHAR *look_set_taskbar(int look);
 const WCHAR *look_set_start(int look);
 int look_whole(void);                     /* the look all three share, or -1 (Custom) */
 int look_scale8(void);                    /* the title bars' scale for this screen, in eighths */
+const WCHAR *scale_set(int percent);      /* Settings > Display > Scale: LogPixels, the shell told */
 const WCHAR *look_rescale(void);          /* the screen changed: the title bars follow */
 /* lookshare.c: a look saved to an .sglook file, read back, or put back as new */
 const WCHAR *look_export(const WCHAR *path);

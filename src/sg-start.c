@@ -3417,6 +3417,15 @@ static int g_sys_dpi = 96;
 static BOOL apply_scale(void)
 {
     int was = g_dpi;
+#ifndef SG_MUTANT_START_SCALE_ONCE
+    /* Settings > Display > Scale changed while Start runs (it tells the
+     * shell, WindowMetrics): the new LogPixels, not the one this process
+     * started with */
+    DWORD lp = 0, lps = sizeof(lp);
+    if (!RegGetValueW(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"LogPixels", RRF_RT_REG_DWORD, NULL, &lp, &lps)
+        && lp >= 96 && lp <= 480)
+        g_sys_dpi = (int)lp;
+#endif
 #ifndef SG_MUTANT_START_SCREEN_SCALE
     /* the display scale (LogPixels), as Windows sizes Start: the screen's
      * height (the title bars' Scale8) made it half again as large at

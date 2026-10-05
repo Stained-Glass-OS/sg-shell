@@ -1,3 +1,16 @@
+sg-shell (0.1.0-122) unstable; urgency=medium
+
+  * Settings > Display > Scale applies to the taskbar and Start at once, as
+    Windows' does: it wrote LogPixels and told no one, so they waited for the
+    next sign-in (David 2026-10-05: "changing that does not seem to actually
+    change the task bar size"). Settings now sends WM_SETTINGCHANGE
+    (WindowMetrics), which the taskbar (wine-sg 0832) already follows, and
+    Start reads the new LogPixels rather than the one it started with.
+    sg-control --set scale PERCENT does the same. Test: test/start-check.sh
+    (mutants SG_MUTANT_SCALE_NO_BROADCAST, SG_MUTANT_START_SCALE_ONCE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 14:30:16 -0700
+
 sg-shell (0.1.0-121) unstable; urgency=medium
 
   * SG Store: a card cut by the window's bottom edge keeps its buttons
