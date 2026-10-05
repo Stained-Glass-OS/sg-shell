@@ -1,3 +1,17 @@
+sg-shell (0.1.0-115) unstable; urgency=medium
+
+  * The notification centre (sg-notify): the taskbar's notification icon
+    (a speech bubble, filled while there are new ones; its tooltip says
+    how many) and its panel at the right of the screen, as Windows 10's
+    action centre: every toast and tray balloon kept by wine-sg 0815,
+    newest first, with program, title, text and time; an x dismisses one,
+    "Clear all" all of them, one that opens a link opens it; opening it
+    marks them seen. Win+A (wine-sg 0815) and its icon open it; App Paths
+    sg-notify.exe (defaults/64-sg-notify.reg). Gate test/notify-check.sh
+    (make test-notify; mutant SG_MUTANT_NOTIFY_NO_CLEAR).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 13:53:01 +0000
+
 sg-shell (0.1.0-114) unstable; urgency=medium
 
   * Start grows with the screen as the title bars and the taskbar do: its

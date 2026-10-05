@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the notification centre (sg-notify): the taskbar's
+; notification icon and its panel. explorer's Win+A runs
+; ShellExecute("sg-notify.exe", "/toggle") (wine-sg patch 0815), which finds
+; the program here, as the Run box and scripts do.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-notify.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-notify64.exe"
