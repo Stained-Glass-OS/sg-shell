@@ -233,12 +233,25 @@ grep -q 'state privacy' "$FAKE_ERR" && pass "microphone access denied (ConsentSt
 toggle; wait_gone
 wine reg add "$MICKEY" /v Value /d Allow /f >/dev/null 2>&1
 
+# --- hold-to-talk off: the sign-in listener says it is idle --------------------------------------------------
+# sg-session's keeper starts "/background" at sign-in and again whenever it is
+# not running; with hold-to-talk off it ends at once -- and was started again
+# ten times at every sign-in. It leaves $XDG_RUNTIME_DIR/sg-dictate-idle,
+# which the keeper honours; the listener, once running, takes it away
+# (mutant NO_IDLE_MARK).
+mkdir -p "$T/run"
+speech HoldToTalk 0
+XDG_RUNTIME_DIR="$T/run" wine "$EXE" /background >/dev/null 2>&1
+[ -e "$T/run/sg-dictate-idle" ] && pass "hold-to-talk off: /background ends and marks itself idle for the session's keeper" \
+    || fail "no sg-dictate-idle after /background with hold-to-talk off"
+
 # --- hold-to-talk, on the X keyboard ------------------------------------------------------------------------
 speech HoldToTalk 1
 : > "$FAKE_ERR"
-wine "$EXE" /background >/dev/null 2>&1
+XDG_RUNTIME_DIR="$T/run" wine "$EXE" /background >/dev/null 2>&1
 i=0; while ! grep -q 'waiting for the hold-to-talk key' "$FAKE_ERR" && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
 grep -q 'waiting for the hold-to-talk key' "$FAKE_ERR" && pass "the hold-to-talk listener is waiting" || fail "no listener: $(cat "$FAKE_ERR")"
+[ ! -e "$T/run/sg-dictate-idle" ] && pass "...and is no longer marked idle" || fail "sg-dictate-idle left while the listener runs"
 P bar | grep -q 'VISIBLE 0' && pass "...with no bar showing" || fail "bar: $(P bar)"
 P activate Notepad; sleep 0.5
 before=$(P text Notepad)

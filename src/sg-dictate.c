@@ -1372,6 +1372,31 @@ static const WCHAR *args_after_program(const WCHAR *cmdline)
     return p;
 }
 
+/* The session's helper keeper (sg-session) starts "/background" at sign-in
+ * and again whenever it is not running. With hold-to-talk off it ends at
+ * once, as it should -- and the keeper started it again, ten times, at every
+ * sign-in. It now leaves $XDG_RUNTIME_DIR/sg-dictate-idle saying so, which
+ * the keeper honours; the listener (Speech Recognition starts it when
+ * hold-to-talk is turned on) takes it away. */
+static void mark_idle(BOOL idle)
+{
+#ifndef SG_MUTANT_NO_IDLE_MARK
+    WCHAR dir[MAX_PATH], path[MAX_PATH + 32];
+    DWORD n = GetEnvironmentVariableW(L"XDG_RUNTIME_DIR", dir, MAX_PATH);
+    HANDLE f;
+    WCHAR *c;
+
+    if (!n || n >= MAX_PATH || dir[0] != '/') return;
+    swprintf(path, ARRAYSIZE(path), L"Z:%ls/sg-dictate-idle", dir);
+    for (c = path; *c; c++) if (*c == '/') *c = '\\';
+    if (!idle) { DeleteFileW(path); return; }
+    f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+#else
+    (void)idle;
+#endif
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int show)
 {
     const WCHAR *cmdline = GetCommandLineW(), *args = args_after_program(cmdline);
@@ -1406,7 +1431,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int s
          * they do it. */
         if (FindWindowW(CLASS_NAME, NULL)) return forward(cmd) ? 0 : 1;
         if (!wcscmp(cmd, L"/reload")) return 0;
-        if (!wcscmp(cmd, L"/background") && !g_set.hold) return 0;
+        if (!wcscmp(cmd, L"/background") && !g_set.hold) { mark_idle(TRUE); return 0; }
         if (relaunch(args)) return 0;
         /* No engine to be had: show the bar anyway, saying so. */
     }
@@ -1414,6 +1439,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int s
     mutex = CreateMutexW(NULL, TRUE, MUTEX_NAME);
     if (GetLastError() == ERROR_ALREADY_EXISTS)
         return forward(cmd) ? 0 : 1;
+    mark_idle(FALSE);   /* running now: the keeper keeps it so */
 
     InitializeCriticalSection(&g_out_lock);
     if (g_bridged)
