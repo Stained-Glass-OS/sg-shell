@@ -1,3 +1,12 @@
+sg-shell (0.1.0-120) unstable; urgency=medium
+
+  * Start follows the display scale (LogPixels), as Windows' Start and our
+    taskbar (wine-sg 0832) do: -114 had grown it with the screen's height
+    (half again as large at 1080p). start-check: the title bars' Scale8 12
+    leaves Start 708 px wide at 100% (mutant SG_MUTANT_START_SCREEN_SCALE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 18:29:41 +0000
+
 sg-shell (0.1.0-119) unstable; urgency=medium
 
   * SG Store lists SG Mail (Apps\128, ours:apt:sg-mail): Stained Glass OS's

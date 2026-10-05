@@ -3410,19 +3410,22 @@ static HFONT make_font(int pt10, int weight)
                        CLEARTYPE_QUALITY, 0, L"Segoe UI");
 }
 
-/* Start grows with the screen as the title bars and the taskbar do (the
- * looks' Style\Scale8: the screen's height in eighths of 800 px), or with
- * the DPI if that is larger; its fonts made again. TRUE when it changed. */
+/* Start is as large as the display scale makes it, as the taskbar is
+ * (wine-sg 0832) and as Windows' Start is; its fonts made again. TRUE when
+ * it changed. */
 static int g_sys_dpi = 96;
 static BOOL apply_scale(void)
 {
-    int was = g_dpi, s8 = (int)reg_value(L"Software\\Stained Glass\\Style", L"Scale8", 8);
-    if (s8 < 8) s8 = 8;
-    if (s8 > 24) s8 = 24;
-#ifdef SG_MUTANT_START_NO_SCALE
-    s8 = 8;
+    int was = g_dpi;
+#ifndef SG_MUTANT_START_SCREEN_SCALE
+    /* the display scale (LogPixels), as Windows sizes Start: the screen's
+     * height (the title bars' Scale8) made it half again as large at
+     * 1080p, larger than Windows' (David 2026-10-05) */
+    g_dpi = g_sys_dpi;
+#else
+    int s8 = (int)reg_value(L"Software\\Stained Glass\\Style", L"Scale8", 8);
+    g_dpi = max(g_sys_dpi, MulDiv(96, s8 < 8 ? 8 : s8 > 24 ? 24 : s8, 8));
 #endif
-    g_dpi = max(g_sys_dpi, MulDiv(96, s8, 8));
     if (g_font && g_dpi == was) return FALSE;
     if (g_font) { DeleteObject(g_font); DeleteObject(g_font_small); DeleteObject(g_font_bold); DeleteObject(g_font_big); DeleteObject(g_font_glyph); }
     g_font       = make_font(105, FW_NORMAL);
