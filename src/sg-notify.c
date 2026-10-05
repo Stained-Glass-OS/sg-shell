@@ -10,9 +10,14 @@
  * how many; clicking it, or Win+A (explorer runs "sg-notify.exe /toggle"),
  * opens a panel at the right of the screen listing them, newest first, with
  * the program, title, text and time of each. A notification's x dismisses
- * it, "Clear all" dismisses them all, and clicking one that opens a link
- * (a toast with a protocol launch) opens it. Opening the panel marks them
- * seen (Notifications\Seen).
+ * it, "Clear all" dismisses them all. Clicking one hands it to the program
+ * that sent it, as Windows' action centre does, and it goes: wine-sg's
+ * windows.ui (0819) SgActivateNotification gives it to the program's COM
+ * activator (COM starting the program if need be), or to the running
+ * program's toast (its Activated event) or tray icon (NIN_BALLOONUSERCLICK),
+ * or brings the program to the front or starts it; one that opens a link (a
+ * toast with a protocol launch) opens it. Opening the panel marks them seen
+ * (Notifications\Seen).
  *
  *   sg-notify              the icon (sg-session starts it with the shell)
  *   sg-notify /toggle      open or close the panel (of the running one)
@@ -243,6 +248,54 @@ static void tray_update(BOOL add)
     if (old) DestroyIcon(old);
 }
 
+/* --- a click on a notification ------------------------------------------------------ */
+
+struct activation
+{
+    DWORD seq;
+    WCHAR launch[512];
+    BOOL link;
+};
+
+static DWORD g_activated = (DWORD)-1;
+static HRESULT g_activated_hr;
+
+/* in a thread of its own: COM may take a while to start the program */
+static DWORD WINAPI activate_thread(void *arg)
+{
+    typedef HRESULT (WINAPI *activate_fn)(DWORD, const WCHAR *);
+    struct activation *a = arg;
+    HMODULE ui = LoadLibraryW(L"windows.ui.dll");
+    activate_fn activate = ui ? (activate_fn)(void (*)(void))GetProcAddress(ui, "SgActivateNotification") : NULL;
+    HRESULT hr = E_NOTIMPL;
+
+#ifndef SG_MUTANT_NOTIFY_NO_ACTIVATE
+    if (activate) hr = activate(a->seq, NULL);
+    else if (a->link)
+        /* an older wine-sg: a link at least */
+        hr = (INT_PTR)ShellExecuteW(NULL, NULL, a->launch, NULL, NULL, SW_SHOWNORMAL) > 32 ? S_OK : E_FAIL;
+#endif
+    g_activated_hr = hr;
+    g_activated = a->seq;
+    /* it goes from the centre, as on Windows */
+    if (activate || a->link) dismiss(a->seq);
+    PostMessageW(g_tray, g_changed, 0, 0);
+    free(a);
+    return 0;
+}
+
+static void activate_entry(const struct entry *e)
+{
+    struct activation *a = calloc(1, sizeof(*a));
+    HANDLE thread;
+    if (!a) return;
+    a->seq = e->seq;
+    a->link = e->protocol && e->launch[0];
+    lstrcpynW(a->launch, e->launch, ARRAYSIZE(a->launch));
+    if ((thread = CreateThread(NULL, 0, activate_thread, a, 0, NULL))) CloseHandle(thread);
+    else free(a);
+}
+
 /* --- the panel --------------------------------------------------------------------- */
 
 static void dump(void)
@@ -256,6 +309,7 @@ static void dump(void)
     fprintf(f, "visible=%d\nrect=%ld,%ld,%ld,%ld\ncount=%d\nunread=%d\n", IsWindowVisible(g_fly), wr.left, wr.top,
             wr.right, wr.bottom, g_count, unread());
     fprintf(f, "clear=%ld,%ld,%ld,%ld\n", g_clear_rect.left, g_clear_rect.top, g_clear_rect.right, g_clear_rect.bottom);
+    if (g_activated != (DWORD)-1) fprintf(f, "activated=%lu hr=%08lx\n", (unsigned long)g_activated, (unsigned long)g_activated_hr);
     for (i = 0; i < g_count; i++)
     {
         struct entry *e = &g_entries[i];
@@ -458,8 +512,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             g_hot = hot; g_hot_close = close; g_clear_hot = clear;
             InvalidateRect(hwnd, NULL, FALSE);
         }
-        SetCursor(LoadCursorW(NULL, (const WCHAR *)(clear || (hot >= 0 && g_entries[hot].protocol && g_entries[hot].launch[0])
-                                                    ? IDC_HAND : IDC_ARROW)));
+        SetCursor(LoadCursorW(NULL, (const WCHAR *)(clear || (hot >= 0 && !close) ? IDC_HAND : IDC_ARROW)));
         return 0;
     }
     case WM_MOUSELEAVE:
@@ -481,15 +534,11 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         if ((i = entry_at(pt, &close)) < 0) return 0;
-        if (!close && g_entries[i].protocol && g_entries[i].launch[0])
+        if (!close)
         {
-            /* a toast that opens a link: opened, and it goes */
-            WCHAR launch[512];
-            lstrcpynW(launch, g_entries[i].launch, ARRAYSIZE(launch));
-            dismiss(g_entries[i].seq);
+            /* handed to its program (or its link opened), and it goes */
+            activate_entry(&g_entries[i]);
             show_panel(FALSE);
-            ShellExecuteW(NULL, NULL, launch, NULL, NULL, SW_SHOWNORMAL);
-            tray_update(FALSE);
             return 0;
         }
         if (close)
@@ -520,6 +569,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             InvalidateRect(g_fly, NULL, FALSE);
         }
         tray_update(FALSE);
+        dump();
         return 0;
     }
     if (sg_mode_changed(msg, lp))

@@ -1,3 +1,16 @@
+sg-shell (0.1.0-116) unstable; urgency=medium
+
+  * The notification centre: clicking a notification hands it to the
+    program that sent it, as Windows' action centre does, and it goes --
+    through wine-sg 0819's SgActivateNotification (the program's COM toast
+    activator, its toast's Activated event, its tray icon's balloon click,
+    or the program brought to the front / started); a link still opens
+    (also with an older wine-sg). notify-check: a planted entry clicked
+    starts its program and leaves the history (mutant
+    SG_MUTANT_NOTIFY_NO_ACTIVATE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 16:28:02 +0000
+
 sg-shell (0.1.0-115) unstable; urgency=medium
 
   * The notification centre (sg-notify): the taskbar's notification icon

@@ -9,9 +9,12 @@
 #     area's height, listing them newest first, and marks them seen;
 #   - a notification's x dismisses it (gone from the history too);
 #   - Clear all dismisses the rest;
-#   - /toggle again closes it.
+#   - /toggle again closes it;
+#   - clicking one hands it to its program through wine-sg 0819's
+#     SgActivateNotification (here a program gone, so it is started), the
+#     panel closes and it leaves the history.
 #
-#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutant SG_MUTANT_NOTIFY_NO_CLEAR)
+#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutants SG_MUTANT_NOTIFY_NO_CLEAR, SG_MUTANT_NOTIFY_NO_ACTIVATE)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -85,5 +88,26 @@ hist=$("$WINE" reg query 'HKCU\Software\Stained Glass\Notifications\History' 2>/
 
 "$WINE" "$T/sg-notify64.exe" /toggle >/dev/null 2>&1; sleep 1.5
 [ "$(val visible)" = 0 ] && pass "/toggle again closes it" || fail "still open: $(val visible)"
+
+# a click on one hands it to its program (wine-sg 0819 SgActivateNotification):
+# here a program that is gone, with no activator, so it is started
+if grep -aq SgActivateNotification "$WINEPREFIX/drive_c/windows/system32/windows.ui.dll" 2>/dev/null; then
+    printf '@echo clicked> C:\\clicked.txt\r\n' > "$WINEPREFIX/drive_c/mark.bat"
+    add 00000010 Marker "Click me" "It starts its program"
+    "$WINE" reg add 'HKCU\Software\Stained Glass\Notifications\History\00000010' /v Exe /d 'C:\mark.bat' /f >/dev/null 2>&1
+    "$WINE" "$T/sg-notify64.exe" /toggle >/dev/null 2>&1; sleep 2
+    set -- $(val rect | tr ',' ' '); px=${1:-0} py=${2:-0}
+    set -- $(d | sed -n 's/^entry 10 \([0-9,]*\) .*/\1/p' | tr ',' ' ')
+    [ $# = 4 ] && { xdotool mousemove $(( px + $1 + 30 )) $(( py + ($2 + $4) / 2 )); sleep 0.4; xdotool click 1; }
+    i=0; while [ ! -s "$WINEPREFIX/drive_c/clicked.txt" ] && [ $i -lt 50 ]; do sleep 0.2; i=$((i + 1)); done
+    sleep 1
+    hist=$("$WINE" reg query 'HKCU\Software\Stained Glass\Notifications\History' 2>/dev/null | tr -d '\r')
+    [ -s "$WINEPREFIX/drive_c/clicked.txt" ] && [ "$(val activated)" = "10 hr=00000000" ] && [ "$(val visible)" = 0 ] \
+        && ! printf '%s\n' "$hist" | grep -q '\\00000010$' \
+        && pass "clicking one hands it to its program (here: started), closes the panel, and it goes" \
+        || fail "click: started $([ -s "$WINEPREFIX/drive_c/clicked.txt" ] && echo 1 || echo 0) activated '$(val activated)' visible $(val visible)"
+else
+    echo "SKIP  clicking one: this wine-sg has no SgActivateNotification (0819)"
+fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"
