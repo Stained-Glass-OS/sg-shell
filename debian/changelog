@@ -1,3 +1,14 @@
+sg-shell (0.1.0-119) unstable; urgency=medium
+
+  * SG Store lists SG Mail (Apps\128, ours:apt:sg-mail): Stained Glass OS's
+    mail and calendar, an Outlook-style window on Thunderbird (repository
+    sg-mail). Open starts it by its program name, sg-mail.exe (sg-linuxapp's
+    App Paths name for Linux apps); as a mail program with a mailto: handler
+    it is among Settings > Default apps' Email choices once installed.
+    Test: test/store-catalog-check.sh (fails on the catalogue without it).
+
+ -- Stained Glass OS <dev@stained-glass.example>  Mon, 05 Oct 2026 10:58:53 -0700
+
 sg-shell (0.1.0-118) unstable; urgency=medium
 
   * Settings > Apps & features (ms-settings:optionalfeatures, where

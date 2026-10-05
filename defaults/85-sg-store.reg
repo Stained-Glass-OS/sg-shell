@@ -139,6 +139,18 @@ Windows Registry Editor Version 5.00
 "DetectName"="SG Office"
 "Run"="sg-documents.exe"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\128]
+"Name"="SG Mail"
+"Publisher"="Stained Glass OS"
+"Description"="Email and calendar in a familiar window: folders, a reading pane, meetings and reminders. Built on Thunderbird; signs in to Microsoft, Google and other mail."
+"Category"="Productivity"
+"Colour"=dword:000f6cbd
+"Tier"="ours"
+"Source"="ours:apt:sg-mail"
+"DetectName"="SG Mail"
+"Run"="sg-mail.exe"
+"Icon"="https://raw.githubusercontent.com/Stained-Glass-OS/sg-mail/main/data/icons/128x128/sg-mail.png"
+
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\05]
 "Name"="Vivaldi"
 "Publisher"="Vivaldi Technologies"
