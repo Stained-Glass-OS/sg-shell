@@ -1,4 +1,7 @@
-sg-shell (0.1.0-147) unstable; urgency=medium
+sg-shell (0.1.0-148) unstable; urgency=medium
+
+  * Version only: 0.1.0-147 was taken twice (the session keyring change
+    landed beside another 0.1.0-147); this release carries it.
 
   * Changing your own password (Control Panel "Change your password",
     Settings > Sign-in options > Change) asks for the current password, as
