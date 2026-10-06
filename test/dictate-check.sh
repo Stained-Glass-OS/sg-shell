@@ -83,12 +83,14 @@ def emit(line):
         except OSError: pass
 texts = json.load(open(os.environ["FAKE_TEXTS"]))
 n = int(open(os.environ["FAKE_N"]).read()) if os.path.exists(os.environ["FAKE_N"]) else 0
+started = False
 for raw in os.fdopen(ur, "rb"):
     line = raw.decode("utf-8", "replace").strip()
     if not line.startswith("{"): continue
     log.write(line + "\n")
     cmd = json.loads(line)["cmd"]
     if cmd == "start":
+        started = True
         emit("STATE loading"); emit("STATE listening"); emit("LEVEL 70")
         item = texts[n % len(texts)]
         n += 1; open(os.environ["FAKE_N"], "w").write(str(n))
@@ -107,13 +109,16 @@ for raw in os.fdopen(ur, "rb"):
             continue
         emit("TEXT " + json.dumps(item, ensure_ascii=False))
     elif cmd in ("stop", "cancel"):
-        emit("STATE idle")
+        # as the real engine: a stop with nothing started says nothing (what
+        # left a hold "active" when voice typing was off)
+        if started: emit("STATE idle")
+        started = False
     elif cmd == "quit":
         break
 child.wait()
 EOF
 chmod 755 "$T/fake-engine"
-printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Bar open.", "Held again.", " Adult male chart.", " I use stained glass daily.", " Long one.", "Held with Alt.", "Caf\u00e9 cr\u00e8me \u2013 fin",
+printf '%s' '["Hello from voice typing.", "Second line?\n", "Held to talk.", "Back on.", "Bar open.", "Held again.", " Adult male chart.", " I use stained glass daily.", " Long one.", "Held with Alt.", "Caf\u00e9 cr\u00e8me \u2013 fin",
   {"partials": ["Hallo", "Hallo Welt,", "Hallo Welt, das ist ein"], "pause": 2.5,
    "text": " Hallo Welt, das ist ein Test.", "after": 4, "cmd": "delete"}]' > "$T/texts.json"
 export FAKE_LOG="$T/engine.log" FAKE_ERR="$T/bar.log" FAKE_TEXTS="$T/texts.json" FAKE_N="$T/n"
@@ -280,6 +285,23 @@ wait_text "${before}Held to talk." 10 && pass "held to talk: typed into Notepad 
 tail -1 "$FAKE_LOG" | grep -q '"stop"' && pass "releasing the key stops listening" || fail "log end: $(tail -2 "$FAKE_LOG")"
 wait_gone && pass "...and the bar goes again" || fail "the bar stayed after hold-to-talk"
 [ "$(P foreground)" = Notepad ] && pass "Notepad kept the focus" || fail "the focus went to $(P foreground)"
+# Held while voice typing is off: the bar says it is off -- and the key must
+# work again once it is back on; the hold stayed "active" and every later
+# press was ignored until Win+H (David 2026-10-06; mutant HOLD_STUCK_OFF).
+speech Enabled 0
+: > "$FAKE_ERR"
+xdotool keydown Control_R; sleep 1.5; xdotool keyup Control_R
+i=0; while ! grep -q 'state off' "$FAKE_ERR" && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+grep -q 'state off' "$FAKE_ERR" && pass "held while voice typing is off: the bar says it is off" || fail "no 'off' state: $(tail -2 "$FAKE_ERR")"
+wait_gone && pass "...and goes again" || fail "the 'off' bar stayed"
+speech Enabled 1
+P activate Notepad; sleep 0.5
+before=$(P text Notepad)
+xdotool keydown Control_R; sleep 1.5
+P bar | grep -q 'VISIBLE 1' && pass "turned back on, holding Right Ctrl opens the bar at once" || fail "the key did nothing after turning voice typing back on"
+xdotool keyup Control_R
+wait_text "${before}Back on." 10 && pass "...and types" || fail "Notepad has '$(P text Notepad)'"
+wait_gone
 speech HoldToTalk 0
 wine "$EXE" /reload >/dev/null 2>&1
 sleep 1
@@ -431,7 +453,7 @@ if [ "${WINH:-0}" = 1 ]; then
 fi
 
 # --- partial results: shown in the bar while speaking, never typed; commands ---------------------------
-echo 10 > "$FAKE_N"
+echo 11 > "$FAKE_N"
 reg 'HKCU\Software\Stained Glass\Speech' /v Language /d de-DE
 P activate Notepad; sleep 0.5
 before=$(P text Notepad)

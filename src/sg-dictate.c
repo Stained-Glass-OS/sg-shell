@@ -58,6 +58,7 @@
 #define TIMER_UNLOAD 2
 #define TIMER_ANIM 3
 #define TIMER_FLUSH 4
+#define TIMER_HOLDOFF 5
 /* After the hold key's release, before what was heard is typed: the release
  * reaches the program first -- typed at once with Alt as the hold key, the
  * words went in as Alt+letters, menu keys (David 2026-10-02). */
@@ -797,14 +798,31 @@ static BOOL microphone_allowed(void)
            !consent_denied(HKEY_CURRENT_USER, L"NonPackaged");
 }
 
+/* Hold-to-talk that could not start (voice typing off, no engine, no
+ * microphone access): no engine runs to say "idle", which is what ends a
+ * hold -- the hold stayed "active", every later press was ignored, and the
+ * key did nothing until Win+H started the engine (David 2026-10-06). The
+ * hold ends here; the bar shows why for a moment, then goes. */
+static void hold_abort(BOOL hold)
+{
+#ifndef SG_MUTANT_HOLD_STUCK_OFF
+    if (!hold) return;
+    g_hold_active = FALSE;
+    g_hold_pending = FALSE;
+    if (g_hold_shown) SetTimer(g_wnd, TIMER_HOLDOFF, 2500, NULL);
+#else
+    (void)hold;
+#endif
+}
+
 static void start_listening(BOOL hold)
 {
     char req[1200], mic[768], tail[8], lang[32];
     HWND fg = GetForegroundWindow();
     load_settings();
-    if (!g_bridged) { set_state(ST_NOENGINE); return; }
-    if (!g_set.enabled) { set_state(ST_OFF); return; }
-    if (!microphone_allowed()) { set_state(ST_PRIVACY); return; }
+    if (!g_bridged) { set_state(ST_NOENGINE); hold_abort(hold); return; }
+    if (!g_set.enabled) { set_state(ST_OFF); hold_abort(hold); return; }
+    if (!microphone_allowed()) { set_state(ST_PRIVACY); hold_abort(hold); return; }
     WideCharToMultiByte(CP_UTF8, 0, g_set.mic, -1, mic, sizeof(mic), NULL, NULL);
     snprintf(req, sizeof(req), "{\"cmd\": \"start\", \"continuous\": %s, \"spoken\": %s, \"auto\": %s, "
              "\"fillers\": %s, \"numbers\": %s, \"fresh\": %s, \"mic\": ",
@@ -1399,6 +1417,17 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             KillTimer( hwnd, TIMER_FLUSH );
             flush_held_text();
+        }
+        else if (wp == TIMER_HOLDOFF)
+        {
+            KillTimer(hwnd, TIMER_HOLDOFF);
+            if (g_hold_shown && g_visible && !listening() && !g_hold_active)
+            {
+                g_hold_shown = FALSE;
+                ShowWindow(hwnd, SW_HIDE);
+                g_visible = FALSE;
+                KillTimer(hwnd, TIMER_ANIM);
+            }
         }
         else if (wp == TIMER_HOLD)
         {

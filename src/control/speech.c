@@ -568,6 +568,10 @@ BOOL cmd_speech(int id, int code, HWND ctl)
     case CMD_ENABLED:
         if (code != BN_CLICKED) return TRUE;
         set_setting(L"Enabled", on);
+        /* the hold-to-talk listener takes it at once, started if it is not
+         * running (David 2026-10-06: turned back on, Right Ctrl did nothing
+         * until Win+H) */
+        tell_toolbar(on && setting(L"HoldToTalk", 0) ? L"/background" : L"/reload");
         if (on && model_state(&done, &total, NULL, 0) != MS_INSTALLED) download();
         update_status();
         return TRUE;
