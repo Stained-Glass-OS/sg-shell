@@ -138,7 +138,8 @@ static inline HDC sg__open(struct sg_ss *s, HDC dc, int x, int y, int w, int h)
     BITMAPINFO bi = { { sizeof(BITMAPINFOHEADER), w * SG_SS, -h * SG_SS, 1, 32, BI_RGB, 0, 0, 0, 0, 0 }, { { 0, 0, 0, 0 } } };
     memset(s, 0, sizeof(*s));
     s->dc = dc; s->x = x; s->y = y; s->w = w; s->h = h;
-    if (w <= 0 || h <= 0 || w > 4096 || h > 4096) return NULL;
+    /* a DC already in GM_ADVANCED is a region's (or transformed): drawn as it is */
+    if (w <= 0 || h <= 0 || w > 4096 || h > 4096 || GetGraphicsMode(dc) == GM_ADVANCED) return NULL;
     if (!(s->big = CreateCompatibleDC(dc))) return NULL;
     if (!(s->bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, (void **)&s->bits, NULL, 0)))
     {

@@ -196,10 +196,19 @@ and `test/smoothicons-gate.sh` (0856).
 
 ## 3. Elsewhere
 
-- **sg-compositor** draws Horizon/Glass caption buttons and their glyphs
-  pixel by pixel (decor.c); see its own changelog for their antialiasing.
-- **sg-session**: Setup's icon (setup/make-icon.py, supersampled), and the
-  greeter, OOBE and Setup windows' glyphs (GDI in Wine).
+- **sg-compositor** (decor.c) draws a Linux program's Horizon and Glass
+  caption buttons itself: the close cross by each pixel's share of its two
+  strokes, the buttons' and the bar's rounded corners by each pixel's share
+  of the outline, 4 x 4 samples (0.2.0+sg42; gate `test/decorsmooth-gate.sh`,
+  mutant `SG_MUTANT_JAGGED_DECOR`).
+- **sg-session**: `greeter/sg-smooth.h` (a copy of ours) for the login and
+  lock screens' account circle and power button, Setup's glyphs and the
+  first-run setup's pictures, toggles and arrows; Setup's icon
+  (`setup/make-icon.py`, supersampled) at the ten sizes (0.1.0-141; gate
+  `test/smooth-glyphs-test.sh`). The stained-glass backdrop behind Setup
+  stays hard-edged (supersampling a whole screen costs hundreds of MB).
+- The drop-ins and regions draw plain GDI on a DC already in GM_ADVANCED
+  (one inside a region), so nesting them is harmless.
 
 ## 4. Open
 
