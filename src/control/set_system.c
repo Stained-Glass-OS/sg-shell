@@ -93,14 +93,16 @@ static void load_modes(void)
     }
 }
 
-static const int SCALES[] = { 100, 125, 150, 175, 200, 225, 250 };
+/* Windows' steps; the last three only where they are recommended or below
+ * (a 4K screen and larger), so a 1080p screen's list is as it was */
+static const int SCALES[] = { 100, 125, 150, 175, 200, 225, 250, 300, 350, 400 };
 
 void set_build_display(void)
 {
     const WCHAR *items[64];
     WCHAR scales[ARRAYSIZE(SCALES)][32];
     const WCHAR *sitems[ARRAYSIZE(SCALES)];
-    int y = st_title(L"Display"), i, dpi, sel = 0;
+    int y = st_title(L"Display"), i, dpi, sel = 0, rec = scale_recommended(), nscales = 0;
     BOOL ok, night = FALSE, avail = FALSE;
     int temp = 4000;
     char *ans, buf[256];
@@ -140,12 +142,15 @@ void set_build_display(void)
     /* Scale: LogPixels, which Windows programs read at start */
     y = st_head(y, L"Scale and layout");
     dpi = (int)reg_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", g_dpi);
-    for (i = 0; i < (int)ARRAYSIZE(SCALES); i++) {
-        _snwprintf(scales[i], ARRAYSIZE(scales[i]), L"%d%%%ls", SCALES[i], SCALES[i] == 100 ? L" (Recommended)" : L"");
+    /* "(Recommended)": the scale that makes everything the share of this
+     * screen it has on a 1080p screen at 100% (scale_for_screen) */
+    for (i = 0; i < (int)ARRAYSIZE(SCALES) && (SCALES[i] <= 250 || SCALES[i] <= rec); i++) {
+        _snwprintf(scales[i], ARRAYSIZE(scales[i]), L"%d%%%ls", SCALES[i], SCALES[i] == rec ? L" (Recommended)" : L"");
         sitems[i] = scales[i];
         if (MulDiv(SCALES[i], 96, 100) == dpi) sel = i;
+        nscales++;
     }
-    st_combo(&y, L"Change the size of text, apps, and other items", sitems, ARRAYSIZE(SCALES), sel, CMD_SCALE);
+    st_combo(&y, L"Change the size of text, apps, and other items", sitems, nscales, sel, CMD_SCALE);
 
     load_modes();
     for (i = 0; i < g_nmodes; i++) items[i] = g_modes[i].text;
@@ -251,7 +256,7 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
     case CMD_SCALE:
         if (code == CBN_SELCHANGE) {
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
-            if (i >= 0 && i < (int)ARRAYSIZE(SCALES)) {
+            if (i >= 0 && i < (int)ARRAYSIZE(SCALES) && SCALES[i] != scale_current()) {
                 scale_set(SCALES[i]);
                 st_status(L"Some apps won't respond to scaling changes until you close and open them again, "
                           L"or sign out.");
@@ -271,19 +276,125 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
     return FALSE;
 }
 
-/* Scale: LogPixels, then the running shell told (the taskbar and Start
- * follow at once, as Windows' do; programs read it at their start). Settings'
- * own list and sg-control --set scale PERCENT. */
-const WCHAR *scale_set(int percent)
+/* ---- the display scale ------------------------------------------------------------------
+ * LogPixels, which Windows programs read at their start (Wine scales the
+ * windows of those that do not scale themselves); the taskbar and Start
+ * follow it at once, told by WM_SETTINGCHANGE "WindowMetrics" (wine-sg 0832).
+ *
+ * Until the user picks a scale, it is the recommended one for the screen,
+ * set at sign-in and when the screen changes size (sg-session); a pick
+ * that is not the recommended one is kept (Software\Stained Glass\Display
+ * ScaleChosen), picking the recommended one again makes it automatic.
+ * AutoLogPixels is the value the automatic scale last wrote: a LogPixels
+ * other than it and 96 was chosen before this existed, and is kept too.
+ * The same rule, in sh, is sg-session's sg_auto_scale (before the shell
+ * starts). */
+#define DISPLAY_KEY L"Software\\Stained Glass\\Display"
+
+/* The recommended scale for a WxH screen: whatever is on it takes the share
+ * of the screen it takes on a 1080p screen at 100% (David 2026-10-05: "the
+ * taskbar will take up the same % of screen as on a 1080p screen") -- the
+ * shorter side over 1080, to the nearest of Windows' 25% steps, never below
+ * 100% (1080p and smaller stay as they are), at most 400%. 1440p 125%,
+ * 1824 (a Surface Pro 7) 175%, 2160 (4K) 200%. Windows weighs the panel's
+ * physical size too; the screen's height alone is the rule here, so a
+ * screen looks the same at every size of panel. */
+int scale_for_screen(int w, int h)
+{
+    int s = w < h ? w : h, q;
+#ifdef SG_MUTANT_SCALE_RECOMMEND_100
+    return 100;
+#endif
+    if (s <= 0) return 100;
+    q = (s * 4 + 540) / 1080;
+    return (q < 4 ? 4 : q > 16 ? 16 : q) * 25;
+}
+
+/* the screen's size in pixels: the mode in use (the desktop's), not the
+ * one a program that Wine scales is shown */
+static void screen_size(int *w, int *h)
+{
+    DEVMODEW dm = { .dmSize = sizeof(dm) };
+    WCHAR fake[32];
+    *w = GetSystemMetrics(SM_CXSCREEN); *h = GetSystemMetrics(SM_CYSCREEN);
+    if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 200 && dm.dmPelsHeight >= 200) {
+        *w = (int)dm.dmPelsWidth; *h = (int)dm.dmPelsHeight;
+    }
+    /* the gates' stand-in for a screen their X server does not have */
+    if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN", fake, ARRAYSIZE(fake))) swscanf(fake, L"%dx%d", w, h);
+}
+
+int scale_recommended(void)
+{
+    int w, h;
+    screen_size(&w, &h);
+    return scale_for_screen(w, h);
+}
+
+/* the scale in use, in percent (LogPixels; 100 where there is none) */
+int scale_current(void)
+{
+    DWORD dpi = reg_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", 96);
+    return MulDiv(dpi < 96 ? 96 : (int)dpi, 100, 96);
+}
+
+static void scale_write(int dpi)
 {
     DWORD_PTR r;
-    if (percent < 100 || percent > 500) return L"a scale is 100 to 500 percent";
-    reg_set_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", MulDiv(percent, 96, 100));
+    reg_set_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", dpi);
 #ifndef SG_MUTANT_SCALE_NO_BROADCAST
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"WindowMetrics", SMTO_ABORTIFHUNG, 2000, &r);
 #else
     (void)r;
 #endif
+}
+
+/* Settings' list and sg-control --set scale PERCENT: the user's pick */
+const WCHAR *scale_set(int percent)
+{
+    int dpi = MulDiv(percent, 96, 100);
+    if (percent < 100 || percent > 500) return L"a scale is 100 to 500 percent";
+#ifndef SG_MUTANT_SCALE_NO_STICK
+    /* kept from now on, unless it is the recommended one: then the scale is
+     * automatic again, and follows the screen */
+    if (percent == scale_recommended()) {
+        reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"ScaleChosen", 0);
+        reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"AutoLogPixels", dpi);
+    } else reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"ScaleChosen", 1);
+#endif
+    scale_write(dpi);
+    look_rescale();   /* the title bars: their share of the screen at the new scale */
+    return NULL;
+}
+
+/* the automatic scale (sign-in, the screen's size changed, --set scale
+ * auto): the recommended one, unless the user chose one. TRUE when it
+ * changed the scale. */
+BOOL scale_auto(void)
+{
+    int lp = (int)reg_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", 0);
+    int was_auto = (int)reg_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"AutoLogPixels", 0);
+    int want = MulDiv(scale_recommended(), 96, 100);
+#ifndef SG_MUTANT_SCALE_NO_STICK
+    if (reg_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"ScaleChosen", 0)) return FALSE;
+    if (lp && lp != 96 && lp != was_auto) {
+        /* a scale picked before the automatic one existed: the user's */
+        reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"ScaleChosen", 1);
+        return FALSE;
+    }
+#endif
+    (void)was_auto;
+    if ((lp ? lp : 96) == want) return FALSE;
+    reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"AutoLogPixels", want);
+    scale_write(want);
+    return TRUE;
+}
+
+/* --set scale auto: back to the recommended scale, which follows the screen */
+const WCHAR *scale_set_auto(void)
+{
+    reg_set_dword(HKEY_CURRENT_USER, DISPLAY_KEY, L"ScaleChosen", 0);
+    if (scale_auto()) look_rescale();
     return NULL;
 }
 

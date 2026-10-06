@@ -620,7 +620,7 @@ const WCHAR *effects_write_conf(void)
     WCHAR home[MAX_PATH] = L"", dir[MAX_PATH], path[MAX_PATH], *dos;
     WCHAR *(CDECL *to_dos)(const char *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
     char unix_dir[MAX_PATH * 3], text[1024];
-    int frame = look_frame_style(), glass;
+    int frame = look_frame_style(), glass, dpi, s8, bar;
     DWORD transparency = reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"EnableTransparency", 1);
     HANDLE f;
     DWORD done;
@@ -650,6 +650,19 @@ const WCHAR *effects_write_conf(void)
     /* the Glass look's frames see-through, this opaque (sg-deskcomp), with
      * Transparency effects on (Colors) */
     glass = frame == LOOK_GLASS && transparency ? 62 : 0;
+    /* the sizes in the screen's pixels: Wine keeps them at 96 DPI and draws
+     * them at the display scale (LogPixels) -- the title bar's height is the
+     * caption's and its one-pixel edge (SM_CYCAPTION), scaled as Wine scales
+     * them; the compositor draws in pixels */
+    dpi = (int)reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"LogPixels", 96);
+    if (dpi < 96 || dpi > 480) dpi = 96;
+#ifdef SG_MUTANT_CONF_UNSCALED
+    dpi = 96;
+#endif
+    s8 = MulDiv(look_scale8(), dpi, 96);
+    /* the taskbar's height, as explorer sizes it (wine-sg 0832: 40 px at
+     * 100%, in eighths of the scale): a maximized Linux window stops above it */
+    bar = (40 * min((dpi * 8 + 48) / 96, 24) + 4) / 8;
     /* the window frames' look and sizes: the compositor's title bars for
      * Linux programs not (yet) in a Wine frame match them (sg-compositor's
      * decor.c): frame, the title bar's height (SM_CYCAPTION), the caption
@@ -657,15 +670,17 @@ const WCHAR *effects_write_conf(void)
     _snprintf(text, sizeof(text),
               "# Written by Settings > Personalization; read by sg-deskcomp and sg-compositor.\n"
               "shadows=%d\nshadow=%s\nanimations=%d\nopen=%ls\nminimize=%ls\nwobbly=%d\nmoving=%d\nglass=%d\n"
-              "frame=%ls\ncaption=%d\nbutton=%d\nbuttonh=%d\nborder=%d\nscale8=%d\nbackground=%ls\n",
+              "frame=%ls\ncaption=%d\nbutton=%d\nbuttonh=%d\nborder=%d\nscale8=%d\nbackground=%ls\n"
+              "taskbar=%d\ncursor=%d\n",
               effects_choice(L"Shadows", 1, 1) != 0,
               frame == LOOK_HORIZON ? "horizon" : frame == LOOK_GLASS ? "glass" : "modern",
               effects_animations(),
               OPEN_KEYS[effects_choice(L"WindowOpen", 0, 2)], MINIMIZE_KEYS[effects_choice(L"WindowMinimize", 0, 2)],
               effects_choice(L"Wobbly", 0, 1) != 0, effects_choice(L"MovingTranslucent", 0, 1) != 0, glass,
-              LOOK_KEYS[frame], GetSystemMetrics(SM_CYCAPTION), GetSystemMetrics(SM_CXSIZE), GetSystemMetrics(SM_CYSIZE),
-              GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER), look_scale8(),
-              BACKGROUND_KEYS[effects_background()]);
+              LOOK_KEYS[frame], MulDiv(GetSystemMetrics(SM_CYCAPTION) - 1, dpi, 96) + 1, MulDiv(GetSystemMetrics(SM_CXSIZE), dpi, 96),
+              MulDiv(GetSystemMetrics(SM_CYSIZE), dpi, 96),
+              MulDiv(GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER), dpi, 96), min(s8, 24),
+              BACKGROUND_KEYS[effects_background()], bar, MulDiv(24, dpi, 96));
     text[sizeof(text) - 1] = 0;
     f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return L"the effects could not be saved for the compositor";

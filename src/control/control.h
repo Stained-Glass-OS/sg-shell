@@ -239,6 +239,11 @@ const WCHAR *look_set_start(int look);
 int look_whole(void);                     /* the look all three share, or -1 (Custom) */
 int look_scale8(void);                    /* the title bars' scale for this screen, in eighths */
 const WCHAR *scale_set(int percent);      /* Settings > Display > Scale: LogPixels, the shell told */
+int scale_for_screen(int w, int h);       /* the recommended scale for a WxH screen, in percent */
+int scale_recommended(void);              /* ...for this screen */
+int scale_current(void);                  /* the scale in use (LogPixels), in percent */
+BOOL scale_auto(void);                    /* the recommended scale, unless the user chose one; TRUE: changed */
+const WCHAR *scale_set_auto(void);        /* --set scale auto: the scale follows the screen again */
 const WCHAR *look_rescale(void);          /* the screen changed: the title bars follow */
 /* lookshare.c: a look saved to an .sglook file, read back, or put back as new */
 const WCHAR *look_export(const WCHAR *path);

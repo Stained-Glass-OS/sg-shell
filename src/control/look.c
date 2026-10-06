@@ -89,7 +89,12 @@ int look_frame_style(void)
 }
 
 /* the title bars' scale for this screen, in eighths: 8 up to 800 px of
- * height, then with it (900 p 9, 1080 p 11, 1440 p 14, 2160 p 22), at most 24 */
+ * height, then with it (900 p 9, 1080 p 11, 1440 p 14, 2160 p 22), at most
+ * 24. The height is the screen's at the display scale (LogPixels): the
+ * sizes are kept at 96 DPI and Wine draws them at the scale, so at 175% on
+ * a 1824 px screen they are 1042 px's -- 10 eighths, made 1.75 times as
+ * large: the share of the screen they have at 1080p and 100%. At 100%
+ * nothing changes. */
 int look_scale8(void)
 {
     DEVMODEW dm = { .dmSize = sizeof(dm) };
@@ -101,6 +106,12 @@ int look_scale8(void)
         WCHAR fake[16];
         if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN_HEIGHT", fake, ARRAYSIZE(fake)) && _wtoi(fake) >= 200) h = _wtoi(fake);
     }
+#ifndef SG_MUTANT_TITLE_DOUBLE_SCALE
+    {
+        DWORD dpi = reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"LogPixels", 96);
+        if (dpi > 96 && dpi <= 480) h = MulDiv(h, 96, (int)dpi);
+    }
+#endif
     if (!reg_dword(HKEY_CURRENT_USER, STYLE, L"ScaleWithScreen", 1)) return 8;
 #ifdef SG_MUTANT_NOSCALE
     return 8;

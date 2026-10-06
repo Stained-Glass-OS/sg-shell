@@ -1,3 +1,26 @@
+sg-shell (0.1.0-127) unstable; urgency=medium
+
+  * High-resolution screens (David 2026-10-05, a Surface Pro 7 at
+    2736x1824: "everything is tiny"; "the taskbar will take up the same % of
+    screen as on a 1080p screen does"). Settings > Display > Scale marks the
+    screen's recommended scale "(Recommended)": the shorter side over 1080,
+    to the nearest 25% step, never below 100% (1440 lines 125%, 1824 175%,
+    2160 200%; 300-400% listed where recommended). Until the user picks one
+    the scale is the recommended one, and follows the screen: --set metrics
+    (sign-in) and --set desktop (the screen changed) set it, and --set scale
+    auto; a pick other than the recommended one sticks (Software\Stained
+    Glass\Display ScaleChosen), picking the recommended one again makes it
+    automatic, and a scale set before this is kept as the user's. The title
+    bars' screen scale (Scale8) is taken from the screen's height at the
+    display scale, so Wine does not scale them twice (40 px of 1824 at 175%,
+    the share of the screen 1080p's have). effects.conf gives the compositor
+    the sizes in the screen's pixels, the taskbar's height and the pointer's
+    size. At 1080p and smaller nothing changes. Test: test/hidpi-check.sh
+    (mutants SG_MUTANT_SCALE_RECOMMEND_100, SG_MUTANT_SCALE_NO_STICK,
+    SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_CONF_UNSCALED).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 19:30:00 -0700
+
 sg-shell (0.1.0-126) unstable; urgency=medium
 
   * Restart to finish updating: sg-restart-notice, a popup above the tray

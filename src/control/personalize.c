@@ -642,7 +642,7 @@ int personalize_set(int argc, WCHAR **argv)
     const WCHAR *why = L"usage: --set wallpaper PATH [fill|fit|stretch|tile|center|span] | background RRGGBB | "
                        L"accent RRGGBB | mode apps|system light|dark | style classic|rounded|horizon|glass | look classic|rounded|horizon|glass|reset | look export|import PATH | effects animations|slide|shadows|wobbly|moving|transparency on|off | effects open none|fade|zoom | effects minimize none|scale|lamp | desktop WxH | "
                        L"taskbar-look|start-look classic|rounded|horizon|glass | background-animation static|light|cells | "
-                       L"title-scale on|off | metrics";
+                       L"title-scale on|off | metrics | scale PERCENT|auto";
     COLORREF c;
     int i;
     if (argc >= 2 && !lstrcmpW(argv[0], L"wallpaper")) {
@@ -677,7 +677,9 @@ int personalize_set(int argc, WCHAR **argv)
             desktop_follow(w, h);
             why = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && (int)dm.dmPelsWidth == w && (int)dm.dmPelsHeight == h
                   ? NULL : L"the desktop did not take that size";
-            if (!why) { look_rescale(); look_wait(); }   /* the title bars: their share of the new size */
+            /* the display scale (unless the user chose one) and the title
+             * bars: their share of the new size */
+            if (!why) { scale_auto(); look_rescale(); look_wait(); }
         } else why = L"a size is WIDTHxHEIGHT";
     }
     else if (argc == 3 && !lstrcmpW(argv[0], L"effects") && (!lstrcmpW(argv[2], L"on") || !lstrcmpW(argv[2], L"off")))
@@ -696,10 +698,17 @@ int personalize_set(int argc, WCHAR **argv)
         why = look_rescale();
         look_wait();
     }
-    else if (argc == 2 && !lstrcmpW(argv[0], L"scale")) why = scale_set(_wtoi(argv[1]));
+    else if (argc == 2 && !lstrcmpW(argv[0], L"scale")) {
+        /* a percentage: the user's pick; auto: the recommended one, which
+         * follows the screen */
+        why = !lstrcmpW(argv[1], L"auto") ? scale_set_auto() : scale_set(_wtoi(argv[1]));
+        look_wait();
+    }
     else if (argc == 1 && !lstrcmpW(argv[0], L"metrics")) {
         /* the session, at sign-in and when the screen changes size: the
-         * title bars take their share of the screen (sg-session) */
+         * display scale is the recommended one unless the user chose one,
+         * and the title bars take their share of the screen (sg-session) */
+        scale_auto();
         why = look_rescale();
         look_wait();
     }
