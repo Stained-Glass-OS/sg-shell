@@ -62,6 +62,7 @@ enum
     IC_COUNT
 };
 extern HIMAGELIST g_icons;          /* 16x16 (scaled for dpi) */
+void mmc_dpi_changed(HWND h, WPARAM wp, LPARAM lp);   /* main.c: a new display scale */
 extern HIMAGELIST g_icons32;        /* 32x32, for dialogs */
 
 /* ---- the console tree ------------------------------------------------------ */

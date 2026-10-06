@@ -36,6 +36,7 @@
 #include "zipcore.h"
 #include "../sg-mode.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -432,6 +433,29 @@ static void draw_flat_button(DRAWITEMSTRUCT *di, BOOL hot)
 
 static HWND g_hot_button;
 static WNDPROC g_button_proc;
+/* a new display scale while a window is open (per-monitor v2, sg-dpi.h):
+ * the fonts at it once, every window's controls with them; each window then
+ * lays itself out (WM_SIZE) */
+static BOOL zip_dpi(HWND hwnd, WPARAM wp, LPARAM lp)
+{
+    HFONT old[3] = { g_font, g_font_title, g_font_glyph }, made[3];
+    int i, was = g_dpi;
+    if ((int)sg_dpi_new(wp) != g_dpi)
+    {
+        g_dpi = (int)sg_dpi_new(wp);
+        g_font = make_font(90, FW_NORMAL, L"Segoe UI");
+        g_font_title = make_font(120, FW_NORMAL, L"Segoe UI");
+        g_font_glyph = make_font(100, FW_NORMAL, L"Segoe UI");
+        made[0] = g_font; made[1] = g_font_title; made[2] = g_font_glyph;
+        sg_dpi_refont(hwnd, old, made, 3);
+        sg_dpi_scale_all_columns(hwnd, was, g_dpi);
+        for (i = 0; i < 3; i++) DeleteObject(old[i]);
+    }
+    sg_dpi_apply_rect(hwnd, lp);
+    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    return was != g_dpi;
+}
+
 static LRESULT CALLBACK hover_button_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == WM_MOUSEMOVE && g_hot_button != hwnd)
@@ -614,6 +638,12 @@ static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         if (w) wizard_layout(w);
         return 0;
+#ifndef SG_MUTANT_ZIP_DPI_IGNORED
+    case WM_DPICHANGED:
+        zip_dpi(hwnd, wp, lp);
+        if (w) wizard_layout(w);
+        return 0;
+#endif
     case WM_CTLCOLORSTATIC:
         SetBkColor((HDC)wp, COL_BG);
         SetTextColor((HDC)wp, COL_TEXT);
@@ -1056,6 +1086,23 @@ static LRESULT CALLBACK browser_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         if (b) browser_layout(b);
         return 0;
+#ifndef SG_MUTANT_ZIP_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* the list again only for a new scale: a refill while it is being
+         * filled the first time put its folders after the files */
+        if (zip_dpi(hwnd, wp, lp) && b)
+        {
+            /* the shell's icons, made again at the new size: the list again */
+            SHFILEINFOW sfi;
+            WCHAR here[MAX_PATH];
+            if ((b->images = (HIMAGELIST)SHGetFileInfoW(L"C:\\", 0, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_SMALLICON)))
+                ListView_SetImageList(b->list, b->images, LVSIL_SMALL);
+            lstrcpyW(here, b->folder);
+            browser_go(b, here, FALSE);
+        }
+        if (b) browser_layout(b);
+        return 0;
+#endif
     case WM_SETFOCUS:
         if (b) SetFocus(b->list);
         return 0;
@@ -1176,7 +1223,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     sgm_dark = sg_apps_dark();
 
     g_inst = inst;
-    SetProcessDPIAware();
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
     dc = GetDC(NULL);
     g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
     ReleaseDC(NULL, dc);

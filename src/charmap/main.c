@@ -21,6 +21,7 @@
 #include <string.h>
 #include <wchar.h>
 #include "../sg-mode.h"
+#include "../sg-dpi.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -835,6 +836,38 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         SendMessageW(g_status, WM_SIZE, 0, 0);
         return 0;
+#ifndef SG_MUTANT_CHARMAP_DPI_IGNORED
+    case WM_DPICHANGED:
+    {
+        /* a new display scale while Character Map is open (per-monitor v2,
+         * sg-dpi.h): its controls, grid and characters at it -- crisp */
+        NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+        HFONT old_ui = g_ui_font;
+        int old = g_dpi, parts[2], sbw = GetSystemMetrics(SM_CXVSCROLL);
+        WCHAR face[LF_FACESIZE];
+
+        hide_zoom();
+        g_dpi = (int)sg_dpi_new(wp);
+        g_cell = S(24);
+        SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+        g_ui_font = CreateFontIndirectW(&ncm.lfMessageFont);
+        sg_dpi_refont(hwnd, &old_ui, &g_ui_font, 1);
+        DeleteObject(old_ui);
+        sg_dpi_scale_children(hwnd, old, g_dpi);
+        SetWindowPos(g_grid, NULL, 0, 0, COLS * g_cell + 1 + sbw + 4, ROWS * g_cell + 1 + 4, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        current_font(face);
+        load_font(face[0] ? face : L"Tahoma");
+        if (SendMessageW(g_status, SB_GETPARTS, 2, (LPARAM)parts) == 2)
+        {
+            parts[0] = MulDiv(parts[0], g_dpi, old);
+            SendMessageW(g_status, SB_SETPARTS, 2, (LPARAM)parts);
+        }
+        sg_dpi_apply_rect(hwnd, lp);
+        SendMessageW(g_status, WM_SIZE, 0, 0);
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) hide_zoom();
         return 0;
@@ -917,10 +950,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmd, int show)
     RECT r;
     MSG m;
     (void)prev; (void)cmd;
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     g_inst = inst;

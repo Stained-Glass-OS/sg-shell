@@ -35,6 +35,7 @@
 #include "store.h"
 #include "../sg-mode.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 
 static BOOL g_dark;   /* the app mode: dark (follow_mode) */
 #include <shellapi.h>
@@ -1280,6 +1281,8 @@ static LRESULT CALLBACK search_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return CallWindowProcW(g_search_proc, hwnd, msg, wp, lp);
 }
 
+static void make_fonts_at_dpi(void);
+
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp)) follow_mode(hwnd);
@@ -1414,6 +1417,25 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         layout_search(hwnd);
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
+#ifndef SG_MUTANT_STORE_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while the Store is open (per-monitor v2,
+         * sg-dpi.h): its fonts, cards and the apps' pictures at it */
+        HFONT old[4] = { g_f_title, g_f_head, g_f_body, g_f_small }, made[4];
+        int i, scroll = MulDiv(g_scroll, (int)sg_dpi_new(wp), g_dpi);
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts_at_dpi();
+        made[0] = g_f_title; made[1] = g_f_head; made[2] = g_f_body; made[3] = g_f_small;
+        sg_dpi_refont(hwnd, old, made, 4);
+        for (i = 0; i < 4; i++) DeleteObject(old[i]);
+        icons_rescale(dpx(48));
+        sg_dpi_apply_rect(hwnd, lp);
+        layout_search(hwnd);
+        g_scroll = scroll;
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+    }
+#endif
     case WM_PAINT:
         paint(hwnd);
         return 0;
@@ -1427,17 +1449,22 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-static void make_fonts(void)
+static void make_fonts_at_dpi(void)
 {
     NONCLIENTMETRICSW ncm = { sizeof(ncm) };
-    HDC dc = GetDC(NULL);
-    g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
-    ReleaseDC(NULL, dc);
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
     g_f_body = CreateFontIndirectW(&ncm.lfMessageFont);
     ncm.lfMessageFont.lfHeight = -dpx(11); g_f_small = CreateFontIndirectW(&ncm.lfMessageFont);
     ncm.lfMessageFont.lfHeight = -dpx(15); ncm.lfMessageFont.lfWeight = FW_SEMIBOLD; g_f_head = CreateFontIndirectW(&ncm.lfMessageFont);
     ncm.lfMessageFont.lfHeight = -dpx(24); ncm.lfMessageFont.lfWeight = FW_SEMIBOLD; g_f_title = CreateFontIndirectW(&ncm.lfMessageFont);
+}
+
+static void make_fonts(void)
+{
+    HDC dc = GetDC(NULL);
+    g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
+    ReleaseDC(NULL, dc);
+    make_fonts_at_dpi();
 }
 
 static const WCHAR *g_start_page;           /* --page: the app whose details page opens first */
@@ -1497,10 +1524,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     (void)prev; (void)cmdline; (void)show;
     GetEnvironmentVariableW(L"SG_STORE_DUMP", g_dump, MAX_PATH);
     InitializeCriticalSection(&g_qlock);
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     for (i = 1; argv && i < argc; i++) {

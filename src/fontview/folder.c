@@ -19,6 +19,7 @@
  */
 #include "fontview.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 #include <shellapi.h>
 #include <commdlg.h>
 #include <shlwapi.h>
@@ -568,12 +569,34 @@ static LRESULT CALLBACK search_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return CallWindowProcW(g_search_proc, hwnd, msg, wp, lp);
 }
 
+static void folder_fonts(void);
+
 static LRESULT CALLBACK folder_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_SIZE:
         layout();
         return 0;
+#ifndef SG_MUTANT_FONTVIEW_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while the Fonts folder is open (per-monitor
+         * v2, sg-dpi.h): its tiles, their samples and its links at it */
+        HFONT old[4] = { F.ui, F.ui_small, F.title, F.details_big }, made[4];
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        folder_fonts();
+        made[0] = F.ui; made[1] = F.ui_small; made[2] = F.title; made[3] = F.details_big;
+        sg_dpi_refont(hwnd, old, made, 4);
+        for (i = 0; i < 4; i++) DeleteObject(old[i]);
+        for (i = 0; i < F.nfam; i++) if (F.tile_fonts[i]) { DeleteObject(F.tile_fonts[i]); F.tile_fonts[i] = NULL; }
+        F.scroll = 0;
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
+        grid_metrics();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
@@ -674,10 +697,7 @@ int folder_main(int show)
     wc.lpszClassName = L"SgFontsGrid";
     RegisterClassW(&wc);
 
-    F.ui = CreateFontW(-S(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    F.ui_small = CreateFontW(-S(11), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    F.title = CreateFontW(-S(17), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    F.details_big = CreateFontW(-S(16), 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    folder_fonts();
     F.sel = -1;
     reload();
 
@@ -709,4 +729,13 @@ int folder_main(int show)
         DispatchMessageW(&msg);
     }
     return 0;
+}
+
+/* the folder's fonts at g_dpi */
+static void folder_fonts(void)
+{
+    F.ui = CreateFontW(-S(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    F.ui_small = CreateFontW(-S(11), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    F.title = CreateFontW(-S(17), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    F.details_big = CreateFontW(-S(16), 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
 }

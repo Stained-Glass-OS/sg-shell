@@ -108,6 +108,7 @@ const WCHAR *tier_name(int tier);
 void    icons_fetch(const app_t *apps, int n, int px, HWND notify, UINT msg);
 HBITMAP icon_for(const app_t *a);
 int     icons_ready(void);
+void    icons_rescale(int px);
 
 /* sysinstall.c: system packages (Linux apps, .deb files) through the
  * administrator's consent and sg-admind */

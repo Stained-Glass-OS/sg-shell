@@ -21,6 +21,7 @@
  */
 #include "wordpad.h"
 #include "resource.h"
+#include "../sg-dpi.h"
 
 HINSTANCE g_inst;
 HWND g_main, g_ribbon, g_ruler, g_edit, g_status, g_face, g_size;
@@ -1255,6 +1256,17 @@ static LRESULT CALLBACK edit_sub(HWND h, UINT m, WPARAM w, LPARAM l)
     return CallWindowProcW(g_edit_proc, h, m, w, l);
 }
 
+/* the ribbon's and status bar's fonts at g_dpi */
+static void make_ui_fonts(void)
+{
+    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    ncm.lfMessageFont.lfHeight = -S(12);
+    g_font = CreateFontIndirectW(&ncm.lfMessageFont);
+    ncm.lfMessageFont.lfHeight = -S(11);
+    g_font_small = CreateFontIndirectW(&ncm.lfMessageFont);
+}
+
 static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     if (m == g_findmsg && g_findmsg) return on_find_msg(l);
@@ -1302,6 +1314,25 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         ((MINMAXINFO *)l)->ptMinTrackSize.x = S(400);
         ((MINMAXINFO *)l)->ptMinTrackSize.y = S(300);
         return 0;
+#ifndef SG_MUTANT_WORDPAD_DPI_IGNORED
+    case WM_DPICHANGED:
+    {
+        /* a new display scale while WordPad is open (per-monitor v2,
+         * sg-dpi.h): its ribbon, ruler, status bar and the document's text
+         * laid out again at it -- crisp, not Wine's scaled picture */
+        HFONT old[2] = { g_font, g_font_small }, made[2];
+        g_dpi = (int)sg_dpi_new(w);
+        make_ui_fonts();
+        made[0] = g_font; made[1] = g_font_small;
+        sg_dpi_refont(h, old, made, 2);
+        DeleteObject(old[0]); DeleteObject(old[1]);
+        sg_dpi_apply_rect(h, l);
+        apply_wrap();       /* the text wrapped again at the new scale */
+        layout();
+        RedrawWindow(h, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+        return 0;
+    }
+#endif
     case WM_CLOSE:
         if (!may_discard()) return 0;
         save_settings();
@@ -1384,7 +1415,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
 {
     WNDCLASSEXW wc;
     MSG msg;
-    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES };
     WCHAR file[MAX_PATH], printer[MAX_PATH];
     BOOL print;
@@ -1393,10 +1423,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     DWORD sz = sizeof(fr);
     int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = CW_USEDEFAULT, h = CW_USEDEFAULT;
     (void)prev; (void)cmd;
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     g_inst = inst;
@@ -1406,11 +1436,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     if (!GetEnvironmentVariableW(L"SG_WORDPAD_DUMP", g_dump, MAX_PATH)) g_dump[0] = 0;
     g_findmsg = RegisterWindowMessageW(FINDMSGSTRINGW);
     dc = GetDC(NULL); g_dpi = GetDeviceCaps(dc, LOGPIXELSY); ReleaseDC(NULL, dc);
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    ncm.lfMessageFont.lfHeight = -S(12);
-    g_font = CreateFontIndirectW(&ncm.lfMessageFont);
-    ncm.lfMessageFont.lfHeight = -S(11);
-    g_font_small = CreateFontIndirectW(&ncm.lfMessageFont);
+    make_ui_fonts();
     load_settings();
     parse_cmdline(file, &print, printer);
 

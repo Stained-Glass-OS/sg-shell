@@ -23,6 +23,7 @@ void sgm_follow(HWND hwnd)
     RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
 }
 #include "resource.h"
+#include "../sg-dpi.h"
 
 HINSTANCE g_inst;
 HWND g_main, g_ribbon, g_canvas, g_status;
@@ -615,6 +616,13 @@ void do_command(int cmd)
 
 void status_message(const WCHAR *s) { lstrcpynW(g_status_msg, s, ARRAYSIZE(g_status_msg)); }
 
+/* the ribbon's fonts at g_dpi */
+static void make_ui_fonts(void)
+{
+    g_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_small = CreateFontW(-MulDiv(8, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
@@ -630,14 +638,25 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_TIMER: write_dump(); return 0;
     case WM_SETFOCUS: SetFocus(g_canvas); return 0;
+#ifndef SG_MUTANT_PAINT_DPI_IGNORED
     case WM_DPICHANGED:
     {
-        RECT *r = (RECT *)lp;
-        g_dpi = HIWORD(wp);
-        SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        /* a new display scale while Paint is open (per-monitor v2, sg-dpi.h):
+         * its ribbon, fonts and status bar at it; the picture keeps its
+         * pixels at its zoom */
+        HFONT old[2] = { g_font, g_font_small }, made[2];
+        g_dpi = (int)sg_dpi_new(wp);
+        make_ui_fonts();
+        made[0] = g_font; made[1] = g_font_small;
+        sg_dpi_refont(hwnd, old, made, 2);
+        DeleteObject(old[0]); DeleteObject(old[1]);
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
         ribbon_layout();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
         return 0;
     }
+#endif
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -672,7 +691,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     (void)prev; (void)cmdline;
 
     g_inst = inst;
-    SetProcessDPIAware();
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     sdc = GetDC(NULL); g_dpi = GetDeviceCaps(sdc, LOGPIXELSY); ReleaseDC(NULL, sdc);
     if (g_dpi < 96) g_dpi = 96;
@@ -684,8 +703,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         if (argv[i][0] != '/' || wcschr(argv[i], '\\') || wcschr(argv[i] + 1, '/')) { file = argv[i]; break; }
 
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    g_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_font_small = CreateFontW(-MulDiv(8, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    make_ui_fonts();
     memset(&g_text_font, 0, sizeof(g_text_font));
     lstrcpyW(g_text_font.lfFaceName, L"Segoe UI");
     g_text_font.lfHeight = -MulDiv(11, 96, 72);

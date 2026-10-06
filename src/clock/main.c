@@ -31,6 +31,7 @@
 #include "../sg-mode.h"
 #include "../sg-smooth.h"
 #include "../sg-round.h"
+#include "../sg-dpi.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -323,10 +324,37 @@ static void snooze(int alarm)
     a->snoozed_until = GetTickCount64() + (ULONGLONG)(a->snooze_min > 0 ? a->snooze_min : 10) * 60000;
 }
 
+static void make_fonts(void);
+static HWND g_dlg;
+
+/* a new display scale (per-monitor v2, sg-dpi.h): the fonts at it once, the
+ * open dialog's controls with them; each window then takes its rectangle
+ * (main_proc, dlg_proc, toast_proc hear it in any order) */
+static void clock_dpi(UINT dpi)
+{
+    HFONT old[] = { g_f_body, g_f_small, g_f_head, g_f_big, g_f_huge, g_f_pivot, g_f_pivot_on }, made[7];
+    int i, was = g_dpi;
+#ifdef SG_MUTANT_CLOCK_DPI_IGNORED
+    return;
+#endif
+    if ((int)dpi == g_dpi) return;
+    g_dpi = (int)dpi;
+    make_fonts();
+    made[0] = g_f_body; made[1] = g_f_small; made[2] = g_f_head; made[3] = g_f_big;
+    made[4] = g_f_huge; made[5] = g_f_pivot; made[6] = g_f_pivot_on;
+    if (g_dlg)
+    {
+        sg_dpi_refont(g_dlg, old, made, 7);
+        sg_dpi_scale_children(g_dlg, was, g_dpi);
+    }
+    for (i = 0; i < 7; i++) if (old[i]) DeleteObject(old[i]);
+}
+
 static LRESULT CALLBACK toast_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     int i = toast_index(hwnd);
     switch (msg) {
+    case WM_DPICHANGED: clock_dpi(sg_dpi_new(wp)); place_toasts(); InvalidateRect(hwnd, NULL, TRUE); return 0;
     case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
     case WM_ERASEBKGND: return 1;
     case WM_PAINT: {
@@ -793,7 +821,6 @@ static void paint(HDC dc, RECT *c)
 
 /* ---- the dialogs: an alarm, a timer, a city -------------------------------------------------------- */
 enum { D_ALARM = 1, D_TIMER, D_CITY };
-static HWND g_dlg;
 static int g_dlg_kind, g_dlg_index;
 #define ID_NAME 100
 #define ID_H 101
@@ -930,6 +957,7 @@ static void dialog_save(void)
 static LRESULT CALLBACK dlg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
+    case WM_DPICHANGED: clock_dpi(sg_dpi_new(wp)); sg_dpi_apply_rect(hwnd, lp); InvalidateRect(hwnd, NULL, TRUE); return 0;
     case WM_COMMAND:
         switch (LOWORD(wp)) {
         case ID_SAVE: case IDOK: dialog_save(); return 0;
@@ -1208,6 +1236,12 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
     switch (msg) {
+    case WM_DPICHANGED:
+        /* laid out and drawn at the new scale -- crisp, not Wine's scaled picture */
+        clock_dpi(sg_dpi_new(wp));
+        sg_dpi_apply_rect(hwnd, lp);
+        relayout();
+        return 0;
     case WM_SIZE: relayout(); return 0;
     case WM_GETMINMAXINFO: { MINMAXINFO *mm = (MINMAXINFO *)lp; mm->ptMinTrackSize.x = S(420); mm->ptMinTrackSize.y = S(420); return 0; }
     case WM_ERASEBKGND: return 1;
@@ -1288,6 +1322,17 @@ static HFONT font(int pt10, int weight)
                        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 }
 
+static void make_fonts(void)
+{
+    g_f_body = font(105, FW_NORMAL);
+    g_f_small = font(90, FW_NORMAL);
+    g_f_head = font(140, FW_SEMIBOLD);
+    g_f_big = font(260, FW_LIGHT);
+    g_f_huge = font(480, FW_LIGHT);
+    g_f_pivot = font(140, FW_NORMAL);
+    g_f_pivot_on = font(140, FW_SEMIBOLD);
+}
+
 static int page_from_arg(const WCHAR *a)
 {
     int i;
@@ -1311,10 +1356,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     HDC dc;
     HANDLE mutex;
     (void)prev; (void)cmdline;
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     for (i = 1; i < argc; i++) {
@@ -1342,13 +1387,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
     ReleaseDC(NULL, dc);
     if (g_dpi < 96) g_dpi = 96;
-    g_f_body = font(105, FW_NORMAL);
-    g_f_small = font(90, FW_NORMAL);
-    g_f_head = font(140, FW_SEMIBOLD);
-    g_f_big = font(260, FW_LIGHT);
-    g_f_huge = font(480, FW_LIGHT);
-    g_f_pivot = font(140, FW_NORMAL);
-    g_f_pivot_on = font(140, FW_SEMIBOLD);
+    make_fonts();
     (void)g_f_glyph;
     make_chime();
     load_all();

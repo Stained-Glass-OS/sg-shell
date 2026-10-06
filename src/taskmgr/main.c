@@ -17,6 +17,7 @@
  */
 #include "taskmgr.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 /* Stained Glass: the app mode picks the palette (taskmgr.h); switched live */
 BOOL sgm_dark;
 void sgm_follow(HWND hwnd)
@@ -70,6 +71,17 @@ HFONT make_font(int pt10, int weight)
 {
     return CreateFontW(-MulDiv(pt10, g_dpi, 720), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
                        CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
+/* every font at g_dpi */
+static void make_fonts(void)
+{
+    g_font = make_font(90, FW_NORMAL);
+    g_font_small = make_font(85, FW_NORMAL);
+    g_font_bold = make_font(90, FW_SEMIBOLD);
+    g_font_head = make_font(110, FW_NORMAL);
+    g_font_value = make_font(140, FW_NORMAL);
+    g_font_big = make_font(200, FW_NORMAL);
 }
 
 static void fill(HDC dc, const RECT *r, COLORREF c)
@@ -1461,6 +1473,25 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_SIZE: layout(); return 0;
+#ifndef SG_MUTANT_TASKMGR_DPI_IGNORED
+    case WM_DPICHANGED:
+    {
+        /* a new display scale while Task Manager is open (per-monitor v2,
+         * sg-dpi.h): its tabs, lists and graphs at it -- crisp */
+        HFONT old[6] = { g_font, g_font_small, g_font_bold, g_font_head, g_font_value, g_font_big }, made[6];
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        made[0] = g_font; made[1] = g_font_small; made[2] = g_font_bold;
+        made[3] = g_font_head; made[4] = g_font_value; made[5] = g_font_big;
+        sg_dpi_refont(hwnd, old, made, 6);
+        for (i = 0; i < 6; i++) DeleteObject(old[i]);
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_GETMINMAXINFO:
         ((MINMAXINFO *)lp)->ptMinTrackSize.x = S(320);
         ((MINMAXINFO *)lp)->ptMinTrackSize.y = S(300);
@@ -1587,19 +1618,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     }
 
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    SetProcessDPIAware();
+    /* drawn at the display scale, a new one too (WM_DPICHANGED; sg-dpi.h) */
+    sg_dpi_init();
     screen = GetDC(NULL);
     g_dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
     if (g_dpi < 96) g_dpi = 96;
     GetEnvironmentVariableW(L"SG_TASKMGR_DUMP", g_dump_path, MAX_PATH);
 
-    g_font = make_font(90, FW_NORMAL);
-    g_font_small = make_font(85, FW_NORMAL);
-    g_font_bold = make_font(90, FW_SEMIBOLD);
-    g_font_head = make_font(110, FW_NORMAL);
-    g_font_value = make_font(140, FW_NORMAL);
-    g_font_big = make_font(200, FW_NORMAL);
+    make_fonts();
 
     grid_register(inst);
     wc.lpfnWndProc = perf_proc; wc.hInstance = inst; wc.lpszClassName = PERF_CLASS;

@@ -43,6 +43,7 @@
 #include "sg-mode.h"
 #include "sg-smooth.h"
 #include "sg-round.h"
+#include "sg-dpi.h"
 
 #define WM_TRAY   (WM_APP + 1)
 #define WM_TOGGLE (WM_APP + 2)
@@ -69,13 +70,19 @@ static NOTIFYICONDATAW g_nid;
 static HFONT g_font, g_font_bold, g_font_small, g_font_head;
 static UINT g_taskbar_created, g_changed;
 static struct entry g_entries[MAX_ENTRIES];
-static int g_count, g_hot = -1, g_scroll, g_s8 = 8;
+static int g_count, g_hot = -1, g_scroll, g_s8 = 8, g_dpi = 96;
 static BOOL g_clear_hot, g_hot_close;
 static RECT g_clear_rect;
 static const WCHAR *g_dump;
 
-/* the screen's scale, as the title bars, the taskbar and Start have it */
+/* the screen's scale, as the title bars, the taskbar and Start have it: the
+ * looks' (Scale8) at the display scale (per-monitor v2, sg-dpi.h: drawn by
+ * us at it, not scaled by Wine -- the same size, crisp) */
+#ifndef SG_MUTANT_NOTIFY_DPI_IGNORED
+static int U(int v) { return (v * g_s8 * g_dpi + 384) / 768; }
+#else
 static int U(int v) { return (v * g_s8 + 4) / 8; }
+#endif
 
 static DWORD reg_dword(const WCHAR *key, const WCHAR *name, DWORD def)
 {
@@ -254,7 +261,7 @@ static void tray_update(BOOL add)
     g_nid.uID = 1;
     g_nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
     g_nid.uCallbackMessage = WM_TRAY;
-    g_nid.hIcon = make_icon(U(GetSystemMetrics(SM_CXSMICON)), n);
+    g_nid.hIcon = make_icon(U(16), n);
     if (n == 1) lstrcpyW(g_nid.szTip, L"1 new notification");
     else if (n) _snwprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"%d new notifications", n);
     else lstrcpyW(g_nid.szTip, L"No new notifications");
@@ -492,11 +499,29 @@ static int entry_at(POINT pt, BOOL *on_close)
     return -1;
 }
 
+static void make_fonts(void);
+
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
     case WM_PAINT: fly_paint(hwnd); return 0;
+#ifndef SG_MUTANT_NOTIFY_DPI_IGNORED
+    case WM_DPICHANGED:
+    {
+        /* a new display scale: the panel and its text at it, at the screen's
+         * right again; the taskbar's icon too */
+        HFONT old[4] = { g_font, g_font_small, g_font_bold, g_font_head };
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        for (i = 0; i < 4; i++) DeleteObject(old[i]);
+        if (IsWindowVisible(hwnd)) show_panel(TRUE);
+        tray_update(FALSE);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+    }
+#endif
     case WM_ERASEBKGND: return 1;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) show_panel(FALSE);
@@ -694,6 +719,14 @@ static HFONT make_font(int height, int weight)
     return CreateFontW(-height, 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
 }
 
+static void make_fonts(void)
+{
+    g_font = make_font(U(14), FW_NORMAL);
+    g_font_small = make_font(U(12), FW_NORMAL);
+    g_font_bold = make_font(U(14), FW_SEMIBOLD);
+    g_font_head = make_font(U(20), FW_NORMAL);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
 {
     static WCHAR dump_path[MAX_PATH];
@@ -726,13 +759,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         return 0;
     }
     if (GetEnvironmentVariableW(L"SG_NOTIFY_DUMP", dump_path, MAX_PATH)) g_dump = dump_path;
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
     g_s8 = (int)reg_dword(L"Software\\Stained Glass\\Style", L"Scale8", 8);
     if (g_s8 < 8) g_s8 = 8;
     if (g_s8 > 24) g_s8 = 24;
-    g_font = make_font(U(14), FW_NORMAL);
-    g_font_small = make_font(U(12), FW_NORMAL);
-    g_font_bold = make_font(U(14), FW_SEMIBOLD);
-    g_font_head = make_font(U(20), FW_NORMAL);
+    {
+        HDC dc = GetDC(NULL);
+        g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
+        ReleaseDC(NULL, dc);
+        if (g_dpi < 96) g_dpi = 96;
+    }
+    make_fonts();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
     g_changed = RegisterWindowMessageW(L"SgNotificationsChanged");
 

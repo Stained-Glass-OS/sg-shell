@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include "../sg-dpi.h"
 
 #define HOST_CLASS  L"SgStickyHost"
 #define NOTE_CLASS  L"SgStickyNote"
@@ -164,9 +165,12 @@ static void save_note(note *n)
     note_path(n, path);
     _snwprintf(tmp, MAX_PATH + 8, L"%ls.tmp", path);
     rtf = note_rtf(n);
-    len = _snprintf(head, sizeof(head), "StickyNote 1\r\nColor=%ls\r\nRect=%ld,%ld,%ld,%ld\r\nOpen=%d\r\n\r\n",
-                    COLORS[n->color].name, n->rc.left, n->rc.top, n->rc.right - n->rc.left,
-                    n->rc.bottom - n->rc.top, n->open ? 1 : 0);
+    /* (in 96-DPI units, as before the notes were per-monitor aware: the same
+     * place at any display scale) */
+    len = _snprintf(head, sizeof(head), "StickyNote 1\r\nColor=%ls\r\nRect=%d,%d,%d,%d\r\nOpen=%d\r\n\r\n",
+                    COLORS[n->color].name, MulDiv(n->rc.left, 96, g_dpi), MulDiv(n->rc.top, 96, g_dpi),
+                    MulDiv(n->rc.right - n->rc.left, 96, g_dpi), MulDiv(n->rc.bottom - n->rc.top, 96, g_dpi),
+                    n->open ? 1 : 0);
     f = CreateFileW(tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f != INVALID_HANDLE_VALUE)
     {
@@ -213,7 +217,7 @@ static note *load_note(const WCHAR *path, const WCHAR *id)
             }
 #endif
         if (!strncmp(p, "Rect=", 5) && sscanf(p + 5, "%d,%d,%d,%d", &x, &y, &w, &h) == 4 && w > 0 && h > 0)
-            SetRect(&n->rc, x, y, x + w, y + h);
+            SetRect(&n->rc, S(x), S(y), S(x) + S(w), S(y) + S(h));
         if (!strncmp(p, "Open=", 5)) n->open = p[5] != '0';
     }
     n->rtf = _strdup(body);
@@ -634,6 +638,29 @@ static void layout_note(note *n)
     if (n->menu) MoveWindow(n->menu, 0, 0, c.right, S(44) + 2 * S(40) + S(6), TRUE);
 }
 
+static void make_fonts(void);
+
+/* a new display scale (per-monitor v2, sg-dpi.h): the fonts at it once,
+ * WINDOW's controls with them, and WINDOW at the rectangle suggested */
+static void sticky_dpi(HWND window, WPARAM wp, LPARAM lp)
+{
+    static HFONT old[6], made[6];
+    int i;
+    if ((int)sg_dpi_new(wp) != g_dpi)
+    {
+        old[0] = g_font_body; old[1] = g_font_ui; old[2] = g_font_ui_bold;
+        old[3] = g_font_small; old[4] = g_font_title; old[5] = g_font_glyph;
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        made[0] = g_font_body; made[1] = g_font_ui; made[2] = g_font_ui_bold;
+        made[3] = g_font_small; made[4] = g_font_title; made[5] = g_font_glyph;
+        /* (the old fonts are kept: other notes still use them until they hear of it) */
+    }
+    sg_dpi_refont(window, old, made, 6);
+    (void)i;
+    sg_dpi_apply_rect(window, lp);
+}
+
 static LRESULT CALLBACK note_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     note *n = note_of(hwnd);
@@ -666,6 +693,13 @@ static LRESULT CALLBACK note_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         layout_note(n);
         return 0;
     case WM_SIZE: layout_note(n); InvalidateRect(hwnd, NULL, TRUE); break;
+#ifndef SG_MUTANT_STICKY_DPI_IGNORED
+    case WM_DPICHANGED:
+        sticky_dpi(hwnd, wp, lp);
+        layout_note(n);
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+#endif
     case WM_ERASEBKGND: return 1;
     case WM_PAINT:
     {
@@ -1045,6 +1079,13 @@ static LRESULT CALLBACK list_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg)
     {
     case WM_SIZE: layout_list(); InvalidateRect(hwnd, NULL, TRUE); return 0;
+#ifndef SG_MUTANT_STICKY_DPI_IGNORED
+    case WM_DPICHANGED:
+        sticky_dpi(hwnd, wp, lp);
+        layout_list();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+#endif
     case WM_ERASEBKGND:
     {
         RECT c;
@@ -1208,6 +1249,16 @@ static LRESULT CALLBACK host_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+static void make_fonts(void)
+{
+    g_font_body = make_font(110, FW_NORMAL, 0, 0, 0, NULL);
+    g_font_ui = make_font(100, FW_NORMAL, 0, 0, 0, NULL);
+    g_font_ui_bold = make_font(100, FW_SEMIBOLD, 0, 0, 0, NULL);
+    g_font_small = make_font(85, FW_NORMAL, 0, 0, 0, NULL);
+    g_font_title = make_font(160, FW_SEMIBOLD, 0, 0, 0, NULL);
+    g_font_glyph = make_font(110, FW_BOLD, 0, 0, 0, NULL);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
     HANDLE mutex;
@@ -1239,6 +1290,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         return 1;
     }
 
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
+    sg_dpi_init();
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     LoadLibraryW(L"msftedit.dll");
     {
@@ -1248,12 +1302,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     sdc = GetDC(NULL);
     g_dpi = GetDeviceCaps(sdc, LOGPIXELSY);
     ReleaseDC(NULL, sdc);
-    g_font_body = make_font(110, FW_NORMAL, 0, 0, 0, NULL);
-    g_font_ui = make_font(100, FW_NORMAL, 0, 0, 0, NULL);
-    g_font_ui_bold = make_font(100, FW_SEMIBOLD, 0, 0, 0, NULL);
-    g_font_small = make_font(85, FW_NORMAL, 0, 0, 0, NULL);
-    g_font_title = make_font(160, FW_SEMIBOLD, 0, 0, 0, NULL);
-    g_font_glyph = make_font(110, FW_BOLD, 0, 0, 0, NULL);
+    make_fonts();
     if (!GetEnvironmentVariableW(L"SG_STICKY_DUMP", g_dump, MAX_PATH)) g_dump[0] = 0;
 
     wc.hInstance = inst;

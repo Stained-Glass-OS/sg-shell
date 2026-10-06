@@ -628,6 +628,9 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg)
     {
     case WM_SIZE: layout(); return 0;
+#ifndef SG_MUTANT_MMC_DPI_IGNORED
+    case WM_DPICHANGED: mmc_dpi_changed(h, wp, lp); layout(); return 0;
+#endif
     case WM_TIMER:
         sample();
         refresh_lists();

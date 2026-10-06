@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "../sg-mode.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 #include <shellapi.h>
 #include <windowsx.h>
 #include <stdarg.h>
@@ -763,6 +764,8 @@ static void layout(void)
     MoveWindow(g_page, 0, S(NAVBAR_H), w, r.bottom - S(NAVBAR_H), TRUE);
 }
 
+static void fonts_at_dpi(void);
+
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp) && sg_apps_dark() != g_dark) pal_apply(hwnd);
@@ -823,6 +826,23 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         break;
+#ifndef SG_MUTANT_CPL_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while Control Panel is open (per-monitor v2,
+         * sg-dpi.h): its fonts, bar and page laid out again at it -- crisp */
+        HFONT old[] = { g_font_title, g_font_cat, g_font_head, g_font_body, g_font_small, g_font_big };
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        fonts_at_dpi();
+        SendMessageW(g_search, WM_SETFONT, (WPARAM)g_font_body, FALSE);
+        for (i = 0; i < (int)ARRAYSIZE(old); i++) if (old[i]) DeleteObject(old[i]);
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
+        refresh_page();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+        return 0;
+    }
+#endif
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -835,18 +855,23 @@ static HFONT font(int pt, int weight)
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 }
 
-static void make_fonts(void)
+static void fonts_at_dpi(void)
 {
-    HDC dc = GetDC(NULL);
-    g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
-    ReleaseDC(NULL, dc);
-    if (g_dpi < 96) g_dpi = 96;
     g_font_title = font(12, FW_NORMAL);
     g_font_cat   = font(11, FW_NORMAL);
     g_font_head  = font(9, FW_SEMIBOLD);
     g_font_body  = font(9, FW_NORMAL);
     g_font_small = font(8, FW_NORMAL);
     g_font_big   = font(24, FW_LIGHT);
+}
+
+static void make_fonts(void)
+{
+    HDC dc = GetDC(NULL);
+    g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
+    ReleaseDC(NULL, dc);
+    if (g_dpi < 96) g_dpi = 96;
+    fonts_at_dpi();
 }
 
 /* ---- control.exe's command line ------------------------------------------------ */
@@ -1057,9 +1082,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     register_page_classes();
     if (settings) return settings_main(argc, argv, show);
 #ifndef SG_MUTANT_DPI_UNAWARE
-    /* Control Panel: drawn at the display scale it starts at (its sizes go
-     * by g_dpi) -- unaware, Wine scaled its picture, soft at 175% */
-    SetProcessDPIAware();
+    /* Control Panel: drawn at the display scale (its sizes go by g_dpi),
+     * a new one too (WM_DPICHANGED) -- unaware, Wine scaled its picture,
+     * soft at 175% */
+    sg_dpi_init();
     make_fonts();
 #endif
     wc.hInstance = inst; wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);

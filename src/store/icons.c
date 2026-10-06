@@ -195,6 +195,9 @@ done:
     return bmp;
 }
 
+static LONG g_redo;  /* a new size asked for while a pass ran */
+static void start_pass(void);
+
 static DWORD WINAPI worker(void *arg)
 {
     LONG i;
@@ -204,14 +207,37 @@ static DWORD WINAPI worker(void *arg)
         DWORD size = 0;
         BYTE *data = fetch(g_ent[i].url, &size);
         if (data) {
-            g_ent[i].bmp = decode(data, size, g_px);
+            HBITMAP bmp = decode(data, size, g_px);
+            if (bmp) g_ent[i].bmp = bmp;   /* (one made at another scale is left: it may be being drawn) */
             free(data);
         }
         if (g_ent[i].bmp && g_notify) PostMessageW(g_notify, g_msg, 0, 0);
     }
     CoUninitialize();
-    if (!InterlockedDecrement(&g_pending) && g_notify) PostMessageW(g_notify, g_msg, 1, 0);
+    if (!InterlockedDecrement(&g_pending))
+    {
+        if (InterlockedExchange(&g_redo, 0)) start_pass();
+        else if (g_notify) PostMessageW(g_notify, g_msg, 1, 0);
+    }
     return 0;
+}
+
+static void start_pass(void)
+{
+    int i, threads = min(WORKERS, g_nent);
+    g_next = 0;
+    g_pending = threads;
+    for (i = 0; i < threads; i++) CloseHandle(CreateThread(NULL, 0, worker, NULL, 0, NULL));
+}
+
+/* the pictures again at PX (a new display scale: sg-dpi.h), from the cache;
+ * the ones drawn now stay until each is replaced */
+void icons_rescale(int px)
+{
+    if (!g_nent || px == g_px) return;
+    g_px = px;
+    if (g_pending) InterlockedExchange(&g_redo, 1);
+    else start_pass();
 }
 
 void icons_fetch(const app_t *apps, int n, int px, HWND notify, UINT msg)
@@ -226,9 +252,8 @@ void icons_fetch(const app_t *apps, int n, int px, HWND notify, UINT msg)
     }
     if (!g_nent) return;
     g_inet = InternetOpenW(L"StainedGlass-Store/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    threads = min(WORKERS, g_nent);
-    g_pending = threads;
-    for (i = 0; i < threads; i++) CloseHandle(CreateThread(NULL, 0, worker, NULL, 0, NULL));
+    (void)threads;
+    start_pass();
 }
 
 /* how many pictures are ready (the dump) */

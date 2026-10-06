@@ -639,9 +639,36 @@ static int hit_at(int x, int y)
     return -1;
 }
 
+/* its fonts at g_dpi */
+static void make_fonts(void)
+{
+    g_f_head = font(200, FW_SEMIBOLD);
+    g_f_body = font(100, FW_NORMAL);
+    g_f_bold = font(110, FW_SEMIBOLD);
+    g_f_small = font(90, FW_NORMAL);
+    g_f_letter = font(140, FW_BOLD);
+}
+
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
+#ifndef SG_MUTANT_BROWSER_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while it is open (per-monitor v2): its text
+         * and cards at it */
+        HFONT old[5] = { g_f_head, g_f_body, g_f_bold, g_f_small, g_f_letter };
+        int i;
+        g_dpi = HIWORD(wp) < 96 ? 96 : HIWORD(wp);
+        make_fonts();
+        for (i = 0; i < 5; i++) DeleteObject(old[i]);
+        {
+            const RECT *r = (const RECT *)lp;
+            SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
+#endif
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
@@ -788,11 +815,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     screen = GetDC(NULL);
     g_dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
-    g_f_head = font(200, FW_SEMIBOLD);
-    g_f_body = font(100, FW_NORMAL);
-    g_f_bold = font(110, FW_SEMIBOLD);
-    g_f_small = font(90, FW_NORMAL);
-    g_f_letter = font(140, FW_BOLD);
+    make_fonts();
     wc.lpfnWndProc = wnd_proc;
     wc.hInstance = inst;
     wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));

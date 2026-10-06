@@ -53,6 +53,7 @@
 #include "vt.h"
 #include "wtsettings.h"
 #include "../sg-envreload.h"
+#include "../sg-dpi.h"
 
 #define MAX_TABS 32
 #define MAX_PANES 64
@@ -2145,9 +2146,17 @@ static void apply_settings(void)
     InvalidateRect(g_wnd, NULL, FALSE);
     write_dump(TRUE);
 }
+static int g_set_dpi;  /* the DPI the settings window's controls are placed at */
+
 static LRESULT CALLBACK settings_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
+    case WM_DPICHANGED:
+        /* its controls at the new scale (their font: main_proc) */
+        sg_dpi_scale_children(hwnd, g_set_dpi ? (UINT)g_set_dpi : (UINT)g_dpi, sg_dpi_new(wp));
+        g_set_dpi = (int)sg_dpi_new(wp);
+        sg_dpi_apply_rect(hwnd, lp);
+        return 0;
     case WM_COMMAND:
         if (LOWORD(wp) == IDOK) {
             WCHAR face[LF_FACESIZE], size[8];
@@ -2190,6 +2199,7 @@ static void show_settings(void)
     wc.lpfnWndProc = settings_proc; wc.hInstance = g_inst; wc.lpszClassName = L"SgTerminalSettings";
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     RegisterClassW(&wc);
+    g_set_dpi = g_dpi;
     g_set_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT, L"SgTerminalSettings", L"Settings",
                                 WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, S(400), S(400), g_wnd, NULL, g_inst, NULL);
 #define ADD(cls, txt, style, X, Y, W, H, id) do { c = CreateWindowExW(0, cls, txt, WS_CHILD | WS_VISIBLE | (style), X, Y, W, H, g_set_dlg, (HMENU)(INT_PTR)(id), g_inst, NULL); \
@@ -2399,6 +2409,13 @@ static int tab_at(int x, int y, BOOL *on_close)
     return -1;
 }
 
+/* the tabs' and find box's fonts at g_dpi */
+static void make_ui_fonts(void)
+{
+    g_ui_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_ui_small = CreateFontW(-MulDiv(7, g_dpi, 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
@@ -2413,6 +2430,30 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         default_grid();
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
+#ifndef SG_MUTANT_TERMINAL_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while the Terminal is open (per-monitor v2,
+         * sg-dpi.h): its text, tabs and find box at it; each pane's grid
+         * again (its console resized) -- crisp, not Wine's scaled picture */
+        HFONT old[2] = { g_ui_font, g_ui_small }, made[2];
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        g_tab_h = S(40);
+        make_ui_fonts();
+        made[0] = g_ui_font; made[1] = g_ui_small;
+        sg_dpi_refont(hwnd, old, made, 2);
+        if (g_set_dlg) sg_dpi_refont(g_set_dlg, old, made, 2);
+        DeleteObject(old[0]); DeleteObject(old[1]);
+        make_fonts();
+        sg_dpi_apply_rect(hwnd, lp);
+        layout_tabs();
+        layout_panes();
+        regrid_all();
+        for (i = 0; i < MAX_PANES; i++) if (g_panes[i].used) place_find(&g_panes[i]);
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_ERASEBKGND: return 1;
     case WM_PAINT: {
         PAINTSTRUCT ps;
@@ -2687,10 +2728,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     MSG msg;
     HDC dc;
     (void)prev; (void)cmdline;
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     g_inst = inst;
@@ -2702,8 +2743,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);     /* CoCreateGuid, ShellExecute */
     load_profiles();
     make_fonts();
-    g_ui_font = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_ui_small = CreateFontW(-MulDiv(7, g_dpi, 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    make_ui_fonts();
     /* --sg-handoff SERVER [--title T]: a program's new console, as its one tab */
     for (i = 1; i + 1 < argc; i++) {
 #ifndef SG_MUTANT_IGNORE_HANDOFF

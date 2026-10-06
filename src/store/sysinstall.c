@@ -31,6 +31,7 @@
  */
 #include "store.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 #include <shellapi.h>
 
 typedef char *(CDECL *unixname_t)(const WCHAR *);
@@ -646,6 +647,22 @@ static void make_fonts(void)
     ncm.lfMessageFont.lfHeight = -S(17); ncm.lfMessageFont.lfWeight = FW_SEMIBOLD; f_head = CreateFontIndirectW(&ncm.lfMessageFont);
 }
 
+/* a new display scale while an install window is open (per-monitor v2,
+ * sg-dpi.h): its fonts and sizes at it */
+static BOOL sys_dpi_changed(HWND hwnd, WPARAM wp, LPARAM lp)
+{
+    HFONT old[3] = { f_body, f_small, f_head };
+    int i;
+    s_dpi = (int)sg_dpi_new(wp);
+    f_body = NULL;
+    make_fonts();
+    s_dpi = (int)sg_dpi_new(wp);   /* (make_fonts read the screen's) */
+    for (i = 0; i < 3; i++) if (old[i]) DeleteObject(old[i]);
+    sg_dpi_apply_rect(hwnd, lp);
+    InvalidateRect(hwnd, NULL, TRUE);
+    return TRUE;
+}
+
 static void draw_text(HDC dc, HFONT font, COLORREF col, RECT rc, const WCHAR *s, UINT fmt)
 {
     HFONT old = SelectObject(dc, font);
@@ -710,6 +727,9 @@ static LRESULT CALLBACK job_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CREATE:
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)((CREATESTRUCTW *)lp)->lpCreateParams);
         SetTimer(hwnd, 1, 60, NULL);
+        return 0;
+    case WM_DPICHANGED:
+        sys_dpi_changed(hwnd, wp, lp);
         return 0;
     case WM_TIMER:
         if (wp == 2) { DestroyWindow(hwnd); return 0; }
@@ -1122,6 +1142,9 @@ static LRESULT CALLBACK deb_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     debwin_t *d = &g_deb;
     switch (msg) {
+    case WM_DPICHANGED:
+        sys_dpi_changed(hwnd, wp, lp);
+        return 0;
     case WM_PAINT:
         deb_paint(hwnd, d);
         return 0;

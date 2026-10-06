@@ -24,6 +24,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "fontview.h"
+#include "../sg-dpi.h"
 #include <shellapi.h>
 #include <commdlg.h>
 #include <shlwapi.h>
@@ -421,6 +422,21 @@ static LRESULT CALLBACK viewer_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         layout();
         return 0;
+#ifndef SG_MUTANT_FONTVIEW_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while the font is shown (per-monitor v2,
+         * sg-dpi.h): its samples, buttons and bar at it -- crisp */
+        HFONT old = v.ui;
+        g_dpi = (int)sg_dpi_new(wp);
+        v.ui = CreateFontW(-S(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+        sg_dpi_refont(hwnd, &old, &v.ui, 1);
+        DeleteObject(old);
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_ERASEBKGND: {
         RECT r;
         HBRUSH b = CreateSolidBrush(COL_BAR);
@@ -606,10 +622,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     HDC dc;
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES };
     (void)prev; (void)cmd;
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     g_inst = inst;

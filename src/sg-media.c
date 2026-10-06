@@ -28,6 +28,7 @@
 #include <initguid.h>
 #include "sg-mode.h"
 #include "sg-smooth.h"
+#include "sg-dpi.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -1048,6 +1049,8 @@ static LRESULT CALLBACK video_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+static void make_fonts(void);
+
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp)) sgm_follow(hwnd);
@@ -1065,6 +1068,22 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         place_video();
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
+#ifndef SG_MUTANT_MEDIA_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while it plays (per-monitor v2, sg-dpi.h): its
+         * bar, buttons and list at it; the video fills its new area */
+        HFONT old[4] = { g_font, g_font_small, g_font_title, g_font_big };
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        for (i = 0; i < 4; i++) DeleteObject(old[i]);
+        sg_dpi_apply_rect(hwnd, lp);
+        layout();
+        place_video();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
+    }
+#endif
     case WM_GETMINMAXINFO:
         ((MINMAXINFO *)lp)->ptMinTrackSize.x = S(500);
         ((MINMAXINFO *)lp)->ptMinTrackSize.y = S(320);
@@ -1191,6 +1210,14 @@ static HFONT make_font(int pt10, int weight)
                        CLEARTYPE_QUALITY, 0, L"Segoe UI");
 }
 
+static void make_fonts(void)
+{
+    g_font = make_font(100, FW_NORMAL);
+    g_font_small = make_font(90, FW_NORMAL);
+    g_font_title = make_font(105, FW_SEMIBOLD);
+    g_font_big = make_font(200, FW_SEMIBOLD);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
 {
     WNDCLASSEXW wc = { sizeof(wc) };
@@ -1203,7 +1230,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
 
     (void)prev; (void)cmdline;
     g_inst = inst;
-    SetProcessDPIAware();
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
 
     /* one Media Player: a second hands its files over and leaves */
     mutex = CreateMutexW(NULL, FALSE, L"Local\\StainedGlassMediaPlayer");
@@ -1228,10 +1255,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     screen = GetDC(NULL);
     g_dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
-    g_font = make_font(100, FW_NORMAL);
-    g_font_small = make_font(90, FW_NORMAL);
-    g_font_title = make_font(105, FW_SEMIBOLD);
-    g_font_big = make_font(200, FW_SEMIBOLD);
+    make_fonts();
     load_settings();
 
     wc.lpfnWndProc = main_proc;

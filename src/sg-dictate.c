@@ -39,6 +39,7 @@
 #include <windows.h>
 #include "sg-mode.h"
 #include "sg-smooth.h"
+#include "sg-dpi.h"
 #include <shellapi.h>
 #include <math.h>
 #include <stdarg.h>
@@ -99,7 +100,11 @@ static double g_ring;           /* the ring's radius beyond the button, eased */
 static HWND g_last_target;      /* where the last text went */
 static int g_last_len;          /* how many characters that was, for "delete that" */
 static WCHAR *g_partial;        /* what is being said, not yet final: shown, never typed */
-static int g_bar_w = BAR_W;
+static int g_bar_w = BAR_W;     /* (at 100%: D() makes it the screen's pixels) */
+/* the display scale the bar is drawn at (per-monitor v2, sg-dpi.h: crisp at
+ * any scale, a new one too) */
+static int g_dpi = 96;
+#define D(v) MulDiv((v), g_dpi, 96)
 static HFONT g_font, g_font_small, g_font_partial;
 static struct settings g_set;
 static HHOOK g_kbhook;
@@ -531,8 +536,8 @@ static void size_bar(void)
     g_bar_w = want;
     if (!g_visible) return;
     GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY), &mi);
-    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - g_bar_w) / 2, mi.rcWork.top + 12,
-                 g_bar_w, BAR_H, SWP_NOACTIVATE);
+    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - D(g_bar_w)) / 2, mi.rcWork.top + D(12),
+                 D(g_bar_w), D(BAR_H), SWP_NOACTIVATE);
 }
 
 static void set_partial(WCHAR *text)
@@ -851,8 +856,8 @@ static void show_bar(void)
     MONITORINFO mi = { sizeof(mi) };
     POINT pt = { 0, 0 };
     GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY), &mi);
-    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - g_bar_w) / 2, mi.rcWork.top + 12,
-                 g_bar_w, BAR_H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(g_wnd, HWND_TOPMOST, (mi.rcWork.left + mi.rcWork.right - D(g_bar_w)) / 2, mi.rcWork.top + D(12),
+                 D(g_bar_w), D(BAR_H), SWP_NOACTIVATE | SWP_SHOWWINDOW);
     g_visible = TRUE;
     g_closing = FALSE;
     SetTimer(g_wnd, TIMER_ANIM, 40, NULL);
@@ -1238,29 +1243,29 @@ static const WCHAR *status_text(void)
     }
 }
 
-#define GEAR_X 28
-#define MIC_X 84
-#define CLOSE_X (g_bar_w - 28)
+#define GEAR_X D(28)
+#define MIC_X D(84)
+#define CLOSE_X (D(g_bar_w) - D(28))
 
 static void paint(HWND hwnd)
 {
     PAINTSTRUCT ps;
     HDC wdc = BeginPaint(hwnd, &ps), dc = CreateCompatibleDC(wdc);
-    HBITMAP bmp = CreateCompatibleBitmap(wdc, g_bar_w, BAR_H), obmp = SelectObject(dc, bmp);
-    RECT r = { 0, 0, g_bar_w, BAR_H }, tr;
+    HBITMAP bmp = CreateCompatibleBitmap(wdc, D(g_bar_w), D(BAR_H)), obmp = SelectObject(dc, bmp);
+    RECT r = { 0, 0, D(g_bar_w), D(BAR_H) }, tr;
     HBRUSH bg = CreateSolidBrush(COL_BG);
     HPEN edge = CreatePen(PS_SOLID, 1, COL_EDGE), op;
-    int cy = BAR_H / 2;
+    int cy = D(BAR_H) / 2;
 
     FillRect(dc, &r, bg);
     op = SelectObject(dc, edge);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Rectangle(dc, 0, 0, g_bar_w, BAR_H);
+    Rectangle(dc, 0, 0, D(g_bar_w), D(BAR_H));
     SelectObject(dc, op);
 
-    if (g_hot == HOT_GEAR) fill_circle(dc, GEAR_X, cy, 16, COL_HOVER);
+    if (g_hot == HOT_GEAR) fill_circle(dc, GEAR_X, cy, D(16), COL_HOVER);
     draw_gear(dc, GEAR_X, cy, COL_SUBTLE, g_hot == HOT_GEAR ? COL_HOVER : COL_BG);
-    if (g_hot == HOT_CLOSE) fill_circle(dc, CLOSE_X, cy, 16, COL_HOVER);
+    if (g_hot == HOT_CLOSE) fill_circle(dc, CLOSE_X, cy, D(16), COL_HOVER);
     draw_close(dc, CLOSE_X, cy, COL_SUBTLE);
 
     /* The listening indicator: the button in the accent colour, and a ring
@@ -1269,17 +1274,17 @@ static void paint(HWND hwnd)
     if (g_state == ST_LISTENING)
     {
         int ring = (int)g_ring;
-        if (ring > 0) fill_circle(dc, MIC_X, cy, MIC_R + ring, COL_RING);
-        fill_circle(dc, MIC_X, cy, MIC_R, COL_ACCENT);
+        if (ring > 0) fill_circle(dc, MIC_X, cy, D(MIC_R + ring), COL_RING);
+        fill_circle(dc, MIC_X, cy, D(MIC_R), COL_ACCENT);
     }
     else
-        fill_circle(dc, MIC_X, cy, MIC_R, g_hot == HOT_MIC ? RGB(0x55, 0x55, 0x55) : COL_IDLE);
+        fill_circle(dc, MIC_X, cy, D(MIC_R), g_hot == HOT_MIC ? RGB(0x55, 0x55, 0x55) : COL_IDLE);
     draw_mic(dc, MIC_X, cy, COL_TEXT);
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, g_state == ST_LISTENING || g_state == ST_LOADING || g_state == ST_IDLE ? COL_TEXT : COL_SUBTLE);
     SelectObject(dc, g_state <= ST_LISTENING ? g_font : g_font_small);
-    SetRect(&tr, MIC_X + MIC_R + 16, 4, CLOSE_X - 20, BAR_H - 4);
+    SetRect(&tr, MIC_X + D(MIC_R + 16), D(4), CLOSE_X - D(20), D(BAR_H - 4));
     if (g_partial && g_state <= ST_LISTENING)
     {
         /* What is being said, greyed and in italics: not typed yet. Its end
@@ -1290,7 +1295,7 @@ static void paint(HWND hwnd)
         int w = tr.right - tr.left;
         SelectObject(dc, g_font_partial);
         SetTextColor(dc, COL_SUBTLE);
-        while (*p && GetTextExtentPoint32W(dc, p, (int)wcslen(p), &sz) && sz.cx > w - 16)
+        while (*p && GetTextExtentPoint32W(dc, p, (int)wcslen(p), &sz) && sz.cx > w - D(16))
         {
             const WCHAR *sp = wcschr(p + 1, ' ');
             p = sp ? sp : p + 1;
@@ -1310,11 +1315,11 @@ static void paint(HWND hwnd)
         /* A longer message wraps: centre the lines it takes. */
         RECT m = tr;
         int h = DrawTextW(dc, status_text(), -1, &m, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
-        tr.top = (BAR_H - h) / 2;
+        tr.top = (D(BAR_H) - h) / 2;
         DrawTextW(dc, status_text(), -1, &tr, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
     }
 
-    BitBlt(wdc, 0, 0, g_bar_w, BAR_H, dc, 0, 0, SRCCOPY);
+    BitBlt(wdc, 0, 0, D(g_bar_w), D(BAR_H), dc, 0, 0, SRCCOPY);
     SelectObject(dc, obmp);
     DeleteObject(bmp);
     DeleteDC(dc);
@@ -1325,10 +1330,10 @@ static void paint(HWND hwnd)
 
 static enum hot hit(int x, int y)
 {
-    int cy = BAR_H / 2;
-    if ((x - GEAR_X) * (x - GEAR_X) + (y - cy) * (y - cy) <= 18 * 18) return HOT_GEAR;
-    if ((x - MIC_X) * (x - MIC_X) + (y - cy) * (y - cy) <= (MIC_R + 4) * (MIC_R + 4)) return HOT_MIC;
-    if ((x - CLOSE_X) * (x - CLOSE_X) + (y - cy) * (y - cy) <= 18 * 18) return HOT_CLOSE;
+    int cy = D(BAR_H) / 2;
+    if ((x - GEAR_X) * (x - GEAR_X) + (y - cy) * (y - cy) <= D(18) * D(18)) return HOT_GEAR;
+    if ((x - MIC_X) * (x - MIC_X) + (y - cy) * (y - cy) <= D(MIC_R + 4) * D(MIC_R + 4)) return HOT_MIC;
+    if ((x - CLOSE_X) * (x - CLOSE_X) + (y - cy) * (y - cy) <= D(18) * D(18)) return HOT_CLOSE;
     return HOT_NONE;
 }
 
@@ -1362,12 +1367,37 @@ static void command(const WCHAR *cmd)
     toggle();
 }
 
+/* the bar's fonts and glyphs at g_dpi */
+static void make_fonts(void)
+{
+    g_icon_scale = g_dpi / 96.0;
+    g_font = CreateFontW(-D(15), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_small = CreateFontW(-D(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_partial = CreateFontW(-D(15), 0, 0, 0, FW_NORMAL, TRUE, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
+#ifndef SG_MUTANT_DICTATE_DPI_IGNORED
+    case WM_DPICHANGED:
+    {
+        /* a new display scale while the bar shows: its size, text and glyphs
+         * at it, at the top of the screen again */
+        HFONT old[3] = { g_font, g_font_small, g_font_partial };
+        int i;
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        for (i = 0; i < 3; i++) DeleteObject(old[i]);
+        if (g_visible) show_bar();
+        else SetWindowPos(hwnd, NULL, 0, 0, D(g_bar_w), D(BAR_H), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+    }
+#endif
     case WM_PAINT:
         paint(hwnd);
         return 0;
@@ -1583,9 +1613,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int s
         g_bridged = g_in && g_in != INVALID_HANDLE_VALUE && g_out && g_out != INVALID_HANDLE_VALUE;
     }
 
-    g_font = CreateFontW(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_font_small = CreateFontW(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_font_partial = CreateFontW(-15, 0, 0, 0, FW_NORMAL, TRUE, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    /* drawn at the display scale, a new one too (WM_DPICHANGED; sg-dpi.h) */
+    sg_dpi_init();
+    g_dpi = (int)sg_dpi_for(NULL);
+    make_fonts();
     wc.lpfnWndProc = wnd_proc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
@@ -1595,7 +1626,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline_unused, int s
      * rule the taskbar keeps for tool windows. */
     owner = CreateWindowExW(WS_EX_TOOLWINDOW, L"Static", NULL, WS_POPUP, 0, 0, 0, 0, NULL, NULL, inst, NULL);
     g_wnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, L"Voice typing",
-                            WS_POPUP, 0, 0, BAR_W, BAR_H, owner, NULL, inst, NULL);
+                            WS_POPUP, 0, 0, D(BAR_W), D(BAR_H), owner, NULL, inst, NULL);
     if (!g_wnd) return 1;
     if (g_bridged) CloseHandle(CreateThread(NULL, 0, reader_thread, NULL, 0, NULL));
 

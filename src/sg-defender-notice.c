@@ -24,11 +24,22 @@
 #include <string.h>
 #include "sg-mode.h"
 #include "sg-smooth.h"
+#include "sg-dpi.h"
 
 #define CLASS_NAME L"SgDefenderNotice"
 #define W_DIP 380
 #define H_DIP 150
-#define TIMEOUT_MS 30000
+#define TIMEOUT_MS notice_timeout()
+
+/* how long it shows: 30 s (SG_NOTICE_TIMEOUT_MS: the gates', which measure
+ * it across a display scale change) */
+static UINT notice_timeout(void)
+{
+    WCHAR v[16];
+    UINT ms = 0;
+    if (GetEnvironmentVariableW(L"SG_NOTICE_TIMEOUT_MS", v, 16)) ms = (UINT)wcstoul(v, NULL, 10);
+    return ms >= 1000 ? ms : 30000;
+}
 #define DEFENDER_DIR L"Z:\\var\\lib\\stained-glass\\defender"
 #define COL_THREAT RGB(0xC4, 0x2B, 0x1C)
 
@@ -187,10 +198,41 @@ static int hit(LPARAM lp)
     return 0;
 }
 
+static int g_stacked;   /* notices of its kind above which it sits */
+
+/* the buttons' places in a W x H notice */
+static void notice_rects(int w, int h)
+{
+    SetRect(&g_close, w - S(40), S(6), w - S(8), S(32));
+    SetRect(&g_review, S(20), h - S(48), S(20) + (w - S(52)) / 2, h - S(16));
+    SetRect(&g_dismiss, g_review.right + S(12), g_review.top, w - S(20), g_review.bottom);
+}
+
 static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_PAINT: paint(hwnd); return 0;
+#ifndef SG_MUTANT_NOTICE_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while it shows (per-monitor v2, sg-dpi.h): its
+         * text and buttons at it, in the corner above the taskbar again */
+        HFONT old[3] = { g_font, g_font_bold, g_font_small };
+        RECT work;
+        int i, w, h;
+        g_dpi = (int)sg_dpi_new(wp);
+        g_font = font(10, FW_NORMAL);
+        g_font_bold = font(11, FW_SEMIBOLD);
+        g_font_small = font(9, FW_NORMAL);
+        for (i = 0; i < 3; i++) DeleteObject(old[i]);
+        w = S(W_DIP); h = S(H_DIP);
+        notice_rects(w, h);
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+        SetWindowPos(hwnd, NULL, work.right - w - S(12), work.bottom - (h + S(12)) * (g_stacked + 1), w, h,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
+#endif
     case WM_MOUSEMOVE: {
         int h = hit(lp);
         if (!g_tracking) {
@@ -235,10 +277,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     (void)prev; (void)cmd; (void)show;
     if (argc < 2 || !load(argv[1])) return 0;
     dump();
-    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
-     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+    /* drawn at the display scale (its sizes go by g_dpi), a new one too
+     * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE
-    SetProcessDPIAware();
+    sg_dpi_init();
 #endif
 
     dc = GetDC(NULL);
@@ -248,9 +290,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     g_font_bold = font(11, FW_SEMIBOLD);
     g_font_small = font(9, FW_NORMAL);
     w = S(W_DIP); h = S(H_DIP);
-    SetRect(&g_close, w - S(40), S(6), w - S(8), S(32));
-    SetRect(&g_review, S(20), h - S(48), S(20) + (w - S(52)) / 2, h - S(16));
-    SetRect(&g_dismiss, g_review.right + S(12), g_review.top, w - S(20), g_review.bottom);
+    notice_rects(w, h);
 
     wc.lpfnWndProc = proc;
     wc.hInstance = inst;
@@ -258,6 +298,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     RegisterClassW(&wc);
     while ((other = FindWindowExW(NULL, other, CLASS_NAME, NULL))) stacked++;
+    g_stacked = stacked;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, L"SG Defender",
                            WS_POPUP | WS_BORDER, work.right - w - S(12), work.bottom - (h + S(12)) * (stacked + 1),

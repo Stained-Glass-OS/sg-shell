@@ -22,6 +22,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "mmc.h"
+#include "../sg-dpi.h"
 /* Stained Glass: the app mode picks the consoles' palette (mmc.h); switched live */
 BOOL sgm_dark;
 void sgm_follow(HWND hwnd)
@@ -1076,6 +1077,52 @@ static void go_history(int delta)
     g_hist_nav = FALSE;
 }
 
+static void load_icons(void);
+static HFONT make_font(int pt, int weight);
+
+struct swap_icons { HIMAGELIST old, now; };
+
+static BOOL CALLBACK swap_icons_proc(HWND child, LPARAM lp)
+{
+    const struct swap_icons *sw = (const struct swap_icons *)lp;
+    WCHAR cls[32];
+    if (!GetClassNameW(child, cls, 32)) return TRUE;
+    if (!lstrcmpiW(cls, WC_TREEVIEWW) && TreeView_GetImageList(child, TVSIL_NORMAL) == sw->old)
+        TreeView_SetImageList(child, sw->now, TVSIL_NORMAL);
+    else if (!lstrcmpiW(cls, WC_LISTVIEWW) && ListView_GetImageList(child, LVSIL_SMALL) == sw->old)
+        ListView_SetImageList(child, sw->now, LVSIL_SMALL);
+    else if (!lstrcmpiW(cls, TOOLBARCLASSNAMEW) && (HIMAGELIST)SendMessageW(child, TB_GETIMAGELIST, 0, 0) == sw->old)
+        SendMessageW(child, TB_SETIMAGELIST, 0, (LPARAM)sw->now);
+    return TRUE;
+}
+
+/* a new display scale while a console is open (per-monitor v2, sg-dpi.h):
+ * its fonts, icons, columns and panes at it -- crisp, not Wine's scaled
+ * picture (Resource Monitor's window too) */
+void mmc_dpi_changed(HWND h, WPARAM wp, LPARAM lp)
+{
+    HFONT old[3] = { g_font, g_font_bold, g_font_head }, made[3];
+    struct swap_icons sw;
+    HIMAGELIST old32 = g_icons32;
+    int i, was = g_dpi;
+
+    g_dpi = (int)sg_dpi_new(wp);
+    g_font = make_font(9, FW_NORMAL);
+    g_font_bold = make_font(9, FW_SEMIBOLD);
+    g_font_head = make_font(12, FW_SEMIBOLD);
+    made[0] = g_font; made[1] = g_font_bold; made[2] = g_font_head;
+    sg_dpi_refont(h, old, made, 3);
+    for (i = 0; i < 3; i++) DeleteObject(old[i]);
+    sw.old = g_icons;
+    load_icons();
+    sw.now = g_icons;
+    EnumChildWindows(h, swap_icons_proc, (LPARAM)&sw);
+    (void)old32;   /* (a dialog open now may still draw from the old lists: kept) */
+    sg_dpi_scale_all_columns(h, was, g_dpi);
+    sg_dpi_apply_rect(h, lp);
+    RedrawWindow(h, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
 static LRESULT CALLBACK main_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (sg_mode_changed(msg, lp))
@@ -1089,6 +1136,12 @@ static LRESULT CALLBACK main_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         layout();
         frame_dump_later();
         return 0;
+#ifndef SG_MUTANT_MMC_DPI_IGNORED
+    case WM_DPICHANGED:
+        mmc_dpi_changed(h, wp, lp);
+        layout();
+        return 0;
+#endif
     case WM_GETMINMAXINFO:
         ((MINMAXINFO *)lp)->ptMinTrackSize.x = S(520);
         ((MINMAXINFO *)lp)->ptMinTrackSize.y = S(360);
@@ -1445,7 +1498,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
         if (done) CloseHandle(done);
     }
 
-    SetProcessDPIAware();
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
     dc = GetDC(NULL);
     g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
     ReleaseDC(NULL, dc);
