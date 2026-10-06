@@ -4,6 +4,11 @@
  *                  and touched window (what wine-sg 1150 stamps for every
  *                  touch going down), then the focus moves to the edit control
  *   touch-button   the same for the button
+ *   linux-front    a window of the class a Linux program's frame has
+ *                  (SgLinuxWindow) comes to the front
+ *   front          this window to the front again, the text field focused
+ *   set NAME N     the touch keyboard's setting NAME (TabletTip\1.7) to N,
+ *                  announced as the taskbar's menu does ("TraySettings")
  * -- and writes C:\touchkbd-state.txt: the edit's text, whether this window
  * is in front and has the focus. "touchkbd-probe.exe workarea" writes the
  * work area (as a new process reads it) to C:\touchkbd-work.txt.
@@ -28,6 +33,35 @@ static void touch_focus(HWND hwnd)
     SetFocus(hwnd);
 }
 
+static HWND g_linux;
+
+static LRESULT CALLBACK linux_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/* a stand-in for a Linux program's window in its frame (explorer's
+ * SgLinuxWindow), brought to the front */
+static void linux_front(void)
+{
+    WNDCLASSW wc = { 0 };
+    wc.lpfnWndProc = linux_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"SgLinuxWindow";
+    RegisterClassW(&wc);
+    if (!g_linux)
+        g_linux = CreateWindowW(L"SgLinuxWindow", L"Linux program", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 600, 40, 300, 200,
+                                NULL, NULL, wc.hInstance, NULL);
+    SetForegroundWindow(g_linux);
+}
+
+/* the touch keyboard's settings, as Settings and the taskbar's menu write them */
+static void set_tip(const WCHAR *name, DWORD value)
+{
+    RegSetKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\TabletTip\\1.7", name, REG_DWORD, &value, sizeof(value));
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"TraySettings", SMTO_ABORTIFHUNG, 2000, NULL);
+}
+
 static void tick(void)
 {
     FILE *f;
@@ -45,6 +79,19 @@ static void tick(void)
             g_done = n;
             if (!strncmp(line, "touch-edit", 10)) touch_focus(g_edit);
             else if (!strncmp(line, "touch-button", 12)) touch_focus(g_button);
+            else if (!strncmp(line, "linux-front", 11)) linux_front();
+            else if (!strncmp(line, "front", 5)) { SetForegroundWindow(g_wnd); SetFocus(g_edit); }
+            else if (!strncmp(line, "set ", 4))
+            {
+                WCHAR name[64];
+                unsigned long v = 0;
+                char a[64];
+                if (sscanf(line + 4, "%63s %lu", a, &v) == 2)
+                {
+                    MultiByteToWideChar(CP_ACP, 0, a, -1, name, 64);
+                    set_tip(name, v);
+                }
+            }
         }
         fclose(f);
     }

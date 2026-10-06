@@ -1,3 +1,22 @@
+sg-shell (0.1.0-149) unstable; urgency=medium
+
+  * The touch keyboard follows the user's choices: its button in the
+    notification area is the taskbar menu's "Show touch keyboard button"
+    (TipbandDesiredVisibility, wine-sg 1151; not set, on with a touch
+    screen or pen), added and removed at once; Settings > Devices > Typing
+    gets "Show the touch keyboard when not in tablet mode and there's no
+    keyboard attached" and "Automatically show the touch keyboard in
+    windowed apps when there's no keyboard attached".
+  * A keyboard attached while the touch keyboard showed itself (a Type
+    Cover clicked on) hides it within two seconds.
+  * A Linux program's window in front gets the touch keyboard's keys too,
+    through sg-session's sg-xtype (XTEST); before, they went to Wine only.
+  * Gate: make test-touchkbd (21 checks; mutants TOUCHKBD_NO_AUTOSHOW,
+    TOUCHKBD_NO_KEYBOARD_CHECK, TOUCHKBD_NO_LIVE_KEYBOARD,
+    TOUCHKBD_NO_XTYPE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 15:00:00 -0700
+
 sg-shell (0.1.0-148) unstable; urgency=medium
 
   * Version only: 0.1.0-147 was taken twice (the session keyring change

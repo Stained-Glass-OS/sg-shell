@@ -501,6 +501,66 @@ static void paint(HDC hdc)
 
 /* ---- typing --------------------------------------------------------------- */
 
+/* A Linux program's window in front (in its Wine frame, explorer's
+ * SgLinuxWindow) has the X focus itself: SendInput reaches Wine's windows
+ * only, so its keys go through sg-session's sg-xtype (XTEST on the session's
+ * X server) instead. Without sg-xtype, SendInput as for any window. */
+static WCHAR g_xtype[MAX_PATH];
+
+static BOOL linux_in_front(void)
+{
+    HWND fg = GetForegroundWindow();
+    WCHAR cls[32];
+#ifdef SG_MUTANT_TOUCHKBD_NO_XTYPE
+    return FALSE;
+#endif
+    return fg && GetClassNameW(fg, cls, ARRAYSIZE(cls)) && !wcscmp(cls, L"SgLinuxWindow");
+}
+
+static void find_xtype(void)
+{
+    WCHAR *(CDECL *to_dos)(const char *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
+    char unix_path[MAX_PATH];
+    DWORD n = GetEnvironmentVariableA("SG_XTYPE", unix_path, MAX_PATH);
+    WCHAR *dos;
+
+    if (!n || n >= MAX_PATH) lstrcpyA(unix_path, "/usr/libexec/stained-glass/sg-xtype");
+    if (!to_dos || !(dos = to_dos(unix_path))) return;
+    if (GetFileAttributesW(dos) != INVALID_FILE_ATTRIBUTES) lstrcpynW(g_xtype, dos, MAX_PATH);
+    HeapFree(GetProcessHeap(), 0, dos);
+}
+
+/* TOKEN (sg-xtype's: "u:0061", "k:BackSpace") to the Linux program in front,
+ * with Ctrl if latched; FALSE when it cannot */
+static BOOL xtype(const WCHAR *token)
+{
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    WCHAR cmd[MAX_PATH + 64];
+
+    if (!g_xtype[0] || !linux_in_front()) return FALSE;
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" %ls%ls", g_xtype, g_ctrl ? L"ctrl+" : L"", token);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    if (!CreateProcessW(g_xtype, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return FALSE;
+    WaitForSingleObject(pi.hProcess, 2000);   /* keys in order */
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return TRUE;
+}
+
+static const WCHAR *vk_keysym(WORD vk)
+{
+    switch (vk)
+    {
+    case VK_BACK: return L"k:BackSpace";
+    case VK_RETURN: return L"k:Return";
+    case VK_TAB: return L"k:Tab";
+    case VK_LEFT: return L"k:Left";
+    case VK_RIGHT: return L"k:Right";
+    }
+    return NULL;
+}
+
 static void send_vk(WORD vk, BOOL up, BOOL extended)
 {
     INPUT in = { INPUT_KEYBOARD };
@@ -512,6 +572,11 @@ static void send_vk(WORD vk, BOOL up, BOOL extended)
 
 static void tap_vk(WORD vk, BOOL extended)
 {
+    WCHAR token[16];
+    if (vk >= 'A' && vk <= 'Z') _snwprintf(token, ARRAYSIZE(token), L"u:%04x", vk - 'A' + 'a');
+    else if (vk_keysym(vk)) lstrcpyW(token, vk_keysym(vk));
+    else token[0] = 0;
+    if (token[0] && xtype(token)) return;
     if (g_ctrl) send_vk(VK_CONTROL, FALSE, FALSE);
     send_vk(vk, FALSE, extended);
     send_vk(vk, TRUE, extended);
@@ -523,6 +588,10 @@ static void type_char(WCHAR c)
     HKL layout = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), NULL));
     SHORT vks = VkKeyScanExW(c, layout);
     BOOL shift = vks != -1 && (HIBYTE(vks) & 1);
+    WCHAR token[16];
+
+    _snwprintf(token, ARRAYSIZE(token), L"u:%04x", c);
+    if (xtype(token)) return;
 
     if (vks != -1 && !(HIBYTE(vks) & 6))
     {
@@ -707,6 +776,35 @@ static BOOL text_field(HWND *focus)
     return gti.hwndCaret != NULL;
 }
 
+/* the window FOCUS is in fills its screen (a full-screen program, the login
+ * screen) */
+static BOOL full_screen(HWND focus)
+{
+    HWND top = GetAncestor(focus, GA_ROOT);
+    MONITORINFO mi = { sizeof(mi) };
+    RECT rc;
+
+    if (!top || !GetWindowRect(top, &rc) || !GetMonitorInfoW(MonitorFromWindow(top, MONITOR_DEFAULTTONEAREST), &mi))
+        return FALSE;
+    return rc.left <= mi.rcMonitor.left && rc.top <= mi.rcMonitor.top && rc.right >= mi.rcMonitor.right &&
+           rc.bottom >= mi.rcMonitor.bottom;
+}
+
+/* Settings > Devices > Typing (sg-control): "Show the touch keyboard when not
+ * in tablet mode and there's no keyboard attached" is Windows' value
+ * EnableDesktopModeAutoInvoke -- here there is no tablet mode, so it is the
+ * switch for showing itself at all (on unless turned off); "Automatically
+ * show the touch keyboard in windowed apps when there's no keyboard
+ * attached" is ours, AutoInvokeInWindowedApps (on unless turned off): off,
+ * it shows itself only for full-screen programs and the screens before
+ * sign-in. Never with a hardware keyboard attached. */
+static BOOL auto_wanted(HWND focus)
+{
+    if (!reg_get(L"EnableDesktopModeAutoInvoke", 1)) return FALSE;
+    if (!reg_get(L"AutoInvokeInWindowedApps", 1) && !full_screen(focus)) return FALSE;
+    return !has_keyboard();
+}
+
 /* a touch went down: show the keyboard for a text field it focused, hide
  * one that showed itself when it focused something else */
 static void check_focus(void)
@@ -719,7 +817,7 @@ static void check_focus(void)
 #endif
     if (text && !g_shown)
     {
-        if (has_keyboard() && !reg_get(L"EnableDesktopModeAutoInvoke", 0)) return;
+        if (!auto_wanted(focus)) return;
         show_keyboard(TRUE, TRUE);
     }
     else if (!text && g_shown && g_auto) show_keyboard(FALSE, FALSE);
@@ -728,6 +826,15 @@ static void check_focus(void)
 static void poll_touch(void)
 {
     DWORD stamp = (DWORD)(ULONG_PTR)GetPropW(GetDesktopWindow(), L"__wine_sg_touch_time");
+
+    /* a keyboard attached meanwhile (a Type Cover clicked on): the keyboard
+     * that showed itself goes, every two seconds looked at */
+#ifndef SG_MUTANT_TOUCHKBD_NO_LIVE_KEYBOARD
+    {
+        static int ticks;
+        if (g_shown && g_auto && ++ticks % 8 == 0 && has_keyboard()) show_keyboard(FALSE, FALSE);
+    }
+#endif
 
     if (!stamp || stamp == g_last_touch) return;
     g_last_touch = stamp;
@@ -791,6 +898,13 @@ static HICON make_icon(int size)
     DeleteObject(mask);
     DeleteDC(dc);
     return icon;
+}
+
+/* "Show touch keyboard button" (the taskbar's menu): Windows' value
+ * TipbandDesiredVisibility; not set, on with a touch screen or pen */
+static BOOL tray_wanted(void)
+{
+    return reg_get(L"TipbandDesiredVisibility", has_touch_screen()) != 0;
 }
 
 static void tray_add(void)
@@ -884,6 +998,17 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             InvalidateRect(hwnd, NULL, FALSE);
         }
         else if (wp == SPI_SETWORKAREA && g_shown) { place(); write_dump(); }
+        else if (lp && !lstrcmpW((const WCHAR *)lp, L"TraySettings"))
+        {
+            /* the button turned on or off from the taskbar's menu */
+            if (tray_wanted() && !g_tray) tray_add();
+            else if (!tray_wanted() && g_tray)
+            {
+                Shell_NotifyIconW(NIM_DELETE, &g_nid);
+                g_tray = FALSE;
+            }
+            write_dump();
+        }
         return 0;
     case WM_SIZE:
         layout();
@@ -946,7 +1071,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         if (other && command) PostMessageW(other, WM_COMMAND_LINE, command, 0);
         return 0;
     }
-    if (background && !has_touch_screen() && !reg_get(L"TipbandDesiredVisibility", 0)) return 0;
+    if (background && !has_touch_screen() && !tray_wanted()) return 0;
 
     build_pages();
     wc.lpfnWndProc = wnd_proc;
@@ -959,7 +1084,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
                             WS_POPUP, 0, 0, 800, 300, NULL, NULL, inst, NULL);
     if (!g_wnd) return 1;
     layout();
-    if (has_touch_screen() || reg_get(L"TipbandDesiredVisibility", 0)) tray_add();
+    find_xtype();
+    if (tray_wanted()) tray_add();
     if (has_touch_screen()) SetTimer(g_wnd, T_POLL, 250, NULL);
     if (command) show_keyboard(command != CMD_HIDE, FALSE);
     write_dump();

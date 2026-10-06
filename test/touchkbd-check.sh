@@ -16,8 +16,14 @@
 #   - with a hardware keyboard attached, a touch on the text field leaves it
 #     hidden; /toggle shows it anyway and its hide key hides it
 #
+#   - its settings: the taskbar's "Show touch keyboard button", Settings'
+#     "Show the touch keyboard when not in tablet mode..." and "...in windowed
+#     apps..."; a keyboard attached while shown hides it; a Linux program's
+#     window in front gets its keys through sg-xtype (a stand-in here)
+#
 # SG_TOUCHKBD_EXE runs another build (mutants: -DSG_MUTANT_TOUCHKBD_NO_AUTOSHOW,
-# -DSG_MUTANT_TOUCHKBD_NO_KEYBOARD_CHECK);
+# -DSG_MUTANT_TOUCHKBD_NO_KEYBOARD_CHECK, -DSG_MUTANT_TOUCHKBD_NO_LIVE_KEYBOARD,
+# -DSG_MUTANT_TOUCHKBD_NO_XTYPE);
 # SG_WINE_DIR another Wine (a build tree works). Display :176. Screenshot:
 # build/touchkbd-shown.png.
 set -u
@@ -98,6 +104,11 @@ B: MSC=10
 B: LED=1f
 EOF
 cp "$C/no-keyboard.txt" "$C/devices.txt"
+# a stand-in for sg-session's sg-xtype (XTEST into a Linux program's window):
+# it writes what it was asked to type
+printf '#!/bin/sh\necho "$*" >> "%s/xtype.log"\n' "$C" > "$T/fake-xtype"
+chmod +x "$T/fake-xtype"
+export SG_XTYPE="$T/fake-xtype"
 export SG_TOUCHKBD_TOUCH=1 SG_TOUCHKBD_DEVICES='C:\devices.txt' SG_TOUCHKBD_DUMP='C:\touchkbd.txt'
 DUMP="$C/touchkbd.txt"; STATE="$C/touchkbd-state.txt"
 
@@ -161,6 +172,51 @@ wine 'C:\sg-touchkbd64.exe' /toggle >/dev/null 2>&1; sleep 1.5
 [ "$(shown)" = 1 ] && pass "/toggle (the taskbar button's action) shows it anyway" || fail "/toggle: $(val WINDOW)"
 tap hide
 [ "$(shown)" = 0 ] && pass "its hide key hides it" || fail "the hide key: $(val WINDOW)"
+
+
+# --- its settings (Settings > Devices > Typing; the taskbar's menu) ---
+cp "$C/no-keyboard.txt" "$C/devices.txt"
+cmd "set TipbandDesiredVisibility 0"
+grep -q 'tray=0' "$DUMP" && pass "\"Show touch keyboard button\" off: the button leaves the notification area" \
+    || fail "the button stays: $(val STATE)"
+cmd "set TipbandDesiredVisibility 1"
+grep -q 'tray=1' "$DUMP" && pass "and on again: it comes back" || fail "the button did not come back: $(val STATE)"
+cmd "set EnableDesktopModeAutoInvoke 0"
+cmd touch-button
+cmd touch-edit
+[ "$(shown)" = 0 ] && pass "\"Show the touch keyboard when not in tablet mode...\" off: a touched text field leaves it hidden" \
+    || fail "shown with the setting off: $(val WINDOW)"
+cmd "set EnableDesktopModeAutoInvoke 1"
+cmd "set AutoInvokeInWindowedApps 0"
+cmd touch-button
+cmd touch-edit
+[ "$(shown)" = 0 ] && pass "\"...in windowed apps\" off: not for a program in a window" || fail "shown for a windowed program: $(val WINDOW)"
+cmd "set AutoInvokeInWindowedApps 1"
+cmd touch-button
+cmd touch-edit
+[ "$(shown)" = 1 ] && pass "both on: shown again" || fail "not shown with both on: $(val WINDOW)"
+
+# --- a keyboard attached while it is shown (a Type Cover clicked on) ---
+cp "$C/keyboard.txt" "$C/devices.txt"
+i=0; while [ "$(shown)" = 1 ] && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+[ "$(shown)" = 0 ] && pass "a keyboard attached hides the keyboard that showed itself (in $((i / 2)) s)" \
+    || fail "still shown with a keyboard attached: $(val WINDOW)"
+cp "$C/no-keyboard.txt" "$C/devices.txt"
+
+# --- a Linux program in front: its keys through sg-xtype ---
+wine 'C:\sg-touchkbd64.exe' /show >/dev/null 2>&1; sleep 1.5
+cmd linux-front
+tap h i
+tap backspace
+tap shift a
+x=$(tr -d '\r' < "$C/xtype.log" 2>/dev/null | tr '\n' ' ')
+[ "$x" = "u:0068 u:0069 k:BackSpace u:0041 " ] && pass "a Linux program's window in front: its keys go through sg-xtype ($x)" \
+    || fail "sg-xtype was asked: '$x'"
+cmd front
+before=$(state TEXT)
+tap z
+[ "$(state TEXT)" = "${before}z" ] && pass "and a Wine program's in front again: SendInput as before" \
+    || fail "back in the Wine program: '$(state TEXT)' after '$before'"
 
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

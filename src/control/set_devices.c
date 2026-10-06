@@ -1,4 +1,5 @@
-/* sg-control -- Settings > Devices: Bluetooth & other devices, Mouse, Typing.
+/* sg-control -- Settings > Devices: Bluetooth & other devices, Mouse, Typing
+ * (spelling, the touch keyboard showing itself, the hardware keyboard).
  *
  * Bluetooth is bluez's, through sg-settingsctl (bluetoothctl as the user);
  * the mouse and keyboard settings are Windows' own (SystemParametersInfo,
@@ -179,7 +180,8 @@ BOOL set_cmd_mouse(int id, int code, HWND ctl)
 
 /* ---- Typing ------------------------------------------------------------------------------------ */
 static const WCHAR TABLET[] = L"Software\\Microsoft\\TabletTip\\1.7";
-enum { CMD_AUTOCORRECT = CMD_PAGE_FIRST + 1, CMD_HIGHLIGHT, CMD_DELAY, CMD_RATE, CMD_BLINK, CMD_TRY };
+enum { CMD_AUTOCORRECT = CMD_PAGE_FIRST + 1, CMD_HIGHLIGHT, CMD_DELAY, CMD_RATE, CMD_BLINK, CMD_TRY,
+       CMD_TIP_DESKTOP, CMD_TIP_WINDOWED };
 
 void set_build_typing(void)
 {
@@ -190,6 +192,13 @@ void set_build_typing(void)
     y = st_head(y, L"Spelling");
     st_toggle(&y, L"Autocorrect misspelled words", reg_dword(HKEY_CURRENT_USER, TABLET, L"EnableAutocorrection", 1) != 0, CMD_AUTOCORRECT);
     st_toggle(&y, L"Highlight misspelled words", reg_dword(HKEY_CURRENT_USER, TABLET, L"EnableSpellchecking", 1) != 0, CMD_HIGHLIGHT);
+    /* the touch keyboard (sg-shell's sg-touchkbd) reads these each time a
+     * touch focuses a text field */
+    y = st_head(y, L"Touch keyboard");
+    st_toggle(&y, L"Show the touch keyboard when not in tablet mode and there's no keyboard attached",
+              reg_dword(HKEY_CURRENT_USER, TABLET, L"EnableDesktopModeAutoInvoke", 1) != 0, CMD_TIP_DESKTOP);
+    st_toggle(&y, L"Automatically show the touch keyboard in windowed apps when there's no keyboard attached",
+              reg_dword(HKEY_CURRENT_USER, TABLET, L"AutoInvokeInWindowedApps", 1) != 0, CMD_TIP_WINDOWED);
     y = st_head(y, L"Hardware keyboard");
     st_slider(&y, L"Repeat delay (long to short)", 0, 3, 3 - (int)delay, CMD_DELAY);
     st_slider(&y, L"Repeat rate (slow to fast)", 0, 31, rate, CMD_RATE);
@@ -204,6 +213,8 @@ BOOL set_cmd_typing(int id, int code, HWND ctl)
     switch (id) {
     case CMD_AUTOCORRECT: reg_set_dword(HKEY_CURRENT_USER, TABLET, L"EnableAutocorrection", st_checked(ctl)); return TRUE;
     case CMD_HIGHLIGHT: reg_set_dword(HKEY_CURRENT_USER, TABLET, L"EnableSpellchecking", st_checked(ctl)); return TRUE;
+    case CMD_TIP_DESKTOP: reg_set_dword(HKEY_CURRENT_USER, TABLET, L"EnableDesktopModeAutoInvoke", st_checked(ctl)); return TRUE;
+    case CMD_TIP_WINDOWED: reg_set_dword(HKEY_CURRENT_USER, TABLET, L"AutoInvokeInWindowedApps", st_checked(ctl)); return TRUE;
     case CMD_DELAY: if (code == (PG_SCROLL_CODE | TB_ENDTRACK)) SystemParametersInfoW(SPI_SETKEYBOARDDELAY, 3 - pos, NULL, F); return TRUE;
     case CMD_RATE: if (code == (PG_SCROLL_CODE | TB_ENDTRACK)) SystemParametersInfoW(SPI_SETKEYBOARDSPEED, pos, NULL, F); return TRUE;
     case CMD_BLINK:

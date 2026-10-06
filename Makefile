@@ -285,7 +285,7 @@ test-office: office
 .PHONY: test-touchkbd
 test-touchkbd: build
 	@sh test/touchkbd-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
-	 for m in TOUCHKBD_NO_AUTOSHOW TOUCHKBD_NO_KEYBOARD_CHECK; do \
+	 for m in TOUCHKBD_NO_AUTOSHOW TOUCHKBD_NO_KEYBOARD_CHECK TOUCHKBD_NO_LIVE_KEYBOARD TOUCHKBD_NO_XTYPE; do \
 	   $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_$$m -o $(BUILD)/sg-touchkbd-$$m.exe \
 	       src/touchkbd/main.c $(TOUCHKBD_LIBS) || exit 1; \
 	   SG_TOUCHKBD_EXE=$(BUILD)/sg-touchkbd-$$m.exe sh test/touchkbd-check.sh >/dev/null 2>&1; rc=$$?; \
