@@ -24,12 +24,12 @@ enum page_id {
     PG_HOME, PG_ALL,
     PG_CAT_SYSSEC, PG_CAT_NET, PG_CAT_HW, PG_CAT_PROG, PG_CAT_USERS, PG_CAT_APPEAR, PG_CAT_CLOCK,
     PG_SYSTEM, PG_PROGRAMS, PG_USERS, PG_USERS_MANAGE, PG_DATETIME, PG_PERSONALIZE,
-    PG_UPDATE, PG_NETWORK, PG_SPEECH, PG_ADMINTOOLS,
+    PG_UPDATE, PG_NETWORK, PG_SPEECH, PG_ADMINTOOLS, PG_PRINTERS,
     /* Settings (SystemSettings, ms-settings:): the same page machinery in
      * the Settings window (settings.c) */
     PG_S_HOME, PG_S_SEARCH,
     PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_S_ENVVARS,
-    PG_S_BLUETOOTH, PG_S_MOUSE, PG_S_TYPING,
+    PG_S_BLUETOOTH, PG_S_PRINTERS, PG_S_MOUSE, PG_S_TYPING,
     PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
     PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_EFFECTS, PG_S_LOOKSHARE,
     PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP,
@@ -354,5 +354,8 @@ void build_update(void);        BOOL cmd_update(int, int, HWND);
 void build_network(void);       BOOL cmd_network(int, int, HWND);
 void build_speech(void);        BOOL cmd_speech(int, int, HWND);     void timer_speech(void);
 void build_admintools(void);    BOOL cmd_admintools(int, int, HWND); void dump_admintools(void);
+/* set_printers.c: Devices and Printers, and Settings' Printers & scanners */
+void build_printers(void);      BOOL cmd_printers(int, int, HWND);   void dump_printers(void);
+int  printers_load(BOOL with_queues);
 
 #endif

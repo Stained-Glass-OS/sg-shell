@@ -55,14 +55,17 @@ static const struct applet ADMIN_A = { L"Administrative Tools", IC_ADMINTOOLS, N
     { { L"View event logs", NAV(PG_ADMINTOOLS) }, { L"Free up disk space", NAV(PG_ADMINTOOLS) } } };
 static const struct applet FONTS_A = { L"Fonts", IC_FONTS, CMD_FONTS, L"font fonts typeface install preview delete truetype opentype",
     { { L"Preview, delete, or show and hide fonts", CMD_FONTS } } };
+static const struct applet PRINTERS_A = { L"Devices and Printers", IC_HW, NAV(PG_PRINTERS),
+    L"printer printers scanner default printer driver print queue label printer",
+    { { L"View devices and printers", NAV(PG_PRINTERS) } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
     &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A,
 };
 
-struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[4]; };
+struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[5]; };
 static const struct category CATS[] = {
     { PG_CAT_SYSSEC, IC_SYSSEC, L"System and Security",
       { { L"View basic information about this computer", NAV(PG_SYSTEM) }, { L"Check for updates", NAV(PG_UPDATE) } },
@@ -71,8 +74,9 @@ static const struct category CATS[] = {
       { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"Internet Options", CMD_INET } },
       { &NETCENTER_A, &INET_A } },
     { PG_CAT_HW, IC_HW, L"Hardware and Sound",
-      { { L"Set up game controllers", CMD_JOY }, { L"Adjust screen resolution", CMD_DESK } },
-      { &DISPLAY_A, &GAME_A, &SPEECH_A, &POWER_A } },
+      { { L"View devices and printers", NAV(PG_PRINTERS) }, { L"Set up game controllers", CMD_JOY },
+        { L"Adjust screen resolution", CMD_DESK } },
+      { &PRINTERS_A, &DISPLAY_A, &GAME_A, &SPEECH_A, &POWER_A } },
     { PG_CAT_PROG, IC_PROG, L"Programs",
       { { L"Uninstall a program", NAV(PG_PROGRAMS) } },
       { &PROGRAMS_A } },
@@ -128,7 +132,7 @@ void build_category(void)
     if (!cat) return;
     x = pg_left_pane(labels, ids, n) + S(36);
     y = S(28);
-    for (i = 0; i < 4 && cat->applets[i]; i++) {
+    for (i = 0; i < 5 && cat->applets[i]; i++) {
         const struct applet *a = cat->applets[i];
         int tx = x + S(56), j;
         pg_icon(x, y, S(40), a->icon);

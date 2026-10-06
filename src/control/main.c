@@ -90,6 +90,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_NETWORK]      = { L"Network and Sharing Center", PG_CAT_NET,    build_network,      cmd_network },
     [PG_SPEECH]       = { L"Speech Recognition",         PG_CAT_HW,     build_speech,       cmd_speech, NULL, timer_speech },
     [PG_ADMINTOOLS]   = { L"Administrative Tools",       PG_CAT_SYSSEC, build_admintools,   cmd_admintools },
+    [PG_PRINTERS]     = { L"Devices and Printers",       PG_CAT_HW,     build_printers,     cmd_printers },
     SETTINGS_PAGE_DEFS
 };
 
@@ -856,7 +857,7 @@ static const struct target TARGETS[] = {
     { L"desktop",        PG_PERSONALIZE }, { L"color",       PG_PERSONALIZE },
     { L"date/time",      PG_DATETIME }, { L"international", PG_DATETIME },
     { L"netconnections", PG_NETWORK },  { L"update",        PG_UPDATE },
-    { L"system",         PG_SYSTEM },   { L"printers",      PG_CAT_HW },
+    { L"system",         PG_SYSTEM },   { L"printers",      PG_PRINTERS },
     { L"mouse",          PG_CAT_HW },   { L"keyboard",      PG_CAT_HW },
     { L"admintools",     PG_ADMINTOOLS },
     /* canonical names (control /name ...) */
@@ -872,7 +873,7 @@ static const struct target TARGETS[] = {
     { L"Microsoft.InternetOptions",         PG_COUNT, L"inetcpl.cpl" },
     { L"Microsoft.GameControllers",         PG_COUNT, L"joy.cpl" },
     { L"Microsoft.Display",                 PG_COUNT, L"desk.cpl" },
-    { L"Microsoft.DevicesAndPrinters",      PG_CAT_HW },
+    { L"Microsoft.DevicesAndPrinters",      PG_PRINTERS },
     { L"Microsoft.ActionCenter",            PG_CAT_SYSSEC },
     { L"Microsoft.SecurityAndMaintenance",  PG_CAT_SYSSEC },
     { L"Microsoft.SpeechRecognition",       PG_SPEECH },
@@ -880,7 +881,7 @@ static const struct target TARGETS[] = {
     /* our own page names, for --page */
     { L"home", PG_HOME }, { L"all", PG_ALL }, { L"programs", PG_PROGRAMS }, { L"users", PG_USERS },
     { L"accounts", PG_USERS_MANAGE }, { L"datetime", PG_DATETIME }, { L"personalization", PG_PERSONALIZE },
-    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
+    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"devices-and-printers", PG_PRINTERS }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
     { L"cat-hardware", PG_CAT_HW }, { L"cat-programs", PG_CAT_PROG }, { L"cat-users", PG_CAT_USERS },
     { L"cat-appearance", PG_CAT_APPEAR }, { L"cat-clock", PG_CAT_CLOCK },
 };
@@ -968,7 +969,7 @@ static int dump(const WCHAR *what)
     struct { const WCHAR *name; void (*fn)(void); } parts[] = {
         { L"system", dump_system }, { L"programs", dump_programs }, { L"users", dump_users },
         { L"datetime", dump_datetime }, { L"personalization", dump_personalize },
-        { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech }, { L"admintools", dump_admintools },
+        { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech }, { L"admintools", dump_admintools }, { L"printers", dump_printers },
         { L"items", dump_items },
     };
     size_t i;

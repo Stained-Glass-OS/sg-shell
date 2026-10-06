@@ -6,3 +6,4 @@ office/gen-reg.py	Windows Registry Editor Version 5\.00	the .reg file format hea
 admin/sg-admind	Windows Registry Editor Version 5\.00	the .reg file format header reg.exe requires (the unregistration it imports), not a name for our product
 src/store/main.c	Windows program	SG Store's choice of an app's build: a Windows program (run with Wine) or a Linux app -- what the system runs, not a name for our product
 src/store/details.c	Windows program	SG Store's details page: where a Windows program (run with Wine) comes from -- what the system runs, not a name for our product
+src/control/set_printers.c	Windows driver	a printer maker's driver for Windows, which the user installs from the maker -- what prints, not a name for our product

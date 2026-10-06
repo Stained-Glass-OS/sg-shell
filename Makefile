@@ -14,7 +14,7 @@ PANELS = sg-taskbar sg-start
 # The Control Panel is several files (src/control/) and needs more of Windows.
 CONTROL_SRC  = $(wildcard src/control/*.c)
 CONTROL_LIBS = -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
-               -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi -lwininet -lversion
+               -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi -lwininet -lversion -lwinspool
 # The network programs: sg-netclient.h and a common-controls 6 manifest.
 NET_PANELS = sg-ncpa sg-netflyout
 WINDRES64 ?= x86_64-w64-mingw32-windres
@@ -321,6 +321,7 @@ test: build
 	@sh test/timezone-auto-test.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
+	@sh test/printers-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/hidpi-check.sh
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/optionalfeatures-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
