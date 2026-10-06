@@ -1,3 +1,24 @@
+sg-shell (0.1.0-151) unstable; urgency=medium
+
+  * The taskbar's flyouts (volume, network, battery), the On-Screen
+    Keyboard, the touch keyboard and Magnifier follow the display scale,
+    and a new one while they run, crisp: per-monitor aware (src/sg-dpi.h),
+    laid out again on WM_DPICHANGED. They were DPI-unaware: Wine drew them
+    at 100% and scaled the picture, soft. The On-Screen Keyboard keeps its
+    share of the screen (its title bar at the scale) and keeps its place in
+    100%'s pixels; the touch keyboard spans the screen at the new height.
+    Magnifier now enlarges the screen's own pixels (unaware, it was handed
+    a scaled-down screen). At 100% nothing changes.
+  * Test: test/hidpi-live-check.sh covers them (the battery flyout with a
+    fake battery where sudo -n can mount one); mutants
+    SG_MUTANT_VOLUME_DPI_IGNORED, NET_, BATTERY_, OSK_, TOUCHKBD_,
+    MAGNIFY_DPI_IGNORED.
+  * test/defender-notice-check.sh: "Review opens Settings" waits for the
+    line cmd writes, not just the file (cmd makes it empty first; read at
+    once it was empty -- the red check on origin since 0.1.0-101's gate).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 16:40:00 -0700
+
 sg-shell (0.1.0-150) unstable; urgency=medium
 
   * SG Store's Linux Firefox, Chrome, Edge and Steam no longer add a second

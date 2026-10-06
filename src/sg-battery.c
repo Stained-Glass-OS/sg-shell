@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include "sg-mode.h"
 #include "sg-round.h"
+#include "sg-dpi.h"
 
 #define FLY_W 360
 #define FLY_H 150
@@ -30,6 +31,10 @@ static HWND g_tray, g_fly;
 static NOTIFYICONDATAW g_nid;
 static SYSTEM_POWER_STATUS g_ps;
 static HFONT g_font, g_font_big, g_font_small;
+/* the flyout at the display scale, a new one too (per-monitor v2, sg-dpi.h):
+ * its sizes are 100%'s, S() at the DPI it is drawn at */
+static int g_dpi = 96;
+#define S(x) MulDiv((x), g_dpi, 96)
 static BOOL g_link_hot;
 static UINT g_taskbar_created;
 
@@ -142,7 +147,7 @@ static void tray_update(BOOL add)
 
 /* --- the flyout ------------------------------------------------------------------- */
 
-static RECT link_rect(void) { RECT r = { 20, FLY_H - 40, 200, FLY_H - 16 }; return r; }
+static RECT link_rect(void) { RECT r = { S(20), S(FLY_H - 40), S(200), S(FLY_H - 16) }; return r; }
 
 static void fly_paint(HWND hwnd)
 {
@@ -160,17 +165,17 @@ static void fly_paint(HWND hwnd)
     FillRect(dc, &c, b);
     DeleteObject(b);
     SetBkMode(dc, TRANSPARENT);
-    big = make_icon(48);
-    DrawIconEx(dc, 20, 22, big, 48, 48, 0, NULL, DI_NORMAL);
+    big = make_icon(S(48));
+    DrawIconEx(dc, S(20), S(22), big, S(48), S(48), 0, NULL, DI_NORMAL);
     DestroyIcon(big);
     SelectObject(dc, g_font_big);
     SetTextColor(dc, text);
-    SetRect(&r, 84, 16, FLY_W - 16, 60);
+    SetRect(&r, S(84), S(16), S(FLY_W - 16), S(60));
     _snwprintf(buf, ARRAYSIZE(buf), L"%d%%", percent());
     DrawTextW(dc, buf, -1, &r, DT_SINGLELINE | DT_VCENTER);
     SelectObject(dc, g_font_small);
     SetTextColor(dc, subtle);
-    SetRect(&r, 84, 60, FLY_W - 16, 80);
+    SetRect(&r, S(84), S(60), S(FLY_W - 16), S(80));
     describe(buf, ARRAYSIZE(buf));
     DrawTextW(dc, buf, -1, &r, DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, g_font);
@@ -194,8 +199,10 @@ static void place_flyout(void)
 {
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    SetWindowPos(g_fly, HWND_TOPMOST, work.right - FLY_W - 12, work.bottom - FLY_H - 12, FLY_W, FLY_H, SWP_NOACTIVATE);
+    SetWindowPos(g_fly, HWND_TOPMOST, work.right - S(FLY_W + 12), work.bottom - S(FLY_H + 12), S(FLY_W), S(FLY_H), SWP_NOACTIVATE);
 }
+
+static void make_fonts(void);
 
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -203,6 +210,17 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
     case WM_PAINT: fly_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
+#ifndef SG_MUTANT_BATTERY_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: its text, picture and size at it */
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        sg_dpi_apply_rect(hwnd, lp);
+        place_flyout();
+        tray_update(FALSE);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+#endif
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) ShowWindow(hwnd, SW_HIDE);
         return 0;
@@ -287,7 +305,17 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 static HFONT make_font(int height, int weight)
 {
-    return CreateFontW(-height, 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    return CreateFontW(-S(height), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
+static void make_fonts(void)
+{
+    if (g_font) DeleteObject(g_font);
+    if (g_font_small) DeleteObject(g_font_small);
+    if (g_font_big) DeleteObject(g_font_big);
+    g_font = make_font(14, FW_NORMAL);
+    g_font_small = make_font(12, FW_NORMAL);
+    g_font_big = make_font(34, FW_LIGHT);
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
@@ -314,9 +342,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     }
     if (FindWindowW(L"SgBatteryTray", NULL)) return 0;   /* one per session */
 
-    g_font = make_font(14, FW_NORMAL);
-    g_font_small = make_font(12, FW_NORMAL);
-    g_font_big = make_font(34, FW_LIGHT);
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+    g_dpi = (int)sg_dpi_for(NULL);
+    make_fonts();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
 
     wc.lpfnWndProc = tray_proc;
@@ -330,7 +358,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     RegisterClassW(&wc);
     /* owned by the (never shown) tray window: no taskbar button of its own */
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Battery", WS_POPUP,
-                            0, 0, FLY_W, FLY_H, g_tray, NULL, inst, NULL);
+                            0, 0, S(FLY_W), S(FLY_H), g_tray, NULL, inst, NULL);
     sg_round_corners(g_fly);
     tray_update(TRUE);
     SetTimer(g_tray, 1, 30000, NULL);

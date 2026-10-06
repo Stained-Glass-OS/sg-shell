@@ -25,15 +25,20 @@
 #include "sg-mode.h"
 #include "sg-smooth.h"
 #include "sg-round.h"
+#include "sg-dpi.h"
 
-#define FLY_W 360
-#define ROW_H 60
-#define EXP_H 64
-#define EXP_H_KEY 96
-#define FOOT_H 132
+/* the flyout at the display scale, a new one too (per-monitor v2, sg-dpi.h):
+ * its sizes are 100%'s, S() at the DPI it is drawn at */
+static int g_dpi = 96;
+#define S(x) MulDiv((x), g_dpi, 96)
+#define FLY_W S(360)
+#define ROW_H S(60)
+#define EXP_H S(64)
+#define EXP_H_KEY S(96)
+#define FOOT_H S(132)
 #define MAX_NETS 48
 #define MAX_WIRED 8
-#define MAX_LIST_H 420
+#define MAX_LIST_H S(420)
 #define WM_TRAY (WM_APP + 1)
 #define ID_KEY 100
 
@@ -349,7 +354,7 @@ static void tray_update(BOOL add)
 
 /* --- the flyout ---------------------------------------------------------------------------- */
 
-static int list_top(void) { return 8; }
+static int list_top(void) { return S(8); }
 static int exp_h(void) { return g_exp_state == EXP_KEY ? EXP_H_KEY : EXP_H; }
 
 static int row_y(int i)
@@ -387,7 +392,7 @@ static void place_flyout(void)
      * rectangle. */
     if (!(bar && GetWindowRect(bar, &tb)) && SHAppBarMessage(ABM_GETTASKBARPOS, &abd)) tb = abd.rc;
     else if (!bar) SetRectEmpty(&tb);
-    if (tb.bottom > tb.top && tb.top > work.top + 100)
+    if (tb.bottom > tb.top && tb.top > work.top + S(100))
     {
         x = tb.right - FLY_W;
         y = tb.top - h;
@@ -413,42 +418,42 @@ static void draw_wifi_glyph(HDC dc, int x, int y, int signal, BOOL lit)
     int i, bars = (signal + 12) / 25;
     for (i = 0; i < 4; i++)
     {
-        int rad = 5 + i * 5;
+        int rad = S(5 + i * 5);
         COLORREF c = lit && i < (bars < 1 ? 1 : bars) ? COL_TEXT : g_pal->off;
-        HPEN pen = CreatePen(PS_SOLID, 2, c), op = SelectObject(dc, pen);
+        HPEN pen = CreatePen(PS_SOLID, S(2), c), op = SelectObject(dc, pen);
         if (i == 0)
         {
             HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
-            sg_ellipse(dc, x + 12, y + 20, x + 17, y + 25);
+            sg_ellipse(dc, x + S(12), y + S(20), x + S(17), y + S(25));
             SelectObject(dc, ob); DeleteObject(b);
         }
-        else sg_arc(dc, x + 14 - rad, y + 22 - rad, x + 15 + rad, y + 23 + rad, x + 15 + rad, y + 22 - rad, x + 14 - rad, y + 22 - rad);
+        else sg_arc(dc, x + S(14) - rad, y + S(22) - rad, x + S(15) + rad, y + S(23) + rad, x + S(15) + rad, y + S(22) - rad, x + S(14) - rad, y + S(22) - rad);
         SelectObject(dc, op); DeleteObject(pen);
     }
 }
 
 static void draw_lock(HDC dc, int x, int y)
 {
-    HPEN pen = CreatePen(PS_SOLID, 1, COL_TEXT), op = SelectObject(dc, pen);
+    HPEN pen = CreatePen(PS_SOLID, S(1), COL_TEXT), op = SelectObject(dc, pen);
     HBRUSH b = CreateSolidBrush(COL_TEXT), ob = SelectObject(dc, b);
-    Rectangle(dc, x, y + 4, x + 7, y + 9);
+    Rectangle(dc, x, y + S(4), x + S(7), y + S(9));
     SelectObject(dc, GetStockObject(NULL_BRUSH));
-    sg_arc(dc, x + 1, y, x + 7, y + 8, x + 7, y + 4, x + 1, y + 4);
+    sg_arc(dc, x + S(1), y, x + S(7), y + S(8), x + S(7), y + S(4), x + S(1), y + S(4));
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen); DeleteObject(b);
 }
 
 static void draw_monitor(HDC dc, int x, int y, BOOL lit)
 {
-    HPEN pen = CreatePen(PS_SOLID, 2, lit ? COL_TEXT : COL_SUBTLE), op = SelectObject(dc, pen);
+    HPEN pen = CreatePen(PS_SOLID, S(2), lit ? COL_TEXT : COL_SUBTLE), op = SelectObject(dc, pen);
     HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Rectangle(dc, x + 3, y + 4, x + 27, y + 20);
-    MoveToEx(dc, x + 15, y + 20, NULL); LineTo(dc, x + 15, y + 25);
-    MoveToEx(dc, x + 9, y + 26, NULL); LineTo(dc, x + 22, y + 26);
+    Rectangle(dc, x + S(3), y + S(4), x + S(27), y + S(20));
+    MoveToEx(dc, x + S(15), y + S(20), NULL); LineTo(dc, x + S(15), y + S(25));
+    MoveToEx(dc, x + S(9), y + S(26), NULL); LineTo(dc, x + S(22), y + S(26));
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
 }
 
 /* A flat button; returns its rectangle. */
-static RECT button_rect(int right, int y, int w) { RECT r = { right - w, y, right, y + 30 }; return r; }
+static RECT button_rect(int right, int y, int w) { RECT r = { right - w, y, right, y + S(30) }; return r; }
 
 static void draw_button(HDC dc, RECT r, const WCHAR *text, BOOL accent, BOOL hot)
 {
@@ -459,33 +464,33 @@ static void draw_button(HDC dc, RECT r, const WCHAR *text, BOOL accent, BOOL hot
     DrawTextW(dc, text, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 }
 
-static RECT check_rect(int y) { RECT r = { 60, y, 250, y + 22 }; return r; }
+static RECT check_rect(int y) { RECT r = { S(60), y, S(250), y + S(22) }; return r; }
 
 enum { PART_ROW = 1, PART_PRIMARY, PART_SECONDARY, PART_CHECK, PART_SETTINGS, PART_WIFI_TILE };
 
 /* The expanded row's parts. With the key prompt: the prompt line, the key
  * field (g_key, a real edit control), then Next and Cancel side by side. */
-static RECT key_rect(int i) { int y0 = row_y(i) + ROW_H; RECT r = { 60, y0 + 16, FLY_W - 16, y0 + 42 }; return r; }
+static RECT key_rect(int i) { int y0 = row_y(i) + ROW_H; RECT r = { S(60), y0 + S(16), FLY_W - S(16), y0 + S(42) }; return r; }
 
 static void expanded_parts(int i, RECT *primary, RECT *secondary, RECT *check)
 {
     int y0 = row_y(i) + ROW_H;
-    *check = check_rect(y0 + 2);
+    *check = check_rect(y0 + S(2));
     if (g_exp_state == EXP_KEY)
     {
-        int w = (FLY_W - 16 - 60 - 8) / 2;
-        SetRect(primary, 60, y0 + 50, 60 + w, y0 + 80);
-        SetRect(secondary, FLY_W - 16 - w, y0 + 50, FLY_W - 16, y0 + 80);
+        int w = (FLY_W - S(16 + 60 + 8)) / 2;
+        SetRect(primary, S(60), y0 + S(50), S(60) + w, y0 + S(80));
+        SetRect(secondary, FLY_W - S(16) - w, y0 + S(50), FLY_W - S(16), y0 + S(80));
     }
     else
     {
-        *primary = button_rect(FLY_W - 16, y0 + 26, 130);
+        *primary = button_rect(FLY_W - S(16), y0 + S(26), S(130));
         SetRectEmpty(secondary);
     }
 }
 
-static RECT settings_rect(void) { RECT r = { 16, 0, FLY_W - 16, 0 }; int top = fly_height() - FOOT_H + 12; r.top = top; r.bottom = top + 20; return r; }
-static RECT wifi_tile_rect(void) { int top = fly_height() - FOOT_H + 56; RECT r = { 12, top, 12 + 104, top + 64 }; return r; }
+static RECT settings_rect(void) { RECT r = { S(16), 0, FLY_W - S(16), 0 }; int top = fly_height() - FOOT_H + S(12); r.top = top; r.bottom = top + S(20); return r; }
+static RECT wifi_tile_rect(void) { int top = fly_height() - FOOT_H + S(56); RECT r = { S(12), top, S(12 + 104), top + S(64) }; return r; }
 
 static void on_paint(HWND hwnd)
 {
@@ -509,21 +514,21 @@ static void on_paint(HWND hwnd)
     for (i = 0; i < g_nwired; i++)
     {
         int y = list_top() - g_scroll + i * ROW_H;
-        RECT t = { 60, y + 12, FLY_W - 16, y + 32 };
-        draw_monitor(dc, 16, y + 14, g_wired[i].connected);
+        RECT t = { S(60), y + S(12), FLY_W - S(16), y + S(32) };
+        draw_monitor(dc, S(16), y + S(14), g_wired[i].connected);
         SelectObject(dc, g_font); SetTextColor(dc, COL_TEXT);
         DrawTextW(dc, g_wired[i].name, -1, &t, DT_SINGLELINE | DT_NOPREFIX);
-        OffsetRect(&t, 0, 20);
+        OffsetRect(&t, 0, S(20));
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
         DrawTextW(dc, g_wired[i].connected ? L"Connected" : L"Not connected", -1, &t, DT_SINGLELINE | DT_NOPREFIX);
     }
     if (!g_nwired && !g_nnets)
     {
-        RECT t = { 60, list_top() + 12, FLY_W - 16, list_top() + 32 };
-        draw_monitor(dc, 16, list_top() + 14, FALSE);
+        RECT t = { S(60), list_top() + S(12), FLY_W - S(16), list_top() + S(32) };
+        draw_monitor(dc, S(16), list_top() + S(14), FALSE);
         SelectObject(dc, g_font); SetTextColor(dc, COL_TEXT);
         DrawTextW(dc, g_has_wifi && !g_radio_on ? L"Wi-Fi is turned off" : L"Not connected", -1, &t, DT_SINGLELINE);
-        OffsetRect(&t, 0, 20);
+        OffsetRect(&t, 0, S(20));
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
         DrawTextW(dc, g_has_wifi && g_radio_on ? L"Looking for Wi-Fi networks..." : L"No connections are available", -1, &t,
                   DT_SINGLELINE);
@@ -533,23 +538,23 @@ static void on_paint(HWND hwnd)
         struct wnet *n = &g_nets[i];
         int y = row_y(i);
         RECT row = { 0, y, FLY_W, y + ROW_H + (i == g_exp ? exp_h() : 0) };
-        RECT t = { 60, y + 11, FLY_W - 16, y + 31 };
+        RECT t = { S(60), y + S(11), FLY_W - S(16), y + S(31) };
         WCHAR sub[64];
         if (i == g_exp || (i == g_hot && g_hot_part == PART_ROW))
         {
             b = CreateSolidBrush(i == g_exp ? COL_OPEN : COL_HOVER); FillRect(dc, &row, b); DeleteObject(b);
         }
-        draw_wifi_glyph(dc, 16, y + 12, n->signal, TRUE);
+        draw_wifi_glyph(dc, S(16), y + S(12), n->signal, TRUE);
         if (secured(n))
         {
-            RECT ko = { 32, y + 28, 43, y + 41 };
+            RECT ko = { S(32), y + S(28), S(43), y + S(41) };
             HBRUSH kb = CreateSolidBrush(i == g_exp ? COL_OPEN : (i == g_hot && g_hot_part == PART_ROW) ? COL_HOVER : COL_BG);
             FillRect(dc, &ko, kb); DeleteObject(kb);
-            draw_lock(dc, 34, y + 30);
+            draw_lock(dc, S(34), y + S(30));
         }
         SelectObject(dc, g_font); SetTextColor(dc, COL_TEXT);
         DrawTextW(dc, n->name, -1, &t, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-        OffsetRect(&t, 0, 20);
+        OffsetRect(&t, 0, S(20));
         if (n->inuse) _snwprintf(sub, 64, secured(n) ? L"Connected, secured" : L"Connected");
         else _snwprintf(sub, 64, secured(n) ? L"Secured" : L"Open");
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
@@ -560,7 +565,7 @@ static void on_paint(HWND hwnd)
             expanded_parts(i, &pr, &sr, &ck);
             if (g_exp_state == EXP_KEY)
             {
-                RECT lbl = { 60, y + ROW_H - 4, FLY_W - 16, y + ROW_H + 14 };
+                RECT lbl = { S(60), y + ROW_H - S(4), FLY_W - S(16), y + ROW_H + S(14) };
                 SetTextColor(dc, g_exp_msg[0] ? COL_ERROR : COL_SUBTLE);
                 DrawTextW(dc, g_exp_msg[0] ? g_exp_msg : L"Enter the network security key", -1, &lbl,
                           DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
@@ -570,7 +575,7 @@ static void on_paint(HWND hwnd)
             }
             else if (g_exp_state == EXP_BUSY)
             {
-                RECT lbl = { 60, y + ROW_H + 4, FLY_W - 16, y + ROW_H + 24 };
+                RECT lbl = { S(60), y + ROW_H + S(4), FLY_W - S(16), y + ROW_H + S(24) };
                 SetTextColor(dc, COL_SUBTLE);
                 DrawTextW(dc, g_exp_msg, -1, &lbl, DT_SINGLELINE | DT_NOPREFIX);
             }
@@ -578,23 +583,23 @@ static void on_paint(HWND hwnd)
             {
                 if (!n->inuse)
                 {
-                    RECT box = { ck.left, ck.top + 3, ck.left + 16, ck.top + 19 }, lbl = ck;
-                    HPEN pen = CreatePen(PS_SOLID, 1, COL_TEXT), op = SelectObject(dc, pen);
+                    RECT box = { ck.left, ck.top + S(3), ck.left + S(16), ck.top + S(19) }, lbl = ck;
+                    HPEN pen = CreatePen(PS_SOLID, S(1), COL_TEXT), op = SelectObject(dc, pen);
                     HBRUSH fill = CreateSolidBrush(g_autoconnect ? COL_ACCENT : COL_BG), ofb = SelectObject(dc, fill);
                     Rectangle(dc, box.left, box.top, box.right, box.bottom);
                     if (g_autoconnect)
                     {
-                        POINT tick[3] = { { box.left + 3, box.top + 8 }, { box.left + 7, box.top + 12 }, { box.left + 13, box.top + 4 } };
+                        POINT tick[3] = { { box.left + S(3), box.top + S(8) }, { box.left + S(7), box.top + S(12) }, { box.left + S(13), box.top + S(4) } };
                         sg_polyline(dc, tick, 3);
                     }
                     SelectObject(dc, op); SelectObject(dc, ofb); DeleteObject(pen); DeleteObject(fill);
-                    lbl.left += 24;
+                    lbl.left += S(24);
                     SetTextColor(dc, COL_TEXT);
                     DrawTextW(dc, L"Connect automatically", -1, &lbl, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
                 }
                 if (g_exp_state == EXP_ERROR && g_exp_msg[0])
                 {
-                    RECT lbl = { 60, pr.top - 2, pr.left - 8, pr.bottom + 2 };
+                    RECT lbl = { S(60), pr.top - S(2), pr.left - S(8), pr.bottom + S(2) };
                     SetTextColor(dc, COL_ERROR);
                     DrawTextW(dc, g_exp_msg, -1, &lbl, DT_WORDBREAK | DT_NOPREFIX | DT_END_ELLIPSIS);
                 }
@@ -611,15 +616,15 @@ static void on_paint(HWND hwnd)
     r = settings_rect();
     SelectObject(dc, g_font); SetTextColor(dc, COL_LINK);
     DrawTextW(dc, L"Network & Internet settings", -1, &r, DT_SINGLELINE | DT_NOPREFIX);
-    OffsetRect(&r, 0, 20);
+    OffsetRect(&r, 0, S(20));
     SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
     DrawTextW(dc, L"Change settings, such as making a connection metered.", -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
     if (g_has_wifi)
     {
         RECT t = wifi_tile_rect(), l;
         b = CreateSolidBrush(g_radio_on ? COL_ACCENT : COL_BUTTON); FillRect(dc, &t, b); DeleteObject(b);
-        draw_wifi_glyph(dc, t.left + 6, t.top + 2, 100, TRUE);
-        l = t; l.left += 8; l.top += 38;
+        draw_wifi_glyph(dc, t.left + S(6), t.top + S(2), 100, TRUE);
+        l = t; l.left += S(8); l.top += S(38);
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_TEXT);
         DrawTextW(dc, L"Wi-Fi", -1, &l, DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -637,7 +642,7 @@ static void hit(int x, int y, int *row, int *part)
     RECT r = settings_rect(), t = wifi_tile_rect();
     int i, list_h = list_height();
     *row = -1; *part = 0;
-    r.bottom += 20;
+    r.bottom += S(20);
     if (PtInRect(&r, p)) { *part = PART_SETTINGS; return; }
     if (g_has_wifi && PtInRect(&t, p)) { *part = PART_WIFI_TILE; return; }
     if (list_h > MAX_LIST_H) list_h = MAX_LIST_H;
@@ -799,12 +804,34 @@ static void show_flyout(void)
     SetTimer(g_tray_wnd, 2, 5000, NULL);
 }
 
+static void make_fonts(void)
+{
+    HFONT old[3] = { g_font, g_font_small, g_font_title };
+    int i;
+    g_font = CreateFontW(-S(15), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_small = CreateFontW(-S(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    g_font_title = CreateFontW(-S(15), 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    if (g_key) SendMessageW(g_key, WM_SETFONT, (WPARAM)g_font, TRUE);
+    for (i = 0; i < 3; i++) if (old[i]) DeleteObject(old[i]);
+}
+
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
     case WM_PAINT: on_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
+#ifndef SG_MUTANT_NET_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: its rows, glyphs, text, key field and size at it */
+        g_dpi = (int)sg_dpi_new(wp);
+        g_scroll = 0;
+        make_fonts();
+        sg_dpi_apply_rect(hwnd, lp);
+        relayout();
+        tray_update(FALSE);
+        return 0;
+#endif
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_busy && GetParent((HWND)lp) != hwnd && (HWND)lp != g_key) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
         return 0;
@@ -1045,9 +1072,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
             WideCharToMultiByte(CP_UTF8, 0, argv[++i], -1, expand, sizeof(expand), NULL, NULL);
     }
 
-    g_font = CreateFontW(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_font_small = CreateFontW(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-    g_font_title = CreateFontW(-15, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+    g_dpi = (int)sg_dpi_for(NULL);
+    make_fonts();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
 
     wc.lpfnWndProc = tray_proc;
@@ -1062,9 +1089,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     RegisterClassW(&wc);
     /* Owned by the (never shown) tray window: no taskbar button of its own. */
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Network", WS_POPUP,
-                            0, 0, FLY_W, 300, g_tray_wnd, NULL, inst, NULL);
+                            0, 0, FLY_W, fly_height(), g_tray_wnd, NULL, inst, NULL);
     sg_round_corners(g_fly);
-    g_key = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_PASSWORD | ES_AUTOHSCROLL, 60, 0, FLY_W - 76, 22,
+    g_key = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_PASSWORD | ES_AUTOHSCROLL, S(60), 0, FLY_W - S(76), S(22),
                             g_fly, (HMENU)(INT_PTR)ID_KEY, inst, NULL);
     SendMessageW(g_key, WM_SETFONT, (WPARAM)g_font, TRUE);
     SendMessageW(g_key, EM_LIMITTEXT, 127, 0);

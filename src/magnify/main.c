@@ -48,6 +48,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <dwmapi.h>
@@ -81,6 +82,12 @@ static HHOOK g_mouse_hook;
 static DWORD g_frames;
 static WCHAR g_dump[MAX_PATH];
 static HFONT g_font, g_font_big;
+/* the toolbar at the display scale, a new one too (per-monitor v2, sg-dpi.h):
+ * its sizes are 100%'s, S() at the DPI it is drawn at. Per-monitor aware,
+ * Magnifier also reads the screen's own pixels: Wine no longer hands an
+ * unaware Magnifier a scaled-down screen to enlarge (soft at 175%) */
+static int g_dpi = 96;
+#define S(x) MulDiv((x), g_dpi, 96)
 static int g_hot = -1;                          /* the toolbar button under the mouse */
 
 /* ---- settings ------------------------------------------------------------------------------ */
@@ -489,7 +496,7 @@ static void paint_view(HDC dc)
             FrameRect(dc, &cr, b), InflateRect(&cr, -1, -1), FrameRect(dc, &cr, b);
         else
         {
-            RECT r = { 0, cr.bottom - 3, cr.right, cr.bottom };
+            RECT r = { 0, cr.bottom - S(3), cr.right, cr.bottom };
             FillRect(dc, &r, b);
         }
         DeleteObject(b);
@@ -607,13 +614,25 @@ static void views_menu(void)
 
 static void layout_bar(void)
 {
-    int x = 8, y = 8, h = 40;
-    SetRect(&g_btn[0], x, y, x + 40, y + h); x += 40;
-    SetRect(&g_btn[1], x, y, x + 64, y + h); x += 64;
-    SetRect(&g_btn[2], x, y, x + 40, y + h); x += 48;
-    SetRect(&g_btn[3], x, y, x + 88, y + h); x += 92;
-    SetRect(&g_btn[4], x, y, x + 40, y + h); x += 40;
-    SetRect(&g_btn[5], x, y, x + 40, y + h);
+    int x = S(8), y = S(8), h = S(40);
+    SetRect(&g_btn[0], x, y, x + S(40), y + h); x += S(40);
+    SetRect(&g_btn[1], x, y, x + S(64), y + h); x += S(64);
+    SetRect(&g_btn[2], x, y, x + S(40), y + h); x += S(48);
+    SetRect(&g_btn[3], x, y, x + S(88), y + h); x += S(92);
+    SetRect(&g_btn[4], x, y, x + S(40), y + h); x += S(40);
+    SetRect(&g_btn[5], x, y, x + S(40), y + h);
+}
+
+static void mag_fonts(void)
+{
+    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+    if (g_font) DeleteObject(g_font);
+    if (g_font_big) DeleteObject(g_font_big);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    ncm.lfMessageFont.lfHeight = -S(15);
+    g_font = CreateFontIndirectW(&ncm.lfMessageFont);
+    ncm.lfMessageFont.lfHeight = -S(18);
+    g_font_big = CreateFontIndirectW(&ncm.lfMessageFont);
 }
 
 static void paint_bar(HWND hwnd, HDC dc)
@@ -630,15 +649,15 @@ static void paint_bar(HWND hwnd, HDC dc)
     {
         RECT r = g_btn[i];
         int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
-        HPEN pen = CreatePen(PS_SOLID, 2, ink), op;
+        HPEN pen = CreatePen(PS_SOLID, S(2), ink), op;
         if (i == g_hot && i != 1) FillRect(dc, &r, hot);
         op = SelectObject(dc, pen);
         SetTextColor(dc, ink);
         switch (i)
         {
-        case 0: MoveToEx(dc, cx - 7, cy, NULL); LineTo(dc, cx + 8, cy); break;
-        case 2: MoveToEx(dc, cx - 7, cy, NULL); LineTo(dc, cx + 8, cy);
-                MoveToEx(dc, cx, cy - 7, NULL); LineTo(dc, cx, cy + 8); break;
+        case 0: MoveToEx(dc, cx - S(7), cy, NULL); LineTo(dc, cx + S(8), cy); break;
+        case 2: MoveToEx(dc, cx - S(7), cy, NULL); LineTo(dc, cx + S(8), cy);
+                MoveToEx(dc, cx, cy - S(7), NULL); LineTo(dc, cx, cy + S(8)); break;
         case 1:
             swprintf(level, 16, L"%d%%", g_zoom);
             SelectObject(dc, g_font_big);
@@ -650,10 +669,10 @@ static void paint_bar(HWND hwnd, HDC dc)
             POINT tri[3];
             HBRUSH ib = CreateSolidBrush(ink), obr;
             SelectObject(dc, g_font);
-            t.right -= 14;
+            t.right -= S(14);
             DrawTextW(dc, L"Views", -1, &t, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            tri[0].x = r.right - 18; tri[0].y = cy - 2; tri[1].x = r.right - 10; tri[1].y = cy - 2;
-            tri[2].x = r.right - 14; tri[2].y = cy + 2;
+            tri[0].x = r.right - S(18); tri[0].y = cy - S(2); tri[1].x = r.right - S(10); tri[1].y = cy - S(2);
+            tri[2].x = r.right - S(14); tri[2].y = cy + S(2);
             obr = SelectObject(dc, ib);
             sg_polygon(dc, tri, 3);
             SelectObject(dc, obr); DeleteObject(ib);
@@ -664,12 +683,12 @@ static void paint_bar(HWND hwnd, HDC dc)
             /* a cog: a ring and eight teeth */
             int k;
             HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            sg_ellipse(dc, cx - 6, cy - 6, cx + 7, cy + 7);
-            sg_ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
+            sg_ellipse(dc, cx - S(6), cy - S(6), cx + S(7), cy + S(7));
+            sg_ellipse(dc, cx - S(2), cy - S(2), cx + S(3), cy + S(3));
             for (k = 0; k < 8; k++)
             {
                 static const int dx[8] = { 0, 6, 9, 6, 0, -6, -9, -6 }, dy[8] = { -9, -6, 0, 6, 9, 6, 0, -6 };
-                sg_line(dc, cx + dx[k] * 2 / 3, cy + dy[k] * 2 / 3, cx + dx[k], cy + dy[k]);
+                sg_line(dc, cx + S(dx[k] * 2) / 3, cy + S(dy[k] * 2) / 3, cx + S(dx[k]), cy + S(dy[k]));
             }
             SelectObject(dc, ob);
             break;
@@ -740,6 +759,17 @@ static LRESULT CALLBACK bar_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
+#ifndef SG_MUTANT_MAGNIFY_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: its buttons, glyphs, text and size at it */
+        g_dpi = (int)sg_dpi_new(wp);
+        mag_fonts();
+        layout_bar();
+        sg_dpi_apply_rect(hwnd, lp);
+        InvalidateRect(hwnd, NULL, FALSE);
+        write_dump();
+        return 0;
+#endif
     case WM_CREATE:
         layout_bar();
         SetTimer(hwnd, TIMER_FRAME, 33, NULL);
@@ -834,7 +864,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     WNDCLASSEXW wc = { sizeof(wc) };
     HANDLE mutex;
     MSG msg;
-    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
     DWORD n;
     (void)prev; (void)cmdline; (void)show;
 
@@ -859,16 +888,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         return 0;
     }
 
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+    g_dpi = (int)sg_dpi_for(NULL);
     load_settings();
     g_sw = GetSystemMetrics(SM_CXSCREEN);
     g_sh = GetSystemMetrics(SM_CYSCREEN);
     GetCursorPos(&g_center);
 
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    ncm.lfMessageFont.lfHeight = -15;
-    g_font = CreateFontIndirectW(&ncm.lfMessageFont);
-    ncm.lfMessageFont.lfHeight = -18;
-    g_font_big = CreateFontIndirectW(&ncm.lfMessageFont);
+    mag_fonts();
 
     wc.lpfnWndProc = bar_proc;
     wc.hInstance = inst;
@@ -885,11 +912,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     g_view = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_VIEW, L"Magnifier view",
                              WS_POPUP, 0, 0, 1, 1, NULL, NULL, inst, NULL);
     {
-        RECT r = { 0, 0, BAR_W, BAR_H };
+        RECT r = { 0, 0, S(BAR_W), S(BAR_H) };
         DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
         AdjustWindowRectEx(&r, style, FALSE, WS_EX_TOPMOST);
         g_bar = CreateWindowExW(WS_EX_TOPMOST, CLASS_BAR, L"Magnifier", style,
-                                g_sw - (r.right - r.left) - 24, g_sh / 8, r.right - r.left, r.bottom - r.top,
+                                g_sw - (r.right - r.left) - S(24), g_sh / 8, r.right - r.left, r.bottom - r.top,
                                 NULL, NULL, inst, NULL);
     }
     if (!g_bar) return 1;

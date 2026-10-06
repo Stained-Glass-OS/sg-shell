@@ -26,6 +26,7 @@
 #include "sg-mode.h"
 #include "sg-smooth.h"
 #include "sg-round.h"
+#include "sg-dpi.h"
 
 #define FLY_W 360
 #define FLY_H 112
@@ -44,6 +45,10 @@ static HWND g_tray, g_fly;
 static DWORD g_fly_hidden;   /* GetTickCount when the flyout last hid on deactivation: a tray click within ~200ms of it is that same click, so it must not reopen (else it flickers instead of closing) */
 static NOTIFYICONDATAW g_nid;
 static HFONT g_font, g_font_small, g_font_icon;
+/* the flyout at the display scale, a new one too (per-monitor v2, sg-dpi.h):
+ * its sizes are 100%'s, S() at the DPI it is drawn at */
+static int g_dpi = 96;
+#define S(x) MulDiv((x), g_dpi, 96)
 static UINT g_taskbar_created;
 static BOOL g_dragging, g_mute_hot, g_dev_hot;
 static int g_drag_vol = -1;
@@ -298,10 +303,10 @@ static void tray_update(BOOL add)
 
 /* --- the flyout: device, mute button, slider ---------------------------------------- */
 
-static RECT dev_rect(void)    { RECT r = { 16, 12, FLY_W - 16, 40 }; return r; }
-static RECT mute_rect(void)   { RECT r = { 12, 56, 52, 96 }; return r; }
-static RECT track_rect(void)  { RECT r = { 64, 72, FLY_W - 64, 80 }; return r; }
-static RECT number_rect(void) { RECT r = { FLY_W - 56, 56, FLY_W - 12, 96 }; return r; }
+static RECT dev_rect(void)    { RECT r = { S(16), S(12), S(FLY_W - 16), S(40) }; return r; }
+static RECT mute_rect(void)   { RECT r = { S(12), S(56), S(52), S(96) }; return r; }
+static RECT track_rect(void)  { RECT r = { S(64), S(72), S(FLY_W - 64), S(80) }; return r; }
+static RECT number_rect(void) { RECT r = { S(FLY_W - 56), S(56), S(FLY_W - 12), S(96) }; return r; }
 
 static int volume_at(int x)
 {
@@ -341,29 +346,29 @@ static void fly_paint(HWND hwnd)
     if (g_cur >= 0) _snwprintf(buf, ARRAYSIZE(buf), L"%ls%ls", g_sinks[g_cur].desc, g_nsinks > 1 ? L"  \x2228" : L"");
     else describe(buf, ARRAYSIZE(buf));
     buf[ARRAYSIZE(buf) - 1] = 0;
-    r.left += 8;
+    r.left += S(8);
     DrawTextW(mem, buf, -1, &r, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
     /* the mute button: the speaker as it is */
     r = mute_rect();
     if (g_mute_hot) { b = CreateSolidBrush(hover); FillRect(mem, &r, b); DeleteObject(b); }
-    icon = make_icon(24, text);
-    DrawIconEx(mem, r.left + 8, r.top + 8, icon, 24, 24, 0, NULL, DI_NORMAL);
+    icon = make_icon(S(24), text);
+    DrawIconEx(mem, r.left + S(8), r.top + S(8), icon, S(24), S(24), 0, NULL, DI_NORMAL);
     DestroyIcon(icon);
 
     /* the slider */
     t = track_rect();
     x = t.left + (t.right - t.left) * vol / 100;
-    SetRect(&r, t.left, t.top + 2, t.right, t.bottom - 2);
+    SetRect(&r, t.left, t.top + S(2), t.right, t.bottom - S(2));
     b = CreateSolidBrush(rail); FillRect(mem, &r, b); DeleteObject(b);
-    SetRect(&r, t.left, t.top + 2, x, t.bottom - 2);
+    SetRect(&r, t.left, t.top + S(2), x, t.bottom - S(2));
     b = CreateSolidBrush(muted() ? rail : accent); FillRect(mem, &r, b); DeleteObject(b);
     {
         HBRUSH ob;
-        HPEN op, edge = CreatePen(PS_SOLID, 2, bg);
+        HPEN op, edge = CreatePen(PS_SOLID, S(2), bg);
         b = CreateSolidBrush(muted() ? subtle : accent);
         ob = SelectObject(mem, b); op = SelectObject(mem, edge);
-        sg_ellipse(mem, x - 9, (t.top + t.bottom) / 2 - 9, x + 10, (t.top + t.bottom) / 2 + 10);
+        sg_ellipse(mem, x - S(9), (t.top + t.bottom) / 2 - S(9), x + S(10), (t.top + t.bottom) / 2 + S(10));
         SelectObject(mem, ob); SelectObject(mem, op);
         DeleteObject(b); DeleteObject(edge);
     }
@@ -384,7 +389,7 @@ static void place_flyout(void)
 {
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    SetWindowPos(g_fly, HWND_TOPMOST, work.right - FLY_W - 12, work.bottom - FLY_H - 12, FLY_W, FLY_H, SWP_NOACTIVATE);
+    SetWindowPos(g_fly, HWND_TOPMOST, work.right - S(FLY_W + 12), work.bottom - S(FLY_H + 12), S(FLY_W), S(FLY_H), SWP_NOACTIVATE);
 }
 
 static void set_volume(int v, BOOL send)
@@ -442,6 +447,8 @@ static void choose_device(HWND hwnd)
     }
 }
 
+static void make_fonts(void);
+
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
@@ -451,6 +458,18 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
     case WM_PAINT: fly_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
+#ifndef SG_MUTANT_VOLUME_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: its text, slider and size at it; the tray
+         * icon at the new small-icon size */
+        g_dpi = (int)sg_dpi_new(wp);
+        make_fonts();
+        sg_dpi_apply_rect(hwnd, lp);
+        place_flyout();
+        tray_update(FALSE);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+#endif
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_dragging && !IsWindowVisible((HWND)lp)) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
         return 0;
@@ -477,7 +496,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (g_mute_hot || g_dev_hot) { g_mute_hot = g_dev_hot = FALSE; InvalidateRect(hwnd, NULL, FALSE); }
         return 0;
     case WM_LBUTTONDOWN:
-        r = track_rect(); InflateRect(&r, 12, 14);
+        r = track_rect(); InflateRect(&r, S(12), S(14));
         if (PtInRect(&r, pt) && g_cur >= 0)
         {
             g_dragging = TRUE;
@@ -580,7 +599,17 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 static HFONT make_font(int height, int weight)
 {
-    return CreateFontW(-height, 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    return CreateFontW(-S(height), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+}
+
+static void make_fonts(void)
+{
+    if (g_font) DeleteObject(g_font);
+    if (g_font_small) DeleteObject(g_font_small);
+    if (g_font_icon) DeleteObject(g_font_icon);
+    g_font = make_font(14, FW_NORMAL);
+    g_font_small = make_font(12, FW_NORMAL);
+    g_font_icon = make_font(20, FW_NORMAL);
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
@@ -608,9 +637,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
 
     InitializeCriticalSection(&g_cs);
     g_wake = CreateEventW(NULL, FALSE, TRUE, NULL);   /* read at once */
-    g_font = make_font(14, FW_NORMAL);
-    g_font_small = make_font(12, FW_NORMAL);
-    g_font_icon = make_font(20, FW_NORMAL);
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+    g_dpi = (int)sg_dpi_for(NULL);
+    make_fonts();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
 
     wc.lpfnWndProc = tray_proc;
@@ -624,7 +653,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     RegisterClassW(&wc);
     /* owned by the (never shown) tray window: no taskbar button of its own */
     g_fly = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Volume", WS_POPUP,
-                            0, 0, FLY_W, FLY_H, g_tray, NULL, inst, NULL);
+                            0, 0, S(FLY_W), S(FLY_H), g_tray, NULL, inst, NULL);
     sg_round_corners(g_fly);
     tray_update(TRUE);
     CloseHandle(CreateThread(NULL, 0, worker, NULL, 0, NULL));

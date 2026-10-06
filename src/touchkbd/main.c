@@ -59,6 +59,7 @@
 #include <wchar.h>
 #include "../sg-mode.h"
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 
 #define CLASS_NAME L"IPTip_Main_Window"
 #define TIP_KEY L"Software\\Microsoft\\TabletTip\\1.7"
@@ -169,12 +170,10 @@ static DWORD reg_get(const WCHAR *name, DWORD def)
     return v;
 }
 
+/* the display scale it is drawn at (per-monitor v2, sg-dpi.h: a new one too) */
 static float dpi_scale(void)
 {
-    HDC dc = GetDC(NULL);
-    float s = GetDeviceCaps(dc, LOGPIXELSY) / 96.0f;
-    ReleaseDC(NULL, dc);
-    return s < 1 ? 1 : s;
+    return sg_dpi_for(g_wnd) / 96.0f;
 }
 
 /* ---- what is attached --------------------------------------------------- */
@@ -1014,6 +1013,15 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         layout();
         write_dump();
         return 0;
+#ifndef SG_MUTANT_TOUCHKBD_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: its keys, gaps and height at it */
+        if (g_shown) place();
+        else { sg_dpi_apply_rect(hwnd, lp); layout(); }
+        InvalidateRect(hwnd, NULL, FALSE);
+        write_dump();
+        return 0;
+#endif
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
@@ -1055,6 +1063,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     (void)prev; (void)show;
 
     g_inst = inst;
+#ifndef SG_MUTANT_TOUCHKBD_DPI_IGNORED
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+#endif
     n = GetEnvironmentVariableW(L"SG_TOUCHKBD_DUMP", g_dump, MAX_PATH);
     if (!n || n >= MAX_PATH) g_dump[0] = 0;
     n = GetEnvironmentVariableW(L"SG_TOUCHKBD_DEVICES", g_devices, MAX_PATH);

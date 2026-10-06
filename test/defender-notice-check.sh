@@ -62,7 +62,9 @@ xdotool search --onlyvisible --name '^SG Defender$' 2>/dev/null | grep -qx "$W1"
 sleep 1; [ ! -e "$T/opened.txt" ] && pass "...without opening Settings" || fail "Dismiss opened Settings"
 eval "$(xdotool getwindowgeometry --shell "$W2")"
 xdotool mousemove $((X + WIDTH / 4)) $((Y + HEIGHT - 20)) click 1
-i=0; while [ $i -lt 40 ] && [ ! -e "$T/opened.txt" ]; do sleep 0.5; i=$((i + 1)); done
+# what cmd's "echo %1> opened.txt" writes: the file is there (made empty) a
+# moment before the line is in it -- waiting for the file alone read it empty
+i=0; while [ $i -lt 40 ] && ! grep -q "ms-settings:" "$T/opened.txt" 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
 grep -q "ms-settings:windowsdefender" "$T/opened.txt" 2>/dev/null && pass "Review opens Settings > Virus & threat protection" \
     || fail "Review: $(cat "$T/opened.txt" 2>/dev/null)"
 wineserver -k 2>/dev/null; sleep 1

@@ -12,9 +12,14 @@
 #      aware: Wine does not scale its picture), 1.75 times as large on the
 #      screen, and a control inside it laid out again (1.75 times too)
 #   3. back at 100%: 96 DPI, the sizes they had (within a few pixels)
+# (the On-Screen Keyboard keeps its width, a share of the screen, and its
+# title bar grows with the scale; the touch keyboard spans the screen and
+# grows 1.75 times taller)
 # Programs: Control Panel, WordPad, the Store, Character Map, Alarms & Clock,
 # the Terminal, the Font Viewer, the voice typing bar, the Defender and
-# restart notices.
+# restart notices; the taskbar's flyouts (volume, network), the On-Screen
+# Keyboard, the touch keyboard and Magnifier's toolbar; the battery flyout
+# with a fake battery where sudo -n can mount one (as test/battery-check.sh).
 #
 #   WINE=<wine-sg's wine> sh test/hidpi-live-check.sh   (or SG_WINE_DIR=<root>)
 #   Mutants: SG_MUTANT_DPI_SYSTEM_ONLY (src/sg-dpi.h: aware of the system DPI
@@ -22,7 +27,10 @@
 #   SG_MUTANT_WORDPAD_DPI_IGNORED, SG_MUTANT_STORE_DPI_IGNORED,
 #   SG_MUTANT_CHARMAP_DPI_IGNORED, SG_MUTANT_CLOCK_DPI_IGNORED,
 #   SG_MUTANT_TERMINAL_DPI_IGNORED, SG_MUTANT_FONTVIEW_DPI_IGNORED,
-#   SG_MUTANT_NOTICE_DPI_IGNORED, SG_MUTANT_DICTATE_DPI_IGNORED: that
+#   SG_MUTANT_NOTICE_DPI_IGNORED, SG_MUTANT_DICTATE_DPI_IGNORED,
+#   SG_MUTANT_VOLUME_DPI_IGNORED, SG_MUTANT_NET_DPI_IGNORED,
+#   SG_MUTANT_OSK_DPI_IGNORED, SG_MUTANT_TOUCHKBD_DPI_IGNORED,
+#   SG_MUTANT_MAGNIFY_DPI_IGNORED, SG_MUTANT_BATTERY_DPI_IGNORED: that
 #   program fails 2.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -37,7 +45,8 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 for t in Xvfb "$MINGW"; do command -v "$t" >/dev/null || { echo "SKIP: $t missing"; exit 77; }; done
 [ -x "$WINE" ] || { echo "SKIP: no wine-sg at $WINE"; exit 77; }
-for x in sg-control sg-wordpad sg-store sg-charmap sg-clock sg-terminal sg-fontview sg-dictate sg-defender-notice sg-restart-notice; do
+for x in sg-control sg-wordpad sg-store sg-charmap sg-clock sg-terminal sg-fontview sg-dictate sg-defender-notice sg-restart-notice \
+         sg-volume sg-netflyout sg-osk sg-touchkbd sg-magnify; do
     [ -f "$HERE/build/${x}64.exe" ] || { echo "SKIP: build/${x}64.exe missing (make build)"; exit 77; }
 done
 
@@ -80,12 +89,38 @@ sg-terminal:SgTerminalWindow:SgTerminalView:
 sg-fontview:SgFontView:SgFontViewPane:Z:$FONT
 sg-dictate:SgDictateBar:-:/toggle
 sg-defender-notice:SgDefenderNotice:-:0123-abcd
-sg-restart-notice:SgRestartNotice:-:"
+sg-restart-notice:SgRestartNotice:-:
+sg-volume:SgVolumeFlyout:-:
+sg-netflyout:SgNetworkFlyout:-:--bridged
+sg-osk:OSKMainClass:-:
+sg-touchkbd:IPTip_Main_Window:-:/toggle
+sg-magnify:SgMagnifier:-:lens zoom:100"
+# the battery flyout, where a fake battery can be put over
+# /sys/class/power_supply in a mount namespace of its own (sudo -n, as
+# test/battery-check.sh): without a battery it shows nothing
+BATT=""
+if sudo -n true 2>/dev/null && command -v unshare >/dev/null && [ -f "$HERE/build/sg-battery64.exe" ]; then
+    mkdir -p "$T/ps/BAT0" "$T/ps/AC"
+    printf 'Battery\n' > "$T/ps/BAT0/type"; printf 'Discharging\n' > "$T/ps/BAT0/status"
+    printf '11400000\n' > "$T/ps/BAT0/voltage_now"; printf '4385965\n' > "$T/ps/BAT0/charge_full"
+    printf '2763158\n' > "$T/ps/BAT0/charge_now"; printf '877192\n' > "$T/ps/BAT0/current_now"
+    printf 'Mains\n' > "$T/ps/AC/type"; printf '0\n' > "$T/ps/AC/online"
+    APPS="$APPS
+sg-battery:SgBatteryFlyout:-:"
+    BATT=1
+fi
 echo "$APPS" | while IFS=: read -r exe cls child args; do
+    if [ "$exe" = sg-battery ]; then
+        sudo -n unshare -m sh -c "mount --bind '$T/ps' /sys/class/power_supply && exec sudo -n -u '$(id -un)' env \
+            HOME='$HOME' WINEPREFIX='$WINEPREFIX' WINEDEBUG=-all WINEDLLOVERRIDES='$WINEDLLOVERRIDES' DISPLAY='$DISPLAY' \
+            XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' WINESERVER='$WINESERVER' '$WINE' '$HERE/build/sg-battery64.exe'" >/dev/null 2>&1 &
+        sleep 3; continue
+    fi
     # shellcheck disable=SC2086
     "$WINE" "$HERE/build/${exe}64.exe" $args >/dev/null 2>&1 &
     sleep 3
 done
+[ -n "$BATT" ] || echo "NOTE  no sudo -n: the battery flyout is not checked (SG_MUTANT_BATTERY_DPI_IGNORED needs it)"
 sleep 6
 probe() { "$WINE" "$T/probe.exe" win "$1" ${2:+"$2"} 2>/dev/null | tr -d '\r'; }
 measure() {   # FILE: each program's line
@@ -123,7 +158,16 @@ echo "$APPS" | while IFS=: read -r exe cls child args; do
     w2=$(field "$b" size | cut -dx -f1); h2=$(field "$b" size | cut -dx -f2)
     ok=1
     [ "$(field "$b" dpi)" = 168 ] || ok=0
-    ratio "$w1" "$w2" 1.65 1.85 && ratio "$h1" "$h2" 1.65 1.85 || ok=0
+    if [ "$cls" = OSKMainClass ]; then
+        # the On-Screen Keyboard keeps its share of the screen (its keys grow
+        # with the window); its title bar takes the new scale: 30 -> 52 px
+        [ "$w2" = "$w1" ] && [ $((h2 - h1)) -ge 18 ] && [ $((h2 - h1)) -le 26 ] || ok=0
+    elif [ "$cls" = IPTip_Main_Window ]; then
+        # the touch keyboard: across the whole screen, 1.75 times as tall
+        [ "$w2" = "$w1" ] && ratio "$h1" "$h2" 1.65 1.85 || ok=0
+    else
+        ratio "$w1" "$w2" 1.65 1.85 && ratio "$h1" "$h2" 1.65 1.85 || ok=0
+    fi
     if [ "$child" != - ]; then
         ch1=$(field "$a" child | cut -dx -f2); ch2=$(field "$b" child | cut -dx -f2)
         ratio "$ch1" "$ch2" 1.6 1.9 || ok=0

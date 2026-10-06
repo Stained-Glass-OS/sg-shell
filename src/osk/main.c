@@ -58,6 +58,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "../sg-smooth.h"
+#include "../sg-dpi.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <mmsystem.h>
@@ -224,6 +225,11 @@ static BYTE g_alpha = 255;
 static BOOL g_appbar;
 static RECT g_undocked;
 static int g_title_h = 30;
+/* the keyboard at the display scale, a new one too (per-monitor v2, sg-dpi.h):
+ * its title bar, gaps and grips are 100%'s, S() at the DPI it is drawn at;
+ * the keys follow the window's size */
+static int g_dpi = 96;
+#define S(x) MulDiv((x), g_dpi, 96)
 static RECT g_btn_min, g_btn_close;
 
 /* the keyboard layout (see the header) */
@@ -286,10 +292,12 @@ static void save_placement(void)
     RECT r;
     if (g_docked || !g_wnd || IsIconic(g_wnd)) return;
     GetWindowRect(g_wnd, &r);
-    reg_put(L"WindowLeft", r.left);
-    reg_put(L"WindowTop", r.top);
-    reg_put(L"WindowWidth", r.right - r.left);
-    reg_put(L"WindowHeight", r.bottom - r.top);
+    /* in 100%'s pixels, as it kept them when Wine scaled it: the same place
+     * and size at any scale */
+    reg_put(L"WindowLeft", MulDiv(r.left, 96, g_dpi));
+    reg_put(L"WindowTop", MulDiv(r.top, 96, g_dpi));
+    reg_put(L"WindowWidth", MulDiv(r.right - r.left, 96, g_dpi));
+    reg_put(L"WindowHeight", MulDiv(r.bottom - r.top, 96, g_dpi));
 }
 
 /* ---- state -------------------------------------------------------------------------------- */
@@ -405,7 +413,7 @@ static void write_dump(void)
     {
         POINT a = { (g_btn_close.left + g_btn_close.right) / 2, (g_btn_close.top + g_btn_close.bottom) / 2 };
         POINT b = { (g_btn_min.left + g_btn_min.right) / 2, (g_btn_min.top + g_btn_min.bottom) / 2 };
-        POINT t = { 60, g_title_h / 2 };
+        POINT t = { S(60), g_title_h / 2 };
         ClientToScreen(g_wnd, &a); ClientToScreen(g_wnd, &b); ClientToScreen(g_wnd, &t);
         dumpf(f, L"CLOSE %ld %ld\nMINIMIZE %ld %ld\nTITLE %ld %ld\n", a.x, a.y, b.x, b.y, t.x, t.y);
     }
@@ -462,6 +470,19 @@ static void layout_changed(void)
 }
 
 /* ---- layout ------------------------------------------------------------------------------- */
+/* the title bar's font and height at DPI */
+static void osk_scale(int dpi)
+{
+    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+    g_dpi = dpi < 96 ? 96 : dpi;
+    g_title_h = S(30);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    ncm.lfCaptionFont.lfHeight = -S(13);
+    ncm.lfCaptionFont.lfWeight = FW_NORMAL;
+    if (g_font_title) DeleteObject(g_font_title);
+    g_font_title = CreateFontIndirectW(&ncm.lfCaptionFont);
+}
+
 static float units_wide(void)
 {
     float w = RCOLX + 1.15f;
@@ -473,10 +494,10 @@ static void layout(void)
 {
     RECT cr;
     float uw, uh;
-    int i, pad = 6, gap = 3;
+    int i, pad = S(6), gap = S(3);
     GetClientRect(g_wnd, &cr);
-    SetRect(&g_btn_close, cr.right - 46, 0, cr.right, g_title_h);
-    SetRect(&g_btn_min, cr.right - 92, 0, cr.right - 46, g_title_h);
+    SetRect(&g_btn_close, cr.right - S(46), 0, cr.right, g_title_h);
+    SetRect(&g_btn_min, cr.right - S(92), 0, cr.right - S(46), g_title_h);
     uw = (cr.right - 2 * pad) / units_wide();
     uh = (cr.bottom - g_title_h - 2 * pad) / 5.0f;
     for (i = 0; i < NKEYS; i++)
@@ -576,19 +597,19 @@ static void paint(HDC dc)
     /* the title bar: our own, so the window never becomes the foreground to be moved */
     SelectObject(dc, g_font_title);
     SetTextColor(dc, C_TEXT);
-    SetRect(&r, 12, 0, cr.right - 100, g_title_h);
+    SetRect(&r, S(12), 0, cr.right - S(100), g_title_h);
     {
-        HICON ic = LoadImageW(g_inst, MAKEINTRESOURCEW(1), IMAGE_ICON, 16, 16, 0);
-        if (ic) { DrawIconEx(dc, 10, (g_title_h - 16) / 2, ic, 16, 16, 0, NULL, DI_NORMAL); DestroyIcon(ic); r.left = 34; }
+        HICON ic = LoadImageW(g_inst, MAKEINTRESOURCEW(1), IMAGE_ICON, S(16), S(16), 0);
+        if (ic) { DrawIconEx(dc, S(10), (g_title_h - S(16)) / 2, ic, S(16), S(16), 0, NULL, DI_NORMAL); DestroyIcon(ic); r.left = S(34); }
     }
     DrawTextW(dc, L"On-Screen Keyboard", -1, &r, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     {
-        HPEN pen = CreatePen(PS_SOLID, 1, C_TEXT), op = SelectObject(dc, pen);
+        HPEN pen = CreatePen(PS_SOLID, S(1), C_TEXT), op = SelectObject(dc, pen);
         int cx = (g_btn_min.left + g_btn_min.right) / 2, cy = g_title_h / 2;
-        MoveToEx(dc, cx - 5, cy, NULL); LineTo(dc, cx + 6, cy);
+        MoveToEx(dc, cx - S(5), cy, NULL); LineTo(dc, cx + S(6), cy);
         cx = (g_btn_close.left + g_btn_close.right) / 2;
-        sg_line(dc, cx - 5, cy - 5, cx + 6, cy + 6);
-        sg_line(dc, cx + 5, cy - 5, cx - 6, cy + 6);
+        sg_line(dc, cx - S(5), cy - S(5), cx + S(6), cy + S(6));
+        sg_line(dc, cx + S(5), cy - S(5), cx - S(6), cy + S(6));
         SelectObject(dc, op); DeleteObject(pen);
     }
 
@@ -616,7 +637,7 @@ static void paint(HDC dc)
         else
         {
             /* word keys: at the left, as Windows draws them */
-            r.left += 6;
+            r.left += S(6);
             DrawTextW(dc, label, -1, &r, (wcslen(label) > 1 ? DT_LEFT : DT_CENTER) | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         }
     }
@@ -940,6 +961,45 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         InvalidateRect(hwnd, NULL, FALSE);
         write_dump();
         return 0;
+#ifndef SG_MUTANT_OSK_DPI_IGNORED
+    case WM_DPICHANGED:
+        /* a new display scale: the title bar at it, the window at the
+         * suggested size (the keys follow it) */
+    {
+        int was = g_dpi, title_was = g_title_h;
+        osk_scale((int)sg_dpi_new(wp));
+        if (g_docked)
+        {
+            /* docked: across the bottom again, as tall as docking makes it at
+             * the new scale; where it goes back to, at the new scale too */
+            RECT u = g_undocked;
+            SetRect(&g_undocked, MulDiv(u.left, g_dpi, was), MulDiv(u.top, g_dpi, was),
+                    MulDiv(u.right, g_dpi, was), MulDiv(u.bottom, g_dpi, was));
+            u = g_undocked;
+            set_docked(FALSE);
+            g_undocked = u;
+            set_docked(TRUE);
+        }
+        else
+        {
+            /* as wide as it was -- it is a share of the screen, and its keys
+             * grow with it; the title bar at the new scale. (The suggested
+             * rectangle, 1.75 times as wide, ran off the screen.) */
+            RECT r, work;
+            int h;
+            GetWindowRect(hwnd, &r);
+            h = r.bottom - r.top - title_was + g_title_h;
+            SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+            if (r.top + h > work.bottom) r.top = max(work.top, work.bottom - h);
+            SetWindowPos(hwnd, NULL, r.left, r.top, r.right - r.left, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            (void)lp;
+        }
+        layout();
+        InvalidateRect(hwnd, NULL, FALSE);
+        write_dump();
+        return 0;
+    }
+#endif
     case WM_MOVE:
         write_dump();
         return 0;
@@ -969,7 +1029,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         POINT p = { x, y };
         GetClientRect(hwnd, &cr);
         if (PtInRect(&g_btn_close, p) || PtInRect(&g_btn_min, p)) return 0;
-        if (!g_docked && x >= cr.right - 14 && y >= cr.bottom - 14) g_drag = DRAG_SIZE;
+        if (!g_docked && x >= cr.right - S(14) && y >= cr.bottom - S(14)) g_drag = DRAG_SIZE;
         else if (!g_docked && y < g_title_h) g_drag = DRAG_MOVE;
         if (g_drag != DRAG_NONE)
         {
@@ -995,8 +1055,8 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 SetWindowPos(hwnd, NULL, g_drag_rect.left + dx, g_drag_rect.top + dy, 0, 0,
                              SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             else
-                SetWindowPos(hwnd, NULL, 0, 0, max(360, g_drag_rect.right - g_drag_rect.left + dx),
-                             max(160, g_drag_rect.bottom - g_drag_rect.top + dy), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hwnd, NULL, 0, 0, max(S(360), g_drag_rect.right - g_drag_rect.left + dx),
+                             max(S(160), g_drag_rect.bottom - g_drag_rect.top + dy), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
             return 0;
         }
         h = key_at(x, y);
@@ -1138,13 +1198,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     if (g_hover_ms < 250 || g_hover_ms > 5000) g_hover_ms = 1000;
     g_fade = reg_get(L"Fade", 0) != 0;
 
-    {
-        NONCLIENTMETRICSW ncm = { sizeof(ncm) };
-        SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-        ncm.lfCaptionFont.lfHeight = -13;
-        ncm.lfCaptionFont.lfWeight = FW_NORMAL;
-        g_font_title = CreateFontIndirectW(&ncm.lfCaptionFont);
-    }
+    sg_dpi_init();      /* the display scale, a new one too (WM_DPICHANGED) */
+    osk_scale((int)sg_dpi_for(NULL));
 
     wc.lpfnWndProc = wnd_proc;
     wc.hInstance = inst;
@@ -1157,12 +1212,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     /* Windows' place: centred across the bottom of the work area, about 70% of its width */
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     w = (work.right - work.left) * 72 / 100;
-    if (w < 720) w = min(720, work.right - work.left);
-    h = (int)(w / units_wide() * 5 * 0.72f) + g_title_h + 12;
+    if (w < S(720)) w = min(S(720), work.right - work.left);
+    h = (int)(w / units_wide() * 5 * 0.72f) + g_title_h + S(12);
     x = work.left + (work.right - work.left - w) / 2;
     y = work.bottom - h;
-    w = reg_get(L"WindowWidth", w); h = reg_get(L"WindowHeight", h);
-    x = reg_get(L"WindowLeft", x); y = reg_get(L"WindowTop", y);
+    w = S(reg_get(L"WindowWidth", MulDiv(w, 96, g_dpi))); h = S(reg_get(L"WindowHeight", MulDiv(h, 96, g_dpi)));
+    x = S(reg_get(L"WindowLeft", MulDiv(x, 96, g_dpi))); y = S(reg_get(L"WindowTop", MulDiv(y, 96, g_dpi)));
     if (x + w > work.right || x < work.left - w / 2 || y < work.top || y + h > work.bottom + h / 2)
     {
         x = work.left + (work.right - work.left - w) / 2;
