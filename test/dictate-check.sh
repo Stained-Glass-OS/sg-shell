@@ -181,6 +181,18 @@ else
 fi
 [ "$(P foreground)" = Notepad ] && pass "Notepad kept the focus" || fail "the focus went to $(P foreground)"
 sleep 0.5; import -window root "$OUT/dictate-bar.png"
+# The gear, the microphone and the close mark are drawn soft-edged (sg-smooth.h):
+# a 24x24 crop round each holds the glyph's colour, what is under it and the
+# blends between. GDI's own drawing gave two colours (mutant SG_MUTANT_JAGGED_DICTATE).
+if [ $# = 4 ]; then
+    glyph_colours() { convert "$OUT/dictate-bar.png" -crop "24x24+$(( $1 - 12 ))+$(( $2 - 12 ))" +repage -format %k info: 2>/dev/null; }
+    bcy=$(( ($2 + $4) / 2 ))
+    gc=$(glyph_colours $(( $1 + 28 )) $bcy); mc=$(glyph_colours $(( $1 + 84 )) $bcy); xc=$(glyph_colours $(( $3 - 28 )) $bcy)
+    [ "${gc:-0}" -ge 6 ] && [ "${mc:-0}" -ge 6 ] && [ "${xc:-0}" -ge 6 ] \
+        && pass "the gear, microphone and close glyphs are smooth ($gc, $mc, $xc colours)" \
+        || fail "jagged toolbar glyphs: gear ${gc:-?}, mic ${mc:-?}, close ${xc:-?} colours (want 6 or more each)"
+    convert "$OUT/dictate-bar.png" -crop "120x56+$1+$2" +repage -scale 400% "$OUT/dictate-glyphs.png" 2>/dev/null
+fi
 grep -q '"cmd": "start".*"continuous": true.*"spoken": false.*"fresh": true' "$FAKE_LOG" \
     && pass "the settings went with the request (continuous, spoken punctuation off)" \
     || fail "start request: $(grep start "$FAKE_LOG" | head -1)"

@@ -38,6 +38,7 @@
 #define _WIN32_WINNT 0x0601
 #include <windows.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 #include <shellapi.h>
 #include <math.h>
 #include <stdarg.h>
@@ -1041,16 +1042,117 @@ static void update_hook(void)
 
 /* ---- drawing ---------------------------------------------------------------------------------- */
 
+/* The toolbar's round buttons and glyphs, drawn soft-edged (sg-smooth.h:
+ * four times larger, averaged down): GDI's ellipses, polygons and pens gave
+ * the microphone, the gear and the circles stepped edges (David 2026-10-06:
+ * "low quality"). g_icon_scale: the glyphs' size at the window's display
+ * scale (1.0 = as designed at 100%). */
+static double g_icon_scale = 1.0;
+
+struct circle_art { COLORREF c; };
+static void circle_art(HDC dc, int w, int h, const void *arg)
+{
+    HBRUSH b = CreateSolidBrush(sg_smooth_colour(((const struct circle_art *)arg)->c)), ob = SelectObject(dc, b);
+    HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
+    Ellipse(dc, 0, 0, w + 1, h + 1);
+    SelectObject(dc, op);
+    SelectObject(dc, ob);
+    DeleteObject(b);
+}
+
 static void fill_circle(HDC dc, int cx, int cy, int r, COLORREF c)
 {
+#ifndef SG_MUTANT_JAGGED_DICTATE
+    struct circle_art a = { c };
+    sg_smooth(dc, cx - r, cy - r, 2 * r + 1, 2 * r + 1, circle_art, &a);
+#else
     HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
     Ellipse(dc, cx - r, cy - r, cx + r + 1, cy + r + 1);
     SelectObject(dc, op);
     SelectObject(dc, ob);
     DeleteObject(b);
+#endif
 }
 
+/* a glyph on a square HALF units either side of its centre, u big pixels a unit */
+struct glyph_art { int which; COLORREF c, bg; double half; };
+enum { GLYPH_MIC, GLYPH_GEAR, GLYPH_CLOSE };
+
+static void glyph_art(HDC dc, int w, int h, const void *arg)
+{
+    const struct glyph_art *g = arg;
+    double u = w / (2.0 * g->half), cx = w / 2.0, cy = h / 2.0;
+    LOGBRUSH lb = { BS_SOLID, sg_smooth_colour(g->c), 0 };
+#define GX(v) ((int)lround(cx + (v) * u))
+#define GY(v) ((int)lround(cy + (v) * u))
+    switch (g->which)
+    {
+    case GLYPH_MIC:   /* a capsule on a stand */
+    {
+        HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, (DWORD)lround(1.6 * u), &lb, 0, NULL);
+        HBRUSH b = CreateSolidBrush(lb.lbColor);
+        HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN)), ob = SelectObject(dc, b);
+        RoundRect(dc, GX(-3.6), GY(-10), GX(3.6), GY(3.5), (int)lround(7.2 * u), (int)lround(7.2 * u));
+        SelectObject(dc, pen);
+        SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Arc(dc, GX(-7), GY(-6.5), GX(7), GY(7.5), GX(7), GY(0.5), GX(-7), GY(0.5));
+        MoveToEx(dc, GX(0), GY(7.5), NULL); LineTo(dc, GX(0), GY(11));
+        MoveToEx(dc, GX(-4), GY(11), NULL); LineTo(dc, GX(4), GY(11));
+        SelectObject(dc, op); SelectObject(dc, ob);
+        DeleteObject(pen); DeleteObject(b);
+        break;
+    }
+    case GLYPH_GEAR:  /* eight square teeth round a ring, a hole in the middle */
+    {
+        POINT pts[32];
+        int t, q;
+        HBRUSH b = CreateSolidBrush(lb.lbColor), hole = CreateSolidBrush(sg_smooth_colour(g->bg));
+        HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN)), ob = SelectObject(dc, b);
+        for (t = 0; t < 8; t++)
+        {
+            static const double ang[4] = { -13, -7, 7, 13 }, rad[4] = { 6.8, 9.2, 9.2, 6.8 };
+            for (q = 0; q < 4; q++)
+            {
+                double a = (t * 45 + ang[q]) * 3.14159265358979 / 180;
+                pts[t * 4 + q].x = GX(rad[q] * sin(a));
+                pts[t * 4 + q].y = GY(-rad[q] * cos(a));
+            }
+        }
+        Polygon(dc, pts, 32);
+        SelectObject(dc, hole);
+        Ellipse(dc, GX(-3.2), GY(-3.2), GX(3.2), GY(3.2));
+        SelectObject(dc, op); SelectObject(dc, ob);
+        DeleteObject(b); DeleteObject(hole);
+        break;
+    }
+    case GLYPH_CLOSE:  /* an X */
+    {
+        HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, (DWORD)lround(1.2 * u), &lb, 0, NULL);
+        HGDIOBJ op = SelectObject(dc, pen);
+        MoveToEx(dc, GX(-5), GY(-5), NULL); LineTo(dc, GX(5), GY(5));
+        MoveToEx(dc, GX(5), GY(-5), NULL); LineTo(dc, GX(-5), GY(5));
+        SelectObject(dc, op);
+        DeleteObject(pen);
+        break;
+    }
+    }
+#undef GX
+#undef GY
+}
+
+static void draw_glyph(HDC dc, int which, int cx, int cy, COLORREF c, COLORREF bg)
+{
+    struct glyph_art g = { which, c, bg, 12 };
+    int half = (int)lround(12 * g_icon_scale);
+    sg_smooth(dc, cx - half, cy - half, 2 * half, 2 * half, glyph_art, &g);
+}
+
+#ifndef SG_MUTANT_JAGGED_DICTATE
+static void draw_mic(HDC dc, int cx, int cy, COLORREF c) { draw_glyph(dc, GLYPH_MIC, cx, cy, c, c); }
+static void draw_gear(HDC dc, int cx, int cy, COLORREF c, COLORREF bg) { draw_glyph(dc, GLYPH_GEAR, cx, cy, c, bg); }
+static void draw_close(HDC dc, int cx, int cy, COLORREF c) { draw_glyph(dc, GLYPH_CLOSE, cx, cy, c, c); }
+#else
 /* A microphone: a capsule on a stand. */
 static void draw_mic(HDC dc, int cx, int cy, COLORREF c)
 {
@@ -1098,6 +1200,7 @@ static void draw_close(HDC dc, int cx, int cy, COLORREF c)
     SelectObject(dc, op);
     DeleteObject(pen);
 }
+#endif
 
 static const WCHAR *status_text(void)
 {

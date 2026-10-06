@@ -1,3 +1,12 @@
+sg-shell (0.1.0-134) unstable; urgency=medium
+
+  * Voice typing's toolbar draws its round buttons, microphone, gear and
+    close mark soft-edged (sg-smooth.h: drawn four times larger and averaged
+    down) instead of GDI's stepped edges. Test: test/dictate-check.sh
+    counts the colours round each glyph (mutant SG_MUTANT_JAGGED_DICTATE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 09:15:14 -0700
+
 sg-shell (0.1.0-133) unstable; urgency=medium
 
   * Settings > Devices > Printers & scanners (ms-settings:printers, which
