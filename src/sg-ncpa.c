@@ -21,6 +21,7 @@
  */
 #define _WIN32_WINNT 0x0601
 #include <windows.h>
+#include "sg-smooth.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <uxtheme.h>
@@ -1039,14 +1040,14 @@ static void draw_adapter_icon(HDC dc, int x, int y, const struct adapter *a)
         for (i = 0; i < 3; i++)
         {
             int rad = 10 + i * 9;
-            Arc(dc, x + 24 - rad, y + 38 - rad, x + 24 + rad, y + 38 + rad, x + 24 + rad, y + 38 - rad, x + 24 - rad, y + 38 - rad);
+            sg_arc(dc, x + 24 - rad, y + 38 - rad, x + 24 + rad, y + 38 + rad, x + 24 + rad, y + 38 - rad, x + 24 - rad, y + 38 - rad);
         }
         SelectObject(dc, br);
-        Ellipse(dc, x + 20, y + 34, x + 28, y + 42);
+        sg_ellipse(dc, x + 20, y + 34, x + 28, y + 42);
     }
     else
     {
-        RoundRect(dc, x + 6, y + 10, x + 42, y + 34, 4, 4);   /* the card */
+        sg_round_rect(dc, x + 6, y + 10, x + 42, y + 34, 4, 4);   /* the card */
         Rectangle(dc, x + 12, y + 34, x + 18, y + 40);        /* its connector */
         MoveToEx(dc, x + 15, y + 40, NULL);
         LineTo(dc, x + 15, y + 46);                           /* the cable */
@@ -1060,10 +1061,10 @@ static void draw_adapter_icon(HDC dc, int x, int y, const struct adapter *a)
         HPEN white = CreatePen(PS_SOLID, 2, RGB(0xFF, 0xFF, 0xFF));
         oldb = SelectObject(dc, red);
         oldp = SelectObject(dc, GetStockObject(NULL_PEN));
-        Ellipse(dc, x + 28, y + 30, x + 46, y + 48);
+        sg_ellipse(dc, x + 28, y + 30, x + 46, y + 48);
         SelectObject(dc, white);
-        MoveToEx(dc, x + 33, y + 35, NULL); LineTo(dc, x + 41, y + 43);
-        MoveToEx(dc, x + 41, y + 35, NULL); LineTo(dc, x + 33, y + 43);
+        sg_line(dc, x + 33, y + 35, x + 41, y + 43);
+        sg_line(dc, x + 41, y + 35, x + 33, y + 43);
         SelectObject(dc, oldb); SelectObject(dc, oldp);
         DeleteObject(red); DeleteObject(white);
     }
@@ -1074,7 +1075,7 @@ static void draw_shield(HDC dc, int x, int y)
     POINT p[5] = { { x + 6, y }, { x + 12, y + 2 }, { x + 11, y + 9 }, { x + 6, y + 13 }, { x + 1, y + 9 } };
     HBRUSH b = CreateSolidBrush(RGB(0x1E, 0x6F, 0xD9)), ob = SelectObject(dc, b);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Polygon(dc, p, 5);
+    sg_polygon(dc, p, 5);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b);
     p[0].x = x + 12; p[3].x = x + 6;

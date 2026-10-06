@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -152,6 +153,7 @@ static HPEN gpen(double w)
     return ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND | PS_JOIN_ROUND, pw > 0 ? pw : 1, &lb, 0, NULL);
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void gpoly(HDC dc, double w, const double *xy, int n, BOOL closed)
 {
     POINT p[24];
@@ -170,6 +172,7 @@ static void gline(HDC dc, double w, double x1, double y1, double x2, double y2)
     gpoly(dc, w, xy, 2, FALSE);
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void gfill(HDC dc, COLORREF c, const double *xy, int n)
 {
     POINT p[24];
@@ -193,6 +196,7 @@ static void gfillrect(HDC dc, COLORREF c, double l, double t, double r, double b
     gfill(dc, c, xy, 4);
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void gellipse(HDC dc, double w, BOOL fill, double l, double t, double r, double b)
 {
     HPEN pen = gpen(w);
@@ -202,6 +206,7 @@ static void gellipse(HDC dc, double w, BOOL fill, double l, double t, double r, 
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void garc(HDC dc, double w, double l, double t, double r, double b, double x1, double y1, double x2, double y2)
 {
     HPEN pen = gpen(w);
@@ -350,7 +355,7 @@ static void round_fill(HDC dc, const RECT *r, COLORREF c, COLORREF border, int r
     HBRUSH br = CreateSolidBrush(c);
     HPEN pen = CreatePen(PS_SOLID, 1, border);
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, pen);
-    RoundRect(dc, r->left, r->top, r->right, r->bottom, radius, radius);
+    sg_round_rect(dc, r->left, r->top, r->right, r->bottom, radius, radius);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(br); DeleteObject(pen);
 }
@@ -574,6 +579,7 @@ static void push_snap(IMG *base, STROKE **strokes, int n)
     g_cur = g_nhist - 1;
 }
 
+/* sg-smooth: the user's own ink on the snip, drawn as it was made */
 static void draw_stroke_gdi(HDC dc, const STROKE *st, COLORREF c)
 {
     LOGBRUSH lb = { BS_SOLID, c, 0 };
@@ -766,6 +772,7 @@ static int window_at(POINT p)
     return -1;
 }
 
+/* sg-smooth: the free-form selection's outline follows the pointer pixel by pixel */
 static void ov_paint(HDC hdc)
 {
     HDC mem = CreateCompatibleDC(hdc), src = CreateCompatibleDC(hdc);

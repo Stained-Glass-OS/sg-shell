@@ -41,6 +41,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -1019,7 +1020,8 @@ static RECT close_rect(int i)
     return c;
 }
 
-static void draw_glyph_x(HDC dc, RECT r, COLORREF c)
+/* sg-smooth: drawn in a region (draw_glyph_x, below) */
+static void draw_glyph_x_raw(HDC dc, RECT r, COLORREF c)
 {
     HPEN p = CreatePen(PS_SOLID, S(1) > 1 ? S(1) : 1, c);
     HGDIOBJ o = SelectObject(dc, p);
@@ -1027,6 +1029,16 @@ static void draw_glyph_x(HDC dc, RECT r, COLORREF c)
     MoveToEx(dc, cx - a, cy - a, NULL); LineTo(dc, cx + a + 1, cy + a + 1);
     MoveToEx(dc, cx + a, cy - a, NULL); LineTo(dc, cx - a - 1, cy + a + 1);
     SelectObject(dc, o); DeleteObject(p);
+}
+
+/* drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+static void draw_glyph_x(HDC dc, RECT r, COLORREF c)
+{
+    struct sg_ss ss;
+    int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2, h = S(7);
+    HDC big = sg_ss_begin(&ss, dc, cx - h, cy - h, 2 * h + 1, 2 * h + 1, S(1) > 1 ? S(1) : 1);
+    draw_glyph_x_raw(big, r, c);
+    sg_ss_end(&ss);
 }
 
 static void paint_strip(HDC dc, RECT *client)
@@ -1086,7 +1098,7 @@ static void paint_strip(HDC dc, RECT *client)
             MoveToEx(dc, cx - S(6), cy, NULL); LineTo(dc, cx + S(7), cy);
             MoveToEx(dc, cx, cy - S(6), NULL); LineTo(dc, cx, cy + S(7));
         } else {
-            MoveToEx(dc, cx - S(4), cy - S(2), NULL); LineTo(dc, cx, cy + S(2)); LineTo(dc, cx + S(5), cy - S(3));
+            { POINT v[3] = { { cx - S(4), cy - S(2) }, { cx, cy + S(2) }, { cx + S(5), cy - S(3) } }; sg_polyline(dc, v, 3); }
         }
         SelectObject(dc, o); DeleteObject(p);
     }
@@ -1467,16 +1479,16 @@ static void draw_box(HDC dc, uint32_t ch, int x, int y, int cw, int chh, COLORRE
         HGDIOBJ o = SelectObject(dc, pen), ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
         int r = (cw < chh ? cw : chh) / 2, ax = cx - (lw - 1) / 2, ay = cy - (lw - 1) / 2;
         if (ch == 0x256D) {        /* ╭ right and down */
-            Arc(dc, ax, ay, ax + 2 * r + 1, ay + 2 * r + 1, ax + r, ay, ax, ay + r);
+            sg_arc(dc, ax, ay, ax + 2 * r + 1, ay + 2 * r + 1, ax + r, ay, ax, ay + r);
             box_fill(dc, ax + r, ay, x + cw, ay + lw, fg); box_fill(dc, ax, ay + r, ax + lw, y + chh, fg);
         } else if (ch == 0x256E) { /* ╮ left and down */
-            Arc(dc, ax - 2 * r, ay, ax + 1, ay + 2 * r + 1, ax, ay + r, ax - r, ay);
+            sg_arc(dc, ax - 2 * r, ay, ax + 1, ay + 2 * r + 1, ax, ay + r, ax - r, ay);
             box_fill(dc, x, ay, ax - r + 1, ay + lw, fg); box_fill(dc, ax, ay + r, ax + lw, y + chh, fg);
         } else if (ch == 0x256F) { /* ╯ up and left */
-            Arc(dc, ax - 2 * r, ay - 2 * r, ax + 1, ay + 1, ax - r, ay, ax, ay - r);
+            sg_arc(dc, ax - 2 * r, ay - 2 * r, ax + 1, ay + 1, ax - r, ay, ax, ay - r);
             box_fill(dc, x, ay, ax - r + 1, ay + lw, fg); box_fill(dc, ax, y, ax + lw, ay - r + 1, fg);
         } else {                   /* ╰ up and right */
-            Arc(dc, ax, ay - 2 * r, ax + 2 * r + 1, ay + 1, ax, ay - r, ax + r, ay);
+            sg_arc(dc, ax, ay - 2 * r, ax + 2 * r + 1, ay + 1, ax, ay - r, ax + r, ay);
             box_fill(dc, ax + r, ay, x + cw, ay + lw, fg); box_fill(dc, ax, y, ax + lw, ay - r + 1, fg);
         }
         SelectObject(dc, ob); SelectObject(dc, o); DeleteObject(pen);

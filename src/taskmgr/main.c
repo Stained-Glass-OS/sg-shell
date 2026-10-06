@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "taskmgr.h"
+#include "../sg-smooth.h"
 /* Stained Glass: the app mode picks the palette (taskmgr.h); switched live */
 BOOL sgm_dark;
 void sgm_follow(HWND hwnd)
@@ -848,9 +849,9 @@ static void graph(HDC dc, RECT r, const double *hist, double max, BOOL big)
     pts[61].x = r.left; pts[61].y = r.bottom - 1;
     SelectObject(dc, GetStockObject(NULL_PEN));
     ob = SelectObject(dc, shade);
-    Polygon(dc, pts, 62);
+    Polygon(dc, pts, 62);   /* sg-smooth: the shade under the line, its edge is the smooth line drawn next */
     SelectObject(dc, line_pen);
-    Polyline(dc, pts, 60);
+    sg_polyline(dc, pts, 60);
     SelectObject(dc, border);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
     Rectangle(dc, r.left, r.top, r.right, r.bottom);
@@ -1383,9 +1384,9 @@ static void paint_main(HDC dc, RECT *rc)
         int cx = t.left + S(9), cy = (t.top + t.bottom) / 2, rad = S(8), a = S(3);
         HPEN pen = CreatePen(PS_SOLID, max(1, S(1)), g_hot_link ? C_ACCENT : C_SUBTLE);
         HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Ellipse(dc, cx - rad, cy - rad, cx + rad + 1, cy + rad + 1);
-        if (g_more) { MoveToEx(dc, cx - a, cy + a / 2 + 1, NULL); LineTo(dc, cx, cy - a / 2); LineTo(dc, cx + a + 1, cy + a / 2 + 2); }
-        else { MoveToEx(dc, cx - a, cy - a / 2, NULL); LineTo(dc, cx, cy + a / 2 + 1); LineTo(dc, cx + a + 1, cy - a / 2 - 1); }
+        sg_ellipse(dc, cx - rad, cy - rad, cx + rad + 1, cy + rad + 1);
+        if (g_more) { POINT v[3] = { { cx - a, cy + a / 2 + 1 }, { cx, cy - a / 2 }, { cx + a + 1, cy + a / 2 + 2 } }; sg_polyline(dc, v, 3); }
+        else { POINT v[3] = { { cx - a, cy - a / 2 }, { cx, cy + a / 2 + 1 }, { cx + a + 1, cy - a / 2 - 1 } }; sg_polyline(dc, v, 3); }
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
         t.left += S(24);
         SelectObject(dc, g_font);
@@ -1399,7 +1400,7 @@ static void paint_main(HDC dc, RECT *rc)
         HPEN pen = CreatePen(PS_SOLID, 1, en ? (g_hot_button ? C_ACCENT : (sgm_dark ? RGB(90, 90, 90) : RGB(190, 190, 190))) : (sgm_dark ? RGB(60, 60, 60) : RGB(220, 220, 220)));
         HBRUSH br = CreateSolidBrush(en && g_hot_button ? C_HOVER : (sgm_dark ? RGB(51, 51, 51) : RGB(253, 253, 253)));
         HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, br);
-        RoundRect(dc, b.left, b.top, b.right, b.bottom, S(4), S(4));
+        sg_round_rect(dc, b.left, b.top, b.right, b.bottom, S(4), S(4));
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen); DeleteObject(br);
         SelectObject(dc, g_font);
         SetTextColor(dc, en ? C_TEXT : (sgm_dark ? RGB(110, 110, 110) : RGB(160, 160, 160)));

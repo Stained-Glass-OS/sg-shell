@@ -34,6 +34,7 @@
 #include <commdlg.h>
 #include "resource.h"
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 
 #define CLASS_NAME L"SgPdfWindow"
 #define SETTINGS_KEY L"Software\\Stained Glass\\PDF Viewer"
@@ -265,7 +266,8 @@ static void line(HDC dc, int x1, int y1, int x2, int y2)
     LineTo(dc, x2, y2);
 }
 
-static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
+/* sg-smooth: drawn in a region (draw_glyph, below) */
+static void draw_glyph_raw(HDC dc, int glyph, int cx, int cy, COLORREF col)
 {
     HPEN pen = CreatePen(PS_SOLID, max(1, dpx(1)), col), op = SelectObject(dc, pen);
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -345,6 +347,16 @@ static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pen);
+}
+
+/* the glyph drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+static void draw_glyph(HDC dc, int glyph, int cx, int cy, COLORREF col)
+{
+    struct sg_ss ss;
+    int h = dpx(12);
+    HDC big = sg_ss_begin(&ss, dc, cx - h, cy - h, 2 * h + 1, 2 * h + 1, max(1, dpx(1)));
+    draw_glyph_raw(big, glyph, cx, cy, col);
+    sg_ss_end(&ss);
 }
 
 static BOOL btn_enabled(int i)

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "sg-netclient.h"
 #include "sg-mode.h"
+#include "sg-smooth.h"
 #include "sg-round.h"
 
 #define FLY_W 360
@@ -216,6 +217,7 @@ static enum icon_kind icon_kind(void)
  * cross when the radio is off or nothing is in range; a monitor for a wired
  * connection (with a cross when there is none, and no Wi-Fi adapter). Drawn
  * at four times the size and scaled down, so it is legible at 16 px. */
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static HICON make_icon(int size)
 {
     enum { K = 4 };
@@ -417,10 +419,10 @@ static void draw_wifi_glyph(HDC dc, int x, int y, int signal, BOOL lit)
         if (i == 0)
         {
             HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
-            Ellipse(dc, x + 12, y + 20, x + 17, y + 25);
+            sg_ellipse(dc, x + 12, y + 20, x + 17, y + 25);
             SelectObject(dc, ob); DeleteObject(b);
         }
-        else Arc(dc, x + 14 - rad, y + 22 - rad, x + 15 + rad, y + 23 + rad, x + 15 + rad, y + 22 - rad, x + 14 - rad, y + 22 - rad);
+        else sg_arc(dc, x + 14 - rad, y + 22 - rad, x + 15 + rad, y + 23 + rad, x + 15 + rad, y + 22 - rad, x + 14 - rad, y + 22 - rad);
         SelectObject(dc, op); DeleteObject(pen);
     }
 }
@@ -431,7 +433,7 @@ static void draw_lock(HDC dc, int x, int y)
     HBRUSH b = CreateSolidBrush(COL_TEXT), ob = SelectObject(dc, b);
     Rectangle(dc, x, y + 4, x + 7, y + 9);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Arc(dc, x + 1, y, x + 7, y + 8, x + 7, y + 4, x + 1, y + 4);
+    sg_arc(dc, x + 1, y, x + 7, y + 8, x + 7, y + 4, x + 1, y + 4);
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen); DeleteObject(b);
 }
 
@@ -582,8 +584,8 @@ static void on_paint(HWND hwnd)
                     Rectangle(dc, box.left, box.top, box.right, box.bottom);
                     if (g_autoconnect)
                     {
-                        MoveToEx(dc, box.left + 3, box.top + 8, NULL); LineTo(dc, box.left + 7, box.top + 12);
-                        LineTo(dc, box.left + 13, box.top + 4);
+                        POINT tick[3] = { { box.left + 3, box.top + 8 }, { box.left + 7, box.top + 12 }, { box.left + 13, box.top + 4 } };
+                        sg_polyline(dc, tick, 3);
                     }
                     SelectObject(dc, op); SelectObject(dc, ofb); DeleteObject(pen); DeleteObject(fill);
                     lbl.left += 24;

@@ -20,6 +20,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "../sg-smooth.h"
 #include "wallpaper.h"
 #include <commdlg.h>
 #include <shlobj.h>
@@ -336,9 +337,9 @@ static LRESULT CALLBACK preview_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         b = CreateSolidBrush(COL_BG); FillRect(dc, &r, b); DeleteObject(b);
         b = CreateSolidBrush(RGB(0x2E, 0x38, 0x48));
         { HGDIOBJ o = SelectObject(dc, b), p = SelectObject(dc, GetStockObject(NULL_PEN));
-          RoundRect(dc, 0, 0, r.right, r.bottom - S(18), S(10), S(10));
+          sg_round_rect(dc, 0, 0, r.right, r.bottom - S(18), S(10), S(10));
           Rectangle(dc, r.right / 2 - S(14), r.bottom - S(20), r.right / 2 + S(14), r.bottom - S(6));
-          RoundRect(dc, r.right / 2 - S(50), r.bottom - S(8), r.right / 2 + S(50), r.bottom, S(6), S(6));
+          sg_round_rect(dc, r.right / 2 - S(50), r.bottom - S(8), r.right / 2 + S(50), r.bottom, S(6), S(6));
           SelectObject(dc, o); SelectObject(dc, p); }
         DeleteObject(b);
         SetRect(&scr, S(8), S(8), r.right - S(8), r.bottom - S(26));

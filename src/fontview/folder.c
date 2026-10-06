@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "fontview.h"
+#include "../sg-smooth.h"
 #include <shellapi.h>
 #include <commdlg.h>
 #include <shlwapi.h>
@@ -191,7 +192,7 @@ static void draw_page(HDC dc, int x, int y, int w, int h)
     pts[4].x = x; pts[4].y = y + h;
     op = SelectObject(dc, pen);
     ob = SelectObject(dc, br);
-    Polygon(dc, pts, 5);
+    sg_polygon(dc, pts, 5);
     MoveToEx(dc, x + w - fold, y, NULL);
     LineTo(dc, x + w - fold, y + fold);
     LineTo(dc, x + w, y + fold);

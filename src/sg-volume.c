@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 #include "sg-round.h"
 
 #define FLY_W 360
@@ -212,6 +213,7 @@ static void describe(WCHAR *out, int cch)
 
 /* --- the icon, drawn here at four times the size and scaled down ------------------ */
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static HICON make_icon(int size, COLORREF fg)
 {
     enum { K = 4 };
@@ -361,7 +363,7 @@ static void fly_paint(HWND hwnd)
         HPEN op, edge = CreatePen(PS_SOLID, 2, bg);
         b = CreateSolidBrush(muted() ? subtle : accent);
         ob = SelectObject(mem, b); op = SelectObject(mem, edge);
-        Ellipse(mem, x - 9, (t.top + t.bottom) / 2 - 9, x + 10, (t.top + t.bottom) / 2 + 10);
+        sg_ellipse(mem, x - 9, (t.top + t.bottom) / 2 - 9, x + 10, (t.top + t.bottom) / 2 + 10);
         SelectObject(mem, ob); SelectObject(mem, op);
         DeleteObject(b); DeleteObject(edge);
     }

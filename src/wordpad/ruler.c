@@ -11,6 +11,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "wordpad.h"
+#include "../sg-smooth.h"
 
 enum { D_NONE, D_FIRST, D_HANGING, D_LEFT, D_RIGHT, D_TAB };
 static int g_drag, g_drag_tab, g_drag_val;
@@ -93,7 +94,7 @@ static void marker(HDC dc, int x, int y, int kind)
     if (kind == 0) { p[0].x = x - w; p[0].y = y; p[1].x = x + w; p[1].y = y; p[2].x = x + w; p[2].y = y + S(4); p[3].x = x; p[3].y = y + S(8); p[4].x = x - w; p[4].y = y + S(4); }
     else if (kind == 1) { p[0].x = x; p[0].y = y; p[1].x = x + w; p[1].y = y + S(4); p[2].x = x + w; p[2].y = y + S(8); p[3].x = x - w; p[3].y = y + S(8); p[4].x = x - w; p[4].y = y + S(4); }
     else { Rectangle(dc, x - w, y, x + w + 1, y + S(5)); n = 0; }
-    if (n) Polygon(dc, p, n);
+    if (n) sg_polygon(dc, p, n);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b); DeleteObject(pen);
 }
 

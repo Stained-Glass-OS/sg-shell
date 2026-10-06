@@ -24,6 +24,7 @@
  */
 #include <windows.h>
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 #include <windowsx.h>
 #include <richedit.h>
 #include <commctrl.h>
@@ -393,7 +394,7 @@ static void dot(HDC dc, int x, int y, int r, COLORREF c)
 {
     HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, x - r, y - r, x + r + 1, y + r + 1);
+    sg_ellipse(dc, x - r, y - r, x + r + 1, y + r + 1);
     SelectObject(dc, op);
     DeleteObject(SelectObject(dc, ob));
 }

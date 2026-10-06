@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "taskmgr.h"
+#include "../sg-smooth.h"
 
 #define GRID_CLASS L"SgTaskmgrGrid"
 
@@ -175,7 +176,7 @@ static void paint(grid_t *g, HDC dc, RECT *rc)
                 HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, GetStockObject(NULL_PEN));
                 if (g->sortdesc) { p[0].x = cx - w; p[0].y = cy; p[1].x = cx + w; p[1].y = cy; p[2].x = cx; p[2].y = cy + w; }
                 else { p[0].x = cx - w; p[0].y = cy + w; p[1].x = cx + w; p[1].y = cy + w; p[2].x = cx; p[2].y = cy; }
-                Polygon(dc, p, 3);
+                sg_polygon(dc, p, 3);
                 SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br);
             }
         }

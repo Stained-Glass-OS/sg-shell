@@ -57,6 +57,7 @@
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../sg-smooth.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <mmsystem.h>
@@ -527,9 +528,9 @@ static BOOL draw_glyph(HDC dc, const struct key *k)
     {
         POINT pt[5] = { { cx - 2 * s, cy }, { cx - s, cy - s }, { cx + 2 * s, cy - s }, { cx + 2 * s, cy + s }, { cx - s, cy + s } };
         SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Polygon(dc, pt, 5);
-        MoveToEx(dc, cx - s / 3, cy - s / 2, NULL); LineTo(dc, cx + s + s / 3, cy + s / 2 + 1);
-        MoveToEx(dc, cx + s + s / 3, cy - s / 2, NULL); LineTo(dc, cx - s / 3, cy + s / 2 + 1);
+        sg_polygon(dc, pt, 5);
+        sg_line(dc, cx - s / 3, cy - s / 2, cx + s + s / 3, cy + s / 2 + 1);
+        sg_line(dc, cx + s + s / 3, cy - s / 2, cx - s / 3, cy + s / 2 + 1);
     }
     else if (k->vk == VK_LWIN)
     {
@@ -550,7 +551,7 @@ static BOOL draw_glyph(HDC dc, const struct key *k)
         case VK_LEFT:  t[0].x = cx - d; t[0].y = cy; t[1].x = cx + d / 2; t[1].y = cy - d; t[2].x = cx + d / 2; t[2].y = cy + d; break;
         default:       t[0].x = cx + d; t[0].y = cy; t[1].x = cx - d / 2; t[1].y = cy - d; t[2].x = cx - d / 2; t[2].y = cy + d; break;
         }
-        Polygon(dc, t, 3);
+        sg_polygon(dc, t, 3);
     }
     else
     {
@@ -586,8 +587,8 @@ static void paint(HDC dc)
         int cx = (g_btn_min.left + g_btn_min.right) / 2, cy = g_title_h / 2;
         MoveToEx(dc, cx - 5, cy, NULL); LineTo(dc, cx + 6, cy);
         cx = (g_btn_close.left + g_btn_close.right) / 2;
-        MoveToEx(dc, cx - 5, cy - 5, NULL); LineTo(dc, cx + 6, cy + 6);
-        MoveToEx(dc, cx + 5, cy - 5, NULL); LineTo(dc, cx - 6, cy + 6);
+        sg_line(dc, cx - 5, cy - 5, cx + 6, cy + 6);
+        sg_line(dc, cx + 5, cy - 5, cx - 6, cy + 6);
         SelectObject(dc, op); DeleteObject(pen);
     }
 
@@ -625,7 +626,7 @@ static void paint(HDC dc)
         int k2;
         for (k2 = 3; k2 <= 9; k2 += 3)
         {
-            MoveToEx(dc, cr.right - k2, cr.bottom - 1, NULL); LineTo(dc, cr.right, cr.bottom - k2 - 1);
+            sg_line(dc, cr.right - k2, cr.bottom - 1, cr.right, cr.bottom - k2 - 1);
         }
         SelectObject(dc, op); DeleteObject(pen);
     }

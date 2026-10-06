@@ -16,6 +16,7 @@
  */
 #include "settings.h"
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 #include <shellapi.h>
 #include <windowsx.h>
 
@@ -360,13 +361,13 @@ static LRESULT CALLBACK toggle_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         pen = CreatePen(PS_SOLID, S(2) > 1 ? S(2) : 1, fg);
         b = CreateSolidBrush(checked ? fg : COL_BG);
         SelectObject(dc, pen); SelectObject(dc, b);
-        RoundRect(dc, pill.left, pill.top, pill.right, pill.bottom, h, h);
+        sg_round_rect(dc, pill.left, pill.top, pill.right, pill.bottom, h, h);
         SelectObject(dc, GetStockObject(NULL_PEN));
         DeleteObject(b);
         b = CreateSolidBrush(checked ? RGB(0xFF, 0xFF, 0xFF) : fg);
         SelectObject(dc, b);
         kx = checked ? pill.right - S(15) : pill.left + S(5);
-        Ellipse(dc, kx, pill.top + S(5), kx + S(10) + 1, pill.top + S(15) + 1);
+        sg_ellipse(dc, kx, pill.top + S(5), kx + S(10) + 1, pill.top + S(15) + 1);
         SelectObject(dc, GetStockObject(WHITE_BRUSH));
         DeleteObject(b); DeleteObject(pen);
         SelectObject(dc, g_font_body);

@@ -83,6 +83,22 @@ a=$(sw); sleep 1; b=$(sw)
 click 'btn swlap'
 [ "$(D stopwatch | sed -n 's/.*laps=\([0-9]*\).*/\1/p')" = 1 ] && pass "Lap records a lap" || fail "laps: $(D stopwatch)"
 shot stopwatch
+# the round buttons are drawn smooth (sg-smooth.h): the accent-coloured Pause
+# button's left edge, a strip across the circle's rim, holds the blends
+# between the accent and the page (GDI's own circle: two colours; mutant:
+# the program built with SG_MUTANT_JAGGED)
+n=$(python3 - "$OUT/clock-stopwatch.png" <<'PY'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB"); w, h = im.size; px = im.load()
+pts = [(x, y) for y in range(h // 4, h * 3 // 4) for x in range(w)
+       if px[x, y][2] > 150 and px[x, y][0] < 160 and px[x, y][1] < 80]
+if not pts: print(0); sys.exit()
+x0 = min(p[0] for p in pts); ys = [p[1] for p in pts if p[0] < x0 + 30]; cy = (min(ys) + max(ys)) // 2
+print(len({px[x, y] for x in range(x0 - 3, x0 + 6) for y in range(cy - 12, cy + 13)}))
+PY
+)
+[ "${n:-0}" -ge 6 ] && pass "the round buttons are smooth ($n colours at the Pause button's rim)" || fail "the round buttons are jagged (${n:-?} colours at the rim, want 6 or more)"
 click 'btn swstart'
 a=$(sw); sleep 1.2; b=$(sw)
 [ "$a" = "$b" ] && D stopwatch | grep -q 'running=0' && pass "Pause stops it ($a ms)" || fail "paused: $a then $b"

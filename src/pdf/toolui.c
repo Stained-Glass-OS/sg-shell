@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "pdf.h"
+#include "../sg-smooth.h"
 #include <commdlg.h>
 
 HWND g_tbar, g_pane;
@@ -42,7 +43,8 @@ static void ln(HDC dc, int x1, int y1, int x2, int y2)
     LineTo(dc, x2, y2);
 }
 
-static void glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF accent)
+/* sg-smooth: drawn in a region (glyph, below) */
+static void glyph_raw(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF accent)
 {
     HPEN pen = CreatePen(PS_SOLID, max(1, s / 8), col), op = SelectObject(dc, pen);
     HGDIOBJ ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -218,6 +220,15 @@ static void glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF a
     SelectObject(dc, op);
     DeleteObject(pen);
     DeleteObject(acc);
+}
+
+/* the glyph drawn soft-edged (sg-smooth.h): its lines and shapes four times finer, averaged down */
+static void glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF accent)
+{
+    struct sg_ss ss;
+    HDC big = sg_ss_begin(&ss, dc, cx - s, cy - s, 2 * s + 1, 2 * s + 1, max(1, s / 8));
+    glyph_raw(big, k, cx, cy, s, col, accent);
+    sg_ss_end(&ss);
 }
 
 /* ---- the tool's bar ----------------------------------------------------------------------------------- */

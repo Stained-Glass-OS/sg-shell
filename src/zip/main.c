@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include "zipcore.h"
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -363,7 +364,8 @@ static void draw_zip_folder(HDC dc, int x, int y, int size)
     DeleteObject(back); DeleteObject(front); DeleteObject(zip);
 }
 
-static void draw_arrow(HDC dc, RECT *r, int dir, COLORREF col)   /* 0 left, 1 right, 2 up */
+/* sg-smooth: drawn in a region (draw_arrow, below) */
+static void draw_arrow_raw(HDC dc, RECT *r, int dir, COLORREF col)   /* 0 left, 1 right, 2 up */
 {
     HPEN pen = CreatePen(PS_SOLID, S(1) + 1, col), old = SelectObject(dc, pen);
     int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, a = S(6), b = S(4);
@@ -380,6 +382,16 @@ static void draw_arrow(HDC dc, RECT *r, int dir, COLORREF col)   /* 0 left, 1 ri
     }
     SelectObject(dc, old);
     DeleteObject(pen);
+}
+
+/* drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+static void draw_arrow(HDC dc, RECT *r, int dir, COLORREF col)   /* 0 left, 1 right, 2 up */
+{
+    struct sg_ss ss;
+    int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, h = S(9);
+    HDC big = sg_ss_begin(&ss, dc, cx - h, cy - h, 2 * h + 1, 2 * h + 1, S(1) + 1);
+    draw_arrow_raw(big, r, dir, col);
+    sg_ss_end(&ss);
 }
 
 /* flat owner-drawn buttons: hover and pressed in the accent's tint */

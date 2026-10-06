@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -1179,7 +1180,8 @@ static void line(HDC dc, int x1, int y1, int x2, int y2)
     LineTo(dc, x2, y2);
 }
 
-static void draw_glyph(HDC dc, enum key k, const RECT *r, COLORREF color)
+/* sg-smooth: drawn in a region (draw_glyph, below) */
+static void draw_glyph_raw(HDC dc, enum key k, const RECT *r, COLORREF color)
 {
     HPEN pen = CreatePen(PS_SOLID, max(1, S(1)), color), op = SelectObject(dc, pen);
     HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -1215,6 +1217,16 @@ static void draw_glyph(HDC dc, enum key k, const RECT *r, COLORREF color)
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pen);
+}
+
+/* the glyph drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+static void draw_glyph(HDC dc, enum key k, const RECT *r, COLORREF color)
+{
+    struct sg_ss ss;
+    int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, h = S(13);
+    HDC big = sg_ss_begin(&ss, dc, cx - h, cy - h, 2 * h + 1, 2 * h + 1, max(1, S(1)));
+    draw_glyph_raw(big, k, r, color);
+    sg_ss_end(&ss);
 }
 
 static void draw_button(HDC dc, int i)

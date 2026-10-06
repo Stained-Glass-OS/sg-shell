@@ -1,6 +1,7 @@
 /* sg-paint -- the canvas: showing the picture at a zoom, the tools, the
  * selection (lifted into a floating picture whose alpha is its mask), the
  * text box, and the canvas's own resize handles.
+ * sg-smooth: the picture's own pixels, drawn hard-edged as Paint's tools draw them (not the program's art).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later

@@ -29,6 +29,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "browser.h"
+#include "../sg-smooth.h"
 #include <shellapi.h>
 #include <shlobj.h>
 
@@ -490,7 +491,7 @@ static void badge(HDC dc, int x, int y, int d, COLORREF c, WCHAR letter)
     HBRUSH br = CreateSolidBrush(c), ob = SelectObject(dc, br);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
     WCHAR s[2] = { letter, 0 };
-    Ellipse(dc, x, y, x + d, y + d);
+    sg_ellipse(dc, x, y, x + d, y + d);
     SelectObject(dc, op);
     SelectObject(dc, ob);
     DeleteObject(br);

@@ -13,6 +13,7 @@
  */
 #include <winsock2.h>
 #include "mmc.h"
+#include "../sg-smooth.h"
 #include <iphlpapi.h>
 #include <string.h>
 
@@ -537,7 +538,7 @@ static void draw_graph(HDC dc, RECT r, const WCHAR *title, const WCHAR *now, con
         pts[i].y = g.bottom - 2 - (int)((g.bottom - g.top - 4) * v);
     }
     SelectObject(dc, pen);
-    Polyline(dc, pts, HIST);
+    sg_polyline(dc, pts, HIST);
     DeleteObject(bg); DeleteObject(frame); DeleteObject(grid); DeleteObject(pen);
 }
 

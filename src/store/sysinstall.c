@@ -30,6 +30,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "store.h"
+#include "../sg-smooth.h"
 #include <shellapi.h>
 
 typedef char *(CDECL *unixname_t)(const WCHAR *);
@@ -659,7 +660,7 @@ static void draw_button(HDC dc, RECT rc, const WCHAR *label, BOOL primary, BOOL 
     HBRUSH b = CreateSolidBrush(primary ? C_ACCENT : RGB(255, 255, 255));
     HPEN pen = CreatePen(PS_SOLID, focus ? 2 : 1, focus ? C_TEXT : primary ? C_ACCENT : C_LINE), op = SelectObject(dc, pen);
     HBRUSH ob = SelectObject(dc, b);
-    RoundRect(dc, rc.left, rc.top, rc.right, rc.bottom, S(6), S(6));
+    sg_round_rect(dc, rc.left, rc.top, rc.right, rc.bottom, S(6), S(6));
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b); DeleteObject(pen);
     draw_text(dc, f_body, primary ? RGB(255, 255, 255) : C_TEXT, rc, label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);

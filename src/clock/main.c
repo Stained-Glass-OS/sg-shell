@@ -29,6 +29,7 @@
 #include <math.h>
 #include <wchar.h>
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 #include "../sg-round.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
@@ -568,7 +569,7 @@ static void round_fill(HDC dc, RECT r, int radius, COLORREF c, COLORREF edge)
     HBRUSH br = CreateSolidBrush(c);
     HPEN pen = CreatePen(PS_SOLID, 1, edge);
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, pen);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
+    sg_round_rect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(br); DeleteObject(pen);
 }
@@ -580,13 +581,13 @@ static void toggle(HDC dc, RECT r, BOOL on)
     HBRUSH br = CreateSolidBrush(on ? C_ACCENT : C_CARD);
     HPEN pen = CreatePen(PS_SOLID, S(2) > 1 ? S(2) : 1, on ? C_ACCENT : (sgm_dark ? RGB(0xD0, 0xD0, 0xD0) : RGB(0x33, 0x33, 0x33)));
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, pen);
-    RoundRect(dc, p.left, p.top, p.right, p.bottom, h, h);
+    sg_round_rect(dc, p.left, p.top, p.right, p.bottom, h, h);
     SelectObject(dc, GetStockObject(NULL_PEN));
     DeleteObject(br);
     br = CreateSolidBrush(on ? RGB(0xFF, 0xFF, 0xFF) : (sgm_dark ? RGB(0xD0, 0xD0, 0xD0) : RGB(0x33, 0x33, 0x33)));
     SelectObject(dc, br);
     kx = on ? p.right - S(15) : p.left + S(5);
-    Ellipse(dc, kx, p.top + S(5), kx + S(10) + 1, p.top + S(15) + 1);
+    sg_ellipse(dc, kx, p.top + S(5), kx + S(10) + 1, p.top + S(15) + 1);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(br); DeleteObject(pen);
 }
@@ -599,16 +600,16 @@ static void glyph(HDC dc, const WCHAR *what, RECT r, COLORREF c)
     HBRUSH br = CreateSolidBrush(c);
     HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, br);
     if (!lstrcmpW(what, L"+")) { MoveToEx(dc, cx - a, cy, NULL); LineTo(dc, cx + a + 1, cy); MoveToEx(dc, cx, cy - a, NULL); LineTo(dc, cx, cy + a + 1); }
-    else if (!lstrcmpW(what, L"x")) { a = S(6); MoveToEx(dc, cx - a, cy - a, NULL); LineTo(dc, cx + a + 1, cy + a + 1); MoveToEx(dc, cx + a, cy - a, NULL); LineTo(dc, cx - a - 1, cy + a + 1); }
-    else if (!lstrcmpW(what, L"play")) { POINT p[3] = { { cx - S(5), cy - S(8) }, { cx - S(5), cy + S(8) }, { cx + S(8), cy } }; Polygon(dc, p, 3); }
+    else if (!lstrcmpW(what, L"x")) { a = S(6); sg_line(dc, cx - a, cy - a, cx + a + 1, cy + a + 1); sg_line(dc, cx + a, cy - a, cx - a - 1, cy + a + 1); }
+    else if (!lstrcmpW(what, L"play")) { POINT p[3] = { { cx - S(5), cy - S(8) }, { cx - S(5), cy + S(8) }, { cx + S(8), cy } }; sg_polygon(dc, p, 3); }
     else if (!lstrcmpW(what, L"pause")) { RECT a1 = { cx - S(6), cy - S(8), cx - S(2), cy + S(8) }, a2 = { cx + S(2), cy - S(8), cx + S(6), cy + S(8) }; FillRect(dc, &a1, br); FillRect(dc, &a2, br); }
     else if (!lstrcmpW(what, L"reset")) {
         SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Arc(dc, cx - S(8), cy - S(8), cx + S(8), cy + S(8), cx - S(8), cy - S(2), cx - S(2), cy - S(8));
+        sg_arc(dc, cx - S(8), cy - S(8), cx + S(8), cy + S(8), cx - S(8), cy - S(2), cx - S(2), cy - S(8));
         MoveToEx(dc, cx - S(8), cy - S(8), NULL); LineTo(dc, cx - S(8), cy - S(2)); LineTo(dc, cx - S(2), cy - S(2));
     } else if (!lstrcmpW(what, L"lap")) {
         MoveToEx(dc, cx - S(6), cy + S(9), NULL); LineTo(dc, cx - S(6), cy - S(9));
-        { POINT p[4] = { { cx - S(6), cy - S(9) }, { cx + S(8), cy - S(6) }, { cx - S(6), cy - S(1) }, { cx - S(6), cy - S(9) } }; Polygon(dc, p, 4); }
+        { POINT p[4] = { { cx - S(6), cy - S(9) }, { cx + S(8), cy - S(6) }, { cx - S(6), cy - S(1) }, { cx - S(6), cy - S(9) } }; sg_polygon(dc, p, 4); }
     }
     SelectObject(dc, op); SelectObject(dc, ob);
     DeleteObject(pen); DeleteObject(br);
@@ -618,7 +619,7 @@ static void circle_button(HDC dc, RECT r, BOOL accent, BOOL hot, const WCHAR *g)
 {
     HBRUSH br = CreateSolidBrush(accent ? (hot ? C_ACCENT_HOT : C_ACCENT) : (hot ? (sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC)) : (sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0))));
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, r.left, r.top, r.right, r.bottom);
+    sg_ellipse(dc, r.left, r.top, r.right, r.bottom);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br);
     glyph(dc, g, r, accent ? RGB(0xFF, 0xFF, 0xFF) : C_TEXT);
 }
@@ -729,17 +730,17 @@ static void paint(HDC dc, RECT *c)
             /* the ring: the time left, in the accent */
             pen = CreatePen(PS_SOLID, S(4), C_EDGE);
             op = SelectObject(dc, pen); SelectObject(dc, GetStockObject(NULL_BRUSH));
-            Ellipse(dc, ring.left, ring.top, ring.right, ring.bottom);
+            sg_ellipse(dc, ring.left, ring.top, ring.right, ring.bottom);
             SelectObject(dc, op); DeleteObject(pen);
             if (frac > 0.001) {
                 double a0 = 3.14159265 / 2, a1 = a0 + frac * 2 * 3.14159265;
                 int cx = (ring.left + ring.right) / 2, cy = (ring.top + ring.bottom) / 2, rr = (ring.right - ring.left) / 2;
                 pen = CreatePen(PS_SOLID, S(4), C_ACCENT);
                 op = SelectObject(dc, pen);
-                if (frac >= 0.999) Ellipse(dc, ring.left, ring.top, ring.right, ring.bottom);
+                if (frac >= 0.999) sg_ellipse(dc, ring.left, ring.top, ring.right, ring.bottom);
                 else {
                     SetArcDirection(dc, AD_CLOCKWISE);
-                    Arc(dc, ring.left, ring.top, ring.right, ring.bottom, cx + (int)(rr * cos(a1)), cy - (int)(rr * sin(a1)),
+                    sg_arc(dc, ring.left, ring.top, ring.right, ring.bottom, cx + (int)(rr * cos(a1)), cy - (int)(rr * sin(a1)),
                         cx + (int)(rr * cos(a0)), cy - (int)(rr * sin(a0)));
                 }
                 SelectObject(dc, op); DeleteObject(pen);

@@ -1,3 +1,30 @@
+sg-shell (0.1.0-137) unstable; urgency=medium
+
+  * Round and slanted shapes are drawn smooth in every program: GDI draws
+    ellipses, rounded rectangles, polygons, arcs and slanted lines with
+    stepped edges. sg-smooth.h gains drop-ins with GDI's own arguments
+    (sg_ellipse, sg_round_rect, sg_polygon, sg_polyline, sg_arc, sg_line:
+    four times larger over what is there, averaged down; a large rounded
+    rectangle keeps GDI's straight edges, only its corners supersampled)
+    and regions for glyph functions (sg_ss_begin/end). Used for Alarms &
+    Clock's toggles, round buttons and timer ring, Calculator's glyphs,
+    Control Panel's arrows and toggles, SG Store's cards, badges, buttons
+    and checks, Media Player's thumbs and play disc, the network flyout's
+    Wi-Fi bars and lock, Network Connections' adapter pictures, Task
+    Manager's graphs and buttons, SG PDF's toolbar glyphs, the Terminal's
+    rounded box arcs and marks, WordPad's and Paint's ribbon arrows and
+    ruler markers, On-Screen Keyboard's keys, Magnifier's bar, Start's
+    older looks, and more (docs/icons.md lists them all).
+  * docs/icons.md: every icon and glyph we draw -- where, how, at which
+    sizes -- and the gates.
+  * Test: test/smooth-shapes-check.sh (each drop-in and a region against
+    GDI's own: soft edges, same place, straight edges unchanged; mutant
+    -DSG_MUTANT_JAGGED), test/raw-shapes-check.sh (in make lint: no raw
+    round/slanted GDI call in src/ unless supersampled or marked),
+    test/clock-check.sh (round buttons; mutant SG_MUTANT_JAGGED).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 10:28:45 -0700
+
 sg-shell (0.1.0-136) unstable; urgency=medium
 
   * Every icon we draw has every frame programs ask for at 100-250%

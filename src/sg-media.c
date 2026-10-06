@@ -27,6 +27,7 @@
 #include <wchar.h>
 #include <initguid.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -243,6 +244,7 @@ static void draw_glyph(HDC dst, const RECT *r, COLORREF color, shape_fn fn, void
     DeleteDC(mdc);
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void poly(HDC dc, const double *pts, int n, int w, int h)
 {
     POINT p[16];
@@ -394,7 +396,7 @@ static void round_fill(HDC dc, const RECT *r, int rad, COLORREF c)
 {
     HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-    RoundRect(dc, r->left, r->top, r->right + 1, r->bottom + 1, rad, rad);
+    sg_round_rect(dc, r->left, r->top, r->right + 1, r->bottom + 1, rad, rad);
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(b);
 }
 
@@ -514,13 +516,13 @@ static void paint_bar(HDC dc)
         HBRUSH wb = CreateSolidBrush(C_WHITE), ob;
         HPEN pen = CreatePen(PS_SOLID, 1, C_LINE), op;
         ob = SelectObject(dc, wb); op = SelectObject(dc, pen);
-        Ellipse(dc, th.left, th.top, th.right, th.bottom);
+        sg_ellipse(dc, th.left, th.top, th.right, th.bottom);
         SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(wb); DeleteObject(pen);
         InflateRect(&th, -S(4), -S(4));
         {
             HBRUSH ab = CreateSolidBrush(g_hot == H_SEEK || g_dragging_seek ? C_ACCENT_HOT : C_ACCENT);
             ob = SelectObject(dc, ab); op = SelectObject(dc, GetStockObject(NULL_PEN));
-            Ellipse(dc, th.left, th.top, th.right + 1, th.bottom + 1);
+            sg_ellipse(dc, th.left, th.top, th.right + 1, th.bottom + 1);
             SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(ab);
         }
     }
@@ -552,7 +554,7 @@ static void paint_bar(HDC dc)
     {
         HBRUSH b = CreateSolidBrush(!enabled ? C_DIM : g_hot == H_PLAY ? C_ACCENT_HOT : C_ACCENT), ob = SelectObject(dc, b);
         HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-        Ellipse(dc, g_hit[H_PLAY].left, g_hit[H_PLAY].top, g_hit[H_PLAY].right + 1, g_hit[H_PLAY].bottom + 1);
+        sg_ellipse(dc, g_hit[H_PLAY].left, g_hit[H_PLAY].top, g_hit[H_PLAY].right + 1, g_hit[H_PLAY].bottom + 1);
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(b);
         glyph_in(dc, &g_hit[H_PLAY], S(40), C_WHITE, g_state == ST_PLAYING ? shape_pause : shape_play, NULL);
     }
@@ -571,7 +573,7 @@ static void paint_bar(HDC dc)
         RECT th = { vol_x - S(7), (track.top + track.bottom) / 2 - S(7), vol_x + S(7), (track.top + track.bottom) / 2 + S(7) };
         HBRUSH ab = CreateSolidBrush(g_muted ? C_DIM : C_ACCENT), ob = SelectObject(dc, ab);
         HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-        Ellipse(dc, th.left, th.top, th.right + 1, th.bottom + 1);
+        sg_ellipse(dc, th.left, th.top, th.right + 1, th.bottom + 1);
         SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(ab);
     }
     button_bg(dc, H_FULL); glyph_in(dc, &g_hit[H_FULL], S(32), g_has_video ? C_TEXT : C_DIM, shape_full, &full);

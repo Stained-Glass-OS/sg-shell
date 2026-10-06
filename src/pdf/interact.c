@@ -28,6 +28,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "pdf.h"
+#include "../sg-smooth.h"
 
 #define WM_APP_COMMIT (WM_APP + 10)
 
@@ -981,7 +982,7 @@ void tool_paint(HDC dc)
         if (g.sub == SUB_ELLIPSE) {
             HPEN pen = CreatePen(PS_SOLID, max(1, dpx(2)), c);
             HGDIOBJ op = SelectObject(dc, pen), ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            Ellipse(dc, r.left, r.top, r.right, r.bottom);
+            sg_ellipse(dc, r.left, r.top, r.right, r.bottom);
             SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(pen);
         } else frame(dc, r, c, g.tool == TOOL_COMMENT ? PS_SOLID : PS_DASH, g.tool == TOOL_COMMENT ? max(1, dpx(2)) : 1);
     } else if (D.mode == DRAG_LINE) {

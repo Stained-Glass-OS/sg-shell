@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 #include "sg-round.h"
 
 #define WM_TRAY   (WM_APP + 1)
@@ -183,6 +184,7 @@ static void when(const struct entry *e, WCHAR *out, int cch)
 
 /* --- the icon: a speech bubble, filled when there are new ones --------------------- */
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static HICON make_icon(int size, int fresh)
 {
     enum { K = 4 };
@@ -421,8 +423,8 @@ static void fly_paint(HWND hwnd)
         {
             HPEN pen = CreatePen(PS_SOLID, U(8) >= 12 ? 2 : 1, g_hot_close ? text : subtle), op = SelectObject(dc, pen);
             int cx = (e->close.left + e->close.right) / 2, cy = (e->close.top + e->close.bottom) / 2, d = U(5);
-            MoveToEx(dc, cx - d, cy - d, NULL); LineTo(dc, cx + d + 1, cy + d + 1);
-            MoveToEx(dc, cx + d, cy - d, NULL); LineTo(dc, cx - d - 1, cy + d + 1);
+            sg_line(dc, cx - d, cy - d, cx + d + 1, cy + d + 1);
+            sg_line(dc, cx + d, cy - d, cx - d - 1, cy + d + 1);
             SelectObject(dc, op);
             DeleteObject(pen);
         }

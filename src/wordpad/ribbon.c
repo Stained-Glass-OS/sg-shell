@@ -9,6 +9,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "wordpad.h"
+#include "../sg-smooth.h"
 
 enum { K_TAB, K_FILETAB, K_BIG, K_SMALL, K_ICON, K_GROUP, K_CHECK, K_LAUNCH, K_COMBO };
 
@@ -181,7 +182,7 @@ static void arrow(HDC dc, int cx, int cy, COLORREF c)
     POINT p[3] = { { cx - S(3), cy - S(1) }, { cx + S(3), cy - S(1) }, { cx, cy + S(2) } };
     HBRUSH b = CreateSolidBrush(c);
     HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Polygon(dc, p, 3);
+    sg_polygon(dc, p, 3);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
 }
 
@@ -275,9 +276,7 @@ static void draw_item(HDC dc, const Item *it, int idx)
         {
             HPEN p = CreatePen(PS_SOLID, S(2), RGB(255, 255, 255));
             HGDIOBJ op = SelectObject(dc, p);
-            MoveToEx(dc, b.left + S(3), b.top + S(7), NULL);
-            LineTo(dc, b.left + S(6), b.top + S(10));
-            LineTo(dc, b.left + S(11), b.top + S(4));
+            { POINT v[3] = { { b.left + S(3), b.top + S(7) }, { b.left + S(6), b.top + S(10) }, { b.left + S(11), b.top + S(4) } }; sg_polyline(dc, v, 3); }
             SelectObject(dc, op); DeleteObject(p);
         }
         t.left = b.right + S(6);

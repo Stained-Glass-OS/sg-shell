@@ -1525,6 +1525,7 @@ static const WCHAR *user_name(void)
 
 /* the rail's glyphs, drawn with lines: menu, documents, pictures, settings,
  * power -- in a 24-unit square about (cx, cy), u pixels a unit, lines w wide */
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void draw_glyph_lines(HDC dc, int which, double cx, double cy, COLORREF c, double u, int w)
 {
     LOGBRUSH lb = { BS_SOLID, c, 0 };
@@ -2261,13 +2262,13 @@ static void x_picture(HDC dc, RECT in)
     SelectClipRgn(dc, clip);
     x_gradient(dc, &in, RGB(0x4A, 0x96, 0xF0), RGB(0xC8, 0xE4, 0xFC));
     b = CreateSolidBrush(RGB(0xFF, 0xD8, 0x40)); ob = SelectObject(dc, b);
-    Ellipse(dc, in.left + w * 6 / 10, in.top + h / 8, in.left + w * 6 / 10 + w / 4, in.top + h / 8 + w / 4);
+    sg_ellipse(dc, in.left + w * 6 / 10, in.top + h / 8, in.left + w * 6 / 10 + w / 4, in.top + h / 8 + w / 4);
     SelectObject(dc, ob); DeleteObject(b);
     b = CreateSolidBrush(RGB(0x5C, 0xB8, 0x3C)); ob = SelectObject(dc, b);
-    Ellipse(dc, in.left - w / 2, in.top + h * 6 / 10, in.left + w * 7 / 10, in.bottom + h / 2);
+    sg_ellipse(dc, in.left - w / 2, in.top + h * 6 / 10, in.left + w * 7 / 10, in.bottom + h / 2);
     SelectObject(dc, ob); DeleteObject(b);
     b = CreateSolidBrush(RGB(0x3C, 0x96, 0x28)); ob = SelectObject(dc, b);
-    Ellipse(dc, in.left + w * 3 / 10, in.top + h * 7 / 10, in.right + w / 2, in.bottom + h / 2);
+    sg_ellipse(dc, in.left + w * 3 / 10, in.top + h * 7 / 10, in.right + w / 2, in.bottom + h / 2);
     SelectObject(dc, ob); DeleteObject(b);
     SelectObject(dc, op);
     SelectClipRgn(dc, NULL);
@@ -2285,7 +2286,7 @@ static void x_tile(HDC dc, RECT box, COLORREF top, COLORREF bottom)
     SelectClipRgn(dc, NULL);
     DeleteObject(rgn);
     op = SelectObject(dc, pen); ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, box.left, box.top, box.right, box.bottom, S(5), S(5));
+    sg_round_rect(dc, box.left, box.top, box.right, box.bottom, S(5), S(5));
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
 }
 
@@ -2320,7 +2321,7 @@ static void x_button(HDC dc, RECT r, const WCHAR *label, int glyph, BOOL hot)
         tip[0].x = box.right - S(9); tip[0].y = (box.top + box.bottom) / 2 - S(4);
         tip[1].x = box.right - S(9); tip[1].y = (box.top + box.bottom) / 2 + S(4);
         tip[2].x = box.right - S(4); tip[2].y = (box.top + box.bottom) / 2;
-        Polygon(dc, tip, 3);
+        sg_polygon(dc, tip, 3);
         SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(w);
     }
     t.left = box.right + S(5);
@@ -2445,7 +2446,7 @@ static void draw_xp(HDC dc)
         if (back) { tri[0].x = arrow.right - S(7); tri[0].y = arrow.top + S(5); tri[1].x = arrow.right - S(7); tri[1].y = arrow.bottom - S(5); tri[2].x = arrow.left + S(6); tri[2].y = (arrow.top + arrow.bottom) / 2; }
         else { tri[0].x = arrow.left + S(7); tri[0].y = arrow.top + S(5); tri[1].x = arrow.left + S(7); tri[1].y = arrow.bottom - S(5); tri[2].x = arrow.right - S(6); tri[2].y = (arrow.top + arrow.bottom) / 2; }
         ob = SelectObject(dc, wb); op = SelectObject(dc, GetStockObject(NULL_PEN));
-        Polygon(dc, tri, 3);
+        sg_polygon(dc, tri, 3);
         SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(wb);
     }
 
@@ -2692,7 +2693,7 @@ static void g_round_fill(HDC dc, RECT r, int radius, COLORREF fill, COLORREF edg
 {
     HBRUSH b = CreateSolidBrush(fill), ob = SelectObject(dc, b);
     HPEN p = CreatePen(PS_SOLID, 1, edge), op = SelectObject(dc, p);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
+    sg_round_rect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b); DeleteObject(p);
 }
@@ -2711,7 +2712,7 @@ static void g_gloss(HDC dc, RECT r, BOOL hot)
     SelectClipRgn(dc, NULL);
     DeleteObject(rgn);
     op = SelectObject(dc, p); ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, S(5), S(5));
+    sg_round_rect(dc, r.left, r.top, r.right, r.bottom, S(5), S(5));
     SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(p);
 }
 
@@ -2722,12 +2723,13 @@ static void g_triangle(HDC dc, int cx, int cy, int size, BOOL left, COLORREF c)
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
     if (left) { t[0].x = cx + size / 2; t[0].y = cy - size; t[1].x = cx + size / 2; t[1].y = cy + size; t[2].x = cx - size / 2; t[2].y = cy; }
     else { t[0].x = cx - size / 2; t[0].y = cy - size; t[1].x = cx - size / 2; t[1].y = cy + size; t[2].x = cx + size / 2; t[2].y = cy; }
-    Polygon(dc, t, 3);
+    sg_polygon(dc, t, 3);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
 }
 
 /* the search box's magnifier: a ring and a handle to the lower right, centred
  * on (cx, cy); u is a pixel at 100% (SG_SS times that, drawn for sg_smooth) */
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void magnifier_lines(HDC dc, double cx, double cy, double u)
 {
     HPEN p = CreatePen(PS_SOLID, max(1, (int)(2 * u + 0.5)), sg_smooth_colour(RGB(0x50, 0x68, 0x88))), op = SelectObject(dc, p);

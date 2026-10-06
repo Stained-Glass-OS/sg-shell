@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 /* Stained Glass: the app mode (Settings > Colors, AppsUseLightTheme) picks
  * the palette; WM_SETTINGCHANGE "ImmersiveColorSet" switches it live */
 BOOL sgm_dark;
@@ -151,6 +152,7 @@ static void seg(HDC dc, double x0, double y0, double x1, double y1)
     LineTo(dc, P(x1), P(y1));
 }
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static void draw_glyph(HDC dc, int g)
 {
     HGDIOBJ op = SelectObject(dc, pen(17)), ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -888,7 +890,7 @@ static void round_fill(HDC dc, const RECT *r, int radius, COLORREF c, COLORREF e
     HBRUSH b = CreateSolidBrush(c);
     HPEN p = CreatePen(PS_SOLID, 1, edge);
     HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, p);
-    RoundRect(dc, r->left, r->top, r->right, r->bottom, radius, radius);
+    sg_round_rect(dc, r->left, r->top, r->right, r->bottom, radius, radius);
     SelectObject(dc, ob); SelectObject(dc, op);
     DeleteObject(b); DeleteObject(p);
 }

@@ -300,10 +300,12 @@ lint:
 	    sed -n 2p "$$f" | grep -q '^\. "$$(dirname "$$0")/scratch-home.sh"$$' || \
 	    { echo "$$f: line 2 must be: . \"\$$(dirname \"\$$0\")/scratch-home.sh\""; exit 1; }; done
 	@python3 tools/trademark-check.py --allow tools/trademark-allow.txt src defaults theme admin office
+	@sh test/raw-shapes-check.sh
 
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build
 	@sh test/icon-sizes-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/smooth-shapes-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/render-check.sh
 	@sh test/start-check.sh
 	@sh test/taskbar-pins-check.sh
@@ -345,6 +347,12 @@ test: build
 .PHONY: test-battery
 test-battery: build
 	@sh test/battery-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
+# sg-smooth.h's soft-edged shapes against GDI's own (no round or slanted GDI
+# shape drawn raw in src/: test/raw-shapes-check.sh, part of make lint).
+.PHONY: test-smooth-shapes
+test-smooth-shapes:
+	@sh test/smooth-shapes-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
 # Every icon the build draws has every frame size (tools/sgicon.py).
 .PHONY: test-icon-sizes

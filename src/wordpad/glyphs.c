@@ -1,4 +1,5 @@
 /* sg-wordpad -- the ribbon's pictures, drawn here (no borrowed artwork).
+ * sg-smooth: every picture here is drawn on a canvas four times larger, reduced to soft-edged alpha.
  *
  * As Paint's and the Control Panel's: plain GDI on a 64-unit grid at four
  * times the size over a key colour, box-filtered down to premultiplied

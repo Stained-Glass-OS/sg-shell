@@ -1068,7 +1068,7 @@ static void fill_circle(HDC dc, int cx, int cy, int r, COLORREF c)
 #else
     HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
     HPEN op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, cx - r, cy - r, cx + r + 1, cy + r + 1);
+    Ellipse(dc, cx - r, cy - r, cx + r + 1, cy + r + 1);   /* sg-smooth: the mutant's jagged circle */
     SelectObject(dc, op);
     SelectObject(dc, ob);
     DeleteObject(b);
@@ -1154,6 +1154,7 @@ static void draw_gear(HDC dc, int cx, int cy, COLORREF c, COLORREF bg) { draw_gl
 static void draw_close(HDC dc, int cx, int cy, COLORREF c) { draw_glyph(dc, GLYPH_CLOSE, cx, cy, c, c); }
 #else
 /* A microphone: a capsule on a stand. */
+/* sg-smooth: the mutant's jagged drawing (SG_MUTANT_JAGGED_DICTATE) */
 static void draw_mic(HDC dc, int cx, int cy, COLORREF c)
 {
     HBRUSH b = CreateSolidBrush(c), ob = SelectObject(dc, b);
@@ -1172,6 +1173,7 @@ static void draw_mic(HDC dc, int cx, int cy, COLORREF c)
 }
 
 /* A gear: eight teeth round a ring. */
+/* sg-smooth: the mutant's jagged drawing (SG_MUTANT_JAGGED_DICTATE) */
 static void draw_gear(HDC dc, int cx, int cy, COLORREF c, COLORREF bg)
 {
     POINT pts[32];

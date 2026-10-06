@@ -7,6 +7,7 @@
 #include "control.h"
 #include "settings.h"
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 #include <shellapi.h>
 #include <windowsx.h>
 #include <stdarg.h>
@@ -623,7 +624,8 @@ void refresh_when_back(void) { g_refresh_on_activate = TRUE; }
 BOOL refresh_pending(void) { BOOL r = g_refresh_on_activate; g_refresh_on_activate = FALSE; return r; }
 
 /* ---- the navigation bar -------------------------------------------------------- */
-static void draw_arrow(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
+/* sg-smooth: drawn in a region (draw_arrow, below) */
+static void draw_arrow_raw(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
 {
     int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, a = S(6);
     HPEN pen = CreatePen(PS_SOLID, S(2), enabled ? (hot ? COL_LINK_HOT : g_pal.soft) : g_pal.disabled);
@@ -641,6 +643,16 @@ static void draw_arrow(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
     }
     SelectObject(dc, old);
     DeleteObject(pen);
+}
+
+/* drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+static void draw_arrow(HDC dc, RECT *r, int dir, BOOL enabled, BOOL hot)
+{
+    struct sg_ss ss;
+    int cx = (r->left + r->right) / 2, cy = (r->top + r->bottom) / 2, h = S(10);
+    HDC big = sg_ss_begin(&ss, dc, cx - h, cy - h, 2 * h + 1, 2 * h + 1, S(2));
+    draw_arrow_raw(big, r, dir, enabled, hot);
+    sg_ss_end(&ss);
 }
 
 static WNDPROC g_btn_proc;

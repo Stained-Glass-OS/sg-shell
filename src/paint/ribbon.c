@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "paint.h"
+#include "../sg-smooth.h"
 
 enum { K_TAB, K_FILETAB, K_BIG, K_SMALL, K_ICON, K_SWATCH, K_PAL, K_GROUP, K_CHECK };
 
@@ -177,7 +178,7 @@ static void arrow(HDC dc, int cx, int cy)
     POINT p[3] = { { cx - S(3), cy - S(1) }, { cx + S(3), cy - S(1) }, { cx, cy + S(2) } };
     HBRUSH b = CreateSolidBrush(TEXT_GREY);
     HGDIOBJ ob = SelectObject(dc, b), op = SelectObject(dc, GetStockObject(NULL_PEN));
-    Polygon(dc, p, 3);
+    sg_polygon(dc, p, 3);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
 }
 
@@ -256,7 +257,7 @@ static void draw_item(HDC dc, int idx)
         {
             HPEN p = CreatePen(PS_SOLID, max(1, S(2)), RGB(255, 255, 255));
             HGDIOBJ op = SelectObject(dc, p);
-            MoveToEx(dc, b.left + S(3), b.top + S(6), NULL); LineTo(dc, b.left + S(5), b.top + S(9)); LineTo(dc, b.left + S(10), b.top + S(3));
+            { POINT v[3] = { { b.left + S(3), b.top + S(6) }, { b.left + S(5), b.top + S(9) }, { b.left + S(10), b.top + S(3) } }; sg_polyline(dc, v, 3); }
             SelectObject(dc, op); DeleteObject(p);
         }
         t = r; t.left += S(22);

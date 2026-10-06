@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 
 #define CLASS_NAME L"SgDefenderNotice"
 #define W_DIP 380
@@ -153,7 +154,7 @@ static void paint(HWND hwnd)
         HPEN pen = CreatePen(PS_SOLID, 1, COL_THREAT);
         b = CreateSolidBrush(COL_THREAT);
         SelectObject(dc, pen); SelectObject(dc, b);
-        Polygon(dc, sh, ARRAYSIZE(sh));
+        sg_polygon(dc, sh, ARRAYSIZE(sh));
         DeleteObject(b); DeleteObject(pen);
     }
     SelectObject(dc, g_font_small);

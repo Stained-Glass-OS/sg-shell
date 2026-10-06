@@ -1,4 +1,5 @@
 /* sg-control -- the Control Panel's icons, drawn here (no borrowed artwork).
+ * sg-smooth: every picture here is drawn on a canvas four times larger, reduced to soft-edged alpha.
  *
  * Each icon is drawn with plain GDI on a 64-unit grid at four times its size
  * over a key colour, then box-filtered down to premultiplied alpha and

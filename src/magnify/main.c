@@ -47,6 +47,7 @@
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "../sg-smooth.h"
 #include <windowsx.h>
 #include <shellapi.h>
 #include <dwmapi.h>
@@ -654,7 +655,7 @@ static void paint_bar(HWND hwnd, HDC dc)
             tri[0].x = r.right - 18; tri[0].y = cy - 2; tri[1].x = r.right - 10; tri[1].y = cy - 2;
             tri[2].x = r.right - 14; tri[2].y = cy + 2;
             obr = SelectObject(dc, ib);
-            Polygon(dc, tri, 3);
+            sg_polygon(dc, tri, 3);
             SelectObject(dc, obr); DeleteObject(ib);
             break;
         }
@@ -663,12 +664,12 @@ static void paint_bar(HWND hwnd, HDC dc)
             /* a cog: a ring and eight teeth */
             int k;
             HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            Ellipse(dc, cx - 6, cy - 6, cx + 7, cy + 7);
-            Ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
+            sg_ellipse(dc, cx - 6, cy - 6, cx + 7, cy + 7);
+            sg_ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
             for (k = 0; k < 8; k++)
             {
                 static const int dx[8] = { 0, 6, 9, 6, 0, -6, -9, -6 }, dy[8] = { -9, -6, 0, 6, 9, 6, 0, -6 };
-                MoveToEx(dc, cx + dx[k] * 2 / 3, cy + dy[k] * 2 / 3, NULL); LineTo(dc, cx + dx[k], cy + dy[k]);
+                sg_line(dc, cx + dx[k] * 2 / 3, cy + dy[k] * 2 / 3, cx + dx[k], cy + dy[k]);
             }
             SelectObject(dc, ob);
             break;

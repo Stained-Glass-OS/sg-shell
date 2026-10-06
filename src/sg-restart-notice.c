@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 
 #define CLASS_NAME L"SgRestartNotice"
 #define W_DIP 380
@@ -166,15 +167,18 @@ static void paint(HWND hwnd)
 
     /* a restart arrow: drawn, as the icon font's is not every machine's */
     {
+        /* drawn soft-edged (sg-smooth.h): four times finer, averaged down */
+        struct sg_ss ss;
+        HDC big = sg_ss_begin(&ss, dc, S(17), S(7), S(23), S(24), S(2));
         HPEN pen = CreatePen(PS_SOLID, S(2), sg_accent());
-        SelectObject(dc, pen);
-        HBRUSH none = (HBRUSH)GetStockObject(NULL_BRUSH);
-        SelectObject(dc, none);
+        HGDIOBJ op = SelectObject(big, pen), ob = SelectObject(big, GetStockObject(NULL_BRUSH));
         /* most of a circle, open at the top right, with an arrowhead there */
-        MoveToEx(dc, S(33), S(15), NULL);
-        AngleArc(dc, S(28), S(20), S(7), 45, 290);
-        MoveToEx(dc, S(33), S(15), NULL); LineTo(dc, S(28), S(15));
-        MoveToEx(dc, S(33), S(15), NULL); LineTo(dc, S(33), S(10));
+        MoveToEx(big, S(33), S(15), NULL);
+        AngleArc(big, S(28), S(20), S(7), 45, 290);   /* sg-smooth: in the region */
+        MoveToEx(big, S(33), S(15), NULL); LineTo(big, S(28), S(15));
+        MoveToEx(big, S(33), S(15), NULL); LineTo(big, S(33), S(10));
+        SelectObject(big, op); SelectObject(big, ob);
+        sg_ss_end(&ss);
         DeleteObject(pen);
     }
     SelectObject(dc, g_font_small);

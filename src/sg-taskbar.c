@@ -19,6 +19,7 @@
 #define COBJMACROS
 #include <windows.h>
 #include "sg-mode.h"
+#include "sg-smooth.h"
 #include <shellapi.h>
 #include <stdio.h>
 #include <time.h>
@@ -90,7 +91,7 @@ static void draw_start_glyph(HDC dc, RECT area, BOOL hot)
         HBRUSH b = CreateSolidBrush(hot ? COL_BAR_HOVER : glass[i]);
         HBRUSH oldb = SelectObject(dc, b);
         HPEN oldp = SelectObject(dc, GetStockObject(NULL_PEN));
-        Polygon(dc, p, 4);
+        sg_polygon(dc, p, 4);
         SelectObject(dc, oldp);
         SelectObject(dc, oldb);
         DeleteObject(b);

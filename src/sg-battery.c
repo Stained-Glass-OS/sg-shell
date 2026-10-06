@@ -58,6 +58,7 @@ static void describe(WCHAR *out, int cch)
 
 /* --- the icon, drawn here at four times the size and scaled down ------------------ */
 
+/* sg-smooth: drawn on a canvas four times larger, reduced to soft-edged alpha */
 static HICON make_icon(int size)
 {
     enum { K = 4 };

@@ -34,6 +34,7 @@
  */
 #include "store.h"
 #include "../sg-mode.h"
+#include "../sg-smooth.h"
 
 static BOOL g_dark;   /* the app mode: dark (follow_mode) */
 #include <shellapi.h>
@@ -670,7 +671,7 @@ static void button(HDC dc, RECT rc, const WCHAR *label, BOOL primary)
     HBRUSH b = CreateSolidBrush(primary ? C_ACCENT : C_CARD);
     HPEN pen = CreatePen(PS_SOLID, 1, primary ? C_ACCENT : C_LINE), oldp = SelectObject(dc, pen);
     HBRUSH oldb = SelectObject(dc, b);
-    RoundRect(dc, rc.left, rc.top, rc.right, rc.bottom, dpx(6), dpx(6));
+    sg_round_rect(dc, rc.left, rc.top, rc.right, rc.bottom, dpx(6), dpx(6));
     SelectObject(dc, oldb); SelectObject(dc, oldp);
     DeleteObject(b); DeleteObject(pen);
     text(dc, g_f_body, primary ? RGB(255, 255, 255) : C_TEXT, rc, label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -693,7 +694,7 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
     pen = CreatePen(PS_SOLID, sel ? 2 : 1, sel ? C_SEL : C_LINE);
     oldp = SelectObject(dc, pen);
     oldb = SelectObject(dc, cb);
-    RoundRect(dc, card.left, card.top, card.right, card.bottom, dpx(8), dpx(8));
+    sg_round_rect(dc, card.left, card.top, card.right, card.bottom, dpx(8), dpx(8));
     SelectObject(dc, oldb); SelectObject(dc, oldp);
     DeleteObject(cb); DeleteObject(pen);
     add_list_hit(H_CARD, idx, card, client_bottom);
@@ -721,7 +722,7 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
         HPEN np = SelectObject(dc, GetStockObject(NULL_PEN));
         WCHAR letter[2] = { a->name[0], 0 };
         RECT br = { x + pad, y + pad, x + pad + badge, y + pad + badge };
-        RoundRect(dc, br.left, br.top, br.right, br.bottom, dpx(8), dpx(8));
+        sg_round_rect(dc, br.left, br.top, br.right, br.bottom, dpx(8), dpx(8));
         SelectObject(dc, ob); SelectObject(dc, np);
         DeleteObject(bb);
         text(dc, g_f_head, RGB(255, 255, 255), br, letter, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -773,7 +774,7 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
                 tri[1].x = b2.right - dpx(12); tri[1].y = tri[0].y;
                 tri[2].x = b2.right - dpx(16); tri[2].y = tri[0].y + dpx(4);
                 otb = SelectObject(dc, tb); np = SelectObject(dc, GetStockObject(NULL_PEN));
-                Polygon(dc, tri, 3);
+                sg_polygon(dc, tri, 3);
                 SelectObject(dc, otb); SelectObject(dc, np); DeleteObject(tb);
                 add_list_hit(H_BUILD, idx, b2, client_bottom);
                 two = TRUE;
@@ -790,14 +791,14 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
         HBRUSH bb = CreateSolidBrush(a->checked ? C_ACCENT : C_CARD);
         HPEN bp = CreatePen(PS_SOLID, 1, a->checked ? C_ACCENT : C_SUB), op = SelectObject(dc, bp);
         HBRUSH ob = SelectObject(dc, bb);
-        RoundRect(dc, box.left, box.top, box.right, box.bottom, dpx(3), dpx(3));
+        sg_round_rect(dc, box.left, box.top, box.right, box.bottom, dpx(3), dpx(3));
         SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(bb); DeleteObject(bp);
         if (a->checked) {
             HPEN tick = CreatePen(PS_SOLID, max(2, dpx(2)), RGB(255, 255, 255));
             op = SelectObject(dc, tick);
-            MoveToEx(dc, box.left + sz * 3 / 16, box.top + sz / 2, NULL);
-            LineTo(dc, box.left + sz * 7 / 16, box.top + sz * 3 / 4);
-            LineTo(dc, box.left + sz * 13 / 16, box.top + sz / 4);
+            POINT v[3] = { { box.left + sz * 3 / 16, box.top + sz / 2 }, { box.left + sz * 7 / 16, box.top + sz * 3 / 4 },
+                           { box.left + sz * 13 / 16, box.top + sz / 4 } };
+            sg_polyline(dc, v, 3);
             SelectObject(dc, op); DeleteObject(tick);
         }
         InflateRect(&hit, dpx(4), dpx(4));
@@ -899,7 +900,7 @@ static void paint_details(HDC dc, const RECT *rc)
         HPEN np = SelectObject(dc, GetStockObject(NULL_PEN));
         WCHAR letter[2] = { a->name[0], 0 };
         RECT br = { x, y, x + badge, y + badge };
-        RoundRect(dc, br.left, br.top, br.right, br.bottom, dpx(10), dpx(10));
+        sg_round_rect(dc, br.left, br.top, br.right, br.bottom, dpx(10), dpx(10));
         SelectObject(dc, ob); SelectObject(dc, np); DeleteObject(bb);
         text(dc, g_f_title, RGB(255, 255, 255), br, letter, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
@@ -1130,7 +1131,7 @@ static void paint(HWND hwnd)
                 HBRUSH b = CreateSolidBrush(k == g_cat ? C_ACCENT : C_CARD);
                 HPEN pen = CreatePen(PS_SOLID, 1, k == g_cat ? C_ACCENT : C_LINE), op = SelectObject(dc, pen);
                 HBRUSH ob = SelectObject(dc, b);
-                RoundRect(dc, chip.left, chip.top, chip.right, chip.bottom, dpx(12), dpx(12));
+                sg_round_rect(dc, chip.left, chip.top, chip.right, chip.bottom, dpx(12), dpx(12));
                 SelectObject(dc, ob); SelectObject(dc, op);
                 DeleteObject(b); DeleteObject(pen);
             }
