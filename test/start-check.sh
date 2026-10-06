@@ -191,6 +191,11 @@ glassblue() { echo "$1" | awk -F, '{ exit !($3 > $1 + 30 && $1 < 110) }'; }
     && [ "$(geo xall 4)" -le "$(geo gleft 4)" ] && [ "$(geo xturnoff 1)" -gt "$(geo gleft 3)" ] && [ "$(geo xturnoff 2)" -ge "$(geo gleft 4)" ] \
     && pass "a search box under the programs, All Programs at their foot, Shut down under the glass column" \
     || fail "Glass parts: search $(val gsearch) all $(val xall) shut down $(val xturnoff) left $(val gleft)"
+# the search box's magnifier, drawn soft-edged like the rail's glyphs (it was
+# a GDI pen: two colours, stepped). Mutant SG_MUTANT_JAGGED_MAGNIFIER (2).
+mx=$((gx + $(geo gsearch 3) - 14 - 7)); my=$((gy + ($(geo gsearch 2) + $(geo gsearch 4)) / 2 - 1 - 7))
+m=$(convert "$HERE/build/start-glass.png" -crop "14x14+$mx+$my" +repage -format %k info: 2>/dev/null)
+[ "${m:-0}" -ge 6 ] && pass "the search box's magnifier is smooth ($m colours)" || fail "jagged search magnifier: ${m:-?} colours (want 6 or more)"
 [ "$(val acrylic)" = 72 ] && pass "and it is frosted more, as glass (72)" || fail "Glass acrylic: $(val acrylic)"
 click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
 [ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists the programs in place" || fail "Glass All Programs: $(val list)"

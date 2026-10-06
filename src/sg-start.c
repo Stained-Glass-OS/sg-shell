@@ -2726,6 +2726,24 @@ static void g_triangle(HDC dc, int cx, int cy, int size, BOOL left, COLORREF c)
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(b);
 }
 
+/* the search box's magnifier: a ring and a handle to the lower right, centred
+ * on (cx, cy); u is a pixel at 100% (SG_SS times that, drawn for sg_smooth) */
+static void magnifier_lines(HDC dc, double cx, double cy, double u)
+{
+    HPEN p = CreatePen(PS_SOLID, max(1, (int)(2 * u + 0.5)), sg_smooth_colour(RGB(0x50, 0x68, 0x88))), op = SelectObject(dc, p);
+    HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Ellipse(dc, (int)(cx - 5 * u), (int)(cy - 5 * u), (int)(cx + 3 * u), (int)(cy + 3 * u));
+    MoveToEx(dc, (int)(cx + 2 * u), (int)(cy + 2 * u), NULL); LineTo(dc, (int)(cx + 6 * u), (int)(cy + 6 * u));
+    SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(p);
+}
+
+static void magnifier_art(HDC dc, int w, int h, const void *arg)
+{
+    (void)arg;
+    (void)w; (void)h;   /* the centre is S(7) in from the corner, as placed */
+    magnifier_lines(dc, S(7) * SG_SS, S(7) * SG_SS, SG_SS * g_dpi / 96.0);
+}
+
 static void draw_seven(HDC dc)
 {
     RECT all = { 0, 0, g_panel_w, g_panel_h }, left = g_left_rect(), r, t, line;
@@ -2784,13 +2802,13 @@ static void draw_seven(HDC dc)
     if (g_search[0]) text(dc, g_search, t, g_font, RGB(0, 0, 0), DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     else text(dc, L"Search programs and files", t, g_xfont_sub, RGB(0x80, 0x80, 0x80), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     {
-        /* a magnifier at its right end */
+        /* a magnifier at its right end, soft-edged like the rail's glyphs */
         int cx = r.right - S(14), cy = (r.top + r.bottom) / 2 - S(1);
-        HPEN p = CreatePen(PS_SOLID, S(2), RGB(0x50, 0x68, 0x88)), op = SelectObject(dc, p);
-        HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
-        Ellipse(dc, cx - S(5), cy - S(5), cx + S(3), cy + S(3));
-        MoveToEx(dc, cx + S(2), cy + S(2), NULL); LineTo(dc, cx + S(6), cy + S(6));
-        SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(p);
+#ifndef SG_MUTANT_JAGGED_MAGNIFIER
+        sg_smooth(dc, cx - S(7), cy - S(7), S(15), S(15), magnifier_art, NULL);
+#else
+        magnifier_lines(dc, cx, cy, S(1));
+#endif
     }
 
     /* the user's picture over the glass column, then the places, plain text */

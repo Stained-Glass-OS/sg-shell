@@ -1,3 +1,13 @@
+sg-shell (0.1.0-128) unstable; urgency=medium
+
+  * Start (the Glass look's search box): the magnifier at the search box's
+    right end is drawn soft-edged with sg-smooth.h, like the rail's glyphs;
+    it was a GDI pen and ellipse, two colours with stepped edges. Test:
+    test/start-check.sh, the colour count of the magnifier (17; mutant
+    SG_MUTANT_JAGGED_MAGNIFIER gives 2).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 21:40:57 -0700
+
 sg-shell (0.1.0-127) unstable; urgency=medium
 
   * High-resolution screens (David 2026-10-05, a Surface Pro 7 at
