@@ -1266,8 +1266,17 @@ static LRESULT CALLBACK search_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         if (wp == VK_ESCAPE) { SetWindowTextW(hwnd, L""); return 0; }
+#ifndef SG_MUTANT_NO_SELECT_ALL
+        /* Ctrl+A selects the search, so typing replaces it (a classic EDIT
+         * has no Ctrl+A: the text typed was added to the old search --
+         * "anydesk7-zip", regression walk 2026-10-06) */
+        if (wp == 'A' && (GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
+            SendMessageW(hwnd, EM_SETSEL, 0, -1);
+            return 0;
+        }
+#endif
     }
-    if (msg == WM_CHAR && (wp == L'\r' || wp == 27)) return 0;   /* no beep */
+    if (msg == WM_CHAR && (wp == L'\r' || wp == 27 || wp == 1)) return 0;   /* no beep (1: Ctrl+A) */
     return CallWindowProcW(g_search_proc, hwnd, msg, wp, lp);
 }
 

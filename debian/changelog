@@ -1,3 +1,13 @@
+sg-shell (0.1.0-140) unstable; urgency=medium
+
+  * SG Store: Ctrl+A in the search box selects the search, so what is
+    typed next replaces it (the box is a classic EDIT, which has no
+    Ctrl+A: typing was added to the old search, "anydesk7-zip" -- s14
+    regression walk 2026-10-06). Test: test/store-check.sh K2 (mutant
+    SG_MUTANT_NO_SELECT_ALL).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 10:49:44 -0700
+
 sg-shell (0.1.0-139) unstable; urgency=medium
 
   * The touch keyboard (sg-touchkbd, TabTip.exe): a tablet's keyboard

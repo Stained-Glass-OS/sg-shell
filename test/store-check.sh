@@ -76,6 +76,7 @@
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
+#   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -125,7 +126,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -949,6 +950,10 @@ if waitfor "$D" '^window 1' 60; then
         import -window root "$OUT/store-details.png" 2>/dev/null
         click "$D" "back -"; sleep 1
         [ "$(field detail)" = - ] && [ "$(field search)" = fake ] && pass "Back returns to the list as it was (the search kept)" || fail "after Back: detail '$(field detail)' search '$(field search)'"
+        # Ctrl+A in the search box selects it: typing replaces the search
+        click "$D" "search -"; sleep 0.4; xdotool key ctrl+a; sleep 0.3; xdotool type --delay 60 gim; sleep 1
+        [ "$(field search)" = gim ] && pass "Ctrl+A in the search box selects it: typing replaces the search" || fail "Ctrl+A then typing: search '$(field search)'"
+        xdotool key ctrl+a; sleep 0.3; xdotool type --delay 60 fake; sleep 1
     else fail "a click on the card did not open its page: $(grep '^detail' "$D" | head -3 | tr '\n' '|')"; fi
     xdotool key Escape; sleep 0.4; xdotool key Escape; sleep 0.6     # to the search box, then cleared
     click "$D" "category Linux" && sleep 0.8
@@ -962,6 +967,15 @@ if waitfor "$D" '^window 1' 60; then
     [ "$(field detail)" = - ] && pass "Esc closes the page" || fail "Esc: detail '$(field detail)'"
 else fail "the window did not open (details)"; fi
 wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+# mutant: Ctrl+A selects nothing -- the typing is added to the search
+rm -f "$D"
+wine "$T/mut-no_select_all.exe" >/dev/null 2>&1 &
+if waitfor "$D" '^window 1' 60; then
+    sleep 0.8
+    click "$D" "search -"; sleep 0.4; xdotool type --delay 60 fake; sleep 1; xdotool key ctrl+a; sleep 0.3; xdotool type --delay 60 gim; sleep 1
+    [ "$(field search)" != gim ] && pass "MUTANT NO_SELECT_ALL caught (search '$(field search)')" || fail "MUTANT NO_SELECT_ALL not caught"
+else fail "the mutant's window did not open"; fi
+wine taskkill /f /im mut-no_select_all.exe >/dev/null 2>&1; sleep 0.5
 
 # --- L. one app, two builds; its picture; the queue; Uninstall -----------------------------------
 reg "$K\\05" /v Linux /d L1
