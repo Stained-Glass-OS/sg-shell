@@ -202,10 +202,11 @@ i=0; while [ "$(field zoom)" = "$z0" ] && [ $i -lt 20 ]; do sleep 0.25; i=$((i +
 xdotool key ctrl+minus ctrl+minus
 sleep 0.5
 [ "$(field zoom)" -lt "$z0" ] 2>/dev/null && pass "Ctrl+Minus twice: $(field zoom)%" || fail "zoom out: $(field zoom)"
-xdotool key ctrl+0
-wait_field fit width 3 && [ "$(field zoom)" = "$z0" ] && pass "Ctrl+0: fit width again ($z0%)" || fail "Ctrl+0: fit $(field fit) zoom $(field zoom)"
+xdotool key ctrl+2
+wait_field fit width 3 && [ "$(field zoom)" = "$z0" ] && pass "Ctrl+2: fit width again ($z0%)" || fail "Ctrl+2: fit $(field fit) zoom $(field zoom)"
 xdotool key ctrl+bracketright
 if wait_field rot 90 3; then
+    wait_line "^page $(field current) " 5   # the dump after the view is laid out again
     set -- $(field "page $(field current)")
     [ $# -ge 4 ] && [ $(( $3 - $1 )) -gt $(( $4 - $2 )) ] && pass "Ctrl+]: rotated 90, the page is wider than tall" || fail "rotate: page rect $*"
     wait_line "^page $(field current) .* 1$" 10 || true

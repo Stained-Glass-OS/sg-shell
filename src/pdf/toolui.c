@@ -30,14 +30,6 @@ static BOOL g_format_busy;
 
 /* ---- glyphs ------------------------------------------------------------------------------------------ */
 
-enum {
-    T_NONE, T_SELECT, T_TEXT, T_IMAGE, T_DELETE, T_REPLACE, T_NOTE, T_HIGHLIGHT, T_UNDERLINE, T_STRIKE, T_TEXTBOX,
-    T_RECT, T_ELLIPSE, T_ARROW, T_LINE, T_PEN, T_SIGN, T_FLATTEN, T_MARK, T_AREA, T_FIND, T_APPLY, T_CLEAN, T_ROTL,
-    T_ROTR, T_BLANK, T_INSERT, T_EXTRACT, T_SPLIT, T_CLOSE, T_EDIT, T_COMMENT, T_FILL, T_REDACT, T_ORGANIZE,
-    T_EXPORT, T_COMBINE, T_PROTECT, T_FORM, T_FTEXT, T_FDATE, T_FNUM, T_FCHECK, T_FRADIO, T_FCOMBO, T_FLIST, T_FSIGN,
-    T_DETECT, T_PROPS, T_STAMP, T_LINK, T_CHECKMARK, T_CROSS, T_DOT, T_CERT, T_OCR, T_HEADER, T_WATERMARK, T_BATES,
-    T_REPLACE_PAGE, T_SCAN,
-};
 
 static void ln(HDC dc, int x1, int y1, int x2, int y2)
 {
@@ -217,6 +209,46 @@ static void glyph_raw(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORR
         ln(dc, cx - q, cy - q, cx + q + 1, cy + q + 1);
         ln(dc, cx + q, cy - q, cx - q - 1, cy + q + 1);
         break;
+    case T_MENU:
+        ln(dc, cx - h + 1, cy - q, cx + h, cy - q); ln(dc, cx - h + 1, cy, cx + h, cy); ln(dc, cx - h + 1, cy + q, cx + h, cy + q);
+        break;
+    case T_HOME: {
+        POINT p5[5] = { { cx - h + 2, cy - 1 }, { cx, cy - h + 1 }, { cx + h - 2, cy - 1 }, { cx + h - 2, cy + h - 1 }, { cx - h + 2, cy + h - 1 } };
+        Polygon(dc, p5, 5);
+        Rectangle(dc, cx - 3, cy + 3, cx + 4, cy + h);
+        break;
+    }
+    case T_UP: ln(dc, cx - q - 1, cy + 2, cx, cy - q + 1); ln(dc, cx, cy - q + 1, cx + q + 1, cy + 2); break;
+    case T_DOWN: ln(dc, cx - q - 1, cy - 2, cx, cy + q - 1); ln(dc, cx, cy + q - 1, cx + q + 1, cy - 2); break;
+    case T_PLUS: ln(dc, cx - q - 1, cy, cx + q + 2, cy); ln(dc, cx, cy - q - 1, cx, cy + q + 2); break;
+    case T_MINUS: ln(dc, cx - q - 1, cy, cx + q + 2, cy); break;
+    case T_FITG:
+        Rectangle(dc, cx - q, cy - h + 2, cx + q + 1, cy + h - 1);
+        ln(dc, cx - h, cy - 1, cx - q - 2, cy - 1); ln(dc, cx + q + 3, cy - 1, cx + h + 1, cy - 1);
+        break;
+    case T_OPENFILE: {
+        POINT p6[6] = { { cx - h, cy - q - 2 }, { cx - q, cy - q - 2 }, { cx - 2, cy - q + 1 }, { cx + h, cy - q + 1 },
+                        { cx + h, cy + h - 2 }, { cx - h, cy + h - 2 } };
+        Polygon(dc, p6, 6);
+        break;
+    }
+    case T_ALLTOOLS:
+        Rectangle(dc, cx - h + 1, cy - h + 1, cx - 1, cy - 1); Rectangle(dc, cx + 2, cy - h + 1, cx + h, cy - 1);
+        Rectangle(dc, cx - h + 1, cy + 2, cx - 1, cy + h); Rectangle(dc, cx + 2, cy + 2, cx + h, cy + h);
+        break;
+    case T_BACK: ln(dc, cx + 2, cy - q - 1, cx - q + 1, cy); ln(dc, cx - q + 1, cy, cx + 2, cy + q + 1); break;
+    case T_COMPRESS:
+        Rectangle(dc, cx - q - 1, cy - h + 1, cx + q + 2, cy + h);
+        ln(dc, cx, cy - q - 2, cx, cy - 1); ln(dc, cx - 3, cy - 4, cx, cy - 1); ln(dc, cx + 3, cy - 4, cx, cy - 1);
+        ln(dc, cx, cy + q + 2, cx, cy + 2); ln(dc, cx - 3, cy + 5, cx, cy + 2); ln(dc, cx + 3, cy + 5, cx, cy + 2);
+        break;
+    case T_CREATE: {
+        POINT p5[5] = { { cx - q - 2, cy - h }, { cx + q - 1, cy - h }, { cx + q + 3, cy - h + 4 }, { cx + q + 3, cy + h },
+                        { cx - q - 2, cy + h } };
+        Polygon(dc, p5, 5);
+        ln(dc, cx - 3, cy + 1, cx + 4, cy + 1); ln(dc, cx, cy - 2, cx, cy + 5);
+        break;
+    }
     case T_FORM: case T_FTEXT: case T_FDATE: case T_FNUM: {
         Rectangle(dc, cx - h, cy - q, cx + h + 1, cy + q + 1);
         if (k == T_FORM) { ln(dc, cx - h, cy - h + 1, cx + h + 1, cy - h + 1); ln(dc, cx - h, cy + h, cx + 1, cy + h); }
@@ -303,6 +335,11 @@ static void glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF a
     HDC big = sg_ss_begin(&ss, dc, cx - s, cy - s, 2 * s + 1, 2 * s + 1, max(1, s / 8));
     glyph_raw(big, k, cx, cy, s, col, accent);
     sg_ss_end(&ss);
+}
+
+void pdf_glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF accent)
+{
+    glyph(dc, k, cx, cy, s, col, accent);
 }
 
 /* ---- the tool's bar ----------------------------------------------------------------------------------- */
@@ -634,7 +671,7 @@ static void build_rows(void)
     g_nrows = 0;
     switch (g.tool) {
     case TOOL_NONE:
-        add_row(ROW_HEAD, 0, 0, L"Tools", NULL, NULL);
+        add_row(ROW_HEAD, 0, 0, L"All tools", NULL, NULL);
         add_row(ROW_TOOL, CMD_TOOL + TOOL_EDIT, T_EDIT, L"Edit PDF", L"Change text and pictures", "edit");
         add_row(ROW_TOOL, CMD_TOOL + TOOL_COMMENT, T_COMMENT, L"Comment", L"Notes, highlights, drawings", "comment");
         add_row(ROW_TOOL, CMD_TOOL + TOOL_FILL, T_FILL, L"Fill & Sign", L"Fill in forms, sign", "fill");
@@ -647,9 +684,10 @@ static void build_rows(void)
         add_row(ROW_TOOL, CMD_EXPORT, T_EXPORT, L"Export PDF", L"Word, text, HTML, pictures", "export");
         add_row(ROW_TOOL, CMD_COMBINE, T_COMBINE, L"Combine Files", L"Several files into one PDF", "combine");
         add_row(ROW_TOOL, CMD_PROTECT, T_PROTECT, L"Protect", L"Passwords and permissions", "protect");
-        add_row(ROW_TOOL, CMD_OPTIMIZE, T_FLATTEN, L"Reduce File Size", L"Smaller pictures and fonts", "optimize");
+        add_row(ROW_TOOL, CMD_OPTIMIZE, T_FLATTEN, L"Compress", L"Make the file smaller", "optimize");
         break;
     case TOOL_FORM:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Fields", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_BUTTON, CMD_FORM_DETECT, T_DETECT, L"Auto-detect form fields", NULL, "detect");
@@ -657,17 +695,20 @@ static void build_rows(void)
         add_row(ROW_LIST, 0, 0, NULL, NULL, NULL);
         break;
     case TOOL_EDIT:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Format", NULL, NULL);
         add_row(ROW_FORMAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_TEXT, 0, 0, L"Click an object to select it; drag it to move it, drag a corner to resize it. "
                                 L"Double-click text to change it: it reflows in its box. Del deletes.", NULL, NULL);
         break;
     case TOOL_COMMENT:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Comments", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_LIST, 0, 0, NULL, NULL, NULL);
         break;
     case TOOL_FILL:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Fill & Sign", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_BUTTON, CMD_SIGN, T_SIGN, L"Sign yourself...", NULL, "sign");
@@ -676,6 +717,7 @@ static void build_rows(void)
         add_row(ROW_LIST, 0, 0, NULL, NULL, NULL);
         break;
     case TOOL_REDACT:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Redact", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_BUTTON, CMD_FINDREDACT, T_FIND, L"Find text && patterns...", NULL, "findtext");
@@ -686,6 +728,7 @@ static void build_rows(void)
                                 L"the file anew, so none of it can be recovered.", NULL, NULL);
         break;
     case TOOL_ORGANIZE:
+        add_row(ROW_BUTTON, CMD_TOOLCLOSE, T_BACK, L"All tools", NULL, "back");
         add_row(ROW_HEAD, 0, 0, L"Organize Pages", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_BUTTON, CMD_ORG_BLANK, T_BLANK, L"Insert blank page", NULL, "blank");

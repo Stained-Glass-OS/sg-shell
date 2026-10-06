@@ -30,6 +30,15 @@
 #             page at a time (Page Down turns it), Dark Pages draws them dark
 #   attach    Attach a File: listed in the Attachments pane, saved in the file
 #   stamp     an Approved stamp placed from Comment's bar
+#   frame     the familiar editor's frame: with no document, Home (13 tool
+#             cards, recent files); a card asks for a file and opens its
+#             tool; the Home and document tabs switch; every tool card opens
+#             its tool or its dialog; the quick tools rail (select, comment,
+#             highlight, draw, text, sign) sets each; the floating page
+#             controls turn the page and zoom; the Menu button and Alt+F open
+#             the menu; Ctrl+0 fit page, Ctrl+2 fit width, Ctrl+Shift+Plus
+#             rotates, Ctrl+Tab goes Home and back; screenshots light and dark
+#   scale     at 200% (LogPixels 192) the frame is drawn twice as large
 #   more      a link made with Edit PDF's Link; a sticky note's reply and
 #             status (Accepted) from the comments list; Organize's Replace
 #             (page 2 replaced by another PDF's page)
@@ -45,7 +54,7 @@ EXE="${SG_PDF_EXE:-$HERE/build/sg-pdf64.exe}"
 OUT="$HERE/build"
 PY=/usr/bin/python3
 PROBE="$HERE/test/pdf-pro-probe.py"
-ONLY="${SG_PDF_PRO_ONLY:-form fill sign create ocr decorate view attach stamp more}"
+ONLY="${SG_PDF_PRO_ONLY:-frame form fill sign create ocr decorate view attach stamp more scale}"
 RC=0; XP=""
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
@@ -118,6 +127,10 @@ shot() { sleep 0.5; import -window root "$OUT/pdf-pro-$1.png" 2>/dev/null; }
 wd() { wine winepath -w "$1" 2>/dev/null | tr -d '\r'; }
 tb() { set -- $(grep "^tbtn $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 0.8; }
 pane() { set -- $(grep "^panebtn $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 1; }
+homecard() { wait_line "^homecard $1 " 5; set -- $(grep "^homecard $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 1; }
+dtab() { set -- $(grep "^doctab $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 0.8; }
+rail() { set -- $(grep "^railbtn $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 0.8; }
+flt() { set -- $(grep "^floatbtn $1 " "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1; sleep 0.8; }
 page_xy() {  # X Y [PAGE] -> screen x y of the point (points) on the page
     set -- "$1" "$2" $(field "page ${3:-1}") 0 0 0 0
     python3 -c "l,t,r,b=$3,$4,$5,$6; s=(r-l)/612.0; print(max(0,int(l+$1*s)), max(0,int(t+$2*s)))"
@@ -151,6 +164,85 @@ dialog() {  # TITLE: wait for SG PDF's dialog of that name in front (the dump's 
     wait_line "^dialog .*$1" 10 && sleep 0.4
 }
 F="$DOCS/flat.pdf"
+
+# ============================================================= the frame: Home, tabs, rail, floating controls, Menu
+if want frame; then
+    L="$DOCS/long.pdf"
+    launch "" frame "$(answers frame "$(wd "$L")")"
+    wait_field bridged 1 30 || fail "SG PDF did not start"
+    wait_field home 1 10 && pass "with no document, Home is shown" || fail "home '$(field home)'"
+    [ "$(count '^homecard ')" = 13 ] && pass "13 tool cards on Home" || fail "cards: $(count '^homecard ')"
+    shot home-light
+    homecard organize
+    wait_field pages 6 30 && wait_field tool '5 organize' 10 && pass "the Organize Pages card asks for a file and opens the tool" \
+        || fail "organize card: pages '$(field pages)' tool '$(field tool)'"
+    [ "$(field home)" = 0 ] && pass "the document's tab is in front" || fail "home '$(field home)'"
+    tb close
+    dtab home
+    wait_field home 1 5 && pass "the Home tab shows Home" || fail "Home tab: home '$(field home)'"
+    grep -q '^recent 0 .*long.pdf$' "$D" && pass "long.pdf is the first recent file" || fail "recent: $(grep '^recent' "$D")"
+    dtab doc
+    wait_field home 0 5 && pass "the document's tab shows the document" || fail "doc tab: home '$(field home)'"
+    for c in edit:1 comment:2 fill:3 redact:4 organize:5 form:6; do
+        k=${c%%:*}; n=${c#*:}
+        dtab home; homecard "$k"
+        if [ "$(field tool | cut -d' ' -f1)" = "$n" ] && [ "$(field home)" = 0 ]; then pass "the $k card opens its tool"
+        else fail "card $k: tool '$(field tool)' home '$(field home)'"; fi
+        tb close
+    done
+    for c in export:Export protect:Protect ocr:Recognize compress:Reduce certificates:Certificate combine:Combine; do
+        k=${c%%:*}; t=${c#*:}
+        dtab home; homecard "$k"
+        if dialog "$t"; then pass "the $k card opens its dialog"; else fail "card $k: no '$t' dialog ($(field dialog))"; fi
+        xdotool key Escape; sleep 0.8
+        dtab doc
+    done
+    wait_field home 0 5 || dtab doc
+    s1=$(grep '^railbtn select ' "$D" | cut -d' ' -f4); s2=$(grep '^railbtn comment ' "$D" | cut -d' ' -f4)
+    echo "$(( s2 - s1 ))" > "$T/railstep"
+    for r in comment:2:3 highlight:2:4 draw:2:12 text:3:13; do
+        k=${r%%:*}; rest=${r#*:}; tl=${rest%%:*}; sb=${rest#*:}
+        rail "$k"
+        if [ "$(field tool | cut -d' ' -f1)" = "$tl" ] && [ "$(field sub)" = "$sb" ] && grep -q "^railbtn $k .* 1$" "$D"; then
+            pass "the rail's $k sets tool $tl, $sb"
+        else fail "rail $k: tool '$(field tool)' sub '$(field sub)'"; fi
+    done
+    rail sign
+    if dialog "Signature"; then pass "the rail's sign asks for the signature"; xdotool key Escape; sleep 0.5; else fail "rail sign: no dialog"; fi
+    rail select
+    [ "$(field tool)" = "0 none" ] && pass "the rail's select closes the tool" || fail "rail select: tool '$(field tool)'"
+    shot doc-light
+    c0=$(field current)
+    flt next
+    wait_field current $(( c0 + 1 )) 5 && pass "the floating Next goes to page $(( c0 + 1 ))" || fail "float next: current '$(field current)'"
+    z0=$(field zoom); flt zoomin; sleep 0.5
+    [ "$(field zoom)" -gt "$z0" ] 2>/dev/null && pass "the floating zoom in: $z0% -> $(field zoom)%" || fail "float zoom: $z0 -> $(field zoom)"
+    xdotool key ctrl+0; wait_field fit page 5 && pass "Ctrl+0: fit page" || fail "Ctrl+0: fit '$(field fit)'"
+    xdotool key ctrl+2; wait_field fit width 5 && pass "Ctrl+2: fit width" || fail "Ctrl+2: fit '$(field fit)'"
+    xdotool key ctrl+shift+plus; wait_field rot 90 5 && pass "Ctrl+Shift+Plus rotates the view" || fail "rot '$(field rot)'"
+    xdotool key ctrl+shift+minus; wait_field rot 0 5 || fail "Ctrl+Shift+Minus: rot '$(field rot)'"
+    xdotool key ctrl+Tab; wait_field home 1 5 && pass "Ctrl+Tab: Home" || fail "Ctrl+Tab: home '$(field home)'"
+    xdotool key ctrl+Tab; wait_field home 0 5 || fail "Ctrl+Tab back: home '$(field home)'"
+    dtab menu
+    wait_field menuopen 1 5 && pass "the Menu button opens the menu" || fail "menuopen '$(field menuopen)'"
+    shot menu
+    xdotool key Escape; wait_field menuopen 0 5 || { xdotool key Escape; sleep 0.5; }
+    xdotool key alt+f
+    wait_field menuopen 1 5 && pass "Alt+F opens the File menu" || fail "Alt+F: menuopen '$(field menuopen)'"
+    xdotool key Escape; sleep 0.5
+    closeapp
+    # dark
+    reg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 0
+    launch "" framedark
+    wait_field home 1 20 && wait_field dark 1 5 && pass "dark: Home" || fail "dark home: home '$(field home)' dark '$(field dark)'"
+    shot home-dark
+    set -- $(grep '^recent 0 ' "$D" | head -1); [ $# -ge 4 ] && xdotool mousemove "$3" "$4" click 1
+    wait_field pages 6 30 && pass "a recent file opens with a click" || fail "recent: pages '$(field pages)'"
+    pane comment; sleep 1
+    shot doc-dark
+    closeapp
+    reg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 1
+fi
 
 # ============================================================= Prepare Form
 if want form; then
@@ -276,7 +368,8 @@ if want create; then
     C="$DOCS/created.pdf"
     launch "" create "$(answers create "$(wd "$DOCS/scan.png")|$(wd "$DOCS/notes.txt")|$(wd "$F")" "$(wd "$C")")"
     wait_field bridged 1 30 || fail "SG PDF did not start"
-    pane create
+    wait_field home 1 10 || fail "no document: Home is not shown"
+    homecard create
     if wait_field pages 3 30; then pass "Create PDF from a picture, a text file and a PDF: 3 pages"
     else fail "create: pages '$(field pages)' status '$(field status)'"; fi
     [ "$(field untitled)" = 1 ] && pass "the new document is untitled" || fail "untitled '$(field untitled)'"
@@ -294,7 +387,7 @@ if want ocr; then
     if command -v ocrmypdf >/dev/null && tesseract --list-langs 2>/dev/null | grep -qx eng; then
         launch "" ocr "$(answers ocr "$(wd "$DOCS/scan.png")" "$(wd "$O")")"
         wait_field bridged 1 30
-        pane create; wait_field pages 1 30 || fail "the scan did not open"
+        wait_field home 1 10; homecard create; wait_field pages 1 30 || fail "the scan did not open"
         [ -z "$(probe text "$O" 2>/dev/null)" ] || true
         pane ocr
         if dialog "Recognize Text"; then
@@ -435,6 +528,24 @@ if want more; then
     probe links "$M" | grep -q 'https://example.org/gate' && pass "the link is in the file" || fail "links: $(probe links "$M")"
     [ "$(probe annots "$M" | grep -c Text)" -ge 3 ] && pass "the note, its reply and its status are in the file" || fail "annots: $(probe annots "$M")"
     closeapp
+fi
+
+# ============================================================= 200%
+if want scale; then
+    step=$(cat "$T/railstep" 2>/dev/null || echo 42)
+    wine taskkill /f /im explorer.exe >/dev/null 2>&1; wineserver -k; sleep 1
+    reg 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 192
+    wineserver -w
+    WINEDEBUG=-all wine explorer /desktop=shell,1280x900 >/dev/null 2>&1 &
+    sleep 4
+    launch "$(wd "$DOCS/long.pdf")" scale
+    wait_field pages 6 40 || fail "long.pdf did not open at 200%"
+    s1=$(grep '^railbtn select ' "$D" | cut -d' ' -f4); s2=$(grep '^railbtn comment ' "$D" | cut -d' ' -f4)
+    [ -n "$s1" ] && [ $(( (s2 - s1) * 10 )) -ge $(( step * 18 )) ] && pass "at 200% the rail is twice as large ($step -> $(( s2 - s1 )) px a step)" \
+        || fail "200%: rail step $step -> $(( ${s2:-0} - ${s1:-0} ))"
+    shot scale-200
+    closeapp
+    reg 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 96
 fi
 
 [ $RC = 0 ] && echo "pdf-pro-check: all passed"

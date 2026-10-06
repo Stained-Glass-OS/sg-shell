@@ -1,3 +1,16 @@
+sg-shell (0.1.0-144) unstable; urgency=medium
+
+  * SG PDF follows the familiar professional PDF editor's current look: a
+    tab strip (Menu, Home, the document), Home with the tools gallery and
+    recent files, a quick tools rail on the left, floating page controls,
+    the "All tools" pane turning into each tool's panel; its shortcuts
+    (Ctrl+0 fit page, Ctrl+2 fit width, Ctrl+Shift+Plus rotate, Ctrl+E,
+    Ctrl+N, Ctrl+Tab, Ctrl+? ...). Light and dark, 100-250 percent.
+  * Gates: pdf-pro-check's frame and scale sections, four mutants;
+    pdf-check uses Ctrl+2 for fit width.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 13:03:04 -0700
+
 sg-shell (0.1.0-143) unstable; urgency=medium
 
   * A Linux app's icon in Start, on the taskbar and on its .desktop file

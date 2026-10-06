@@ -208,6 +208,8 @@ typedef struct {
     BOOL cover;                 /* two pages: the first page alone, as a book's cover */
     BOOL night;                 /* the pages drawn dark (their colours inverted) */
     BOOL reading;               /* Read Out Loud is speaking */
+    BOOL home;                  /* the Home tab is in front (it is anyway with no document) */
+    BOOL menu_open;             /* the Menu is down (the dump says so) */
     /* search */
     WCHAR needle[256];
     hit_t *hits;
@@ -336,6 +338,18 @@ void side_dump(FILE *f);
 /* print.c */
 void print_document(void);
 
+/* the glyphs drawn for buttons, cards and the rail (toolui.c, soft-edged with sg-smooth.h) */
+enum {
+    T_NONE, T_SELECT, T_TEXT, T_IMAGE, T_DELETE, T_REPLACE, T_NOTE, T_HIGHLIGHT, T_UNDERLINE, T_STRIKE, T_TEXTBOX,
+    T_RECT, T_ELLIPSE, T_ARROW, T_LINE, T_PEN, T_SIGN, T_FLATTEN, T_MARK, T_AREA, T_FIND, T_APPLY, T_CLEAN, T_ROTL,
+    T_ROTR, T_BLANK, T_INSERT, T_EXTRACT, T_SPLIT, T_CLOSE, T_EDIT, T_COMMENT, T_FILL, T_REDACT, T_ORGANIZE,
+    T_EXPORT, T_COMBINE, T_PROTECT, T_FORM, T_FTEXT, T_FDATE, T_FNUM, T_FCHECK, T_FRADIO, T_FCOMBO, T_FLIST, T_FSIGN,
+    T_DETECT, T_PROPS, T_STAMP, T_LINK, T_CHECKMARK, T_CROSS, T_DOT, T_CERT, T_OCR, T_HEADER, T_WATERMARK, T_BATES,
+    T_REPLACE_PAGE, T_SCAN, T_MENU, T_HOME, T_UP, T_DOWN, T_PLUS, T_MINUS, T_FITG, T_OPENFILE, T_ALLTOOLS, T_BACK,
+    T_COMPRESS, T_CREATE,
+};
+void pdf_glyph(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORREF accent);
+
 /* toolui.c: the tools pane and each tool's bar */
 void toolui_register(void);
 void toolui_create(HWND parent);
@@ -418,6 +432,25 @@ void link_create(int page, frect box);
 extern const WCHAR *const STAMP_LABELS[];
 extern const char *const STAMP_NAMES[];
 #define NSTAMPS 14
+
+/* home.c: the tab strip and Menu, Home (tools gallery, recent files), the quick tools rail, the floating page
+ * controls */
+extern HWND g_tabs, g_home, g_rail, g_float;
+void frame_create(HWND parent);
+void float_create(HWND parent);
+void frame_update(void);
+void frame_dump(FILE *f);
+BOOL home_shown(void);
+void home_switch(BOOL home);
+void home_card(int index);
+void recent_add(const WCHAR *path);
+void menu_popup(int index);
+void rail_command(int index);
+int tabbar_height(void);
+int rail_width(void);
+int float_width(void);
+int float_height(void);
+void shortcuts_help(void);
 
 /* organize.c */
 void org_register(void);
@@ -517,6 +550,9 @@ int org_selected(int *out, int cap);
 #define CMD_FORM_DELETE 258
 #define CMD_FULLSCREEN 259
 #define CMD_FORM_CLEARALL 260
+#define CMD_SHORTCUTS 261
+#define CMD_HOMETAB 262
+#define CMD_PROPSBAR 263
 /* organize */
 #define CMD_ORG_ROTL 280
 #define CMD_ORG_ROTR 281

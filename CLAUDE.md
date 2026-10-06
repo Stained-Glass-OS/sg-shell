@@ -1810,6 +1810,31 @@ layout follows the familiar PDF editor's workflow, the words and art are ours.
   `tab attachments|signatures`, `attachbtn`, `sigitem` and **`dialog TITLE`**
   (one of ours in front: under a Wine desktop every window is one X window,
   so a gate cannot ask X which window has the focus).
+- **The frame (2026-10-06, David: "match it closer to the familiar editor's
+  UI")** -- `home.c`: no Windows menu bar; the **tab strip** (Menu -- the
+  whole menu as one button, Alt or F10 and Alt+F/E/V/T/H open it, the
+  popups' mnemonics as before -- the **Home** tab and the document's tab with
+  its close button); **Home** (Open a file, Scan a document, the tools
+  gallery -- Edit PDF, Create PDF, Export PDF, Comment, Combine Files,
+  Organize Pages, Redact, Protect, Fill & Sign, Prepare Form, Scan & OCR,
+  Compress, Certificates -- a card whose tool needs a document asks for one;
+  the recent files, `HKCU\Software\Stained Glass\PDF Viewer\Recent`); the
+  **quick tools rail** down the left (select, add a comment, highlight, draw,
+  add text, sign); the **floating page controls** at the bottom right of the
+  pages (previous, page n / N, next, zoom out, in, fit). The right pane is
+  "All tools" and each tool's panel starts with "< All tools". One document at
+  a time (one engine): opening another replaces it, after the save prompt.
+  Shortcuts as the familiar editor's: Ctrl+0 fit page, Ctrl+1 actual size,
+  Ctrl+2 fit width, Ctrl+Shift+Plus/Minus rotate the view, Ctrl+Shift+N go
+  to page, Ctrl+N create from files, Ctrl+E properties (the picked field,
+  else the tools pane), Ctrl+Shift+V/B/E read aloud, Ctrl+Shift+I/D/R insert,
+  delete, rotate pages, Ctrl+Tab Home and back, Ctrl+? the list (Help >
+  Keyboard Shortcuts). Clicks act on button-down. The dump adds `home`,
+  `menuopen`, `doctab NAME x y on`, `homecard KEY x y`, `homeopen`, `recent
+  N x y PATH`, `railbtn NAME x y on`, `floatbtn NAME x y`. Gate sections
+  `frame` (Home, every card, tabs, rail, floating controls, Menu, shortcuts,
+  light and dark) and `scale` (LogPixels 192: the frame twice as large);
+  mutants HOMECARD, RAIL, FLOATNAV, TABS.
 - **Package `sg-pdf`** (from this source, like sg-office): the program,
   `defaults/80-sg-pdf.reg`, its icons (`gen-icon.py OUT.ico PNGDIR`) and
   `sg-pdf.desktop` (Linux programs' PDF handler: `sg-open-windows-file`,

@@ -436,6 +436,7 @@ BOOL doc_save(BOOL save_as)
         base = wcsrchr(target, L'\\');
         lstrcpynW(g.name, base ? base + 1 : target, MAX_PATH);
         g.untitled = FALSE;
+        recent_add(g.path);
         app_set_status(L"Saved.");
         app_update_title();
     }
