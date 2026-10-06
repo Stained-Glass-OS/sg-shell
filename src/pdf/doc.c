@@ -68,10 +68,17 @@ void doc_free_page_cache(page_t *p)
     p->annots_loaded = FALSE;
 }
 
+char g_last_head[1024];          /* the last change's answer (xref=, found=, ...) */
+
+static void free_field(field_t *f)
+{
+    free(f->name); free(f->value); free(f->options); free(f->fmt); free(f->calc); free(f->tooltip);
+}
+
 void doc_free_fields(void)
 {
     int i;
-    for (i = 0; i < g.nfields; i++) { free(g.fields[i].name); free(g.fields[i].value); free(g.fields[i].options); }
+    for (i = 0; i < g.nfields; i++) free_field(&g.fields[i]);
     free(g.fields);
     g.fields = NULL;
     g.nfields = 0;
@@ -166,7 +173,13 @@ void doc_apply_state(const char *head, const BYTE *data, DWORD len)
     g.has_sel = FALSE;
     g.sel_a.page = g.sel_b.page = -1;
     doc_free_fields();
-    if (g.form) doc_load_fields();
+    if (g.form || g.tool == TOOL_FORM) doc_load_fields();
+    {
+        BOOL had_sigs = g.nsigs > 0;
+        doc_free_sigs();
+        if (had_sigs || g.form) sigbar_update();
+    }
+    doc_free_attach();
     side_load_outline();
     tool_after_change();
     if (resized) view_relayout(TRUE);
@@ -210,6 +223,7 @@ BOOL doc_request(const char *line)
     SetCursor(old);
     if (rc == 1) {
         g.status[0] = 0;
+        lstrcpynA(g_last_head, head, sizeof(g_last_head));
         doc_apply_state(head, data, len);
         free(data);
         app_status_changed();
@@ -322,11 +336,14 @@ BOOL doc_load_annots(int page)
     n = br_field(head, "n", num, sizeof(num)) ? atoi(num) : 0;
     p->annots = n > 0 ? calloc(n, sizeof(annot_t)) : NULL;
     for (s = (char *)data; p->annots && s && *s && p->nannots < n; s = e) {
-        char *f[8] = { 0 };
+        char *f[10] = { 0 };
         annot_t *a = &p->annots[p->nannots];
+        int nf;
         e = strchr(s, '\n');
         if (e) *e++ = 0;
-        if (split_tabs(s, f, 8) < 7 || !parse_rect(f[3], &a->box)) continue;
+        if ((nf = split_tabs(s, f, 10)) < 7 || !parse_rect(f[3], &a->box)) continue;
+        a->replies = nf > 8 ? atoi(f[8]) : 0;
+        if (nf > 9) lstrcpynA(a->status, f[9], sizeof(a->status));
         a->xref = atoi(f[1]);
         lstrcpynA(a->type, f[2], sizeof(a->type));
         a->color = hex_color(f[4]);
@@ -351,12 +368,16 @@ BOOL doc_load_fields(void)
     g.fields = n > 0 ? calloc(n, sizeof(field_t)) : NULL;
     for (s = (char *)data; g.fields && s && *s && g.nfields < n; s = e) {
         static const char *TYPES[] = { "text", "checkbox", "radio", "combo", "list", "button", "signature" };
-        char *f[9] = { 0 };
+        char *f[12] = { 0 };
         field_t *fl = &g.fields[g.nfields];
-        int k;
+        int k, nf;
         e = strchr(s, '\n');
         if (e) *e++ = 0;
-        if (split_tabs(s, f, 9) < 8 || !parse_rect(f[3], &fl->box)) continue;
+        memset(fl, 0, sizeof(*fl));
+        if ((nf = split_tabs(s, f, 12)) < 8 || !parse_rect(f[3], &fl->box)) continue;
+        fl->fmt = unesc_utf8(nf > 9 ? f[9] : "", -1);
+        fl->calc = unesc_utf8(nf > 10 ? f[10] : "", -1);
+        fl->tooltip = unesc_utf8(nf > 11 ? f[11] : "", -1);
         fl->page = atoi(f[0]);
         fl->xref = atoi(f[1]);
         fl->type = FLD_OTHER;
@@ -366,7 +387,7 @@ BOOL doc_load_fields(void)
         fl->value = unesc_utf8(f[6], -1);
         fl->options = unesc_utf8(f[7], -1);
         fl->fontsize = f[8] ? (float)atof(f[8]) : 0;
-        if (fl->page < 0 || fl->page >= g.npages) { free(fl->name); free(fl->value); free(fl->options); continue; }
+        if (fl->page < 0 || fl->page >= g.npages) { free_field(fl); continue; }
         g.nfields++;
     }
     free(data);
@@ -414,6 +435,7 @@ BOOL doc_save(BOOL save_as)
         lstrcpynW(g.path, target, MAX_PATH);
         base = wcsrchr(target, L'\\');
         lstrcpynW(g.name, base ? base + 1 : target, MAX_PATH);
+        g.untitled = FALSE;
         app_set_status(L"Saved.");
         app_update_title();
     }

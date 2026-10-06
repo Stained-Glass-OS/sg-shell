@@ -447,6 +447,17 @@ static void new_rect_request(int page, frect r)
         g.sub = SUB_SELECT;
         break;
     }
+    case SUB_STAMP:
+        doc_requestf("annot\t%d\tstamp\trect=%s\tstamp=%s", page, rb, STAMP_NAMES[max(0, min(NSTAMPS - 1, g.stamp))]);
+        g.sub = SUB_SELECT;
+        break;
+    case SUB_LINK:
+        link_create(page, r);
+        g.sub = SUB_SELECT;
+        break;
+    case SUB_CERTSIGN:
+        sign_at(page, r);
+        break;
     case SUB_SIGN:
         if (g.sig_kind && g.sig_data) {
             static const char *KIND[] = { "", "ink", "text", "image" };
@@ -477,6 +488,14 @@ static void set_field(int i, const WCHAR *value)
 static void click_field(int i)
 {
     field_t *f = &g.fields[i];
+    if (f->type == FLD_SIGNATURE) {
+        int k;
+        doc_load_sigs();
+        for (k = 0; k < g.nsigs; k++)
+            if (g.sigs[k].xref == f->xref && g.sigs[k].state != SIG_UNSIGNED) { sig_show(k); return; }
+        dlg_certsign(f->xref);
+        return;
+    }
     if (f->flags & 1) { app_set_status(L"This field is read-only."); return; }
     switch (f->type) {
     case FLD_TEXT: {
@@ -525,7 +544,93 @@ static BOOL fields_live(void)
 static BOOL rect_sub(void)
 {
     if (g.tool == TOOL_REDACT) return g.sub == SUB_MARKAREA || g.sub == SUB_MARKTEXT;
-    return g.sub == SUB_RECT || g.sub == SUB_ELLIPSE || g.sub == SUB_ADDIMAGE || g.sub == SUB_SIGN;
+    return g.sub == SUB_RECT || g.sub == SUB_ELLIPSE || g.sub == SUB_ADDIMAGE || g.sub == SUB_SIGN ||
+           g.sub == SUB_STAMP || g.sub == SUB_LINK || g.sub == SUB_CERTSIGN;
+}
+
+static BOOL mark_sub(void)
+{
+    return g.tool == TOOL_FILL && (g.sub == SUB_MARK_CHECK || g.sub == SUB_MARK_CROSS || g.sub == SUB_MARK_DOT);
+}
+
+/* ---- a comment's thread: its replies and review status --------------------------------------------------- */
+
+#include "resource.h"
+
+static struct { int page, xref; } T;
+
+static INT_PTR CALLBACK thread_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    static const WCHAR *const STATES[] = { L"(no change)", L"Accepted", L"Rejected", L"Cancelled", L"Completed", L"None" };
+    (void)lp;
+    switch (msg) {
+    case WM_INITDIALOG: {
+        char line[64], head[256];
+        BYTE *data = NULL;
+        DWORD len;
+        int i;
+        snprintf(line, sizeof(line), "thread\t%d\t%d", T.page, T.xref);
+        if (br_request(line, head, sizeof(head), &data, &len) == 1) {
+            /* "AUTHOR DATE STATE TEXT" lines -> "AUTHOR: TEXT" paragraphs */
+            size_t cap = len * 2 + 64, k = 0;
+            WCHAR *out = calloc(cap, sizeof(WCHAR));
+            char *s2 = (char *)data, *e;
+            for (; out && s2 && *s2; s2 = e) {
+                char *f[4] = { 0 }, *t = s2;
+                int n = 0;
+                e = strchr(s2, '\n');
+                if (e) *e++ = 0;
+                while (n < 4) { f[n++] = t; t = strchr(t, '\t'); if (!t) break; *t++ = 0; }
+                if (n < 4) continue;
+                {
+                    WCHAR *who = unesc_utf8(f[0], -1), *text = unesc_utf8(f[3], -1), *c;
+                    if (who && text && k + wcslen(who) + wcslen(text) + 8 < cap) {
+                        for (c = text; *c; c++) if (*c == '\n') *c = ' ';
+                        k += swprintf(out + k, cap - k, L"%ls: %ls\r\n", who, text);
+                    }
+                    free(who);
+                    free(text);
+                }
+            }
+            if (out) { SetDlgItemTextW(dlg, IDC_TH_TEXT, k ? out : L"(no replies yet)"); free(out); }
+        }
+        free(data);
+        for (i = 0; i < 6; i++) SendDlgItemMessageW(dlg, IDC_TH_STATUS, CB_ADDSTRING, 0, (LPARAM)STATES[i]);
+        SendDlgItemMessageW(dlg, IDC_TH_STATUS, CB_SETCURSEL, 0, 0);
+        SetFocus(GetDlgItem(dlg, IDC_TH_REPLY));
+        return FALSE;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK) {
+            WCHAR reply[2048];
+            int st = (int)SendDlgItemMessageW(dlg, IDC_TH_STATUS, CB_GETCURSEL, 0, 0);
+            GetDlgItemTextW(dlg, IDC_TH_REPLY, reply, 2048);
+            EndDialog(dlg, IDOK);
+            if (reply[0]) {
+                char *e = esc_utf8(reply);
+                if (e) doc_requestf("reply\t%d\t%d\t%s", T.page, T.xref, e);
+                free(e);
+            }
+            if (st > 0) {
+                char st8[32];
+                to_utf8(STATES[st], st8, sizeof(st8));
+                doc_requestf("setstatus\t%d\t%d\t%s", T.page, T.xref, st8);
+            }
+            return TRUE;
+        }
+        if (LOWORD(wp) == IDCANCEL) { EndDialog(dlg, IDCANCEL); return TRUE; }
+        break;
+    }
+    return FALSE;
+}
+
+void comment_thread(int page, int index)
+{
+    if (page < 0 || page >= g.npages || !doc_load_annots(page) || index < 0 || index >= g.pages[page].nannots) return;
+    T.page = page;
+    T.xref = g.pages[page].annots[index].xref;
+    DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_THREAD), g_main, thread_proc, 0);
+    toolui_update();
 }
 
 static BOOL text_sub(void)
@@ -551,7 +656,10 @@ static void context_menu(POINT pt)
     } else if ((g.tool == TOOL_COMMENT && (k = annot_at(page, pt, FALSE)) >= 0) ||
                (g.tool == TOOL_REDACT && (k = annot_at(page, pt, TRUE)) >= 0)) {
         g.pick.kind = PICK_ANNOT; g.pick.page = page; g.pick.index = k;
-        if (g.tool == TOOL_COMMENT) AppendMenuW(m, MF_STRING, 4, L"&Open Note...");
+        if (g.tool == TOOL_COMMENT) {
+            AppendMenuW(m, MF_STRING, 4, L"&Open Note...");
+            AppendMenuW(m, MF_STRING, 5, L"&Reply and Status...");
+        }
         AppendMenuW(m, MF_STRING, 3, g.tool == TOOL_REDACT ? L"&Remove Mark" : L"&Delete");
     } else {
         DestroyMenu(m);
@@ -564,6 +672,7 @@ static void context_menu(POINT pt)
     if (cmd == 1) edit_obj_text(g.pick.page, g.pick.index);
     else if (cmd == 2) app_command(CMD_REPLACEIMAGE);
     else if (cmd == 3) tool_delete_pick();
+    else if (cmd == 5) comment_thread(g.pick.page, g.pick.index);
     else if (cmd == 4) {
         annot_t *a = &g.pages[g.pick.page].annots[g.pick.index];
         WCHAR buf[4096];
@@ -584,6 +693,7 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     float x, y;
     (void)wp;
     if (!g.npages || !g.bridged) return FALSE;
+    if (g.tool == TOOL_FORM) return form_mouse(hwnd, msg, wp, lp);
 
     if (msg == WM_RBUTTONUP) {
         if (g.tool == TOOL_EDIT || g.tool == TOOL_COMMENT || g.tool == TOOL_REDACT) {
@@ -609,6 +719,18 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (fields_live() && (k = field_at(pt)) >= 0) { click_field(k); return TRUE; }
         if (g.tool == TOOL_NONE || g.tool == TOOL_ORGANIZE) return FALSE;
         if (text_sub() && view_over_text(pt)) return FALSE;     /* the view selects text */
+#ifndef SG_MUTANT_FILLMARK
+        if (mark_sub() && page_point(pt, FALSE, &page, &x, &y)) {
+#else
+        if (mark_sub() && page_point(pt, FALSE, &page, &x, &y) && 0) {
+#endif
+            static const char *KIND[] = { "check", "cross", "dot" };
+            float sz = 12;
+            doc_requestf("fillmark\t%d\t%s\t%.2f %.2f %.2f %.2f", page, KIND[g.sub - SUB_MARK_CHECK], x - sz / 2, y - sz / 2,
+                         x + sz / 2, y + sz / 2);
+            toolui_update();
+            return TRUE;
+        }
         if (!page_point(pt, FALSE, &page, &x, &y)) {
             if (g.pick.kind != PICK_NONE) { g.pick.kind = PICK_NONE; InvalidateRect(hwnd, NULL, FALSE); toolui_update(); }
             return TRUE;
@@ -771,7 +893,9 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 /* a click: a box of a useful size at the point */
                 float w = 180, h = 40;
                 if (g.sub == SUB_ADDIMAGE) { w = 200; h = 150; }
-                else if (g.sub == SUB_SIGN) { w = 200; h = 60; }
+                else if (g.sub == SUB_SIGN || g.sub == SUB_CERTSIGN) { w = 200; h = 60; }
+                else if (g.sub == SUB_STAMP) { w = 150; h = 50; }
+                else if (g.sub == SUB_LINK) break;
                 else if (g.tool == TOOL_REDACT) break;
                 else if (g.sub == SUB_RECT || g.sub == SUB_ELLIPSE) { w = 100; h = 60; }
                 r.x1 = D.x0; r.y1 = D.y0; r.x2 = D.x0 + w; r.y2 = D.y0 + h;
@@ -838,6 +962,7 @@ BOOL tool_setcursor(POINT pt)
     int page, h;
     LPCWSTR c = NULL;
     if (!g.npages) return FALSE;
+    if (g.tool == TOOL_FORM) return form_setcursor(pt);
     page = view_page_at(pt, FALSE);
     if (fields_live() && field_at(pt) >= 0) c = (LPCWSTR)IDC_HAND;
     else if (page < 0 || g.tool == TOOL_NONE || g.tool == TOOL_ORGANIZE) return c ? (SetCursor(LoadCursorW(NULL, c)), TRUE) : FALSE;
@@ -847,6 +972,7 @@ BOOL tool_setcursor(POINT pt)
         else if (obj_at(page, pt) >= 0) c = (LPCWSTR)IDC_SIZEALL;
         else c = (LPCWSTR)IDC_ARROW;
     } else if (g.sub == SUB_ADDTEXT || g.sub == SUB_FILLTEXT) c = (LPCWSTR)IDC_IBEAM;
+    else if (mark_sub()) c = (LPCWSTR)IDC_CROSS;
     else if (text_sub()) c = view_over_text(pt) ? (LPCWSTR)IDC_IBEAM : (LPCWSTR)IDC_CROSS;
     else if (g.sub == SUB_SELECT) c = (LPCWSTR)IDC_ARROW;
     else c = (LPCWSTR)IDC_CROSS;
@@ -877,6 +1003,7 @@ void tool_delete_pick(void)
 BOOL tool_key(WPARAM vk)
 {
     if (!g.npages) return FALSE;
+    if (g.tool == TOOL_FORM && form_key(vk)) return TRUE;
     if (vk == VK_DELETE && g.pick.kind != PICK_NONE) { tool_delete_pick(); return TRUE; }
     if (vk == VK_ESCAPE && (g.pick.kind != PICK_NONE || D.mode != DRAG_NONE || g.sub != (g.tool == TOOL_REDACT ? SUB_MARKTEXT : SUB_SELECT))) {
         tool_cancel();
@@ -940,6 +1067,7 @@ void fields_paint(HDC dc, int page)
         old = SelectObject(dc, b);
         PatBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, 0x00A000C9 /* DPa */);
         SelectObject(dc, old);
+        if (g.fields[i].flags & FF_REQUIRED) frame(dc, r, RGB(0xD0, 0x20, 0x20), PS_SOLID, 1);
     }
     DeleteObject(b);
 }
@@ -952,6 +1080,7 @@ void tool_paint(HDC dc)
     HBRUSH white = GetStockObject(WHITE_BRUSH), acc = CreateSolidBrush(C_ACCENT);
     COLORREF accent = RGB(112, 48, 192);
     if (E.hwnd) editor_place();
+    if (g.tool == TOOL_FORM) { form_paint(dc); DeleteObject(acc); return; }
     if (g.tool == TOOL_EDIT && g.npages) {
         /* every object faintly while the tool is open is too busy: the hovered one */
         if (g_hover_page >= 0 && g_hover_page < g.npages && g_hover_obj >= 0 && g_hover_obj < g.pages[g_hover_page].nobjs &&

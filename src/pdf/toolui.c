@@ -34,7 +34,9 @@ enum {
     T_NONE, T_SELECT, T_TEXT, T_IMAGE, T_DELETE, T_REPLACE, T_NOTE, T_HIGHLIGHT, T_UNDERLINE, T_STRIKE, T_TEXTBOX,
     T_RECT, T_ELLIPSE, T_ARROW, T_LINE, T_PEN, T_SIGN, T_FLATTEN, T_MARK, T_AREA, T_FIND, T_APPLY, T_CLEAN, T_ROTL,
     T_ROTR, T_BLANK, T_INSERT, T_EXTRACT, T_SPLIT, T_CLOSE, T_EDIT, T_COMMENT, T_FILL, T_REDACT, T_ORGANIZE,
-    T_EXPORT, T_COMBINE, T_PROTECT,
+    T_EXPORT, T_COMBINE, T_PROTECT, T_FORM, T_FTEXT, T_FDATE, T_FNUM, T_FCHECK, T_FRADIO, T_FCOMBO, T_FLIST, T_FSIGN,
+    T_DETECT, T_PROPS, T_STAMP, T_LINK, T_CHECKMARK, T_CROSS, T_DOT, T_CERT, T_OCR, T_HEADER, T_WATERMARK, T_BATES,
+    T_REPLACE_PAGE, T_SCAN,
 };
 
 static void ln(HDC dc, int x1, int y1, int x2, int y2)
@@ -215,6 +217,78 @@ static void glyph_raw(HDC dc, int k, int cx, int cy, int s, COLORREF col, COLORR
         ln(dc, cx - q, cy - q, cx + q + 1, cy + q + 1);
         ln(dc, cx + q, cy - q, cx - q - 1, cy + q + 1);
         break;
+    case T_FORM: case T_FTEXT: case T_FDATE: case T_FNUM: {
+        Rectangle(dc, cx - h, cy - q, cx + h + 1, cy + q + 1);
+        if (k == T_FORM) { ln(dc, cx - h, cy - h + 1, cx + h + 1, cy - h + 1); ln(dc, cx - h, cy + h, cx + 1, cy + h); }
+        if (k == T_FTEXT) { ln(dc, cx - q, cy - q + 3, cx - q, cy + q - 2); }
+        if (k == T_FDATE) { ln(dc, cx - q, cy - q - 2, cx - q, cy - q + 2); ln(dc, cx + q, cy - q - 2, cx + q, cy - q + 2); ln(dc, cx - h + 2, cy, cx + h - 1, cy); }
+        if (k == T_FNUM) { ln(dc, cx - q, cy - 2, cx + q, cy - 2); ln(dc, cx - q, cy + 2, cx + q, cy + 2); ln(dc, cx - 2, cy - q + 2, cx - 3, cy + q - 1); ln(dc, cx + 2, cy - q + 2, cx + 1, cy + q - 1); }
+        break;
+    }
+    case T_FCHECK: case T_CHECKMARK:
+        if (k == T_FCHECK) Rectangle(dc, cx - q - 2, cy - q - 2, cx + q + 3, cy + q + 3);
+        ln(dc, cx - q, cy, cx - 1, cy + q);
+        ln(dc, cx - 1, cy + q, cx + q + 1, cy - q);
+        break;
+    case T_CROSS:
+        ln(dc, cx - q, cy - q, cx + q + 1, cy + q + 1);
+        ln(dc, cx + q, cy - q, cx - q - 1, cy + q + 1);
+        break;
+    case T_DOT: case T_FRADIO: {
+        HGDIOBJ ob2 = SelectObject(dc, k == T_DOT ? (HGDIOBJ)acc : GetStockObject(NULL_BRUSH));
+        if (k == T_FRADIO) { Ellipse(dc, cx - q - 2, cy - q - 2, cx + q + 3, cy + q + 3); SelectObject(dc, acc); Ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3); }
+        else Ellipse(dc, cx - q, cy - q, cx + q + 1, cy + q + 1);
+        SelectObject(dc, ob2);
+        break;
+    }
+    case T_FCOMBO: case T_FLIST:
+        Rectangle(dc, cx - h, cy - q, cx + h + 1, cy + q + 1);
+        if (k == T_FCOMBO) { POINT t3[3] = { { cx + q - 2, cy - 2 }, { cx + q + 4, cy - 2 }, { cx + q + 1, cy + 2 } }; Polygon(dc, t3, 3); }
+        else { ln(dc, cx - h + 2, cy - 2, cx + q, cy - 2); ln(dc, cx - h + 2, cy + 2, cx + q, cy + 2); }
+        break;
+    case T_FSIGN: case T_CERT:
+        if (k == T_FSIGN) Rectangle(dc, cx - h, cy - q, cx + h + 1, cy + q + 1);
+        ln(dc, cx - q, cy + 2, cx - 2, cy - 3); ln(dc, cx - 2, cy - 3, cx + 1, cy + 3); ln(dc, cx + 1, cy + 3, cx + q, cy - 2);
+        if (k == T_CERT) { Ellipse(dc, cx + q - 1, cy + q - 3, cx + h + 2, cy + h); ln(dc, cx - h, cy + h - 1, cx + q - 2, cy + h - 1); }
+        break;
+    case T_DETECT:
+        Rectangle(dc, cx - h, cy - h, cx + 1, cy - 1);
+        Ellipse(dc, cx - 1, cy - 1, cx + q + 3, cy + q + 3);
+        ln(dc, cx + q + 2, cy + q + 2, cx + h + 1, cy + h + 1);
+        break;
+    case T_PROPS:
+        ln(dc, cx - h, cy - q, cx + h, cy - q); ln(dc, cx - h, cy, cx + h, cy); ln(dc, cx - h, cy + q, cx + h, cy + q);
+        Rectangle(dc, cx - q - 2, cy - q - 2, cx - q + 2, cy - q + 2);
+        Rectangle(dc, cx + 1, cy + q - 2, cx + 5, cy + q + 2);
+        break;
+    case T_STAMP:
+        Rectangle(dc, cx - h, cy + 1, cx + h + 1, cy + q + 2);
+        ln(dc, cx, cy - h + 3, cx, cy + 1);
+        Ellipse(dc, cx - 3, cy - h, cx + 4, cy - h + 6);
+        ln(dc, cx - h, cy + h, cx + h + 1, cy + h);
+        break;
+    case T_LINK:
+        RoundRect(dc, cx - h, cy - 3, cx + 1, cy + 4, 6, 6);
+        RoundRect(dc, cx - 1, cy - 3, cx + h + 1, cy + 4, 6, 6);
+        break;
+    case T_OCR: case T_SCAN:
+        Rectangle(dc, cx - q - 1, cy - q - 1, cx + q + 2, cy + q + 2);
+        ln(dc, cx - h, cy - h, cx - q, cy - h); ln(dc, cx - h, cy - h, cx - h, cy - q);
+        ln(dc, cx + h, cy - h, cx + q, cy - h); ln(dc, cx + h, cy - h, cx + h, cy - q);
+        ln(dc, cx - h, cy + h, cx - q, cy + h); ln(dc, cx - h, cy + h, cx - h, cy + q);
+        ln(dc, cx + h, cy + h, cx + q, cy + h); ln(dc, cx + h, cy + h, cx + h, cy + q);
+        if (k == T_OCR) { ln(dc, cx - 2, cy - 2, cx + 3, cy - 2); ln(dc, cx, cy - 2, cx, cy + 3); }
+        break;
+    case T_HEADER: case T_WATERMARK: case T_BATES: case T_REPLACE_PAGE: {
+        POINT p5[5] = { { cx - q - 2, cy - h }, { cx + q - 1, cy - h }, { cx + q + 3, cy - h + 4 }, { cx + q + 3, cy + h },
+                        { cx - q - 2, cy + h } };
+        Polygon(dc, p5, 5);
+        if (k == T_HEADER) { ln(dc, cx - q, cy - h + 3, cx + q, cy - h + 3); ln(dc, cx - q, cy + h - 3, cx + q, cy + h - 3); }
+        if (k == T_WATERMARK) ln(dc, cx - q, cy + q, cx + q, cy - q);
+        if (k == T_BATES) { ln(dc, cx, cy + h - 5, cx + q, cy + h - 5); ln(dc, cx, cy + h - 3, cx + q, cy + h - 3); }
+        if (k == T_REPLACE_PAGE) { ln(dc, cx - q, cy, cx + q, cy); ln(dc, cx + q, cy, cx + 1, cy - 3); ln(dc, cx - q, cy + 3, cx + q, cy + 3); ln(dc, cx - q, cy + 3, cx - 1, cy + 6); }
+        break;
+    }
     }
     SelectObject(dc, ob);
     SelectObject(dc, op);
@@ -240,6 +314,11 @@ static const tdef_t EDIT_BAR[] = {
     { CMD_SUB + SUB_SELECT, T_SELECT, L"Edit", L"Select, move, resize and edit text and pictures", "select" },
     { CMD_SUB + SUB_ADDTEXT, T_TEXT, L"Add text", L"Click where the text goes", "addtext" },
     { CMD_SUB + SUB_ADDIMAGE, T_IMAGE, L"Add image", L"Choose a picture, then click where it goes", "addimage" },
+    { CMD_SUB + SUB_LINK, T_LINK, L"Link", L"Drag a box over what is to be a link", "link" },
+    TD_SEP,
+    { CMD_HEADFOOT, T_HEADER, NULL, L"Header & footer", "headfoot" },
+    { CMD_WATERMARK, T_WATERMARK, NULL, L"Watermark", "watermark" },
+    { CMD_BATES, T_BATES, NULL, L"Bates numbering", "bates" },
     TD_SEP,
     { CMD_REPLACEIMAGE, T_REPLACE, L"Replace", L"Replace the selected picture", "replace" },
     { CMD_DELETE, T_DELETE, L"Delete", L"Delete the selected object (Del)", "delete" },
@@ -257,15 +336,36 @@ static const tdef_t COMMENT_BAR[] = {
     { CMD_SUB + SUB_ARROW, T_ARROW, NULL, L"Arrow", "arrow" },
     { CMD_SUB + SUB_LINE, T_LINE, NULL, L"Line", "line" },
     { CMD_SUB + SUB_INK, T_PEN, NULL, L"Draw free form", "ink" },
+    { CMD_STAMPS, T_STAMP, NULL, L"Stamp (Approved, Draft, Confidential...)", "stamp" },
     TD_SEP,
     { CMD_DELETE, T_DELETE, NULL, L"Delete the selected comment (Del)", "delete" },
 };
 static const tdef_t FILL_BAR[] = {
     { CMD_SUB + SUB_SELECT, T_SELECT, L"Fill fields", L"Click a field to fill it", "fill" },
     { CMD_SUB + SUB_FILLTEXT, T_TEXT, L"Add text", L"Type anywhere on the page", "addtext" },
+    { CMD_SUB + SUB_MARK_CHECK, T_CHECKMARK, NULL, L"Check mark: click where it goes", "check" },
+    { CMD_SUB + SUB_MARK_CROSS, T_CROSS, NULL, L"Cross mark: click where it goes", "cross" },
+    { CMD_SUB + SUB_MARK_DOT, T_DOT, NULL, L"Dot: click where it goes", "dot" },
+    TD_SEP,
     { CMD_SIGN, T_SIGN, L"Sign", L"Type, draw or choose a signature, then click where it goes", "sign" },
+    { CMD_CERTSIGN, T_CERT, L"Certificate", L"Sign with a digital ID (a certificate signature others can check)", "certsign" },
     TD_SEP,
     { CMD_FLATTEN, T_FLATTEN, L"Flatten", L"Make the filled-in values part of the page", "flatten" },
+};
+static const tdef_t FORM_BAR[] = {
+    { CMD_SUB + SUB_SELECT, T_SELECT, NULL, L"Select fields: drag to move, handles to resize, double-click for properties", "select" },
+    { CMD_SUB + SUB_F_TEXT, T_FTEXT, NULL, L"Text field", "ftext" },
+    { CMD_SUB + SUB_F_DATE, T_FDATE, NULL, L"Date field", "fdate" },
+    { CMD_SUB + SUB_F_NUMBER, T_FNUM, NULL, L"Number field", "fnumber" },
+    { CMD_SUB + SUB_F_CHECK, T_FCHECK, NULL, L"Check box", "fcheck" },
+    { CMD_SUB + SUB_F_RADIO, T_FRADIO, NULL, L"Radio button (buttons of one name are one group)", "fradio" },
+    { CMD_SUB + SUB_F_COMBO, T_FCOMBO, NULL, L"Drop-down list", "fcombo" },
+    { CMD_SUB + SUB_F_LIST, T_FLIST, NULL, L"List box", "flist" },
+    { CMD_SUB + SUB_F_SIGN, T_FSIGN, NULL, L"Signature field", "fsign" },
+    TD_SEP,
+    { CMD_FORM_DETECT, T_DETECT, L"Auto-detect", L"Find the blanks on the pages and make them fields", "detect" },
+    { CMD_FORM_PROPS, T_PROPS, L"Properties", L"The selected field's properties (Enter)", "props" },
+    { CMD_FORM_DELETE, T_DELETE, NULL, L"Delete the selected field (Del)", "delete" },
 };
 static const tdef_t REDACT_BAR[] = {
     { CMD_SUB + SUB_MARKTEXT, T_MARK, L"Mark text & images", L"Drag over text, or drag a box over anything", "marktext" },
@@ -284,6 +384,8 @@ static const tdef_t ORG_BAR[] = {
     { CMD_ORG_INSERT, T_INSERT, L"Insert from file", L"Insert pages of a PDF or a picture after the selection", "insert" },
     { CMD_ORG_EXTRACT, T_EXTRACT, L"Extract", L"Save the selected pages as a new PDF", "extract" },
     { CMD_ORG_SPLIT, T_SPLIT, L"Split", L"Split the document into several files", "split" },
+    { CMD_ORG_REPLACE, T_REPLACE_PAGE, L"Replace", L"Replace the selected pages with pages of another PDF", "replace" },
+    { CMD_ORG_SCAN, T_SCAN, NULL, L"Insert pages from the scanner after the selection", "scan" },
 };
 
 static const tdef_t *bar_defs(int *n)
@@ -294,6 +396,7 @@ static const tdef_t *bar_defs(int *n)
     case TOOL_FILL: *n = sizeof(FILL_BAR) / sizeof(FILL_BAR[0]); return FILL_BAR;
     case TOOL_REDACT: *n = sizeof(REDACT_BAR) / sizeof(REDACT_BAR[0]); return REDACT_BAR;
     case TOOL_ORGANIZE: *n = sizeof(ORG_BAR) / sizeof(ORG_BAR[0]); return ORG_BAR;
+    case TOOL_FORM: *n = sizeof(FORM_BAR) / sizeof(FORM_BAR[0]); return FORM_BAR;
     }
     *n = 0;
     return NULL;
@@ -312,6 +415,7 @@ const WCHAR *tool_name(int tool)
     case TOOL_FILL: return L"Fill & Sign";
     case TOOL_REDACT: return L"Redact";
     case TOOL_ORGANIZE: return L"Organize Pages";
+    case TOOL_FORM: return L"Prepare Form";
     }
     return L"";
 }
@@ -325,6 +429,13 @@ static BOOL cmd_enabled(int cmd)
     case CMD_DELETE: return g.pick.kind != PICK_NONE;
     case CMD_APPLYREDACT: return g.nredact > 0;
     case CMD_FLATTEN: return g.form && g.nfields > 0;
+    case CMD_CREATE_FILES: case CMD_CREATE_BLANK: case CMD_CREATE_SCAN: case CMD_MAKEID: return g.bridged;
+    case CMD_FORM_PROPS: case CMD_FORM_DELETE: return form_picked() >= 0;
+    case CMD_ORG_REPLACE: {
+        int k;
+        for (k = 0; k < g.npages; k++) if (g.org_sel && g.org_sel[k]) return TRUE;
+        return FALSE;
+    }
     case CMD_ORG_ROTL: case CMD_ORG_ROTR: case CMD_ORG_DELETE: case CMD_ORG_EXTRACT: {
         int k;
         for (k = 0; k < g.npages; k++) if (g.org_sel && g.org_sel[k]) return TRUE;
@@ -491,7 +602,7 @@ static LRESULT CALLBACK tbar_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (GetCapture() == hwnd) ReleaseCapture();
         if (h >= 0 && h == p) {
             if (h == MAX_TB) app_command(CMD_TOOLCLOSE);
-            else if (g_tb_cmd[h] >= CMD_COLOR || cmd_enabled(g_tb_cmd[h])) app_command(g_tb_cmd[h]);
+            else if ((g_tb_cmd[h] >= CMD_COLOR && g_tb_cmd[h] < CMD_COLOR + NCOLORS) || cmd_enabled(g_tb_cmd[h])) app_command(g_tb_cmd[h]);
         }
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
@@ -529,9 +640,21 @@ static void build_rows(void)
         add_row(ROW_TOOL, CMD_TOOL + TOOL_FILL, T_FILL, L"Fill & Sign", L"Fill in forms, sign", "fill");
         add_row(ROW_TOOL, CMD_TOOL + TOOL_REDACT, T_REDACT, L"Redact", L"Remove content for good", "redact");
         add_row(ROW_TOOL, CMD_TOOL + TOOL_ORGANIZE, T_ORGANIZE, L"Organize Pages", L"Reorder, rotate, insert, delete", "organize");
+        add_row(ROW_TOOL, CMD_TOOL + TOOL_FORM, T_FORM, L"Prepare Form", L"Make a fillable form", "form");
+        add_row(ROW_TOOL, CMD_CERTSIGN, T_CERT, L"Certificates", L"Sign with a digital ID", "certificates");
+        add_row(ROW_TOOL, CMD_OCR, T_OCR, L"Scan & OCR", L"Recognize text in scans", "ocr");
+        add_row(ROW_TOOL, CMD_CREATE_FILES, T_INSERT, L"Create PDF", L"From files, office documents", "create");
         add_row(ROW_TOOL, CMD_EXPORT, T_EXPORT, L"Export PDF", L"Word, text, HTML, pictures", "export");
         add_row(ROW_TOOL, CMD_COMBINE, T_COMBINE, L"Combine Files", L"Several files into one PDF", "combine");
         add_row(ROW_TOOL, CMD_PROTECT, T_PROTECT, L"Protect", L"Passwords and permissions", "protect");
+        add_row(ROW_TOOL, CMD_OPTIMIZE, T_FLATTEN, L"Reduce File Size", L"Smaller pictures and fonts", "optimize");
+        break;
+    case TOOL_FORM:
+        add_row(ROW_HEAD, 0, 0, L"Fields", NULL, NULL);
+        add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
+        add_row(ROW_BUTTON, CMD_FORM_DETECT, T_DETECT, L"Auto-detect form fields", NULL, "detect");
+        add_row(ROW_BUTTON, CMD_FORM_PROPS, T_PROPS, L"Field properties...", NULL, "props");
+        add_row(ROW_LIST, 0, 0, NULL, NULL, NULL);
         break;
     case TOOL_EDIT:
         add_row(ROW_HEAD, 0, 0, L"Format", NULL, NULL);
@@ -548,6 +671,7 @@ static void build_rows(void)
         add_row(ROW_HEAD, 0, 0, L"Fill & Sign", NULL, NULL);
         add_row(ROW_STAT, 0, 0, NULL, NULL, NULL);
         add_row(ROW_BUTTON, CMD_SIGN, T_SIGN, L"Sign yourself...", NULL, "sign");
+        add_row(ROW_BUTTON, CMD_CERTSIGN, T_CERT, L"Sign with a certificate...", NULL, "certsign");
         add_row(ROW_BUTTON, CMD_FLATTEN, T_FLATTEN, L"Flatten form", NULL, "flatten");
         add_row(ROW_LIST, 0, 0, NULL, NULL, NULL);
         break;
@@ -568,6 +692,8 @@ static void build_rows(void)
         add_row(ROW_BUTTON, CMD_ORG_INSERT, T_INSERT, L"Insert from file...", NULL, "insert");
         add_row(ROW_BUTTON, CMD_ORG_EXTRACT, T_EXTRACT, L"Extract pages...", NULL, "extract");
         add_row(ROW_BUTTON, CMD_ORG_SPLIT, T_SPLIT, L"Split document...", NULL, "split");
+        add_row(ROW_BUTTON, CMD_ORG_REPLACE, T_REPLACE_PAGE, L"Replace pages...", NULL, "replace");
+        add_row(ROW_BUTTON, CMD_ORG_SCAN, T_SCAN, L"Insert from scanner...", NULL, "scan");
         add_row(ROW_TEXT, 0, 0, L"Click a page to select it (Ctrl and Shift add), drag pages to move them. "
                                 L"Del deletes the selected pages.", NULL, NULL);
         break;
@@ -590,8 +716,12 @@ static void stat_text(void)
         n = g_list ? (int)SendMessageW(g_list, LB_GETCOUNT, 0, 0) : 0;
         swprintf(g_stat, 160, n == 1 ? L"1 comment" : L"%d comments", n);
         break;
+    case TOOL_FORM:
+        swprintf(g_stat, 160, g.nfields == 1 ? L"1 field. Add fields with the bar above, or Auto-detect them."
+                                             : L"%d fields. Add fields with the bar above, or Auto-detect them.", g.nfields);
+        break;
     case TOOL_FILL:
-        if (!g.form || !g.nfields) lstrcpyW(g_stat, L"This document has no form fields. Use Add text to type on it.");
+        if (!g.form || !g.nfields) lstrcpyW(g_stat, L"This document has no form fields. Use Add text and the marks to type on it.");
         else swprintf(g_stat, 160, L"%d field%ls. Click one to fill it in.", g.nfields, g.nfields == 1 ? L"" : L"s");
         break;
     case TOOL_REDACT:
@@ -617,7 +747,7 @@ static void pane_layout(HDC dc)
         int h = 0;
         switch (r->kind) {
         case ROW_HEAD: h = dpx(34); break;
-        case ROW_TOOL: h = dpx(52); break;
+        case ROW_TOOL: h = dpx(44); break;
         case ROW_BUTTON: h = dpx(36); break;
         case ROW_STAT: SelectObject(dc, g_font_small); h = text_height(dc, g_stat, w) + dpx(10); break;
         case ROW_TEXT: SelectObject(dc, g_font_small); h = text_height(dc, r->label, w) + dpx(14); break;
@@ -665,7 +795,7 @@ static void pane_place_controls(void)
 static BOOL row_enabled(const row_t *r)
 {
     if (r->kind != ROW_TOOL && r->kind != ROW_BUTTON) return FALSE;
-    if (r->cmd == CMD_COMBINE) return g.bridged;
+    if (r->cmd == CMD_COMBINE || r->cmd == CMD_CREATE_FILES) return g.bridged;
     return cmd_enabled(r->cmd) && g.bridged;
 }
 
@@ -790,9 +920,14 @@ static void list_fill(void)
                 annot_t *an = &g.pages[i].annots[a];
                 WCHAR t[400];
                 if (!strcmp(an->type, "Redact")) continue;
-                swprintf(t, 400, L"Page %d  \x2022  %hs%ls%ls%ls%ls", i + 1, an->type,
-                         an->author && an->author[0] ? L"  \x2022  " : L"", an->author ? an->author : L"",
-                         an->contents && an->contents[0] ? L"\n" : L"", an->contents ? an->contents : L"");
+                {
+                    WCHAR extra[64] = L"";
+                    if (an->replies) swprintf(extra, 64, L"  \x2022  %d repl%ls", an->replies, an->replies == 1 ? L"y" : L"ies");
+                    if (an->status[0]) { int n2 = lstrlenW(extra); swprintf(extra + n2, 64 - n2, L"  \x2022  %hs", an->status); }
+                    swprintf(t, 400, L"Page %d  \x2022  %hs%ls%ls%ls%ls%ls", i + 1, an->type,
+                             an->author && an->author[0] ? L"  \x2022  " : L"", an->author ? an->author : L"", extra,
+                             an->contents && an->contents[0] ? L"\n" : L"", an->contents ? an->contents : L"");
+                }
                 SendMessageW(g_list, LB_ADDSTRING, 0, (LPARAM)t);
                 g_litems[k].page = i;
                 g_litems[k].xref = an->xref;
@@ -800,6 +935,19 @@ static void list_fill(void)
             }
         }
         g_nlitems = k;
+    } else if (g.tool == TOOL_FORM) {
+        g_litems = g.nfields ? calloc(g.nfields, sizeof(litem_t)) : NULL;
+        for (i = 0; i < g.nfields && g_litems; i++) {
+            field_t *f = &g.fields[i];
+            WCHAR t[400];
+            swprintf(t, 400, L"Page %d  \x2022  %ls%ls%ls\n%ls", f->page + 1, field_kind_name(f),
+                     f->calc && f->calc[0] ? L"  \x2022  calculated" : L"", f->flags & FF_REQUIRED ? L"  \x2022  required" : L"",
+                     f->name ? f->name : L"(field)");
+            SendMessageW(g_list, LB_ADDSTRING, 0, (LPARAM)t);
+            g_litems[i].page = f->page;
+            g_litems[i].xref = f->xref;
+        }
+        g_nlitems = g_litems ? g.nfields : 0;
     } else if (g.tool == TOOL_FILL) {
         g_litems = g.nfields ? calloc(g.nfields, sizeof(litem_t)) : NULL;
         for (i = 0; i < g.nfields && g_litems; i++) {
@@ -862,6 +1010,15 @@ static void list_select(int i)
 {
     if (i < 0 || i >= g_nlitems) return;
     view_goto_page(g_litems[i].page, 0);
+    if (g.tool == TOOL_FORM) {
+        int k;
+        for (k = 0; k < g.nfields; k++) if (g.fields[k].xref == g_litems[i].xref) {
+            form_pick(k);
+            view_goto_page(g.fields[k].page, max(0.0f, g.fields[k].box.y1 - 40));
+        }
+        InvalidateRect(g_view, NULL, FALSE);
+        InvalidateRect(g_tbar, NULL, FALSE);
+    }
     if (g.tool == TOOL_COMMENT) {
         page_t *p = &g.pages[g_litems[i].page];
         int k;
@@ -1027,6 +1184,12 @@ static LRESULT CALLBACK pane_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         HWND c = (HWND)lp;
         int code = HIWORD(wp);
         if (c == g_list && code == LBN_SELCHANGE) list_select((int)SendMessageW(g_list, LB_GETCURSEL, 0, 0));
+        else if (c == g_list && code == LBN_DBLCLK) {
+            int k = (int)SendMessageW(g_list, LB_GETCURSEL, 0, 0);
+            list_select(k);
+            if (g.tool == TOOL_FORM && form_picked() >= 0) form_props(form_picked());
+            else if (g.tool == TOOL_COMMENT && g.pick.kind == PICK_ANNOT) comment_thread(g.pick.page, g.pick.index);
+        }
         else if (c == g_color_btn && code == BN_CLICKED) choose_color();
         else if ((c == g_bold_btn || c == g_italic_btn) && code == BN_CLICKED) format_changed();
         else if ((c == g_align_btn[0] || c == g_align_btn[1] || c == g_align_btn[2]) && code == BN_CLICKED) {
@@ -1081,7 +1244,8 @@ void toolui_layout(void)
 void toolui_update(void)
 {
     build_rows();
-    if (g_list && (g.tool == TOOL_COMMENT || g.tool == TOOL_FILL) && (g_list_gen != g.generation || g_list_tool != g.tool)) {
+    if (g_list && (g.tool == TOOL_COMMENT || g.tool == TOOL_FILL || g.tool == TOOL_FORM) &&
+        (g_list_gen != g.generation || g_list_tool != g.tool)) {
         g_list_gen = g.generation;
         g_list_tool = g.tool;
         list_fill();
@@ -1096,7 +1260,8 @@ void tool_set(int tool)
     int old = g.tool;
     tool_commit_editor();
     tool_cancel();
-    if (tool == TOOL_REDACT || tool == TOOL_EDIT || tool == TOOL_COMMENT || tool == TOOL_FILL || tool == TOOL_ORGANIZE) {
+    if (tool == TOOL_REDACT || tool == TOOL_EDIT || tool == TOOL_COMMENT || tool == TOOL_FILL || tool == TOOL_ORGANIZE ||
+        tool == TOOL_FORM) {
         if (!g.npages || !g.bridged) tool = TOOL_NONE;
     }
     g.tool = tool;
@@ -1105,6 +1270,7 @@ void tool_set(int tool)
     g_list_gen = -1;
     if (tool != TOOL_NONE && !g.pane) g.pane = TRUE;
     if ((old == TOOL_ORGANIZE) != (tool == TOOL_ORGANIZE)) org_show(tool == TOOL_ORGANIZE);
+    if (tool == TOOL_FORM && !g.fields_loaded) doc_load_fields();
     if (tool != TOOL_NONE && g.perms != 0xFFFF) {
         unsigned need = tool == TOOL_COMMENT ? 32 : tool == TOOL_FILL ? 256 | 32 : tool == TOOL_ORGANIZE ? 1024 | 8 : 8;
         if (!(g.perms & need)) app_set_status(L"This document is secured: its security does not allow these changes. "
@@ -1191,13 +1357,29 @@ void toolui_create(HWND parent)
     build_rows();
 }
 
+void toolui_fonts(void)
+{
+    int i;
+    if (!g_list) return;
+    SendMessageW(g_list, WM_SETFONT, (WPARAM)g_font_small, FALSE);
+    SendMessageW(g_list, LB_SETITEMHEIGHT, 0, dpx(46));
+    SendMessageW(g_font_cb, WM_SETFONT, (WPARAM)g_font, FALSE);
+    SendMessageW(g_size_cb, WM_SETFONT, (WPARAM)g_font, FALSE);
+    SendMessageW(g_bold_btn, WM_SETFONT, (WPARAM)g_font_bold, FALSE);
+    SendMessageW(g_italic_btn, WM_SETFONT, (WPARAM)g_font, FALSE);
+    for (i = 0; i < 3; i++) SendMessageW(g_align_btn[i], WM_SETFONT, (WPARAM)g_font_small, FALSE);
+    if (g_tbar) InvalidateRect(g_tbar, NULL, TRUE);
+    if (g_pane) InvalidateRect(g_pane, NULL, TRUE);
+}
+
 void toolui_dump(FILE *f)
 {
     int i;
     char buf[512];
     RECT r;
     fprintf(f, "tool %d %s\n", g.tool, g.tool == TOOL_EDIT ? "edit" : g.tool == TOOL_COMMENT ? "comment" :
-            g.tool == TOOL_FILL ? "fill" : g.tool == TOOL_REDACT ? "redact" : g.tool == TOOL_ORGANIZE ? "organize" : "none");
+            g.tool == TOOL_FILL ? "fill" : g.tool == TOOL_REDACT ? "redact" : g.tool == TOOL_ORGANIZE ? "organize" :
+            g.tool == TOOL_FORM ? "form" : "none");
     fprintf(f, "sub %d\n", g.sub);
     fprintf(f, "pane %d\n", g.pane && g_pane && IsWindowVisible(g_pane));
     if (g_tbar && IsWindowVisible(g_tbar)) {

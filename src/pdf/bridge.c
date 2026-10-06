@@ -206,7 +206,7 @@ int br_request(const char *line, char *head, int headcap, BYTE **payload, DWORD 
     return rc;
 }
 
-BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h)
+BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h, int *x, int *y)
 {
     char head[256], num[32];
     BITMAPINFO bi = { 0 };
@@ -223,6 +223,8 @@ BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h)
         if (!strncmp(head, "OK", 2) && br_field(head, "w", num, sizeof(num))) {
             *w = atoi(num);
             *h = br_field(head, "h", num, sizeof(num)) ? atoi(num) : 0;
+            if (x) *x = br_field(head, "x", num, sizeof(num)) ? atoi(num) : 0;
+            if (y) *y = br_field(head, "y", num, sizeof(num)) ? atoi(num) : 0;
             if (*w > 0 && *h > 0 && (DWORD)(*w) * (DWORD)(*h) * 4 == n) {
                 bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
                 bi.bmiHeader.biWidth = *w;
@@ -250,8 +252,8 @@ BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h)
 
 /* ---- the render thread ------------------------------------------------------------------------- */
 
-typedef struct { int page, rot, gen; double scale; BOOL thumb; } job_t;
-typedef struct { int page, rot, gen, w, h; double scale; BOOL thumb; HBITMAP bmp; } result_t;
+typedef struct { int page, rot, gen; double scale; BOOL thumb; int tile, cx, cy, cw, ch; } job_t;
+typedef struct { int page, rot, gen, w, h, x, y, tile; double scale; BOOL thumb; HBITMAP bmp; } result_t;
 
 #define MAX_JOBS 256
 static job_t g_jobs[MAX_JOBS];
@@ -264,12 +266,12 @@ static HANDLE g_jevent;
 static BOOL same_job(const job_t *a, const job_t *b)
 {
     return a->page == b->page && a->thumb == b->thumb && a->rot == b->rot && a->gen == b->gen &&
-           fabs(a->scale - b->scale) < 1e-6;
+           fabs(a->scale - b->scale) < 1e-6 && a->tile == b->tile &&
+           (!a->tile || (a->cx == b->cx && a->cy == b->cy && a->cw == b->cw && a->ch == b->ch));
 }
 
-void render_want(int page, double scale, int rot, BOOL thumb)
+static void want(job_t j)
 {
-    job_t j = { page, rot, g.generation, scale, thumb };
     int i;
     EnterCriticalSection(&g_jlock);
     if (g_busy && same_job(&g_inflight, &j)) goto done;
@@ -278,6 +280,28 @@ void render_want(int page, double scale, int rot, BOOL thumb)
     SetEvent(g_jevent);
 done:
     LeaveCriticalSection(&g_jlock);
+}
+
+void render_want(int page, double scale, int rot, BOOL thumb)
+{
+    job_t j = { page, rot, g.generation, scale, thumb, 0, 0, 0, 0, 0 };
+    want(j);
+}
+
+void render_want_tile(int page, double scale, int rot, int x, int y, int w, int h)
+{
+    job_t j = { page, rot, g.generation, scale, FALSE, 1, x, y, w, h };
+    int i;
+    /* one tile a page: an older wish for another part of it is dropped */
+    EnterCriticalSection(&g_jlock);
+    for (i = 0; i < g_njobs; i++)
+        if (g_jobs[i].tile && g_jobs[i].page == page && !same_job(&g_jobs[i], &j)) {
+            memmove(&g_jobs[i], &g_jobs[i + 1], (g_njobs - i - 1) * sizeof(job_t));
+            g_njobs--;
+            i--;
+        }
+    LeaveCriticalSection(&g_jlock);
+    want(j);
 }
 
 /* The view says again what it wants at each paint; what scrolled away is dropped. */
@@ -318,10 +342,14 @@ static DWORD WINAPI render_thread(void *arg)
 #else
             snprintf(line, sizeof(line), "render\t%d\t%.5f\t%d", j.page, j.scale, j.rot);
 #endif
+            if (j.tile) {
+                size_t n = strlen(line);
+                snprintf(line + n, sizeof(line) - n, "\t%d\t%d\t%d\t%d", j.cx, j.cy, j.cw, j.ch);
+            }
             r = calloc(1, sizeof(*r));
             if (!r) continue;
-            r->page = j.page; r->rot = j.rot; r->gen = j.gen; r->scale = j.scale; r->thumb = j.thumb;
-            br_request_into_dib(line, &r->bmp, &r->w, &r->h);
+            r->page = j.page; r->rot = j.rot; r->gen = j.gen; r->scale = j.scale; r->thumb = j.thumb; r->tile = j.tile;
+            br_request_into_dib(line, &r->bmp, &r->w, &r->h, &r->x, &r->y);
             if (!PostMessageW(g_view, WM_APP_RENDERED, 0, (LPARAM)r)) {
                 if (r->bmp) DeleteObject(r->bmp);
                 free(r);
@@ -346,7 +374,8 @@ void render_start_thread(void)
 LRESULT bridge_on_rendered(LPARAM lp)
 {
     result_t *r = (result_t *)lp;
-    view_rendered(r->page, r->thumb, r->scale, r->rot, r->gen, r->bmp, r->w, r->h);
+    if (r->tile) view_rendered_tile(r->page, r->scale, r->rot, r->gen, r->bmp, r->x, r->y, r->w, r->h);
+    else view_rendered(r->page, r->thumb, r->scale, r->rot, r->gen, r->bmp, r->w, r->h);
     free(r);
     return 0;
 }

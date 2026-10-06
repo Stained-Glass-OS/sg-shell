@@ -218,7 +218,7 @@ build:
 	@$(WINDRES64) -I src/wordpad -I $(BUILD) src/wordpad/wordpad.rc -O coff -o $(BUILD)/sg-wordpad-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-wordpad64.exe $(WORDPAD_SRC) \
 	    $(BUILD)/sg-wordpad-res64.o $(WORDPAD_LIBS) && echo "built sg-wordpad (64-bit)"
-	@python3 src/pdf/gen-icon.py $(BUILD)/sg-pdf.ico
+	@python3 src/pdf/gen-icon.py $(BUILD)/sg-pdf.ico $(BUILD)/pdf-icons
 	@$(WINDRES64) -I src/pdf -I $(BUILD) src/pdf/pdf.rc -O coff -o $(BUILD)/sg-pdf-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-pdf64.exe $(PDF_SRC) \
 	    $(BUILD)/sg-pdf-res64.o $(PDF_LIBS) && echo "built sg-pdf (64-bit)"
@@ -404,6 +404,7 @@ test-notify: build
 	@sh test/resmon-check.sh
 	@sh test/pdf-check.sh
 	@sh test/pdf-editor-check.sh
+	@sh test/pdf-pro-check.sh
 	@sh test/browser-check.sh
 	@sh test/store-check.sh
 	@sh test/store-busy-check.sh

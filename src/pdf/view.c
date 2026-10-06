@@ -21,6 +21,8 @@
 #define T_AUTOSCROLL 1
 
 static HCURSOR g_cursor;
+static void relayout_at_page(int page);
+static void flip_to(int dir);
 static POINT g_down;
 static int g_down_link_page = -1, g_down_link = -1;
 static BOOL g_link_pending;
@@ -114,12 +116,17 @@ static void set_scrollbars(void)
     SetScrollInfo(g_view, SB_HORZ, &si, TRUE);
 }
 
+static BOOL flip(void);
+
 static int page_at_y(int docy)
 {
     int i;
-    for (i = 0; i < g.npages; i++)
+    for (i = 0; i < g.npages; i++) {
+        if (g.pages[i].y <= -1000000) continue;     /* not in the spread shown */
         if (docy < g.pages[i].y + g.pages[i].dh + GAP / 2) return i;
-    return g.npages - 1;
+    }
+    for (i = g.npages - 1; i > 0 && g.pages[i].y <= -1000000; i--) ;
+    return max(0, i);
 }
 
 static void update_current(void)
@@ -129,8 +136,9 @@ static void update_current(void)
     client_size(&cw, &ch);
     cur = page_at_y(g.sy + ch / 2);
     /* at the very end the last page is the current one */
-    if (g.sy + ch >= g.doch - 1) cur = g.npages - 1;
-    if (g.sy <= 0) cur = 0;
+    if (g.sy + ch >= g.doch - 1 && !flip()) cur = g.npages - 1;
+    if (g.sy <= 0 && !flip()) cur = 0;
+    if (flip()) cur = g.current;
     if (cur != g.current) {
         g.current = cur;
         side_ensure_visible(cur);
@@ -153,22 +161,74 @@ void view_scroll_to(int x, int y)
     update_current();
 }
 
+static BOOL two_up(void)
+{
+#ifdef SG_MUTANT_TWOUP
+    return FALSE;
+#endif
+    return g.layout == LAYOUT_TWO || g.layout == LAYOUT_TWOCONT;
+}
+
+static BOOL flip(void)
+{
+    return g.layout == LAYOUT_SINGLE || g.layout == LAYOUT_TWO;
+}
+
+/* the first page of the spread (the pages shown side by side) page i is in */
+static int spread_of(int i)
+{
+    if (!two_up()) return i;
+    if (g.cover) return i == 0 ? 0 : ((i - 1) / 2) * 2 + 1;
+    return (i / 2) * 2;
+}
+
+static int spread_len(int first)
+{
+    if (!two_up() || (g.cover && first == 0) || first + 1 >= g.npages) return 1;
+    return 2;
+}
+
+#define HIDDEN_Y (-4000000)
+
 static void layout(double s)
 {
-    int i, y, maxw = 0, cw, ch;
+    int i, y, maxw = 0, cw, ch, cur = g.npages ? spread_of(max(0, min(g.current, g.npages - 1))) : 0;
     client_size(&cw, &ch);
-    for (i = 0; i < g.npages; i++) {
-        disp_size(i, s, &g.pages[i].dw, &g.pages[i].dh);
-        maxw = max(maxw, g.pages[i].dw);
+    for (i = 0; i < g.npages; i++) disp_size(i, s, &g.pages[i].dw, &g.pages[i].dh);
+    for (i = 0; i < g.npages; i += spread_len(spread_of(i))) {
+        int a = spread_of(i), n = spread_len(a), w = g.pages[a].dw + (n > 1 ? GAP + g.pages[a + 1].dw : 0);
+        if (flip() && a != cur) continue;
+        maxw = max(maxw, w);
     }
     g.docw = max(maxw + 2 * MARGIN, cw);
     y = MARGIN;
-    for (i = 0; i < g.npages; i++) {
-        g.pages[i].x = (g.docw - g.pages[i].dw) / 2;
-        g.pages[i].y = y;
-        y += g.pages[i].dh + GAP;
+    for (i = 0; i < g.npages;) {
+        int a = spread_of(i), n = spread_len(a), w, h;
+        if (flip() && a != cur) {
+            for (; i < a + n; i++) { g.pages[i].x = 0; g.pages[i].y = HIDDEN_Y; }
+            continue;
+        }
+        w = g.pages[a].dw + (n > 1 ? GAP + g.pages[a + 1].dw : 0);
+        h = max(g.pages[a].dh, n > 1 ? g.pages[a + 1].dh : 0);
+        g.pages[a].x = (g.docw - w) / 2;
+        g.pages[a].y = y + (h - g.pages[a].dh) / 2;
+        if (n > 1) {
+            g.pages[a + 1].x = g.pages[a].x + g.pages[a].dw + GAP;
+            g.pages[a + 1].y = y + (h - g.pages[a + 1].dh) / 2;
+        }
+        y += h + GAP;
+        i = a + n;
     }
     g.doch = g.npages ? y - GAP + MARGIN : 0;
+}
+
+void view_set_layout(int layout, BOOL cover)
+{
+    int cur = g.current;
+    g.layout = layout;
+    g.cover = cover;
+    relayout_at_page(cur);
+    app_status_changed();
 }
 
 static double fit_zoom(void)
@@ -179,7 +239,7 @@ static double fit_zoom(void)
     for (i = 0; i < g.npages; i++) {
         double pw = g.pages[i].w, ph = g.pages[i].h, z;
         if (g.rot == 90 || g.rot == 270) { double t = pw; pw = ph; ph = t; }
-        z = (cw - 2 * MARGIN) / (pw * g.dpi / 72.0);
+        z = (cw - 2 * MARGIN - (two_up() ? GAP : 0)) / ((two_up() ? 2 * pw : pw) * g.dpi / 72.0);
         if (g.fit == FIT_PAGE) z = min(z, (ch - 2 * MARGIN) / (ph * g.dpi / 72.0));
         if (z > best) best = z;
         if (i > 64) break;  /* the first pages decide */
@@ -222,6 +282,28 @@ static void relayout_at(POINT *anchor)
     update_current();
 }
 
+/* lay out again with the page `page` at the top */
+static void relayout_at_page(int page)
+{
+    int cw, ch;
+    if (page >= 0 && page < g.npages) g.current = page;
+    if (g.fit != FIT_NONE) {
+        g.zoom = fit_zoom();
+        layout(view_scale());
+        set_scrollbars();
+        g.zoom = fit_zoom();
+    }
+    layout(view_scale());
+    client_size(&cw, &ch);
+    g.sx = max(0, min(g.sx, g.docw - cw));
+    if (g.npages && page >= 0 && page < g.npages) g.sy = max(0, min(g.pages[page].y - GAP, g.doch - ch));
+    set_scrollbars();
+    InvalidateRect(g_view, NULL, FALSE);
+    update_current();
+    side_ensure_visible(g.current);
+    side_update();
+}
+
 void view_relayout(BOOL keep_anchor)
 {
     relayout_at(NULL);
@@ -260,6 +342,7 @@ void view_goto_page(int page, float top)
 {
     int y;
     if (page < 0 || page >= g.npages) return;
+    if (flip() && spread_of(page) != spread_of(g.current)) relayout_at_page(page);
     y = g.pages[page].y - GAP;
     if (top > 0 && g.rot == 0) y = g.pages[page].y + (int)(top * view_scale()) - GAP;
     view_scroll_to(g.sx, y);
@@ -633,6 +716,49 @@ void view_find(const WCHAR *needle, int dir)
 
 /* ---- rendering results ----------------------------------------------------------------------------- */
 
+/* the scale page i's whole bitmap is drawn at: the view's, or smaller for a page too large to draw
+ * whole (its part in view comes as a tile at the view's scale) */
+static double base_scale(int i, double s)
+{
+    double px = (double)g.pages[i].dw * g.pages[i].dh;
+    return px > TILE_PIXELS ? s * sqrt(TILE_PIXELS / px) : s;
+}
+
+/* the page is drawn as sharp as the zoom asks: its bitmap (and, for a big page, the tile in view) */
+BOOL view_page_ready(int i)
+{
+    page_t *p = &g.pages[i];
+    double s = view_scale(), bs = base_scale(i, s);
+    RECT rc, cr, vis;
+    if (!p->bmp || p->stale || fabs(p->bscale - bs) > 1e-4 || p->brot != g.rot) return FALSE;
+    if (bs == s) return TRUE;
+    view_page_rect(i, &rc);
+    GetClientRect(g_view, &cr);
+    if (!IntersectRect(&vis, &rc, &cr)) return TRUE;
+    OffsetRect(&vis, -rc.left, -rc.top);
+    return p->tile && p->tlgen == g.generation && fabs(p->tlscale - s) < 1e-4 && p->tlrot == g.rot &&
+           vis.left >= p->tlx && vis.top >= p->tly && vis.right <= p->tlx + p->tlw && vis.bottom <= p->tly + p->tlh;
+}
+
+void view_rendered_tile(int page, double scale, int rot, int gen, HBITMAP bmp, int x, int y, int w, int h)
+{
+    page_t *p;
+    RECT rc;
+    if (gen != g.generation || page < 0 || page >= g.npages || !bmp || fabs(scale - view_scale()) > 1e-4 || rot != g.rot) {
+        if (bmp) DeleteObject(bmp);
+        return;
+    }
+    p = &g.pages[page];
+    if (p->tile) DeleteObject(p->tile);
+    p->tile = bmp;
+    p->tlx = x; p->tly = y; p->tlw = w; p->tlh = h;
+    p->tlscale = scale;
+    p->tlrot = rot;
+    p->tlgen = gen;
+    view_page_rect(page, &rc);
+    InvalidateRect(g_view, &rc, FALSE);
+}
+
 void view_rendered(int page, BOOL thumb, double scale, int rot, int gen, HBITMAP bmp, int w, int h)
 {
     page_t *p;
@@ -650,7 +776,7 @@ void view_rendered(int page, BOOL thumb, double scale, int rot, int gen, HBITMAP
         app_dump();
         return;
     }
-    if (fabs(scale - view_scale()) > 1e-4 || rot != g.rot) {
+    if (fabs(scale - base_scale(page, view_scale())) > 1e-4 || rot != g.rot) {
         /* made for a zoom we left: still better than nothing, or than a page
          * drawn before the last change */
         if (p->bmp && !p->stale) { DeleteObject(bmp); return; }
@@ -679,8 +805,10 @@ void view_free_far(void)
         if (p->y + p->dh >= g.sy && p->y <= g.sy + ch) { if (first < 0) first = i; last = i; }
     }
     if (first < 0) return;
-    for (i = 0; i < g.npages; i++)
+    for (i = 0; i < g.npages; i++) {
         if ((i < first - 3 || i > last + 3) && g.pages[i].bmp) { DeleteObject(g.pages[i].bmp); g.pages[i].bmp = NULL; }
+        if ((i < first || i > last) && g.pages[i].tile) { DeleteObject(g.pages[i].tile); g.pages[i].tile = NULL; }
+    }
 }
 
 /* ---- painting ---------------------------------------------------------------------------------- */
@@ -697,7 +825,12 @@ static void paint(HDC out)
     RECT cr;
     HDC dc, mem;
     HBITMAP buf, oldbuf;
-    HBRUSH canvas = CreateSolidBrush(C_CANVAS), white = GetStockObject(WHITE_BRUSH);
+    HBRUSH canvas = CreateSolidBrush(C_CANVAS), paper = GetStockObject(g.night ? BLACK_BRUSH : WHITE_BRUSH);
+#ifndef SG_MUTANT_NIGHT
+    DWORD rop = g.night ? NOTSRCCOPY : SRCCOPY;   /* Dark Pages: the page's colours turned over */
+#else
+    DWORD rop = SRCCOPY;
+#endif
     HBRUSH shadow = CreateSolidBrush(C_SHADOW), selb = CreateSolidBrush(C_SELECT);
     HBRUSH hitb = CreateSolidBrush(C_HIT), curb = CreateSolidBrush(C_HITCUR);
     double s = view_scale();
@@ -734,16 +867,37 @@ static void paint(HDC out)
         if (p->bmp) {
             HGDIOBJ ob = SelectObject(mem, p->bmp);
             if (fabs(p->bscale - s) < 1e-4 && p->brot == g.rot) {
-                FillRect(dc, &rc, white);
-                BitBlt(dc, rc.left, rc.top, min(p->bw, rc.right - rc.left), min(p->bh, rc.bottom - rc.top), mem, 0, 0, SRCCOPY);
+                FillRect(dc, &rc, paper);
+                BitBlt(dc, rc.left, rc.top, min(p->bw, rc.right - rc.left), min(p->bh, rc.bottom - rc.top), mem, 0, 0, rop);
             } else if (p->brot == g.rot) {
                 SetStretchBltMode(dc, HALFTONE);
                 SetBrushOrgEx(dc, 0, 0, NULL);
-                StretchBlt(dc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, mem, 0, 0, p->bw, p->bh, SRCCOPY);
-            } else FillRect(dc, &rc, white);
+                StretchBlt(dc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, mem, 0, 0, p->bw, p->bh, rop);
+            } else FillRect(dc, &rc, paper);
             SelectObject(mem, ob);
-        } else FillRect(dc, &rc, white);
-        if (!p->bmp || p->stale || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(i, s, g.rot, FALSE);
+        } else FillRect(dc, &rc, paper);
+        {
+            double bs = base_scale(i, s);
+            if (!p->bmp || p->stale || fabs(p->bscale - bs) > 1e-4 || p->brot != g.rot) render_want(i, bs, g.rot, FALSE);
+            if (bs != s) {
+                /* the part in view, sharp: a tile at the view's scale */
+                RECT vis;
+                if (IntersectRect(&vis, &rc, &cr)) {
+                    int bx = vis.left - rc.left, by = vis.top - rc.top, bw = vis.right - vis.left, bh = vis.bottom - vis.top;
+                    BOOL have = p->tile && p->tlgen == g.generation && fabs(p->tlscale - s) < 1e-4 && p->tlrot == g.rot &&
+                                bx >= p->tlx && by >= p->tly && bx + bw <= p->tlx + p->tlw && by + bh <= p->tly + p->tlh;
+                    if (p->tile && p->tlgen == g.generation && fabs(p->tlscale - s) < 1e-4 && p->tlrot == g.rot) {
+                        HGDIOBJ ob = SelectObject(mem, p->tile);
+                        BitBlt(dc, rc.left + p->tlx, rc.top + p->tly, p->tlw, p->tlh, mem, 0, 0, rop);
+                        SelectObject(mem, ob);
+                    }
+                    if (!have) {
+                        int m = max(cr.right, cr.bottom) / 2, tx = max(0, bx - m), ty = max(0, by - m);
+                        render_want_tile(i, s, g.rot, tx, ty, min(p->dw - tx, bw + 2 * m), min(p->dh - ty, bh + 2 * m));
+                    }
+                }
+            }
+        }
         fields_paint(dc, i);
 
         /* search hits, the current one stronger */
@@ -775,7 +929,8 @@ static void paint(HDC out)
     /* the next page too, so scrolling on finds it ready */
     if (last_visible >= 0 && last_visible + 1 < g.npages) {
         page_t *p = &g.pages[last_visible + 1];
-        if (!p->bmp || p->stale || fabs(p->bscale - s) > 1e-4 || p->brot != g.rot) render_want(last_visible + 1, s, g.rot, FALSE);
+        double bs = base_scale(last_visible + 1, s);
+        if (!p->bmp || p->stale || fabs(p->bscale - bs) > 1e-4 || p->brot != g.rot) render_want(last_visible + 1, bs, g.rot, FALSE);
     }
     tool_paint(dc);
 
@@ -792,6 +947,22 @@ static void paint(HDC out)
 }
 
 /* ---- the window ---------------------------------------------------------------------------------- */
+
+/* page at a time: the next (dir 1) or previous spread */
+static void flip_to(int dir)
+{
+    int a = spread_of(g.current), to;
+    if (dir > 0) to = a + spread_len(a);
+    else to = a > 0 ? spread_of(a - 1) : -1;
+    if (to < 0 || to >= g.npages) return;
+    relayout_at_page(to);
+    if (dir < 0) {
+        int cw, ch;
+        client_size(&cw, &ch);
+        view_scroll_to(g.sx, g.doch);
+    }
+    app_status_changed();
+}
 
 static void scroll_msg(int bar, int code)
 {
@@ -862,6 +1033,12 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             ScreenToClient(hwnd, &pt);
             z = delta > 0 ? z * 11 / 10 + 1 : z * 10 / 11;
             view_set_zoom(z / 100.0, FIT_NONE, &pt);
+        } else if (flip()) {
+            int cw, ch;
+            client_size(&cw, &ch);
+            if (delta < 0 && g.sy + ch >= g.doch - 1) flip_to(1);
+            else if (delta > 0 && g.sy <= 0) flip_to(-1);
+            else view_scroll_to(g.sx, g.sy - delta * dpx(120) / WHEEL_DELTA);
         } else view_scroll_to(g.sx, g.sy - delta * dpx(120) / WHEEL_DELTA);
         return 0;
     }
@@ -870,27 +1047,32 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_KEYDOWN: {
         int cw, ch;
-        BOOL ctrl = GetKeyState(VK_CONTROL) < 0;
         if (tool_key(wp)) return 0;
         client_size(&cw, &ch);
         switch (wp) {
         case VK_UP: view_scroll_to(g.sx, g.sy - dpx(40)); return 0;
         case VK_DOWN: view_scroll_to(g.sx, g.sy + dpx(40)); return 0;
         case VK_LEFT:
-            if (g.docw <= cw) view_goto_page(max(g.current - 1, 0), 0);
+            if (flip() && g.docw <= cw) flip_to(-1);
+            else if (g.docw <= cw) view_goto_page(max(g.current - 1, 0), 0);
             else view_scroll_to(g.sx - dpx(40), g.sy);
             return 0;
         case VK_RIGHT:
-            if (g.docw <= cw) view_goto_page(min(g.current + 1, g.npages - 1), 0);
+            if (flip() && g.docw <= cw) flip_to(1);
+            else if (g.docw <= cw) view_goto_page(min(g.current + 1, g.npages - 1), 0);
             else view_scroll_to(g.sx + dpx(40), g.sy);
             return 0;
-        case VK_PRIOR: view_scroll_to(g.sx, g.sy - (ch - dpx(40))); return 0;
+        case VK_PRIOR:
+            if (flip() && g.sy <= 0) { flip_to(-1); return 0; }
+            view_scroll_to(g.sx, g.sy - (ch - dpx(40)));
+            return 0;
         case VK_NEXT: case VK_SPACE:
+            if (flip() && g.sy + ch >= g.doch - 1 && !(wp == VK_SPACE && GetKeyState(VK_SHIFT) < 0)) { flip_to(1); return 0; }
             if (wp == VK_SPACE && GetKeyState(VK_SHIFT) < 0) view_scroll_to(g.sx, g.sy - (ch - dpx(40)));
             else view_scroll_to(g.sx, g.sy + (ch - dpx(40)));
             return 0;
-        case VK_HOME: if (ctrl || 1) view_scroll_to(0, 0); return 0;
-        case VK_END: view_scroll_to(0, g.doch); return 0;
+        case VK_HOME: if (flip()) view_goto_page(0, 0); else view_scroll_to(0, 0); return 0;
+        case VK_END: if (flip()) view_goto_page(g.npages - 1, 0); else view_scroll_to(0, g.doch); return 0;
         case VK_ESCAPE:
             if (g.has_sel) { g.has_sel = FALSE; InvalidateRect(hwnd, NULL, FALSE); app_status_changed(); }
             return 0;

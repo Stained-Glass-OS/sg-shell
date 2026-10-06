@@ -28,7 +28,6 @@ override_dh_auto_install:
 	    build/sg-bugreport64.exe src/bugreport/sg-bugreport-info src/bugreport/sg-debug-run src/bugreport/sg-debug-summary src/bugreport/sg-bugreport-send \
 	    build/sg-wordpad64.exe \
 	    build/sg-fontview64.exe \
-	    build/sg-pdf64.exe \
 	    build/sgcompat64.dll \
 	    build/sglinuxicon64.dll \
 	    build/sg-magnify64.exe build/sg-osk64.exe \
@@ -67,7 +66,8 @@ override_dh_auto_install:
 	# what sg-compositor shows where no window is (its backdrop.c)
 	python3 theme/gen-backdrop.py debian/sg-shell/usr/share/stained-glass/backdrop.sgbd
 	python3 theme/gen-backdrop.py --first debian/sg-shell/usr/share/stained-glass/backdrop-first.sgbd
-	install -m0644 theme/*.reg defaults/*.reg debian/sg-shell/usr/share/stained-glass/defaults.d/
+	install -m0644 theme/*.reg $(filter-out defaults/80-sg-pdf.reg,$(wildcard defaults/*.reg)) \
+	    debian/sg-shell/usr/share/stained-glass/defaults.d/
 	# Linux apps Start does not list: the system's own plumbing (src/linuxapps)
 	install -m0644 src/linuxapps/linux-apps-hidden debian/sg-shell/usr/share/stained-glass/linux-apps-hidden
 	install -D -m0755 src/linuxapps/sg-linuxapp-deps debian/sg-shell/usr/libexec/stained-glass/sg-linuxapp-deps
@@ -86,5 +86,12 @@ override_dh_auto_install:
 	for d in build/office/icons/png/*; do \
 	    install -d debian/sg-office/usr/share/icons/hicolor/$$(basename $$d)/apps; \
 	    install -m0644 $$d/apps/sg-office-*.png debian/sg-office/usr/share/icons/hicolor/$$(basename $$d)/apps/; done
+	# SG PDF (package sg-pdf): the program, its registrations (the .pdf
+	# association), its icons and the Linux programs' PDF handler
+	install -D -m0755 build/sg-pdf64.exe debian/sg-pdf/usr/libexec/stained-glass/shell/sg-pdf64.exe
+	install -D -m0644 defaults/80-sg-pdf.reg debian/sg-pdf/usr/share/stained-glass/defaults.d/80-sg-pdf.reg
+	install -D -m0644 src/pdf/sg-pdf.desktop debian/sg-pdf/usr/share/applications/sg-pdf.desktop
+	for d in build/pdf-icons/*; do \
+	    install -D -m0644 $$d/apps/sg-pdf.png debian/sg-pdf/usr/share/icons/hicolor/$$(basename $$d)/apps/sg-pdf.png; done
 	# Recommended per-program settings for the Compatibility tab (src/compat).
 	install -D -m0644 data/compat-presets.ini debian/sg-shell/usr/share/stained-glass/compat-presets.ini

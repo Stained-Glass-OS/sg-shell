@@ -231,6 +231,21 @@ void org_command(int cmd)
     case CMD_ORG_BLANK:
         doc_requestf("insertblank\t%d", at);
         break;
+    case CMD_ORG_REPLACE:
+        if (!n) break;
+        if (file_dialog(FALSE, L"Replace Pages", L"PDF documents\0*.pdf\0All files (*.*)\0*.*\0", NULL, file, MAX_PATH)) {
+            WCHAR from[32] = L"1", prompt[200];
+            char *u = unix_path(file);
+            WCHAR *wu = u ? from_utf8(u, -1) : NULL;
+            e = wu ? esc_utf8(wu) : NULL;
+            swprintf(prompt, 200, L"Replace the %d selected page%ls with pages of the other document, from its page:", n, n == 1 ? L"" : L"s");
+            if (e && dlg_text(g_main, L"Replace Pages", prompt, from, 32, FALSE)) {
+                snprintf(line, sizeof(line), "replacepages\t%s\t%s\t%d", pages, e, max(1, _wtoi(from)));
+                if (doc_request(line) && before) keep_selection(before, np);
+            }
+            free(e); free(wu); free(u);
+        }
+        break;
     case CMD_ORG_INSERT:
         if (file_dialog(FALSE, L"Insert Pages", L"PDF documents and pictures\0*.pdf;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff\0"
                                                L"All files (*.*)\0*.*\0", NULL, file, MAX_PATH)) {

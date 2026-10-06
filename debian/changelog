@@ -1,3 +1,23 @@
+sg-shell (0.1.0-138) unstable; urgency=medium
+
+  * SG PDF gains the professional PDF editor's tools: Prepare Form (fields
+    drawn or found on a paper form by Auto-detect; their Properties --
+    formats, calculations, choices), forms that compute as they are filled,
+    check marks anywhere, signing with a certificate (a digital ID; a new
+    self-signed one; the signature bar and the Signatures pane), Create PDF
+    (blank, files, office documents, scanner), Recognize Text, Link,
+    Header & Footer, Watermark, Bates and page numbers, stamps, a comment's
+    replies and status, Replace pages, Insert from scanner, Reduce File
+    Size, Attach a File, Page Display (single, two pages, scrolling or
+    not), Dark Pages, Read Out Loud, the Attachments and Signatures panes;
+    big pages drawn in tiles; dialogs follow the dark mode; fonts follow a
+    DPI change.
+  * SG PDF is its own package, sg-pdf (with its icons and the PDF handler
+    for Linux programs); SG Store lists it.
+  * Gate test/pdf-pro-check.sh, eight mutants.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 10:24:08 -0700
+
 sg-shell (0.1.0-137) unstable; urgency=medium
 
   * Round and slanted shapes are drawn smooth in every program: GDI draws

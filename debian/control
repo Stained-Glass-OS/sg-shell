@@ -34,3 +34,23 @@ Description: SG Office for Stained Glass OS (documents, spreadsheets, presentati
  Microsoft Office's file types (until the user installs another suite) and
  Settings > Default apps rows. They start SG Office's editors, our own suite
  based on ONLYOFFICE (package sg-office-editors).
+
+Package: sg-pdf
+Architecture: all
+Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine, sg-session (>= 0.1.0-139)
+Breaks: sg-shell (<< 0.1.0-138)
+Replaces: sg-shell (<< 0.1.0-138)
+Description: SG PDF for Stained Glass OS: view, edit, fill, sign and organize PDFs
+ SG PDF is Stained Glass OS's PDF program: a viewer (continuous, single and
+ two-page views, thumbnails, bookmarks, attachments, find, dark pages, read
+ out loud, print) and an editor with the familiar professional PDF editor's
+ tools -- edit text and pictures, comments with replies and stamps, Fill &
+ Sign, Prepare Form (fields found on a paper form; formats, calculations),
+ certificate signatures and their validation, true redaction, organize
+ pages, headers and footers, watermarks, Bates numbers, text recognition
+ for scans, Create PDF from files, office documents and the scanner,
+ export, combine, protect and reduce file size. It is the default program
+ for PDF files, on the Windows side and for Linux programs.
+ .
+ The Windows program is ours; MuPDF (python3-pymupdf) in sg-session's sg-pdf
+ does the PDF work, OCRmyPDF and Tesseract the text recognition.

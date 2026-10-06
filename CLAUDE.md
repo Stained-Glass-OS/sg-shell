@@ -66,7 +66,7 @@ wine-sg or an X server.
 | `sg-wordpad` | **WordPad** (`wordpad.exe`, `write.exe`) -- Windows 10's WordPad in our own drawing: ribbon (File menu; Home: Clipboard, Font -- face and size boxes, grow/shrink, bold/italic/underline/strike, sub/superscript, highlight and text colour --, Paragraph -- indents, lists (bullets, numbers, letters, Roman), line spacing, alignment, Paragraph and Tabs dialogs --, Insert -- picture, date and time --, Editing -- Find, Replace, Select all; View: zoom, ruler, status bar, word wrap, units), a ruler with draggable indents and tab stops, a status-bar zoom slider, Page Setup, Print and Print preview (RichEdit's EM_FORMATRANGE, wine-sg 0184). Opens and saves RTF, .docx and .odt (our own readers and writers) and text; tables (Insert > Table, wine-sg 0240); opens Word 97-2003 .doc; page numbers, header and footer in print. `defaults/68-sg-wordpad.reg`; wine-sg 0180 hands Wine's wordpad.exe/write.exe over; sg-start lists it. See "WordPad" below. |
 | `sg-mmc` | **The administrative consoles**: `services.msc`, `eventvwr.msc` (and `eventvwr.exe`, as `sg-eventvwr64.exe`), `devmgmt.msc`, `diskmgmt.msc`, `compmgmt.msc` -- our own MMC-style host (console tree, result pane, Actions pane, toolbar, Action menu) and the snap-ins in it. `mmc.exe` resolves to it via App Paths (`defaults/79-sg-admin-tools.reg`); wine-sg 0142 gives the `.msc` files, `mmc.exe`/`eventvwr.exe` launchers, the Start menu's Administrative Tools and 0145 Win+X; the Control Panel has an Administrative Tools page. See "The administrative consoles" below. |
 | SG Office | **The office suite** (package `sg-office`, `office/`; it depends on `sg-office-editors`, our own suite based on ONLYOFFICE, built from the `sg-office` repository: `/usr/bin/sg-office`): SG Office Documents, Spreadsheets and Presentations (`sg-documents64.exe`, `sg-spreadsheets64.exe`, `sg-presentations64.exe`, `office/launcher`) in Start, starting the editors with each file's Unix path (no file: `--new KIND`); the default programs for Office's file types (`office/defaults/`, written by `office/gen-reg.py`: the types file is frozen -- a changed one would be re-imported over Microsoft Office once the user installs it), Default apps rows. SG Store installs it as our apt package (`ours:apt:sg-office`; sg-admind's apt-install registers our own packages at once). No LibreOffice anywhere. Gates: `make test-office` (`test/office-check.sh`, `test/office-native-check.sh`), `make test-office-mutants`. ADR 0016 (stained-glass): our own suite. |
-| `sg-pdf` | **SG PDF** -- the PDF viewer and editor; `.pdf` opens in it out of the box (Windows opens PDFs in Edge, which we do not ship). Viewing as before (continuous scroll, zoom, fit, rotate, thumbnails, bookmarks, find, select and copy, links, print, passwords) and the familiar PDF editor's tools: Edit PDF (text in place with reflow, add text and pictures, move, resize, delete), Comment (standard annotations), Fill & Sign, **Redact** (true removal, and Remove Hidden Information), Organize Pages, Export (Word, text, HTML, pictures), Combine Files, Protect (AES-256); undo and redo; light and dark. MuPDF in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it. See "SG PDF" below. |
+| `sg-pdf` | **SG PDF** (package `sg-pdf`) -- the PDF viewer and editor; `.pdf` opens in it out of the box, on the Windows side and for Linux programs (Windows opens PDFs in Edge, which we do not ship). Viewing (continuous, single page, two pages, zoom, fit, rotate, thumbnails, bookmarks, attachments, signatures, find, select and copy, links, Dark Pages, Read Out Loud, print, passwords; big pages in tiles) and the familiar professional PDF editor's tools: Edit PDF (text in place, pictures, links, header & footer, watermark, Bates numbers, page numbers), Comment (standard annotations, stamps, replies, review status), Fill & Sign (forms with formats and calculations, text and marks anywhere, signatures, **certificate signatures** and their validation), **Prepare Form** (auto-detected fields, every kind, properties), **Redact** (true removal, and Remove Hidden Information), Organize Pages (with replace and scan), **Create PDF** (blank, files, office documents, scanner), **Recognize Text** (OCR), Export, Combine, Protect (AES-256), Reduce File Size; undo and redo; light and dark. MuPDF in sg-session's `sg-pdf`, through its bridge. `.pdf` via `defaults/80-sg-pdf.reg`; sg-start lists it; SG Store lists it (ours). See "SG PDF" below. |
 | `sg-browser` | **Get a web browser** -- we ship no browser (Edge is Microsoft's). Web links (`http`, `https`) and `.htm`/`.html` open it until the user has one: none installed -- it offers Firefox, Chrome and Brave, downloads the maker's installer as the winget community repository describes it, checks its SHA-256, installs it silently (or through winget when the user has it), makes it the default and opens the link; one installed -- the link opens there; several -- "How do you want to open this?". The user's choice (UserChoice, as Settings > Default apps writes it) is honoured on every link. Internet Explorer (Wine's, Gecko) is offered for simple pages. `defaults/81-sg-browser.reg`; sg-start lists it. See "Get a web browser" below. |
 | `sg-taskbar` | **Superseded.** An early standalone AppBar bar, kept as an AppBar/render reference. The taskbar itself is now upgraded in explorer (`wine-sg` patch 0012), not a separate bar -- David's call: upgrade the bar, do not overlay it. |
 
@@ -1777,10 +1777,59 @@ layout follows the familiar PDF editor's workflow, the words and art are ours.
   picture's pixels changed; organize (rotate, delete, drag, blank); export to
   Word; combine; protect (qpdf shows AESv3, reopening asks for the
   password); the dark palette. Mutants: see the commit message.
+- **The professional tools (2026-10-06)** -- `form.c` (Prepare Form: the
+  fields drawn as named boxes; the bar adds text, date, number, check box,
+  radio, drop-down, list and signature fields with a drag or a click;
+  Auto-detect; pick, drag, handles, arrow keys, Del; double-click/Enter:
+  the Properties dialog -- name, tooltip, required, read-only, multi-line,
+  font size, alignment, default, format (number, currency, percent, date
+  patterns, ZIP, phone, SSN), calculation (sum, product, average, min, max
+  of picked fields, or a formula), choices, export value), `sign.c`
+  (certificate signatures: the digital ID dialog, New Digital ID
+  (self-signed .pfx), a click on an empty signature field or a box drawn
+  on the page, saved as a new file; the signature bar over the pages --
+  green valid, yellow valid but the identity unconfirmed, red invalid --
+  and the Signatures pane; a signature's details, "trust this signer"),
+  `create.c` (Create PDF: blank, from files -- pictures, text, PDFs, office
+  documents -- and from the scanner; an untitled document until saved
+  (`app_adopt`); Recognize Text; Add Header & Footer, Watermark, Bates
+  Numbering, Page Numbers; Reduce File Size; attachments; Read Out Loud;
+  links). Fill & Sign adds check, cross and dot marks anywhere and the
+  Certificate button; Comment adds stamps and a comment's Replies and
+  Status dialog (`comment_thread`); Edit PDF adds Link, Header & footer,
+  Watermark, Bates; Organize adds Replace and Insert from scanner. View >
+  Page Display: Single Page View, Enable Scrolling (the default), Two Page
+  View, Two Page Scrolling, Show Cover Page; Dark Pages (the page's colours
+  turned over); Show Panel (Pages, Bookmarks, Attachments, Signatures --
+  the sidebar's tabs). A page bitmap over 4 Mpx is drawn smaller and the
+  part in view comes as a tile at the view's scale (`render ... X Y W H`);
+  sg-pdf keeps the last pages' display lists. The fonts are made again on
+  WM_DPICHANGED. The dump adds `layout`, `night`, `untitled`, `sigbanner`,
+  `sigbar`, `sig`, `attachment`, `formfield`, `formpick`, the side tabs
+  `tab attachments|signatures`, `attachbtn`, `sigitem` and **`dialog TITLE`**
+  (one of ours in front: under a Wine desktop every window is one X window,
+  so a gate cannot ask X which window has the focus).
+- **Package `sg-pdf`** (from this source, like sg-office): the program,
+  `defaults/80-sg-pdf.reg`, its icons (`gen-icon.py OUT.ico PNGDIR`) and
+  `sg-pdf.desktop` (Linux programs' PDF handler: `sg-open-windows-file`,
+  i.e. the Windows side's .pdf association; sg-session's mimeapps.list
+  names it). sg-session Depends on it (so apt brings it) and on what its
+  engine needs (MuPDF, cryptography/asn1crypto, OCRmyPDF, Tesseract
+  English, espeak-ng, sane-utils). SG Store lists it (`ours:apt:sg-pdf`;
+  sg-admind refuses removing it while sg-session needs it).
+- **Gate `test/pdf-pro-check.sh`** (with `test/pdf-pro-probe.py`): Prepare
+  Form (Auto-detect, a field drawn, its Properties by keyboard, the scripts
+  in the file), Fill (calculation, date and number formats, a check mark),
+  Sign (a field and a drawn box; pdfsig: both valid, the second covers the
+  file; the bar and the pane), Create (3 files), OCR, decorations, page
+  display, Dark Pages, attachments, a stamp. `SG_PDF_PRO_ONLY="form ..."`
+  runs sections. Mutants (`-DSG_MUTANT_x`, each turned the gate red):
+  FORMADD, FORMPROPS, CERTSIGN, NIGHT, TWOUP, CREATE, DECORATE, FILLMARK.
 - **Not yet:** a paragraph with mixed fonts takes its dominant font when
   edited; curved vector paths under a redaction mark are removed whole (not
-  cut); moving a path redraws it (its stacking order changes); no OCR, no
-  digital (certificate) signatures, no two-page view or presentation mode.
+  cut); moving a path redraws it (its stacking order changes); pen pressure
+  in ink; encrypted documents are not certificate-signed; no presentation
+  (full screen) mode.
 
 ## Get a web browser (sg-browser)
 

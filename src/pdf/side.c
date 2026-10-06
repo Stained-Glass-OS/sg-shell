@@ -1,18 +1,26 @@
-/* sg-pdf -- SG PDF: the sidebar -- page thumbnails, and the bookmarks
- * (the document's outline) in a tree.
+/* sg-pdf -- SG PDF: the sidebar (the navigation pane) -- page thumbnails,
+ * the bookmarks (the document's outline) in a tree, the attachments (open,
+ * save, attach, delete) and the signatures (each one's state; a
+ * double-click shows its details).
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "pdf.h"
 
-#define TABS_H dpx(40)
+#define TABS_H dpx(40)        /* Pages, Bookmarks over the views */
+#define BTABS_H (g_extra ? dpx(34) : 0)   /* Attachments, Signatures under them, when the document has
+                                           * either (or one of them is open), as the familiar viewer
+                                           * shows its paper clip and signature panes */
+static BOOL g_extra;
+#define NTABS 4
 #define THUMB_W dpx(116)
 #define CELL_PAD dpx(10)
 #define LABEL_H dpx(22)
 
 HWND g_side, g_tree;
-static HWND g_thumbs;
+static HWND g_thumbs, g_alist, g_slist, g_abtn[4], g_sbtn;
+static const WCHAR *const ABTN[4] = { L"Open", L"Save...", L"Attach...", L"Delete" };
 static int g_tscroll;           /* the thumbnails' scroll position */
 static int g_hover_tab = -1;
 
@@ -238,8 +246,100 @@ void side_load_outline(void)
 static void tab_rect(int k, RECT *r)
 {
     RECT rc;
+    int col = k % 2;
     GetClientRect(g_side, &rc);
-    SetRect(r, dpx(6) + k * (rc.right - dpx(12)) / 2, dpx(4), dpx(6) + (k + 1) * (rc.right - dpx(12)) / 2, TABS_H - dpx(4));
+    if (k < 2) SetRect(r, dpx(6) + col * (rc.right - dpx(12)) / 2, dpx(4), dpx(6) + (col + 1) * (rc.right - dpx(12)) / 2,
+                       TABS_H - dpx(4));
+    else SetRect(r, dpx(6) + col * (rc.right - dpx(12)) / 2, rc.bottom - BTABS_H + dpx(3),
+                 dpx(6) + (col + 1) * (rc.right - dpx(12)) / 2, rc.bottom - dpx(3));
+}
+
+static int tab_mode(int k)
+{
+    static const int M[NTABS] = { SIDE_THUMBS, SIDE_OUTLINE, SIDE_ATTACH, SIDE_SIGS };
+    return M[k];
+}
+
+/* ---- attachments and signatures ------------------------------------------------------------------------------ */
+
+static void lists_fill(void)
+{
+    int i;
+    if (g.side == SIDE_ATTACH && g_alist) {
+        doc_load_attach();
+        SendMessageW(g_alist, LB_RESETCONTENT, 0, 0);
+        for (i = 0; i < g.nattach; i++) {
+            WCHAR t[400];
+            DWORD sz = g.attach[i].size;
+            swprintf(t, 400, L"%ls  (%ls%lu %ls)", g.attach[i].file ? g.attach[i].file : L"?",
+                     g.attach[i].key && g.attach[i].key[0] == '@' ? L"comment, " : L"",
+                     sz >= 1048576 ? sz / 1048576 : sz >= 1024 ? sz / 1024 : sz, sz >= 1048576 ? L"MB" : sz >= 1024 ? L"KB" : L"bytes");
+            SendMessageW(g_alist, LB_ADDSTRING, 0, (LPARAM)t);
+        }
+        if (!g.nattach) SendMessageW(g_alist, LB_ADDSTRING, 0, (LPARAM)L"(no attachments)");
+    }
+    if (g.side == SIDE_SIGS && g_slist) {
+        doc_load_sigs();
+        SendMessageW(g_slist, LB_RESETCONTENT, 0, 0);
+        for (i = 0; i < g.nsigs; i++) {
+            WCHAR t[400];
+            sig_t *sg = &g.sigs[i];
+            swprintf(t, 400, L"%ls %ls%ls%ls", sg->state == SIG_VALID ? L"\x2714" : sg->state == SIG_UNKNOWN ? L"\x26A0" :
+                                             sg->state == SIG_INVALID ? L"\x2716" : L"\x25AD",
+                     sg->state == SIG_UNSIGNED ? L"Unsigned field: " : L"", sg->state == SIG_UNSIGNED ? (sg->name ? sg->name : L"")
+                                                                       : (sg->signer ? sg->signer : L""),
+                     sg->state == SIG_VALID ? L" (valid)" : sg->state == SIG_UNKNOWN ? L" (valid, identity unknown)" :
+                     sg->state == SIG_INVALID ? L" (INVALID)" : L"");
+            SendMessageW(g_slist, LB_ADDSTRING, 0, (LPARAM)t);
+        }
+        if (!g.nsigs) SendMessageW(g_slist, LB_ADDSTRING, 0, (LPARAM)L"(no signature fields)");
+    }
+}
+
+void side_fonts(void)
+{
+    int i;
+    if (g_tree) SendMessageW(g_tree, WM_SETFONT, (WPARAM)g_font_small, TRUE);
+    if (g_alist) SendMessageW(g_alist, WM_SETFONT, (WPARAM)g_font_small, TRUE);
+    if (g_slist) SendMessageW(g_slist, WM_SETFONT, (WPARAM)g_font_small, TRUE);
+    for (i = 0; i < 4; i++) if (g_abtn[i]) SendMessageW(g_abtn[i], WM_SETFONT, (WPARAM)g_font_small, TRUE);
+    if (g_sbtn) SendMessageW(g_sbtn, WM_SETFONT, (WPARAM)g_font_small, TRUE);
+    if (g_tree) SendMessageW(g_tree, TVM_SETITEMHEIGHT, dpx(26), 0);
+    if (g_side) { SendMessageW(g_side, WM_SIZE, 0, 0); InvalidateRect(g_side, NULL, TRUE); }
+}
+
+void side_dump(FILE *f)
+{
+    int i;
+    char buf[512];
+    POINT pt;
+    for (i = 2; i < (g_extra ? NTABS : 2); i++)
+        if (side_tab_center(i, &pt)) fprintf(f, "tab %s %ld %ld\n", i == 2 ? "attachments" : "signatures", pt.x, pt.y);
+    if (g.side == SIDE_ATTACH && g_alist && IsWindowVisible(g_alist)) {
+        for (i = 0; i < 4; i++) {
+            RECT r;
+            GetWindowRect(g_abtn[i], &r);
+            to_utf8(ABTN[i], buf, sizeof(buf));
+            fprintf(f, "attachbtn %s %ld %ld\n", buf, (r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        }
+        for (i = 0; i < g.nattach; i++) {
+            RECT r;
+            if (SendMessageW(g_alist, LB_GETITEMRECT, i, (LPARAM)&r) == LB_ERR) continue;
+            MapWindowPoints(g_alist, NULL, (POINT *)&r, 2);
+            fprintf(f, "attachitem %d %ld %ld\n", i, (r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        }
+    }
+    if (g.side == SIDE_SIGS && g_slist && IsWindowVisible(g_slist)) {
+        for (i = 0; i < g.nsigs; i++) {
+            RECT r;
+            WCHAR t[400];
+            if (SendMessageW(g_slist, LB_GETITEMRECT, i, (LPARAM)&r) == LB_ERR) continue;
+            SendMessageW(g_slist, LB_GETTEXT, i, (LPARAM)t);
+            to_utf8(t, buf, sizeof(buf));
+            MapWindowPoints(g_slist, NULL, (POINT *)&r, 2);
+            fprintf(f, "sigitem %d %ld %ld %s\n", i, (r.left + r.right) / 2, (r.top + r.bottom) / 2, buf);
+        }
+    }
 }
 
 BOOL side_tab_center(int k, POINT *pt)
@@ -253,14 +353,37 @@ BOOL side_tab_center(int k, POINT *pt)
     return TRUE;
 }
 
+static BOOL extra_tabs(void)
+{
+    if (g.side == SIDE_ATTACH || g.side == SIDE_SIGS) return TRUE;
+    if (!g.npages || !g.bridged) return FALSE;
+    if (doc_load_attach() && g.nattach) return TRUE;
+    return g.form && doc_load_sigs() && g.nsigs > 0;
+}
+
 static void side_layout(void)
 {
     RECT rc;
+    int i, bh = dpx(26), bw;
+    g_extra = extra_tabs();
     GetClientRect(g_side, &rc);
+    rc.bottom = max(TABS_H, rc.bottom - BTABS_H);     /* the views end over the lower tabs */
     MoveWindow(g_thumbs, 0, TABS_H, rc.right, rc.bottom - TABS_H, TRUE);
     MoveWindow(g_tree, 0, TABS_H, rc.right, rc.bottom - TABS_H, TRUE);
     ShowWindow(g_thumbs, g.side == SIDE_THUMBS ? SW_SHOWNA : SW_HIDE);
     ShowWindow(g_tree, g.side == SIDE_OUTLINE ? SW_SHOWNA : SW_HIDE);
+    bw = (rc.right - dpx(10)) / 2;
+    for (i = 0; i < 4; i++) {
+        MoveWindow(g_abtn[i], dpx(4) + (i % 2) * (bw + dpx(2)), TABS_H + dpx(4) + (i / 2) * (bh + dpx(2)), bw, bh, TRUE);
+        ShowWindow(g_abtn[i], g.side == SIDE_ATTACH ? SW_SHOWNA : SW_HIDE);
+    }
+    MoveWindow(g_alist, 0, TABS_H + 2 * bh + dpx(10), rc.right, max(0, rc.bottom - TABS_H - 2 * bh - dpx(10)), TRUE);
+    ShowWindow(g_alist, g.side == SIDE_ATTACH ? SW_SHOWNA : SW_HIDE);
+    MoveWindow(g_sbtn, dpx(4), TABS_H + dpx(4), rc.right - dpx(8), bh, TRUE);
+    ShowWindow(g_sbtn, g.side == SIDE_SIGS ? SW_SHOWNA : SW_HIDE);
+    MoveWindow(g_slist, 0, TABS_H + bh + dpx(8), rc.right, max(0, rc.bottom - TABS_H - bh - dpx(8)), TRUE);
+    ShowWindow(g_slist, g.side == SIDE_SIGS ? SW_SHOWNA : SW_HIDE);
+    lists_fill();
 }
 
 void side_set_mode(int mode)
@@ -275,12 +398,14 @@ void side_set_mode(int mode)
 
 void side_update(void)
 {
+    if (g_side && g.side != SIDE_NONE && extra_tabs() != g_extra) { side_layout(); InvalidateRect(g_side, NULL, TRUE); }
     if (g_thumbs && g.side == SIDE_THUMBS) { thumbs_scrollbar(); InvalidateRect(g_thumbs, NULL, FALSE); }
+    if (g.side == SIDE_ATTACH || g.side == SIDE_SIGS) lists_fill();
 }
 
 static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    static const WCHAR *const NAMES[2] = { L"Thumbnails", L"Bookmarks" };
+    static const WCHAR *const NAMES[NTABS] = { L"Pages", L"Bookmarks", L"Attachments", L"Signatures" };
     switch (msg) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
@@ -294,11 +419,18 @@ static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         r = rc;
         r.bottom = TABS_H;
         FillRect(dc, &r, bg);
+        if (g_extra) {
+            r = rc;
+            r.top = rc.bottom - BTABS_H;
+            FillRect(dc, &r, bg);
+            r.bottom = r.top + 1;
+            FillRect(dc, &r, line);
+        }
         SetRect(&r, rc.right - 1, 0, rc.right, rc.bottom);
         FillRect(dc, &r, line);
         SetBkMode(dc, TRANSPARENT);
-        for (k = 0; k < 2; k++) {
-            BOOL on = g.side == (k ? SIDE_OUTLINE : SIDE_THUMBS);
+        for (k = 0; k < (g_extra ? NTABS : 2); k++) {
+            BOOL on = g.side == tab_mode(k);
             tab_rect(k, &r);
             if (k == g_hover_tab && !on) FillRect(dc, &r, hov);
             SetTextColor(dc, on ? C_ACCENT : C_TEXT);
@@ -317,7 +449,7 @@ static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         int k, h = -1;
         RECT r;
         TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
-        for (k = 0; k < 2; k++) { tab_rect(k, &r); if (PtInRect(&r, pt)) h = k; }
+        for (k = 0; k < (g_extra ? NTABS : 2); k++) { tab_rect(k, &r); if (PtInRect(&r, pt)) h = k; }
         if (h != g_hover_tab) { g_hover_tab = h; InvalidateRect(hwnd, NULL, FALSE); }
         TrackMouseEvent(&tme);
         return 0;
@@ -327,7 +459,31 @@ static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         RECT r;
         int k;
-        for (k = 0; k < 2; k++) { tab_rect(k, &r); if (PtInRect(&r, pt)) side_set_mode(k ? SIDE_OUTLINE : SIDE_THUMBS); }
+        for (k = 0; k < (g_extra ? NTABS : 2); k++) { tab_rect(k, &r); if (PtInRect(&r, pt)) side_set_mode(tab_mode(k)); }
+        return 0;
+    }
+    case WM_COMMAND: {
+        HWND c = (HWND)lp;
+        int i, sel;
+        if (c == g_alist && HIWORD(wp) == LBN_DBLCLK) attach_open((int)SendMessageW(g_alist, LB_GETCURSEL, 0, 0));
+        if (c == g_slist && HIWORD(wp) == LBN_DBLCLK) {
+            sel = (int)SendMessageW(g_slist, LB_GETCURSEL, 0, 0);
+            if (sel >= 0 && sel < g.nsigs) { view_goto_page(g.sigs[sel].page, max(0.0f, g.sigs[sel].box.y1 - 40)); sig_show(sel); }
+        }
+        if (c == g_slist && HIWORD(wp) == LBN_SELCHANGE) {
+            sel = (int)SendMessageW(g_slist, LB_GETCURSEL, 0, 0);
+            if (sel >= 0 && sel < g.nsigs) view_goto_page(g.sigs[sel].page, max(0.0f, g.sigs[sel].box.y1 - 40));
+        }
+        if (c == g_sbtn && HIWORD(wp) == BN_CLICKED) app_command(CMD_VALIDATE);
+        for (i = 0; i < 4; i++) if (c == g_abtn[i] && HIWORD(wp) == BN_CLICKED) {
+            sel = (int)SendMessageW(g_alist, LB_GETCURSEL, 0, 0);
+            if (i == 2) app_command(CMD_ADDATTACH);
+            else if (sel < 0 || sel >= g.nattach) app_set_status(L"Choose an attachment first.");
+            else if (i == 0) attach_open(sel);
+            else if (i == 1) attach_save(sel);
+            else attach_delete(sel);
+            SetFocus(g_alist);
+        }
         return 0;
     }
     case WM_NOTIFY: {
@@ -351,7 +507,7 @@ static LRESULT CALLBACK side_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     }
-    case WM_CTLCOLORSTATIC: {
+    case WM_CTLCOLORLISTBOX: case WM_CTLCOLORBTN: case WM_CTLCOLORSTATIC: {
         static HBRUSH b;
         static COLORREF bc = (COLORREF)-1;
         if (bc != C_SIDE) { if (b) DeleteObject(b); b = CreateSolidBrush(C_SIDE); bc = C_SIDE; }
@@ -397,5 +553,16 @@ HWND side_create(HWND parent)
     SendMessageW(g_tree, TVM_SETBKCOLOR, 0, C_SIDE);
     SendMessageW(g_tree, TVM_SETTEXTCOLOR, 0, C_TEXT);
     SendMessageW(g_tree, TVM_SETITEMHEIGHT, dpx(26), 0);
+    {
+        int i;
+        g_alist = CreateWindowExW(0, L"LISTBOX", NULL, WS_CHILD | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
+                                  0, 0, 10, 10, g_side, NULL, g_inst, NULL);
+        g_slist = CreateWindowExW(0, L"LISTBOX", NULL, WS_CHILD | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
+                                  0, 0, 10, 10, g_side, NULL, g_inst, NULL);
+        for (i = 0; i < 4; i++)
+            g_abtn[i] = CreateWindowExW(0, L"BUTTON", ABTN[i], WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 10, 10, g_side, NULL, g_inst, NULL);
+        g_sbtn = CreateWindowExW(0, L"BUTTON", L"Validate All", WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 10, 10, g_side, NULL, g_inst, NULL);
+        side_fonts();
+    }
     return g_side;
 }

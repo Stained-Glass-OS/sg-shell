@@ -139,6 +139,18 @@ Windows Registry Editor Version 5.00
 "DetectName"="SG Office"
 "Run"="sg-documents.exe"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\129]
+"Name"="SG PDF"
+"Publisher"="Stained Glass OS"
+"Description"="View, edit, comment on, fill in and sign PDF documents: fillable forms with calculations, certificate signatures, true redaction, page organizing, text recognition for scans, and PDFs made from files and the scanner."
+"Category"="Productivity"
+"Colour"=dword:00c62828
+"Tier"="ours"
+"Source"="ours:apt:sg-pdf"
+"DetectName"="SG PDF"
+"Run"="sg-pdf.exe"
+"Icon"="Z:\\usr\\share\\icons\\hicolor\\128x128\\apps\\sg-pdf.png"
+
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\128]
 "Name"="SG Mail"
 "Publisher"="Stained Glass OS"

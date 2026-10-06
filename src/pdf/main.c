@@ -51,6 +51,7 @@ static WCHAR g_dump[MAX_PATH];
 static HWND g_page_edit, g_find_edit, g_tip;
 static HMENU g_menu;
 static HBRUSH g_editbrush;
+static HBRUSH g_dlg_brush, g_dlg_edit_brush;    /* dialogs in dark (dialog_hook) */
 
 const COLORREF COMMENT_COLORS[NCOLORS] = {
     RGB(0xFF, 0xE5, 0x00), RGB(0xFF, 0x3B, 0x30), RGB(0x2E, 0x7D, 0xF6), RGB(0x2E, 0xB8, 0x4D),
@@ -77,6 +78,8 @@ static void set_palette(BOOL dark)
     }
     if (g_editbrush) DeleteObject(g_editbrush);
     g_editbrush = CreateSolidBrush(P.edit);
+    if (g_dlg_brush) { DeleteObject(g_dlg_brush); g_dlg_brush = NULL; }
+    if (g_dlg_edit_brush) { DeleteObject(g_dlg_edit_brush); g_dlg_edit_brush = NULL; }
 }
 
 /* the menu bar in the app mode: in dark, its items are ours to draw (Wine
@@ -166,6 +169,47 @@ void app_apply_mode(void)
     }
 }
 
+/* ---- dialogs in the app mode ----------------------------------------------------------------------- */
+
+/* Every dialog of ours (and the message boxes) follows the app mode: a hook sees each one start
+ * and, in dark, subclasses it to colour its background and controls from the palette. */
+static LRESULT CALLBACK dark_dialog(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR data)
+{
+    (void)id; (void)data;
+    switch (msg) {
+    case WM_CTLCOLORDLG: case WM_CTLCOLORSTATIC: case WM_CTLCOLORBTN:
+        if (!g.dark) break;
+        SetTextColor((HDC)wp, C_TEXT);
+        SetBkColor((HDC)wp, C_PANE);
+        return (LRESULT)g_dlg_brush;
+    case WM_CTLCOLOREDIT: case WM_CTLCOLORLISTBOX:
+        if (!g.dark) break;
+        SetTextColor((HDC)wp, C_TEXT);
+        SetBkColor((HDC)wp, C_EDITBG);
+        return (LRESULT)g_dlg_edit_brush;
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(hwnd, dark_dialog, 1);
+        break;
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
+static LRESULT CALLBACK dialog_hook(int code, WPARAM wp, LPARAM lp)
+{
+    CWPRETSTRUCT *c = (CWPRETSTRUCT *)lp;
+    if (code == HC_ACTION && c->message == WM_INITDIALOG && g.dark) {
+        WCHAR cls[16];
+        if (GetClassNameW(c->hwnd, cls, 16) && !wcscmp(cls, L"#32770")) {
+            if (!g_dlg_brush) g_dlg_brush = CreateSolidBrush(C_PANE);
+            if (!g_dlg_edit_brush) g_dlg_edit_brush = CreateSolidBrush(C_EDITBG);
+            sg_mode_title(c->hwnd, TRUE);
+            SetWindowSubclass(c->hwnd, dark_dialog, 1, 0);
+            InvalidateRect(c->hwnd, NULL, TRUE);
+        }
+    }
+    return CallNextHookEx(NULL, code, wp, lp);
+}
+
 /* ---- toolbar ----------------------------------------------------------------------------------- */
 
 enum { G_SIDEBAR, G_MINUS, G_PLUS, G_FITWIDTH, G_FITPAGE, G_ROTATE, G_UP, G_DOWN, G_PRINT, G_OPEN, G_SAVE, G_UNDO, G_REDO,
@@ -207,6 +251,22 @@ static HFONT make_font(int pt10, int weight)
 BOOL app_can(unsigned perm)
 {
     return (g.perms & perm) != 0;
+}
+
+/* the fonts at the window's DPI (again when it moves to a monitor of another scale) */
+static void fonts_again(void)
+{
+    HFONT old[4] = { g_font, g_font_small, g_font_bold, g_font_title };
+    int i;
+    g_font = make_font(100, FW_NORMAL);
+    g_font_small = make_font(90, FW_NORMAL);
+    g_font_bold = make_font(90, FW_SEMIBOLD);
+    g_font_title = make_font(120, FW_SEMIBOLD);
+    if (g_page_edit) SendMessageW(g_page_edit, WM_SETFONT, (WPARAM)g_font, TRUE);
+    if (g_find_edit) SendMessageW(g_find_edit, WM_SETFONT, (WPARAM)g_font, TRUE);
+    toolui_fonts();
+    side_fonts();
+    for (i = 0; i < 4; i++) if (old[i]) DeleteObject(old[i]);
 }
 
 static void bar_layout(void)
@@ -543,7 +603,16 @@ static HMENU build_menu(void)
     AppendMenuW(file, MF_STRING, CMD_SAVE, L"&Save\tCtrl+S");
     AppendMenuW(file, MF_STRING, CMD_SAVEAS, L"Save &As...\tCtrl+Shift+S");
     AppendMenuW(file, MF_SEPARATOR, 0, NULL);
+    {
+        HMENU create = CreatePopupMenu();
+        AppendMenuW(create, MF_STRING, CMD_CREATE_BLANK, L"&Blank Page");
+        AppendMenuW(create, MF_STRING, CMD_CREATE_FILES, L"From &Files...");
+        AppendMenuW(create, MF_STRING, CMD_CREATE_SCAN, L"From &Scanner...");
+        AppendMenuW(create, MF_STRING, CMD_COMBINE, L"&Combine Files into a Single PDF...");
+        AppendMenuW(file, MF_POPUP, (UINT_PTR)create, L"Crea&te PDF");
+    }
     AppendMenuW(file, MF_STRING, CMD_COMBINE, L"Co&mbine Files...");
+    AppendMenuW(file, MF_STRING, CMD_OPTIMIZE, L"Reduce File Si&ze...");
     AppendMenuW(exp, MF_STRING, CMD_EXPORT_DOCX, L"&Word Document (.docx)...");
     AppendMenuW(exp, MF_STRING, CMD_EXPORT_TXT, L"&Text (.txt)...");
     AppendMenuW(exp, MF_STRING, CMD_EXPORT_HTML, L"&HTML Web Page...");
@@ -578,6 +647,28 @@ static HMENU build_menu(void)
     AppendMenuW(view, MF_STRING, CMD_ROTATE, L"Rotate View &Clockwise\tCtrl+]");
     AppendMenuW(view, MF_STRING, CMD_ROTATE_LEFT, L"Rotate View Co&unterclockwise\tCtrl+[");
     AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+    {
+        HMENU disp = CreatePopupMenu(), nav = CreatePopupMenu(), read = CreatePopupMenu();
+        AppendMenuW(disp, MF_STRING, CMD_LAYOUT_SINGLE, L"&Single Page View");
+        AppendMenuW(disp, MF_STRING, CMD_LAYOUT_CONT, L"&Enable Scrolling");
+        AppendMenuW(disp, MF_STRING, CMD_LAYOUT_TWO, L"&Two Page View");
+        AppendMenuW(disp, MF_STRING, CMD_LAYOUT_TWOCONT, L"Two Page S&crolling");
+        AppendMenuW(disp, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(disp, MF_STRING, CMD_COVER, L"Show Co&ver Page in Two Page View");
+        AppendMenuW(view, MF_POPUP, (UINT_PTR)disp, L"Page &Display");
+        AppendMenuW(view, MF_STRING, CMD_NIGHT, L"Dar&k Pages");
+        AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(nav, MF_STRING, CMD_THUMBS, L"&Page Thumbnails");
+        AppendMenuW(nav, MF_STRING, CMD_OUTLINE, L"&Bookmarks");
+        AppendMenuW(nav, MF_STRING, CMD_ATTACHMENTS, L"&Attachments");
+        AppendMenuW(nav, MF_STRING, CMD_SIGNATURES, L"&Signatures");
+        AppendMenuW(view, MF_POPUP, (UINT_PTR)nav, L"Show Pane&l");
+        AppendMenuW(read, MF_STRING, CMD_READ_PAGE, L"Read This &Page Only");
+        AppendMenuW(read, MF_STRING, CMD_READ_DOC, L"Read to &End of Document");
+        AppendMenuW(read, MF_STRING, CMD_READ_STOP, L"&Stop");
+        AppendMenuW(view, MF_POPUP, (UINT_PTR)read, L"&Read Out Loud");
+        AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+    }
     AppendMenuW(view, MF_STRING, CMD_SIDEBAR, L"&Navigation Pane\tF4");
     AppendMenuW(view, MF_STRING, CMD_PANE, L"&Tools Pane\tShift+F4");
     AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_EDIT, L"&Edit PDF");
@@ -585,11 +676,24 @@ static HMENU build_menu(void)
     AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_FILL, L"&Fill && Sign");
     AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_REDACT, L"&Redact");
     AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_ORGANIZE, L"&Organize Pages");
+    AppendMenuW(tools, MF_STRING, CMD_TOOL + TOOL_FORM, L"Prepare For&m");
+    AppendMenuW(tools, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(tools, MF_STRING, CMD_CERTSIGN, L"Si&gn with Certificate...");
+    AppendMenuW(tools, MF_STRING, CMD_VALIDATE, L"&Validate All Signatures");
+    AppendMenuW(tools, MF_STRING, CMD_MAKEID, L"New &Digital ID...");
+    AppendMenuW(tools, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(tools, MF_STRING, CMD_OCR, L"Recognize &Text...");
+    AppendMenuW(tools, MF_STRING, CMD_HEADFOOT, L"Add &Header && Footer...");
+    AppendMenuW(tools, MF_STRING, CMD_WATERMARK, L"Add &Watermark...");
+    AppendMenuW(tools, MF_STRING, CMD_BATES, L"&Bates Numbering...");
+    AppendMenuW(tools, MF_STRING, CMD_PAGENUM, L"Add Page &Numbers...");
+    AppendMenuW(tools, MF_STRING, CMD_ADDATTACH, L"&Attach a File...");
+    AppendMenuW(tools, MF_STRING, CMD_FORM_RESET, L"Reset Form...");
     AppendMenuW(tools, MF_SEPARATOR, 0, NULL);
     AppendMenuW(tools, MF_STRING, CMD_EXPORT, L"E&xport PDF...");
-    AppendMenuW(tools, MF_STRING, CMD_COMBINE, L"Com&bine Files...");
+    AppendMenuW(tools, MF_STRING, CMD_COMBINE, L"Combine Fi&les...");
     AppendMenuW(tools, MF_STRING, CMD_PROTECT, L"&Protect...");
-    AppendMenuW(tools, MF_STRING, CMD_SANITIZE, L"Remove &Hidden Information...");
+    AppendMenuW(tools, MF_STRING, CMD_SANITIZE, L"Remove Hidden &Information...");
     AppendMenuW(help, MF_STRING, CMD_ABOUT, L"&About SG PDF");
     AppendMenuW(bar, MF_POPUP, (UINT_PTR)file, L"&File");
     AppendMenuW(bar, MF_POPUP, (UINT_PTR)edit, L"&Edit");
@@ -607,7 +711,10 @@ static void menu_state(HMENU m)
                                     CMD_ROTATE_LEFT, CMD_EXPORT_DOCX, CMD_EXPORT_TXT, CMD_EXPORT_HTML, CMD_EXPORT_PNG,
                                     CMD_EXPORT_JPEG, CMD_EXPORT, CMD_TOOL + TOOL_EDIT, CMD_TOOL + TOOL_COMMENT,
                                     CMD_TOOL + TOOL_FILL, CMD_TOOL + TOOL_REDACT, CMD_TOOL + TOOL_ORGANIZE,
-                                    CMD_FINDREDACT, CMD_SANITIZE, CMD_PROTECT };
+                                    CMD_FINDREDACT, CMD_SANITIZE, CMD_PROTECT, CMD_TOOL + TOOL_FORM, CMD_CERTSIGN,
+                                    CMD_VALIDATE, CMD_OCR, CMD_HEADFOOT, CMD_WATERMARK, CMD_BATES, CMD_PAGENUM,
+                                    CMD_ADDATTACH, CMD_OPTIMIZE, CMD_READ_PAGE, CMD_READ_DOC, CMD_ATTACHMENTS,
+                                    CMD_SIGNATURES };
     int i;
     for (i = 0; i < (int)(sizeof(NEED_DOC) / sizeof(NEED_DOC[0])); i++)
         EnableMenuItem(m, NEED_DOC[i], MF_BYCOMMAND | (doc ? MF_ENABLED : MF_GRAYED));
@@ -621,6 +728,15 @@ static void menu_state(HMENU m)
     CheckMenuItem(m, CMD_PANE, MF_BYCOMMAND | (g.pane ? MF_CHECKED : MF_UNCHECKED));
     for (i = TOOL_EDIT; i < TOOL_COUNT; i++)
         CheckMenuItem(m, CMD_TOOL + i, MF_BYCOMMAND | (g.tool == i ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuRadioItem(m, CMD_LAYOUT_CONT, CMD_LAYOUT_TWO, CMD_LAYOUT_CONT + g.layout, MF_BYCOMMAND);
+    CheckMenuItem(m, CMD_COVER, MF_BYCOMMAND | (g.cover ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_NIGHT, MF_BYCOMMAND | (g.night ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_THUMBS, MF_BYCOMMAND | (g.side == SIDE_THUMBS ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_OUTLINE, MF_BYCOMMAND | (g.side == SIDE_OUTLINE ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_ATTACHMENTS, MF_BYCOMMAND | (g.side == SIDE_ATTACH ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_SIGNATURES, MF_BYCOMMAND | (g.side == SIDE_SIGS ? MF_CHECKED : MF_UNCHECKED));
+    EnableMenuItem(m, CMD_READ_STOP, MF_BYCOMMAND | (g.reading ? MF_ENABLED : MF_GRAYED));
+    EnableMenuItem(m, CMD_FORM_RESET, MF_BYCOMMAND | (doc && g.form ? MF_ENABLED : MF_GRAYED));
 }
 
 /* ---- the frame ---------------------------------------------------------------------------------- */
@@ -640,13 +756,22 @@ void app_layout(void)
         ShowWindow(g_tbar, tb ? SW_SHOWNA : SW_HIDE);
         top += tb;
     }
-    h = max(0, rc.bottom - top);
-    MoveWindow(g_side, 0, top, side, h, TRUE);
-    ShowWindow(g_side, side ? SW_SHOWNA : SW_HIDE);
-    if (g_pane) {
-        MoveWindow(g_pane, rc.right - pane, top, pane, h, TRUE);
-        ShowWindow(g_pane, pane ? SW_SHOWNA : SW_HIDE);
+    {
+        int sb = sigbar_height();
+        if (g_sigbar) {
+            MoveWindow(g_sigbar, side, top, max(0, rc.right - side - pane), sb, TRUE);
+            ShowWindow(g_sigbar, sb ? SW_SHOWNA : SW_HIDE);
+        }
+        h = max(0, rc.bottom - top);
+        MoveWindow(g_side, 0, top, side, h, TRUE);
+        if (g_pane) {
+            MoveWindow(g_pane, rc.right - pane, top, pane, h, TRUE);
+            ShowWindow(g_pane, pane ? SW_SHOWNA : SW_HIDE);
+        }
+        top += sb;
+        h = max(0, rc.bottom - top);
     }
+    ShowWindow(g_side, side ? SW_SHOWNA : SW_HIDE);
     MoveWindow(g_view, side, top, max(0, rc.right - side - pane), h, TRUE);
     if (g_org) MoveWindow(g_org, side, top, max(0, rc.right - side - pane), h, TRUE);
 }
@@ -721,7 +846,25 @@ void app_dump(void)
     dumpf(f, L"zoom %d\n", (int)floor(g.zoom * 100 + 0.5));
     dumpf(f, L"fit %ls\n", g.fit == FIT_WIDTH ? L"width" : g.fit == FIT_PAGE ? L"page" : L"none");
     dumpf(f, L"rot %d\n", g.rot);
-    dumpf(f, L"side %ls\n", g.side == SIDE_THUMBS ? L"thumbs" : g.side == SIDE_OUTLINE ? L"outline" : L"none");
+    dumpf(f, L"side %ls\n", g.side == SIDE_THUMBS ? L"thumbs" : g.side == SIDE_OUTLINE ? L"outline" :
+                            g.side == SIDE_ATTACH ? L"attachments" : g.side == SIDE_SIGS ? L"signatures" : L"none");
+    dumpf(f, L"layout %d\ncover %d\nnight %d\nuntitled %d\nreading %d\n", g.layout, g.cover, g.night, g.untitled, g.reading);
+    {
+        WCHAR b[300];
+        int level;
+        sig_banner(b, 300, &level);
+        if (b[0]) dumpf(f, L"sigbanner %d %ls\n", level, b);
+        if (g_sigbar && IsWindowVisible(g_sigbar)) {
+            RECT sr;
+            GetWindowRect(g_sigbar, &sr);
+            dumpf(f, L"sigbar %d %d\n", (sr.left + sr.right) / 2, (sr.top + sr.bottom) / 2);
+        }
+        for (i = 0; i < g.nsigs; i++)
+            dumpf(f, L"sig %d %d %d %d %ls|%ls\n", g.sigs[i].page + 1, g.sigs[i].xref, g.sigs[i].state, g.sigs[i].covers,
+                  g.sigs[i].name ? g.sigs[i].name : L"", g.sigs[i].signer ? g.sigs[i].signer : L"");
+        for (i = 0; i < g.nattach; i++)
+            dumpf(f, L"attachment %d %u %ls\n", i, (unsigned)g.attach[i].size, g.attach[i].file ? g.attach[i].file : L"");
+    }
     dumpf(f, L"dark %d\n", g.dark);
     dumpf(f, L"undo %d\nredo %d\ndirty %d\nperms %u\nencrypted %d\nprotect %hs\nform %d\nredactions %d\n",
           g.undo, g.redo, g.dirty, g.perms, g.encrypted, g.protect, g.form, g.nredact);
@@ -755,7 +898,7 @@ void app_dump(void)
         if (pr.bottom < 0 || pr.top > cr.bottom || !IsWindowVisible(g_view)) continue;
         screen_rect(g_view, &pr);
         dumpf(f, L"page %d %d %d %d %d %d\n", i + 1, pr.left, pr.top, pr.right, pr.bottom,
-              p->bmp && !p->stale && fabs(p->bscale - view_scale()) < 1e-4 && p->brot == g.rot);
+              view_page_ready(i));
         /* the page's first word, where it is on the screen */
         if (page_load_text(i) && p->ntext) {
             int a = 0, b;
@@ -825,9 +968,21 @@ void app_dump(void)
     }
     toolui_dump(f);
     tool_dump(f);
+    side_dump(f);
+    if (g.tool == TOOL_FORM) form_dump(f);
     org_dump(f);
     dumpf(f, L"focus %ls\n", GetFocus() == g_find_edit ? L"find" : GetFocus() == g_page_edit ? L"page" :
                              GetFocus() == g_view ? L"view" : L"other");
+    {
+        /* a dialog of ours in front (gates wait for it: under a Wine desktop all windows are one X window) */
+        HWND fg = GetForegroundWindow();
+        DWORD pid = 0;
+        if (fg && fg != g_main && GetWindowThreadProcessId(fg, &pid) && pid == GetCurrentProcessId()) {
+            WCHAR t[256];
+            GetWindowTextW(fg, t, 256);
+            dumpf(f, L"dialog %ls\n", t);
+        }
+    }
     if (g.status[0]) dumpf(f, L"status %ls\n", g.status);
     if (g.error[0]) dumpf(f, L"error %ls\n", g.error);
     fclose(f);
@@ -875,6 +1030,72 @@ static void free_document(void)
     g.nredact = 0;
     lstrcpyA(g.protect, "keep");
     g.pick.kind = PICK_NONE;
+    doc_free_sigs();
+    doc_free_attach();
+    g.untitled = FALSE;
+    if (g.reading) read_stop();
+}
+
+/* the pages' sizes and the title from an open (or create) answer */
+static void load_pages(const char *head, BYTE *data)
+{
+    char num[32], *s, *e;
+    int n = br_field(head, "pages", num, sizeof(num)) ? atoi(num) : 0, i;
+    g.pages = n > 0 ? calloc(n, sizeof(page_t)) : NULL;
+    g.org_sel = n > 0 ? calloc(n, sizeof(BOOL)) : NULL;
+    for (s = (char *)data, i = 0; s && *s; s = e) {
+        e = strchr(s, '\n');
+        if (e) *e++ = 0;
+        if (!strncmp(s, "size ", 5) && g.pages && i < n) {
+            double w = 0, h = 0;
+            sscanf(s + 5, "%lf %lf", &w, &h);
+            g.pages[i].w = w > 1 ? w : 612;
+            g.pages[i].h = h > 1 ? h : 792;
+            i++;
+        } else if (!strncmp(s, "title ", 6)) {
+            WCHAR *t = from_utf8(s + 6, -1);
+            if (t) { lstrcpynW(g.doc_title, t, 256); free(t); }
+        }
+    }
+    g.npages = i;
+}
+
+static void shown_again(void)
+{
+    g.hit = -1;
+    view_relayout(FALSE);
+    side_update();
+    org_update();
+    toolui_update();
+    app_update_title();
+    sigbar_update();
+    InvalidateRect(g_view, NULL, FALSE);
+    app_status_changed();
+}
+
+/* a document made here (Create PDF): untitled until saved */
+BOOL app_adopt(const char *head, const BYTE *data, DWORD len, const WCHAR *name)
+{
+    BYTE *copy = malloc(len + 1);
+    render_clear_wants(FALSE);
+    render_clear_wants(TRUE);
+    g.generation++;
+    free_document();
+    if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
+    g.path[0] = 0;
+    lstrcpynW(g.name, name && name[0] ? name : L"Untitled.pdf", MAX_PATH);
+    if (copy) {
+        memcpy(copy, data, len);
+        copy[len] = 0;
+        load_pages(head, copy);
+        free(copy);
+    }
+    g.untitled = TRUE;
+    doc_apply_state(head, NULL, 0);
+    side_load_outline();
+    if (g.form) doc_load_fields();
+    shown_again();
+    return g.npages > 0;
 }
 
 static INT_PTR CALLBACK password_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
@@ -910,10 +1131,10 @@ char *unix_path(const WCHAR *path)
 BOOL app_open(const WCHAR *path)
 {
     WCHAR full[MAX_PATH], pw[128] = L"", *base;
-    char *upath, *eupath, req[MAX_PATH * 4 + 600], *epw, head[512], num[32], *s, *e;
+    char *upath, *eupath, req[MAX_PATH * 4 + 600], *epw, head[512];
     BYTE *data = NULL;
     DWORD len;
-    int rc, n, i, tries = 0;
+    int rc, tries = 0;
     if (!GetFullPathNameW(path, MAX_PATH, full, NULL)) lstrcpynW(full, path, MAX_PATH);
     render_clear_wants(FALSE);
     render_clear_wants(TRUE);
@@ -972,38 +1193,14 @@ BOOL app_open(const WCHAR *path)
         free(data);
         goto done;
     }
-    n = br_field(head, "pages", num, sizeof(num)) ? atoi(num) : 0;
-    g.pages = n > 0 ? calloc(n, sizeof(page_t)) : NULL;
-    g.org_sel = n > 0 ? calloc(n, sizeof(BOOL)) : NULL;
-    for (s = (char *)data, i = 0; s && *s; s = e) {
-        e = strchr(s, '\n');
-        if (e) *e++ = 0;
-        if (!strncmp(s, "size ", 5) && g.pages && i < n) {
-            double w = 0, h = 0;
-            sscanf(s + 5, "%lf %lf", &w, &h);
-            g.pages[i].w = w > 1 ? w : 612;
-            g.pages[i].h = h > 1 ? h : 792;
-            i++;
-        } else if (!strncmp(s, "title ", 6)) {
-            WCHAR *t = from_utf8(s + 6, -1);
-            if (t) { lstrcpynW(g.doc_title, t, 256); free(t); }
-        }
-    }
-    g.npages = i;
+    load_pages(head, data);
     doc_apply_state(head, NULL, 0);
     free(data);
     if (!g.npages) lstrcpynW(g.error, L"This document has no pages.", 256);
     side_load_outline();
-    if (g.form) doc_load_fields();
+    if (g.form) { doc_load_fields(); doc_load_sigs(); }
 done:
-    g.hit = -1;
-    view_relayout(FALSE);
-    side_update();
-    org_update();
-    toolui_update();
-    app_update_title();
-    InvalidateRect(g_view, NULL, FALSE);
-    app_status_changed();
+    shown_again();
     return g.npages > 0;
 }
 
@@ -1024,13 +1221,7 @@ static void close_document(void)
     free_document();
     if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
     g.path[0] = g.name[0] = 0;
-    view_relayout(FALSE);
-    side_update();
-    org_update();
-    toolui_update();
-    app_update_title();
-    InvalidateRect(g_view, NULL, FALSE);
-    app_status_changed();
+    shown_again();
 }
 
 static void save_settings(void)
@@ -1040,6 +1231,12 @@ static void save_settings(void)
     if (RegCreateKeyExW(HKEY_CURRENT_USER, SETTINGS_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
     RegSetValueExW(k, L"Sidebar", 0, REG_DWORD, (const BYTE *)&g.side, sizeof(DWORD));
     RegSetValueExW(k, L"ToolsPane", 0, REG_DWORD, (const BYTE *)&pane, sizeof(DWORD));
+    {
+        DWORD layout = g.layout, cover = g.cover, night = g.night;
+        RegSetValueExW(k, L"PageDisplay", 0, REG_DWORD, (const BYTE *)&layout, sizeof(DWORD));
+        RegSetValueExW(k, L"CoverPage", 0, REG_DWORD, (const BYTE *)&cover, sizeof(DWORD));
+        RegSetValueExW(k, L"DarkPages", 0, REG_DWORD, (const BYTE *)&night, sizeof(DWORD));
+    }
     RegCloseKey(k);
 }
 
@@ -1048,8 +1245,14 @@ static void load_settings(void)
     DWORD v, cb = sizeof(v);
     g.side = SIDE_NONE;
     g.pane = TRUE;
-    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"Sidebar", RRF_RT_REG_DWORD, NULL, &v, &cb) && v <= SIDE_OUTLINE)
+    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"Sidebar", RRF_RT_REG_DWORD, NULL, &v, &cb) && v <= SIDE_SIGS)
         g.side = (int)v;
+    cb = sizeof(v);
+    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"PageDisplay", RRF_RT_REG_DWORD, NULL, &v, &cb) && v <= LAYOUT_TWO) g.layout = (int)v;
+    cb = sizeof(v);
+    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"CoverPage", RRF_RT_REG_DWORD, NULL, &v, &cb)) g.cover = v != 0;
+    cb = sizeof(v);
+    if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"DarkPages", RRF_RT_REG_DWORD, NULL, &v, &cb)) g.night = v != 0;
     cb = sizeof(v);
     if (!RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"ToolsPane", RRF_RT_REG_DWORD, NULL, &v, &cb)) g.pane = v != 0;
 }
@@ -1070,7 +1273,7 @@ void app_command(int cmd)
         app_status_changed();
         return;
     }
-    if (cmd >= CMD_SUB && cmd <= CMD_SUB + SUB_MARKAREA) {
+    if (cmd >= CMD_SUB && cmd <= CMD_SUB + SUB_LAST) {
         tool_set_sub(cmd - CMD_SUB);
         app_status_changed();
         return;
@@ -1081,7 +1284,7 @@ void app_command(int cmd)
         app_status_changed();
         return;
     }
-    if (cmd >= CMD_ORG_ROTL && cmd <= CMD_ORG_SELALL) {
+    if (cmd >= CMD_ORG_ROTL && cmd <= CMD_ORG_REPLACE) {
         org_command(cmd);
         app_status_changed();
         return;
@@ -1195,6 +1398,68 @@ void app_command(int cmd)
     }
     case CMD_TOOLCLOSE: tool_set(TOOL_NONE); break;
     case CMD_ABOUT: about(); break;
+    case CMD_CREATE_BLANK: case CMD_CREATE_FILES: case CMD_CREATE_SCAN: case CMD_ORG_SCAN: case CMD_OCR: case CMD_HEADFOOT:
+    case CMD_WATERMARK: case CMD_BATES: case CMD_PAGENUM: case CMD_OPTIMIZE: case CMD_ADDATTACH: case CMD_READ_PAGE:
+    case CMD_READ_DOC: case CMD_READ_STOP:
+        create_command(cmd);
+        break;
+    case CMD_FORM_DETECT: case CMD_FORM_PROPS: case CMD_FORM_DELETE: case CMD_FORM_CLEARALL:
+        if (g.tool != TOOL_FORM && g.npages) tool_set(TOOL_FORM);
+        form_command(cmd);
+        break;
+    case CMD_FORM_RESET:
+        if (g.npages && MessageBoxW(g_main, L"Clear every field of the form (back to its default values)?", L"Reset Form",
+                                    MB_OKCANCEL | MB_ICONQUESTION) == IDOK)
+            doc_request("resetform");
+        break;
+    case CMD_CERTSIGN: if (g.npages) dlg_certsign(0); break;
+    case CMD_MAKEID: { WCHAR f[MAX_PATH] = L""; dlg_makeid(g_main, f, MAX_PATH); break; }
+    case CMD_VALIDATE: {
+        WCHAR t[300];
+        int level;
+        if (!g.npages) break;
+        doc_free_sigs();
+        doc_load_sigs();
+        sig_banner(t, 300, &level);
+        sigbar_update();
+        side_set_mode(SIDE_SIGS);
+        if (!t[0]) lstrcpyW(t, g.nsigs ? L"The document's signature fields are not signed." : L"This document has no signatures.");
+        app_set_status(L"%ls", t);
+        if (!GetEnvironmentVariableW(L"SG_PDF_QUIET", NULL, 0))
+            MessageBoxW(g_main, t, L"Signatures", MB_OK | (level == 2 ? MB_ICONWARNING : MB_ICONINFORMATION));
+        break;
+    }
+    case CMD_ATTACHMENTS: side_set_mode(g.side == SIDE_ATTACH ? SIDE_NONE : SIDE_ATTACH); save_settings(); break;
+    case CMD_SIGNATURES: side_set_mode(g.side == SIDE_SIGS ? SIDE_NONE : SIDE_SIGS); save_settings(); break;
+    case CMD_LAYOUT_CONT: view_set_layout(LAYOUT_CONT, g.cover); save_settings(); break;
+    case CMD_LAYOUT_TWOCONT: view_set_layout(LAYOUT_TWOCONT, g.cover); save_settings(); break;
+    case CMD_LAYOUT_SINGLE: view_set_layout(LAYOUT_SINGLE, g.cover); save_settings(); break;
+    case CMD_LAYOUT_TWO: view_set_layout(LAYOUT_TWO, g.cover); save_settings(); break;
+    case CMD_COVER: view_set_layout(g.layout, !g.cover); save_settings(); break;
+    case CMD_NIGHT:
+        g.night = !g.night;
+        save_settings();
+        InvalidateRect(g_view, NULL, FALSE);
+        side_update();
+        break;
+    case CMD_NEXTPAGE: view_goto_page(min(g.current + (g.layout == LAYOUT_TWO || g.layout == LAYOUT_TWOCONT ? 2 : 1), g.npages - 1), 0); break;
+    case CMD_PREVPAGE: view_goto_page(max(g.current - (g.layout == LAYOUT_TWO || g.layout == LAYOUT_TWOCONT ? 2 : 1), 0), 0); break;
+    case CMD_STAMPS: {
+        HMENU m = CreatePopupMenu();
+        POINT pt;
+        int i, c;
+        for (i = 0; i < NSTAMPS; i++) AppendMenuW(m, MF_STRING | (g.stamp == i ? MF_CHECKED : 0), i + 1, STAMP_LABELS[i]);
+        GetCursorPos(&pt);
+        c = TrackPopupMenu(m, TPM_RETURNCMD, pt.x, pt.y, 0, g_main, NULL);
+        DestroyMenu(m);
+        if (c > 0) {
+            g.stamp = c - 1;
+            if (g.tool != TOOL_COMMENT) tool_set(TOOL_COMMENT);
+            tool_set_sub(SUB_STAMP);
+            app_set_status(L"Click where the %ls stamp goes (or drag its box).", STAMP_LABELS[g.stamp]);
+        }
+        break;
+    }
     }
     app_status_changed();
 }
@@ -1251,6 +1516,15 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return r;
     }
     case WM_SIZE: app_layout(); return 0;
+    case WM_TIMER:
+        if (wp == 7) {
+            /* the dump follows dialogs opening and closing */
+            static HWND last;
+            HWND fg = GetForegroundWindow();
+            if (fg != last) { last = fg; app_dump(); }
+            return 0;
+        }
+        break;
     case WM_SETFOCUS: SetFocus(g.tool == TOOL_ORGANIZE && g_org ? g_org : g_view); return 0;
     case WM_INITMENUPOPUP: menu_state(g_menu); return 0;
     case WM_MEASUREITEM: if (menu_measure((MEASUREITEMSTRUCT *)lp)) return TRUE; break;
@@ -1273,6 +1547,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_DPICHANGED: {
         RECT *r = (RECT *)lp;
         g.dpi = HIWORD(wp);
+        fonts_again();
         SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
         view_relayout(TRUE);
         return 0;
@@ -1396,6 +1671,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     toolui_register();
     org_register();
 
+    SetWindowsHookExW(WH_CALLWNDPROCRET, dialog_hook, NULL, GetCurrentThreadId());
     g_menu = build_menu();
     g_main = CreateWindowExW(WS_EX_ACCEPTFILES, CLASS_NAME, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              CW_USEDEFAULT, CW_USEDEFAULT, dpx(1100), dpx(740), NULL, g_menu, inst, NULL);
@@ -1406,6 +1682,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     }
     sg_mode_title(g_main, g.dark);
     menu_mode();
+    if (g_dump[0]) SetTimer(g_main, 7, 300, NULL);
     g_bar = CreateWindowExW(0, L"SgPdfBar", NULL, WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, 10, 10, g_main, NULL, inst, NULL);
     g_page_edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_CENTER | ES_NUMBER | ES_AUTOHSCROLL,
                                   0, 0, 10, 10, g_bar, NULL, inst, NULL);
@@ -1428,6 +1705,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         SendMessageW(g_tip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
     }
     side_create(g_main);
+    sigbar_create(g_main);
     toolui_create(g_main);
     g_view = CreateWindowExW(0, L"SgPdfView", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | WS_CLIPCHILDREN,
                              0, 0, 10, 10, g_main, NULL, inst, NULL);

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SG PDF
+GenericName=PDF Viewer and Editor
+Comment=View, edit, fill in, sign and organize PDF documents
+Exec=sg-open-windows-file %f
+Icon=sg-pdf
+Terminal=false
+NoDisplay=true
+Categories=Office;Viewer;
+MimeType=application/pdf;application/x-pdf;

@@ -3,7 +3,8 @@
 # white page with a folded corner, lines of text, a purple band, and a pen
 # across its corner (it edits, too).
 #
-#   gen-icon.py OUT.ico
+#   gen-icon.py OUT.ico [PNGDIR]   PNGDIR: also PNGDIR/<n>x<n>/apps/sg-pdf.png
+#                                  (Linux menus, SG Store's card)
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -57,6 +58,8 @@ def draw():
 
 def main():
     sgicon.write_ico(sys.argv[1], draw())
+    if len(sys.argv) > 2:
+        sgicon.write_hicolor(sys.argv[2], "sg-pdf", draw())
 
 
 if __name__ == "__main__":

@@ -85,3 +85,121 @@
 #define IDD_SPLIT     240
 #define IDC_SP_EVERY  241
 #define IDC_SP_INFO   242
+
+#define IDD_FIELDPROPS 300
+#define IDC_FP_NAME     301
+#define IDC_FP_TOOLTIP  302
+#define IDC_FP_REQUIRED 303
+#define IDC_FP_READONLY 304
+#define IDC_FP_MULTI    305
+#define IDC_FP_FONTSIZE 306
+#define IDC_FP_ALIGN    307
+#define IDC_FP_DEFLABEL 308
+#define IDC_FP_DEFAULT  309
+#define IDC_FP_OPTLABEL 310
+#define IDC_FP_OPTIONS  311
+#define IDC_FP_EXPLABEL 312
+#define IDC_FP_EXPORT   313
+/* IDC_FP_FMTLABEL .. IDC_FP_CALCPICK: the text field's format and calculation (shown together) */
+#define IDC_FP_FMTLABEL 320
+#define IDC_FP_FORMAT   321
+#define IDC_FP_DECLABEL 322
+#define IDC_FP_DECIMALS 323
+#define IDC_FP_CURLABEL 324
+#define IDC_FP_CURRENCY 325
+#define IDC_FP_DATELABEL 326
+#define IDC_FP_DATEPAT  327
+#define IDC_FP_CALCLABEL 328
+#define IDC_FP_CALC     329
+#define IDC_FP_CALCHINT 330
+#define IDC_FP_CALCFIELDS 331
+#define IDC_FP_CALCPICK 332
+
+#define IDD_PICKFIELDS 340
+#define IDC_PK_LIST    341
+
+#define IDD_CERTSIGN   350
+#define IDC_CS_FILE    351
+#define IDC_CS_BROWSE  352
+#define IDC_CS_NEWID   353
+#define IDC_CS_PW      354
+#define IDC_CS_REASON  355
+#define IDC_CS_LOCATION 356
+#define IDC_CS_INFO    357
+#define IDC_CS_PICTURE 358
+
+#define IDD_MAKEID     370
+#define IDC_MI_NAME    371
+#define IDC_MI_ORG     372
+#define IDC_MI_EMAIL   373
+#define IDC_MI_PW      374
+#define IDC_MI_PW2     375
+#define IDC_MI_FILE    376
+#define IDC_MI_BROWSE  377
+
+#define IDD_SCAN       380
+#define IDC_SC_DEVICE  381
+#define IDC_SC_DPI     382
+#define IDC_SC_MODE    383
+#define IDC_SC_PAGES   384
+#define IDC_SC_OCR     385
+#define IDC_SC_SOURCE  386
+#define IDC_SC_REFRESH 387
+
+#define IDD_OCR        390
+#define IDC_OC_LANG    391
+#define IDC_OC_ALL     392
+#define IDC_OC_CURRENT 393
+#define IDC_OC_DESKEW  394
+#define IDC_OC_NOTE    395
+
+#define IDD_HEADFOOT   400
+#define IDC_HF_HL      401
+#define IDC_HF_HC      402
+#define IDC_HF_HR      403
+#define IDC_HF_FL      404
+#define IDC_HF_FC      405
+#define IDC_HF_FR      406
+#define IDC_HF_SIZE    407
+#define IDC_HF_PAGES   408
+#define IDC_HF_MARGIN  409
+
+#define IDD_WATERMARK  420
+#define IDC_WM_TEXT    421
+#define IDC_WM_SIZE    422
+#define IDC_WM_ROTATE  423
+#define IDC_WM_OPACITY 424
+#define IDC_WM_BEHIND  425
+#define IDC_WM_COLOR   426
+#define IDC_WM_IMAGE   427
+#define IDC_WM_BROWSE  428
+#define IDC_WM_USEIMG  429
+#define IDC_WM_USETEXT 430
+#define IDC_WM_PAGES   431
+
+#define IDD_BATES      440
+#define IDC_BT_PREFIX  441
+#define IDC_BT_START   442
+#define IDC_BT_DIGITS  443
+#define IDC_BT_SUFFIX  444
+#define IDC_BT_WHERE   445
+#define IDC_BT_ALIGN   446
+#define IDC_BT_SAMPLE  447
+#define IDC_BT_MODE    448
+
+#define IDD_OPTIMIZE   460
+#define IDC_OP_DPI     461
+#define IDC_OP_QUALITY 462
+#define IDC_OP_META    463
+#define IDC_OP_NOTE    464
+
+#define IDD_LINK       470
+#define IDC_LK_WEB     471
+#define IDC_LK_URL     472
+#define IDC_LK_PAGE    473
+#define IDC_LK_PAGENO  474
+
+#define IDD_THREAD     480
+#define IDC_TH_TEXT    481
+#define IDC_TH_REPLY   482
+#define IDC_TH_STATUS  483
