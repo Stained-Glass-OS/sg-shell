@@ -70,10 +70,12 @@ static BOOL new_document(const char *line, const WCHAR *name)
     BYTE *data = NULL;
     DWORD len = 0;
     int rc;
-    HCURSOR old = SetCursor(LoadCursorW(NULL, (LPCWSTR)IDC_WAIT));
+    HCURSOR old;
+    if (!tab_new()) return FALSE;          /* the new document in a tab (and an engine) of its own */
+    old = SetCursor(LoadCursorW(NULL, (LPCWSTR)IDC_WAIT));
     rc = br_request(line, head, sizeof(head), &data, &len);
     SetCursor(old);
-    if (rc != 1) { free(data); fail_box(head); return FALSE; }
+    if (rc != 1) { free(data); tab_discard_new(); fail_box(head); return FALSE; }
     app_adopt(head, data, len, name);
     free(data);
     return TRUE;
@@ -83,7 +85,6 @@ static BOOL new_document(const char *line, const WCHAR *name)
 
 static void create_blank(void)
 {
-    if (!doc_close_prompt()) return;
     new_document("new\t612\t792\t1", L"Untitled.pdf");
 }
 
@@ -92,7 +93,6 @@ static void create_files(void)
     WCHAR **files = NULL, name[MAX_PATH], *base, *dot;
     int n = 0, i, len = 0, cap;
     char *line;
-    if (!doc_close_prompt()) return;
     if (!file_dialog_multi(L"Create PDF from Files",
                            L"Files that can be made into a PDF\0*.pdf;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff;*.webp;*.txt;"
                            L"*.doc;*.docx;*.odt;*.rtf;*.xls;*.xlsx;*.ods;*.ppt;*.pptx;*.odp;*.htm;*.html\0All files (*.*)\0*.*\0",
@@ -227,7 +227,7 @@ static INT_PTR CALLBACK scan_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 static void create_scan(BOOL into)
 {
     g_scan_into = into;
-    if (!into && !doc_close_prompt()) return;
+
     DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_SCAN), g_main, scan_proc, 0);
 }
 

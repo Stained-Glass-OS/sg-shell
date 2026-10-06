@@ -658,6 +658,7 @@ static HMENU build_menu(void)
         AppendMenuW(disp, MF_SEPARATOR, 0, NULL);
         AppendMenuW(disp, MF_STRING, CMD_COVER, L"Show Co&ver Page in Two Page View");
         AppendMenuW(view, MF_STRING, CMD_HOMETAB, L"&Home\tCtrl+Tab");
+        AppendMenuW(view, MF_STRING, CMD_REOPEN, L"Reopen Documents at &Start");
         AppendMenuW(view, MF_SEPARATOR, 0, NULL);
         AppendMenuW(view, MF_POPUP, (UINT_PTR)disp, L"Page &Display");
         AppendMenuW(view, MF_STRING, CMD_NIGHT, L"Dar&k Pages");
@@ -736,6 +737,7 @@ static void menu_state(HMENU m)
         CheckMenuItem(m, CMD_TOOL + i, MF_BYCOMMAND | (g.tool == i ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuRadioItem(m, CMD_LAYOUT_CONT, CMD_LAYOUT_TWO, CMD_LAYOUT_CONT + g.layout, MF_BYCOMMAND);
     CheckMenuItem(m, CMD_COVER, MF_BYCOMMAND | (g.cover ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(m, CMD_REOPEN, MF_BYCOMMAND | (tabs_reopen_on() ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(m, CMD_NIGHT, MF_BYCOMMAND | (g.night ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(m, CMD_THUMBS, MF_BYCOMMAND | (g.side == SIDE_THUMBS ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(m, CMD_OUTLINE, MF_BYCOMMAND | (g.side == SIDE_OUTLINE ? MF_CHECKED : MF_UNCHECKED));
@@ -1022,6 +1024,9 @@ void app_dump(void)
 
 /* ---- opening ------------------------------------------------------------------------------------ */
 
+static void free_document(void);
+void app_free_document(void) { free_document(); }
+
 static void free_document(void)
 {
     int i;
@@ -1111,7 +1116,7 @@ BOOL app_adopt(const char *head, const BYTE *data, DWORD len, const WCHAR *name)
     BYTE *copy = malloc(len + 1);
     render_clear_wants(FALSE);
     render_clear_wants(TRUE);
-    g.generation++;
+    g.generation = next_generation();
     free_document();
     if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
     g.path[0] = 0;
@@ -1170,9 +1175,19 @@ BOOL app_open(const WCHAR *path)
     int rc, tries = 0;
     if (!GetFullPathNameW(path, MAX_PATH, full, NULL)) lstrcpynW(full, path, MAX_PATH);
     g.home = FALSE;
+    /* open already: its tab to the front */
+    {
+        int t = tab_find(full);
+#ifndef SG_MUTANT_TABREUSE
+        if (t >= 0) { tab_switch(t); return TRUE; }
+#endif
+        (void)t;
+    }
+    /* a tab of its own (with no document open, the first) */
+    if (!tab_new()) { app_layout(); return FALSE; }
     render_clear_wants(FALSE);
     render_clear_wants(TRUE);
-    g.generation++;
+    g.generation = next_generation();
     free_document();
     if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
     lstrcpynW(g.path, full, MAX_PATH);
@@ -1242,21 +1257,14 @@ done:
 static void open_dialog(void)
 {
     WCHAR file[MAX_PATH] = L"";
-    if (!doc_close_prompt()) return;
     if (file_dialog(FALSE, L"Open", L"PDF documents (*.pdf)\0*.pdf\0All files (*.*)\0*.*\0", L"pdf", file, MAX_PATH))
         app_open(file);
 }
 
 static void close_document(void)
 {
-    if (!doc_close_prompt()) return;
-    render_clear_wants(FALSE);
-    render_clear_wants(TRUE);
-    g.generation++;
-    free_document();
-    if (g.tool != TOOL_NONE) tool_set(TOOL_NONE);
-    g.path[0] = g.name[0] = 0;
-    shown_again();
+    if (tab_count()) tab_close(tab_active());
+    else shown_again();
 }
 
 static void save_settings(void)
@@ -1436,6 +1444,7 @@ void app_command(int cmd)
     }
     case CMD_TOOLCLOSE: tool_set(TOOL_NONE); break;
     case CMD_SHORTCUTS: shortcuts_help(); break;
+    case CMD_REOPEN: tabs_set_reopen(!tabs_reopen_on()); break;
     case CMD_HOMETAB: home_switch(TRUE); break;
     case CMD_PROPSBAR:
         if (g.tool == TOOL_FORM && form_picked() >= 0) form_props(form_picked());
@@ -1567,7 +1576,7 @@ static BOOL accelerator(MSG *m)
         }
     }
     switch (m->wParam) {
-    case VK_TAB: home_switch(!home_shown()); return TRUE;
+    case VK_TAB: tab_cycle(shift ? -1 : 1); return TRUE;
     case 'N': app_command(CMD_CREATE_FILES); return TRUE;
     case 'E': app_command(CMD_PROPSBAR); return TRUE;
     case VK_OEM_2: app_command(CMD_SHORTCUTS); return TRUE;
@@ -1628,7 +1637,10 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         break;
     case WM_DROPFILES: {
         WCHAR file[MAX_PATH];
-        if (DragQueryFileW((HDROP)wp, 0, file, MAX_PATH) && doc_close_prompt()) app_open(file);
+        {
+            UINT i, n = DragQueryFileW((HDROP)wp, 0xFFFFFFFF, NULL, 0);
+            for (i = 0; i < n; i++) if (DragQueryFileW((HDROP)wp, i, file, MAX_PATH)) app_open(file);
+        }
         DragFinish((HDROP)wp);
         return 0;
     }
@@ -1648,7 +1660,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_CLOSE:
         tool_commit_editor();
-        if (!doc_close_prompt()) return 0;
+        if (!tabs_close_all()) return 0;
         DestroyWindow(hwnd);
         return 0;
     case WM_DESTROY:
@@ -1811,6 +1823,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     UpdateWindow(g_main);
     SetFocus(g_view);
     if (g.bridged) render_start_thread();
+    if (!file[0] && g.bridged) tabs_reopen();
     if (file[0] && app_open(file) && print_after) app_command(CMD_PRINT);
     else if (!g.bridged) lstrcpynW(g.error, L"SG PDF needs its Linux half, sg-pdf (package sg-session).", 256);
     toolui_update();

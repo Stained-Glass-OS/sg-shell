@@ -195,6 +195,7 @@ typedef struct {
     int nattach;
     BOOL attach_loaded;
     BOOL untitled;              /* made here (Create PDF), not saved yet */
+    int engine;                 /* its engine process (sg-pdf "@N"); 0: none yet */
     /* the view */
     double zoom;                /* 1.0 = 100% */
     int fit;
@@ -264,7 +265,7 @@ BOOL app_can(unsigned perm);
 /* bridge.c */
 BOOL br_start(void);
 int br_request(const char *line, char *head, int headcap, BYTE **payload, DWORD *len);
-BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h, int *x, int *y);
+BOOL br_request_into_dib(int engine, const char *line, HBITMAP *out, int *w, int *h, int *x, int *y);
 const char *br_field(const char *head, const char *key, char *buf, int cap);
 void render_init(void);
 void render_start_thread(void);
@@ -452,6 +453,27 @@ int float_width(void);
 int float_height(void);
 void shortcuts_help(void);
 
+/* tabs.c: documents in tabs, each with an engine process of its own */
+int next_generation(void);
+int tab_count(void);
+int tab_active(void);
+int tab_max(void);
+const app_t *tab_doc(int i);
+BOOL tab_new(void);
+void tab_discard_new(void);
+int tab_find(const WCHAR *path);
+void tab_switch(int i);
+BOOL tab_close(int i);
+BOOL tabs_close_all(void);
+void tab_move(int from, int to);
+void tab_cycle(int dir);
+BOOL tabs_reopen_on(void);
+void tabs_set_reopen(BOOL on);
+void tabs_remember(void);
+void tabs_reopen(void);
+int tabs_paths(WCHAR paths[][MAX_PATH], int cap);
+void app_free_document(void);
+
 /* organize.c */
 void org_register(void);
 HWND org_create(HWND parent);
@@ -553,6 +575,7 @@ int org_selected(int *out, int cap);
 #define CMD_SHORTCUTS 261
 #define CMD_HOMETAB 262
 #define CMD_PROPSBAR 263
+#define CMD_REOPEN 264
 /* organize */
 #define CMD_ORG_ROTL 280
 #define CMD_ORG_ROTR 281

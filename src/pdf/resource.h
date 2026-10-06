@@ -52,6 +52,7 @@
 #define IDC_CB_REMOVE 183
 #define IDC_CB_UP     184
 #define IDC_CB_DOWN   185
+#define IDC_CB_OPEN   186
 
 #define IDD_PROPERTIES 190
 #define IDC_PP_INFO   191

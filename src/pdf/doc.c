@@ -125,7 +125,7 @@ void doc_apply_state(const char *head, const BYTE *data, DWORD len)
         }
     }
     free(copy);
-    g.generation++;
+    g.generation = next_generation();
     render_clear_wants(FALSE);
     render_clear_wants(TRUE);
     if (n != g.npages) resized = TRUE;

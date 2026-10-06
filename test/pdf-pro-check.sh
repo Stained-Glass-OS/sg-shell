@@ -38,6 +38,14 @@
 #             controls turn the page and zoom; the Menu button and Alt+F open
 #             the menu; Ctrl+0 fit page, Ctrl+2 fit width, Ctrl+Shift+Plus
 #             rotates, Ctrl+Tab goes Home and back; screenshots light and dark
+#   tabs      documents in tabs, each with an engine process: a second one
+#             opened, changed and zoomed; switching keeps each one's page,
+#             zoom and unsaved edit; Ctrl+Tab and Ctrl+Shift+Tab through Home
+#             and the tabs; opening one already open goes to its tab; a tab
+#             dragged to another place; Combine Files with the open
+#             documents; the rail's sign offers the certificate; closing asks
+#             only for the changed document (Cancel keeps it, No closes it
+#             unsaved), its engine ends; at most SG_PDF_MAX_TABS documents
 #   scale     at 200% (LogPixels 192) the frame is drawn twice as large
 #   more      a link made with Edit PDF's Link; a sticky note's reply and
 #             status (Accepted) from the comments list; Organize's Replace
@@ -54,7 +62,7 @@ EXE="${SG_PDF_EXE:-$HERE/build/sg-pdf64.exe}"
 OUT="$HERE/build"
 PY=/usr/bin/python3
 PROBE="$HERE/test/pdf-pro-probe.py"
-ONLY="${SG_PDF_PRO_ONLY:-frame form fill sign create ocr decorate view attach stamp more scale}"
+ONLY="${SG_PDF_PRO_ONLY:-frame tabs form fill sign create ocr decorate view attach stamp more scale}"
 RC=0; XP=""
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
@@ -208,7 +216,8 @@ if want frame; then
         else fail "rail $k: tool '$(field tool)' sub '$(field sub)'"; fi
     done
     rail sign
-    if dialog "Signature"; then pass "the rail's sign asks for the signature"; xdotool key Escape; sleep 0.5; else fail "rail sign: no dialog"; fi
+    wait_field menuopen 1 5; xdotool key h
+    if dialog "Signature"; then pass "the rail's sign: a handwritten signature"; xdotool key Escape; sleep 0.5; else fail "rail sign: no dialog"; fi
     rail select
     [ "$(field tool)" = "0 none" ] && pass "the rail's select closes the tool" || fail "rail select: tool '$(field tool)'"
     shot doc-light
@@ -242,6 +251,94 @@ if want frame; then
     shot doc-dark
     closeapp
     reg 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 1
+fi
+
+# ============================================================= documents in tabs
+if want tabs; then
+    L="$DOCS/long.pdf"; FL="$DOCS/tabform.pdf"; cp "$DOCS/flat.pdf" "$FL"
+    launch "$(wd "$L")" tabs "$(answers tabs "$(wd "$FL")" "$(wd "$L")" "$(wd "$DOCS/combined-tabs.pdf")")"
+    wait_field pages 6 40 || fail "long.pdf did not open"
+    wait_line '^page 1 .* 1$' 15
+    set -- $(field view); xdotool mousemove $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )) click 1
+    xdotool key Next Next Next; sleep 1
+    c1=$(field current); z1=$(field zoom)
+    [ "$c1" -ge 2 ] 2>/dev/null || fail "Page Down: current '$c1'"
+    xdotool key ctrl+o
+    wait_field tabs '2 2' 20 && wait_field pages 1 20 && pass "Ctrl+O opens a second document in a tab of its own" || fail "tabs '$(field tabs)' pages '$(field pages)'"
+    BP=$(pgrep -f "sg-pdf --bridge wine .*sg-pdf" | head -1)
+    ne=$(pgrep -c -P "$BP" 2>/dev/null)
+    [ "${ne:-0}" -ge 2 ] && pass "each document has its own engine process ($ne)" || fail "engines under the bridge: '$ne'"
+    pane organize; tb blank
+    wait_field pages 2 10 && wait_field dirty 1 5 && pass "the second document changed (a blank page), unsaved" || fail "edit: pages '$(field pages)' dirty '$(field dirty)'"
+    tb close
+    xdotool key ctrl+equal ctrl+equal; sleep 1; z2=$(field zoom)
+    grep -q '^tabdoc 2 .* 1 1 .*tabform.pdf$' "$D" && pass "its tab shows the unsaved-changes dot" || fail "tab 2: $(grep '^tabdoc 2' "$D")"
+    shot tabs-light
+    set -- $(grep '^tabdoc 1 ' "$D"); xdotool mousemove "$3" "$4" click 1
+    if wait_field tabs '2 1' 5 && wait_field pages 6 5; then
+        [ "$(field current)" = "$c1" ] && [ "$(field zoom)" = "$z1" ] && [ "$(field dirty)" = 0 ] \
+            && pass "back on the first tab: its page ($c1), its zoom ($z1%), no changes" \
+            || fail "first tab: current '$(field current)' (was $c1) zoom '$(field zoom)' (was $z1) dirty '$(field dirty)'"
+    else fail "first tab: tabs '$(field tabs)' pages '$(field pages)'"; fi
+    set -- $(grep '^tabdoc 2 ' "$D"); xdotool mousemove "$3" "$4" click 1
+    if wait_field tabs '2 2' 5 && wait_field pages 2 5; then
+        [ "$(field zoom)" = "$z2" ] && [ "$(field dirty)" = 1 ] && [ "$(field undo)" = 1 ] \
+            && pass "the second tab keeps its zoom ($z2%) and its unsaved edit (undo 1)" \
+            || fail "second tab: zoom '$(field zoom)' (was $z2) dirty '$(field dirty)' undo '$(field undo)'"
+    else fail "second tab: tabs '$(field tabs)' pages '$(field pages)'"; fi
+    xdotool key ctrl+Tab; wait_field home 1 5 && pass "Ctrl+Tab from the last tab: Home" || fail "Ctrl+Tab: home '$(field home)'"
+    xdotool key ctrl+Tab; wait_field tabs '2 1' 5 && wait_field home 0 3 && pass "Ctrl+Tab again: the first tab" || fail "Ctrl+Tab: tabs '$(field tabs)'"
+    xdotool key ctrl+shift+Tab; wait_field home 1 5 && pass "Ctrl+Shift+Tab: back to Home" || fail "Ctrl+Shift+Tab: home '$(field home)'"
+    xdotool key ctrl+shift+Tab; wait_field tabs '2 2' 5 || fail "Ctrl+Shift+Tab: tabs '$(field tabs)'"
+    xdotool key ctrl+o
+    wait_field tabs '2 1' 10 && pass "opening a document already open goes to its tab" || fail "reopen: tabs '$(field tabs)'"
+    # drag the second tab before the first
+    set -- $(grep '^tabdoc 2 ' "$D"); x2=$3; y=$4
+    set -- $(grep '^tabdoc 1 ' "$D"); x1=$3
+    xdotool mousemove "$x2" "$y" mousedown 1 mousemove $(( x2 - 20 )) "$y" mousemove $(( x1 - 30 )) "$y" mouseup 1; sleep 1
+    grep -q '^tabdoc 1 .*tabform.pdf$' "$D" && grep -q '^tabdoc 2 .*long.pdf$' "$D" && pass "a tab dragged before the other goes there" \
+        || fail "drag: $(grep '^tabdoc' "$D" | tr '\n' ' ')"
+    # Combine Files with the open documents
+    xdotool key alt+f; sleep 0.4; xdotool key m; sleep 0.8
+    if dialog "Combine"; then
+        xdotool key alt+o; sleep 0.5; xdotool key Return
+        wait_field tabs '3 3' 20 && wait_field pages 7 10 && pass "Combine Files takes the open documents (their saved files: 1 + 6 pages) and opens the result in a tab" \
+            || fail "combine: tabs '$(field tabs)' pages '$(field pages)'"
+    else fail "no Combine Files dialog"; fi
+    # the rail's sign: both kinds
+    set -- $(grep '^railbtn sign ' "$D"); xdotool mousemove "$3" "$4" click 1
+    wait_field menuopen 1 5 && pass "the rail's sign offers a choice" || fail "rail sign: menuopen '$(field menuopen)'"
+    xdotool key c
+    if dialog "Sign with a Certificate"; then pass "...and the certificate signature is one"; xdotool key Escape; sleep 0.5
+    else fail "rail sign: no certificate dialog"; fi
+    # closing: only the document with changes asks
+    ne=$(pgrep -c -P "$BP" 2>/dev/null)
+    xdotool key ctrl+w
+    wait_field tabs '2 2' 10 && pass "Ctrl+W closes the combined document (no changes: no question)" || fail "close: tabs '$(field tabs)' dialog '$(field dialog)'"
+    sleep 1
+    [ "$(pgrep -c -P "$BP" 2>/dev/null)" -lt "$ne" ] && pass "its engine process ended" || fail "engines: $ne -> $(pgrep -c -P "$BP")"
+    grep -q '^tabdoc 2 .*long.pdf' "$D" && [ "$(field pages)" = 6 ] || fail "after closing: $(grep '^tabdoc' "$D" | tr '\n' ' ') pages '$(field pages)'"
+    set -- $(grep '^tabdoc 1 ' "$D"); xdotool mousemove "$7" "$8" click 1
+    if dialog "SG PDF"; then
+        pass "closing the changed document asks about its changes"
+        xdotool key Escape; sleep 1
+        [ "$(field tabs | cut -d' ' -f1)" = 2 ] && pass "Cancel keeps it open" || fail "cancel: tabs '$(field tabs)'"
+    else fail "no question closing the changed document (tabs '$(field tabs)')"; fi
+    set -- $(grep '^tabdoc 1 ' "$D"); xdotool mousemove "$7" "$8" click 1
+    if dialog "SG PDF"; then xdotool key n; fi
+    wait_field tabs '1 1' 10 && wait_field pages 6 5 && pass "No: closed without saving; long.pdf is left" || fail "after No: tabs '$(field tabs)' pages '$(field pages)'"
+    [ "$(probe pages "$FL")" = 1 ] && pass "the unsaved page was not written to its file" || fail "tabform.pdf pages: $(probe pages "$FL")"
+    closeapp
+    # at most SG_PDF_MAX_TABS documents
+    SG_PDF_MAX_TABS=2; export SG_PDF_MAX_TABS
+    launch "$(wd "$L")" tabcap "$(answers tabcap "$(wd "$FL")" "$(wd "$DOCS/flat.pdf")")"
+    unset SG_PDF_MAX_TABS
+    wait_field pages 6 40 || fail "long.pdf did not open"
+    xdotool key ctrl+o; wait_field tabs '2 2' 20
+    xdotool key ctrl+o; sleep 3
+    [ "$(field tabs)" = "2 2" ] && field status | grep -q 'as many as' && pass "a third document past the limit is refused, with a message" \
+        || fail "cap: tabs '$(field tabs)' status '$(field status)'"
+    closeapp
 fi
 
 # ============================================================= Prepare Form

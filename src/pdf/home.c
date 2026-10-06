@@ -105,16 +105,24 @@ BOOL home_shown(void)
 
 /* ---- the tab strip ------------------------------------------------------------------------------------------- */
 
-enum { TB_MENU, TB_HOME, TB_DOC, TB_DOCCLOSE, TB_N };
-static RECT g_tab_rc[TB_N];
+enum { TB_MENU, TB_HOME, TB_N };
+#define HIT_DOC 100          /* + the tab's index */
+#define HIT_CLOSE 200        /* + the tab's index */
+static RECT g_tab_rc[TB_N], g_doc_rc[32], g_close_rc[32];
 static int g_tab_hover = -1;
+static int g_drag = -1, g_drag_to = -1, g_drag_x;   /* a tab dragged to another place */
+
+static void tab_label(int i, WCHAR *t, int cap)
+{
+    const app_t *d = tab_doc(i);
+    lstrcpynW(t, d && d->name[0] ? d->name : L"Untitled", cap);
+}
 
 static void tabs_layout(HDC dc)
 {
     RECT rc;
     SIZE sz;
-    int x = dpx(6), h = TABBAR_H, w;
-    WCHAR t[MAX_PATH + 4];
+    int x = dpx(6), h = TABBAR_H, w, i, n = tab_count(), avail;
     GetClientRect(g_tabs, &rc);
     SelectObject(dc, g_font);
     GetTextExtentPoint32W(dc, L"Menu", 4, &sz);
@@ -123,16 +131,18 @@ static void tabs_layout(HDC dc)
     GetTextExtentPoint32W(dc, L"Home", 4, &sz);
     SetRect(&g_tab_rc[TB_HOME], x, dpx(4), x + dpx(44) + sz.cx, h);
     x = g_tab_rc[TB_HOME].right + dpx(2);
-    if (g.path[0] || g.npages) {
-        swprintf(t, MAX_PATH + 4, L"%ls%ls", g.dirty ? L"*" : L"", g.name[0] ? g.name : L"Untitled");
+    avail = rc.right - x - dpx(8);
+    for (i = 0; i < n && i < 32; i++) {
+        WCHAR t[MAX_PATH];
+        tab_label(i, t, MAX_PATH);
+        SelectObject(dc, g_font_bold);     /* the tab in front is bold: room for that */
         GetTextExtentPoint32W(dc, t, lstrlenW(t), &sz);
-        w = min(dpx(260), max(dpx(120), sz.cx + dpx(64)));
-        SetRect(&g_tab_rc[TB_DOC], x, dpx(4), x + w, h);
-        SetRect(&g_tab_rc[TB_DOCCLOSE], x + w - dpx(28), dpx(4) + (h - dpx(4) - dpx(20)) / 2, x + w - dpx(8),
+        w = min(dpx(240), max(dpx(110), sz.cx + dpx(76) + (tab_doc(i)->dirty ? dpx(14) : 0)));
+        if (n * (w + dpx(2)) > avail) w = max(dpx(72), avail / n - dpx(2));
+        SetRect(&g_doc_rc[i], x, dpx(4), x + w, h);
+        SetRect(&g_close_rc[i], x + w - dpx(28), dpx(4) + (h - dpx(4) - dpx(20)) / 2, x + w - dpx(8),
                 dpx(4) + (h - dpx(4) - dpx(20)) / 2 + dpx(20));
-    } else {
-        SetRectEmpty(&g_tab_rc[TB_DOC]);
-        SetRectEmpty(&g_tab_rc[TB_DOCCLOSE]);
+        x += w + dpx(2);
     }
 }
 
@@ -150,7 +160,7 @@ static void tabs_paint(HWND hwnd)
     RECT rc, r;
     HBITMAP buf, ob;
     BOOL home = home_shown();
-    WCHAR t[MAX_PATH + 4];
+    int i, n = min(tab_count(), 32);
     GetClientRect(hwnd, &rc);
     dc = CreateCompatibleDC(out);
     buf = CreateCompatibleBitmap(out, max(rc.right, 1), max(rc.bottom, 1));
@@ -175,20 +185,43 @@ static void tabs_paint(HWND hwnd)
     SetTextColor(dc, C_TEXT);
     DrawTextW(dc, L"Home", -1, &r, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     if (home) { RECT u = g_tab_rc[TB_HOME]; u.bottom = u.top + dpx(2); fill(dc, &u, C_ACCENT); }
-    /* the document */
-    if (!IsRectEmpty(&g_tab_rc[TB_DOC])) {
-        r = g_tab_rc[TB_DOC];
-        fill(dc, &r, !home ? C_BAR : g_tab_hover == TB_DOC ? C_HOVER : C_SIDE);
-        if (!home) { RECT u = r; u.bottom = u.top + dpx(2); fill(dc, &u, C_ACCENT); }
+    /* the documents */
+    for (i = 0; i < n; i++) {
+        BOOL on = !home && i == tab_active();
+        const app_t *d = tab_doc(i);
+        WCHAR t[MAX_PATH];
+        r = g_doc_rc[i];
+        if (g_drag >= 0 && i == g_drag) OffsetRect(&r, g_drag_x, 0);
+        fill(dc, &r, on ? C_BAR : g_tab_hover == HIT_DOC + i ? C_HOVER : C_SIDE);
+        if (on) { RECT u = r; u.bottom = u.top + dpx(2); fill(dc, &u, C_ACCENT); }
+        { RECT sep = { r.right, r.top + dpx(8), r.right + 1, r.bottom - dpx(6) }; fill(dc, &sep, C_LINE); }
         pdf_glyph(dc, T_CREATE, r.left + dpx(16), (r.top + r.bottom) / 2, dpx(12), C_ACCENT, C_ACCENT);
-        r.left += dpx(30);
-        r.right = g_tab_rc[TB_DOCCLOSE].left - dpx(4);
-        swprintf(t, MAX_PATH + 4, L"%ls%ls", g.dirty ? L"*" : L"", g.name[0] ? g.name : L"Untitled");
-        SelectObject(dc, !home ? g_font_bold : g_font);
-        DrawTextW(dc, t, -1, &r, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-        r = g_tab_rc[TB_DOCCLOSE];
-        if (g_tab_hover == TB_DOCCLOSE) fill(dc, &r, C_PRESS);
-        pdf_glyph(dc, T_CLOSE, (r.left + r.right) / 2, (r.top + r.bottom) / 2, dpx(12), C_SUBTEXT, C_ACCENT);
+        {
+            RECT tr = r;
+            tr.left += dpx(30);
+            tr.right = r.right - dpx(32) - (d->dirty ? dpx(12) : 0);
+            tab_label(i, t, MAX_PATH);
+            SelectObject(dc, on ? g_font_bold : g_font);
+            SetTextColor(dc, C_TEXT);
+            DrawTextW(dc, t, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+        }
+        {
+            RECT x = g_close_rc[i];
+            if (g_drag >= 0 && i == g_drag) OffsetRect(&x, g_drag_x, 0);
+            if (d->dirty) {
+                /* unsaved changes: a dot before the close button */
+                int cx = x.left - dpx(8), cy = (x.top + x.bottom) / 2;
+                pdf_glyph(dc, T_DOT, cx, cy, dpx(10), C_ACCENT, C_ACCENT);
+            }
+            if (g_tab_hover == HIT_CLOSE + i) fill(dc, &x, C_PRESS);
+            pdf_glyph(dc, T_CLOSE, (x.left + x.right) / 2, (x.top + x.bottom) / 2, dpx(12), C_SUBTEXT, C_ACCENT);
+        }
+    }
+    if (g_drag >= 0 && g_drag_to >= 0 && g_drag_to != g_drag) {
+        RECT mark = g_doc_rc[g_drag_to];
+        mark.right = mark.left + dpx(3);
+        if (g_drag_to > g_drag) { mark.left = g_doc_rc[g_drag_to].right - dpx(3); mark.right = g_doc_rc[g_drag_to].right; }
+        fill(dc, &mark, C_ACCENT);
     }
     SetRect(&r, 0, rc.bottom - 1, rc.right, rc.bottom);
     fill(dc, &r, C_LINE);
@@ -201,11 +234,22 @@ static void tabs_paint(HWND hwnd)
 
 static int tabs_hit(POINT pt)
 {
-    if (PtInRect(&g_tab_rc[TB_DOCCLOSE], pt)) return TB_DOCCLOSE;
-    if (PtInRect(&g_tab_rc[TB_DOC], pt)) return TB_DOC;
+    int i, n = min(tab_count(), 32);
+    for (i = 0; i < n; i++) {
+        if (PtInRect(&g_close_rc[i], pt)) return HIT_CLOSE + i;
+        if (PtInRect(&g_doc_rc[i], pt)) return HIT_DOC + i;
+    }
     if (PtInRect(&g_tab_rc[TB_HOME], pt)) return TB_HOME;
     if (PtInRect(&g_tab_rc[TB_MENU], pt)) return TB_MENU;
     return -1;
+}
+
+/* the tab a dragged tab would go to, for x */
+static int drop_index(int x)
+{
+    int i, n = min(tab_count(), 32);
+    for (i = 0; i < n; i++) if (x < (g_doc_rc[i].left + g_doc_rc[i].right) / 2) return i > g_drag ? i - 1 : i;
+    return n - 1;
 }
 
 /* the menu: all of it from the Menu button (index -1), or one of its menus (Alt+F, Alt+E ...) */
@@ -238,31 +282,58 @@ void home_switch(BOOL home)
 
 static LRESULT CALLBACK tabs_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+    static POINT down;
     switch (msg) {
     case WM_PAINT: tabs_paint(hwnd); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_MOUSEMOVE: {
-        POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
         int h = tabs_hit(pt);
         TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
+        if (g_drag >= 0 && GetCapture() == hwnd) {
+            if (abs(pt.x - down.x) > dpx(6) || g_drag_x) {
+                g_drag_x = pt.x - down.x;
+                g_drag_to = drop_index(pt.x);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+            return 0;
+        }
         if (h != g_tab_hover) { g_tab_hover = h; InvalidateRect(hwnd, NULL, FALSE); }
         TrackMouseEvent(&tme);
         return 0;
     }
     case WM_MOUSELEAVE: g_tab_hover = -1; InvalidateRect(hwnd, NULL, FALSE); return 0;
     case WM_LBUTTONDOWN: {
-        POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
-        switch (tabs_hit(pt)) {
-        case TB_MENU: menu_popup(-1); break;
-        case TB_HOME: home_switch(TRUE); break;
-        case TB_DOC: home_switch(FALSE); break;
-        case TB_DOCCLOSE: app_command(CMD_CLOSE); break;
+        int h = tabs_hit(pt);
+        if (h == TB_MENU) menu_popup(-1);
+        else if (h == TB_HOME) home_switch(TRUE);
+        else if (h >= HIT_CLOSE) tab_close(h - HIT_CLOSE);
+        else if (h >= HIT_DOC) {
+            tab_switch(h - HIT_DOC);
+            g_drag = h - HIT_DOC;
+            g_drag_to = -1;
+            g_drag_x = 0;
+            down = pt;
+            SetCapture(hwnd);
         }
         return 0;
     }
+    case WM_LBUTTONUP:
+        if (g_drag >= 0) {
+            int from = g_drag, to = g_drag_to;
+            g_drag = g_drag_to = -1;
+            g_drag_x = 0;
+            if (GetCapture() == hwnd) ReleaseCapture();
+            if (to >= 0 && to != from) tab_move(from, to);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    case WM_CAPTURECHANGED:
+        if (g_drag >= 0) { g_drag = g_drag_to = -1; g_drag_x = 0; InvalidateRect(hwnd, NULL, FALSE); }
+        return 0;
     case WM_MBUTTONUP: {
-        POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
-        if (tabs_hit(pt) == TB_DOC) app_command(CMD_CLOSE);
+        int h = tabs_hit(pt);
+        if (h >= HIT_DOC && h < HIT_CLOSE) tab_close(h - HIT_DOC);
         return 0;
     }
     }
@@ -537,7 +608,7 @@ static LRESULT CALLBACK home_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         else if (h >= 200 && h < 200 + g_nrecent) {
             WCHAR p[MAX_PATH];
             lstrcpynW(p, g_recent[h - 200].path, MAX_PATH);
-            if (doc_close_prompt()) app_open(p);
+            app_open(p);
         } else if (h >= 0 && h < NCARDS) home_card(h);
         return 0;
     }
@@ -558,7 +629,7 @@ static const rail_t RAIL[] = {
     { T_HIGHLIGHT, L"Highlight text", "highlight" },
     { T_PEN, L"Draw free form", "draw" },
     { T_TEXT, L"Add text anywhere", "text" },
-    { T_SIGN, L"Fill & Sign: sign the document", "sign" },
+    { T_SIGN, L"Sign: a handwritten signature or a certificate", "sign" },
 };
 #define NRAIL ((int)(sizeof(RAIL) / sizeof(RAIL[0])))
 static RECT g_rail_rc[NRAIL];
@@ -573,7 +644,7 @@ static BOOL rail_on(int i)
     case 2: return g.tool == TOOL_COMMENT && g.sub == SUB_HIGHLIGHT;
     case 3: return g.tool == TOOL_COMMENT && g.sub == SUB_INK;
     case 4: return g.tool == TOOL_FILL && g.sub == SUB_FILLTEXT;
-    case 5: return g.tool == TOOL_FILL && g.sub == SUB_SIGN;
+    case 5: return g.tool == TOOL_FILL && (g.sub == SUB_SIGN || g.sub == SUB_CERTSIGN);
     }
     return FALSE;
 }
@@ -586,6 +657,27 @@ void rail_command(int i)
 #ifdef SG_MUTANT_RAIL
     i = 0;
 #endif
+    if (i == 5) {
+        /* sign: by hand (typed, drawn, a picture) or with a certificate */
+        HMENU m = CreatePopupMenu();
+        RECT r = g_rail_rc[5];
+        int c;
+        AppendMenuW(m, MF_STRING, CMD_SIGN, L"Add a &handwritten signature...");
+        AppendMenuW(m, MF_STRING, CMD_CERTSIGN, L"Sign with a &certificate...");
+        MapWindowPoints(g_rail, NULL, (POINT *)&r, 2);
+        g.menu_open = TRUE;
+        app_dump();
+        c = TrackPopupMenu(m, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, r.right, r.top, 0, g_main, NULL);
+        g.menu_open = FALSE;
+        DestroyMenu(m);
+        if (c) {
+            if (g.tool != TOOL_FILL) tool_set(TOOL_FILL);
+            app_command(c);
+        }
+        if (g_rail) InvalidateRect(g_rail, NULL, FALSE);
+        app_status_changed();
+        return;
+    }
     if (g.tool != TOOL[i]) tool_set(TOOL[i]);
     if (i == 5) app_command(CMD_SIGN);
     else if (TOOL[i] != TOOL_NONE) tool_set_sub(SUB[i]);
@@ -822,13 +914,29 @@ void frame_dump(FILE *f)
     fprintf(f, "home %d\n", home_shown());
     fprintf(f, "menuopen %d\n", g.menu_open);
     if (g_tabs) {
-        static const char *const N[TB_N] = { "menu", "home", "doc", "docclose" };
-        for (i = 0; i < TB_N; i++) {
-            if (IsRectEmpty(&g_tab_rc[i])) continue;
-            r = g_tab_rc[i];
+        int n = min(tab_count(), 32);
+        r = g_tab_rc[TB_MENU];
+        MapWindowPoints(g_tabs, NULL, (POINT *)&r, 2);
+        fprintf(f, "doctab menu %ld %ld 0\n", (r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        r = g_tab_rc[TB_HOME];
+        MapWindowPoints(g_tabs, NULL, (POINT *)&r, 2);
+        fprintf(f, "doctab home %ld %ld %d\n", (r.left + r.right) / 2, (r.top + r.bottom) / 2, home_shown());
+        fprintf(f, "tabs %d %d\n", tab_count(), tab_active() + 1);
+        for (i = 0; i < n; i++) {
+            RECT c = g_close_rc[i];
+            char name[MAX_PATH * 3];
+            WCHAR t[MAX_PATH];
+            r = g_doc_rc[i];
             MapWindowPoints(g_tabs, NULL, (POINT *)&r, 2);
-            fprintf(f, "doctab %s %ld %ld %d\n", N[i], (r.left + r.right) / 2, (r.top + r.bottom) / 2,
-                    i == TB_HOME ? home_shown() : i == TB_DOC ? !home_shown() : 0);
+            MapWindowPoints(g_tabs, NULL, (POINT *)&c, 2);
+            tab_label(i, t, MAX_PATH);
+            to_utf8(t, name, sizeof(name));
+            if (i == tab_active()) {
+                fprintf(f, "doctab doc %ld %ld %d\n", (r.left + r.right) / 2, (r.top + r.bottom) / 2, !home_shown());
+                fprintf(f, "doctab docclose %ld %ld 0\n", (c.left + c.right) / 2, (c.top + c.bottom) / 2);
+            }
+            fprintf(f, "tabdoc %d %ld %ld %d %d %ld %ld %s\n", i + 1, (r.left + r.right) / 2, (r.top + r.bottom) / 2,
+                    i == tab_active() && !home_shown(), tab_doc(i)->dirty, (c.left + c.right) / 2, (c.top + c.bottom) / 2, name);
         }
     }
     if (g_home && IsWindowVisible(g_home)) {

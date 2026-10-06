@@ -37,7 +37,7 @@ Description: SG Office for Stained Glass OS (documents, spreadsheets, presentati
 
 Package: sg-pdf
 Architecture: all
-Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine, sg-session (>= 0.1.0-139)
+Depends: ${misc:Depends}, sg-shell (= ${source:Version}), wine-sg | wine, sg-session (>= 0.1.0-145)
 Breaks: sg-shell (<< 0.1.0-138)
 Replaces: sg-shell (<< 0.1.0-138)
 Description: SG PDF for Stained Glass OS: view, edit, fill, sign and organize PDFs

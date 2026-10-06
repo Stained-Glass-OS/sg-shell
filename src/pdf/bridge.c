@@ -151,6 +151,8 @@ static BOOL write_line(const char *line)
     return ok;
 }
 
+BOOL write_for(int engine, const char *line);
+
 const char *br_field(const char *head, const char *key, char *buf, int cap)
 {
     size_t kl = strlen(key);
@@ -184,7 +186,7 @@ int br_request(const char *line, char *head, int headcap, BYTE **payload, DWORD 
     head[0] = 0;
     if (!g.bridged) { lstrcpynA(head, "ERR failed not connected", headcap); return -1; }
     EnterCriticalSection(&g_io);
-    if (write_line(line) && read_line(head, headcap)) {
+    if (write_for(g.engine, line) && read_line(head, headcap)) {
         if (br_field(head, "bytes", num, sizeof(num))) n = strtoul(num, NULL, 10);
         if (n) {
             BYTE *buf = malloc(n + 1);
@@ -206,7 +208,23 @@ int br_request(const char *line, char *head, int headcap, BYTE **payload, DWORD 
     return rc;
 }
 
-BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h, int *x, int *y)
+/* a request for a document's own engine: "@N<TAB>" before it (sg-pdf's bridge routes it) */
+BOOL write_for(int engine, const char *line)
+{
+    char *buf;
+    BOOL ok;
+#ifdef SG_MUTANT_ENGINE
+    engine = engine ? 1 : 0;
+#endif
+    if (engine <= 0) return write_line(line);
+    if (!(buf = malloc(strlen(line) + 16))) return FALSE;
+    sprintf(buf, "@%d\t%s", engine, line);
+    ok = write_line(buf);
+    free(buf);
+    return ok;
+}
+
+BOOL br_request_into_dib(int engine, const char *line, HBITMAP *out, int *w, int *h, int *x, int *y)
 {
     char head[256], num[32];
     BITMAPINFO bi = { 0 };
@@ -217,7 +235,7 @@ BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h, int *x,
     *out = NULL;
     if (!g.bridged) return FALSE;
     EnterCriticalSection(&g_io);
-    if (write_line(line) && read_line(head, sizeof(head))) {
+    if (write_for(engine, line) && read_line(head, sizeof(head))) {
         io = TRUE;
         if (br_field(head, "bytes", num, sizeof(num))) n = strtoul(num, NULL, 10);
         if (!strncmp(head, "OK", 2) && br_field(head, "w", num, sizeof(num))) {
@@ -252,7 +270,7 @@ BOOL br_request_into_dib(const char *line, HBITMAP *out, int *w, int *h, int *x,
 
 /* ---- the render thread ------------------------------------------------------------------------- */
 
-typedef struct { int page, rot, gen; double scale; BOOL thumb; int tile, cx, cy, cw, ch; } job_t;
+typedef struct { int page, rot, gen; double scale; BOOL thumb; int tile, cx, cy, cw, ch, engine; } job_t;
 typedef struct { int page, rot, gen, w, h, x, y, tile; double scale; BOOL thumb; HBITMAP bmp; } result_t;
 
 #define MAX_JOBS 256
@@ -284,13 +302,13 @@ done:
 
 void render_want(int page, double scale, int rot, BOOL thumb)
 {
-    job_t j = { page, rot, g.generation, scale, thumb, 0, 0, 0, 0, 0 };
+    job_t j = { page, rot, g.generation, scale, thumb, 0, 0, 0, 0, 0, g.engine };
     want(j);
 }
 
 void render_want_tile(int page, double scale, int rot, int x, int y, int w, int h)
 {
-    job_t j = { page, rot, g.generation, scale, FALSE, 1, x, y, w, h };
+    job_t j = { page, rot, g.generation, scale, FALSE, 1, x, y, w, h, g.engine };
     int i;
     /* one tile a page: an older wish for another part of it is dropped */
     EnterCriticalSection(&g_jlock);
@@ -349,7 +367,7 @@ static DWORD WINAPI render_thread(void *arg)
             r = calloc(1, sizeof(*r));
             if (!r) continue;
             r->page = j.page; r->rot = j.rot; r->gen = j.gen; r->scale = j.scale; r->thumb = j.thumb; r->tile = j.tile;
-            br_request_into_dib(line, &r->bmp, &r->w, &r->h, &r->x, &r->y);
+            br_request_into_dib(j.engine, line, &r->bmp, &r->w, &r->h, &r->x, &r->y);
             if (!PostMessageW(g_view, WM_APP_RENDERED, 0, (LPARAM)r)) {
                 if (r->bmp) DeleteObject(r->bmp);
                 free(r);

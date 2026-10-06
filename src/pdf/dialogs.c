@@ -592,6 +592,18 @@ static INT_PTR CALLBACK combine_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             }
             return TRUE;
         }
+        case IDC_CB_OPEN: {
+            /* the documents open in SG PDF's tabs (their saved files) */
+            static WCHAR paths[32][MAX_PATH];
+            int n = tabs_paths(paths, 32), i, have = 0;
+            for (i = 0; i < n; i++)
+                if (SendMessageW(list, LB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)paths[i]) == LB_ERR) {
+                    SendMessageW(list, LB_ADDSTRING, 0, (LPARAM)paths[i]);
+                    have++;
+                }
+            if (!have) MessageBeep(MB_ICONINFORMATION);
+            return TRUE;
+        }
         case IDC_CB_REMOVE: {
             int i = (int)SendMessageW(list, LB_GETCURSEL, 0, 0);
             if (i >= 0) SendMessageW(list, LB_DELETESTRING, i, 0);
@@ -633,7 +645,7 @@ static INT_PTR CALLBACK combine_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 DWORD len;
                 if (br_request(line, head, sizeof(head), &data, &len) == 1) {
                     free(data);
-                    if (doc_close_prompt()) app_open(out);
+                    app_open(out);
                 } else {
                     WCHAR *m = from_utf8(head, -1);
                     app_set_status(L"The files could not be combined: %ls", m ? m : L"");

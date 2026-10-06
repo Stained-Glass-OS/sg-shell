@@ -1,3 +1,16 @@
+sg-shell (0.1.0-146) unstable; urgency=medium
+
+  * SG PDF opens documents in tabs, each with an engine process of its
+    own: close buttons, a dot for unsaved changes, drag to reorder,
+    Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+W, a file already open comes to the
+    front, switching keeps each one's page, zoom and edits, closing asks
+    only about that document; Combine Files can take the open documents;
+    at most 20; View > Reopen Documents at Start. The rail's sign offers a
+    handwritten or a certificate signature.
+  * sg-pdf needs sg-session 0.1.0-145 (the bridge's engine a document).
+  * Gate: pdf-pro-check's tabs section, three mutants.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 13:32:25 -0700
 sg-shell (0.1.0-145) unstable; urgency=medium
 
   * Voice typing: hold-to-talk works again as soon as voice typing is turned

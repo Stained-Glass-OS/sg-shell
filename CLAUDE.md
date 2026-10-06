@@ -1822,8 +1822,8 @@ layout follows the familiar PDF editor's workflow, the words and art are ours.
   **quick tools rail** down the left (select, add a comment, highlight, draw,
   add text, sign); the **floating page controls** at the bottom right of the
   pages (previous, page n / N, next, zoom out, in, fit). The right pane is
-  "All tools" and each tool's panel starts with "< All tools". One document at
-  a time (one engine): opening another replaces it, after the save prompt.
+  "All tools" and each tool's panel starts with "< All tools". Documents open in
+  tabs (`tabs.c`).
   Shortcuts as the familiar editor's: Ctrl+0 fit page, Ctrl+1 actual size,
   Ctrl+2 fit width, Ctrl+Shift+Plus/Minus rotate the view, Ctrl+Shift+N go
   to page, Ctrl+N create from files, Ctrl+E properties (the picked field,
@@ -1835,6 +1835,26 @@ layout follows the familiar PDF editor's workflow, the words and art are ours.
   `frame` (Home, every card, tabs, rail, floating controls, Menu, shortcuts,
   light and dark) and `scale` (LogPixels 192: the frame twice as large);
   mutants HOMECARD, RAIL, FLOATNAV, TABS.
+- **Documents in tabs** -- `tabs.c`: every open document is a tab with an
+  engine process of its own (sg-pdf's bridge routes "@N<TAB>request" to
+  `sg-pdf --serve` number N, started when first named; "@N quit" ends it;
+  bridge.c prefixes every request with `g.engine`, the render thread's jobs
+  carry theirs). `g` is the document in front, as always; the other tabs'
+  whole states are kept in `g_docs[]` and swapped in (`tab_switch`), except
+  what belongs to the window (`keep_ui`: panes, page display, dark pages,
+  the format for new text, the signature in hand, DPI, mode). The tool is
+  closed when another tab comes forward. `generation` comes from
+  `next_generation()` (unique across tabs, so a picture made for one tab
+  is never shown in another). The strip: a tab a document with its close
+  button, a dot for unsaved changes, drag to reorder, middle-click closes;
+  Ctrl+Tab / Ctrl+Shift+Tab go through Home and the tabs, Ctrl+W closes
+  the tab (asking only about its changes); opening a file already open goes
+  to its tab; Create PDF and Combine Files open their result in a new tab;
+  Combine's "Add Open Files"; at most 20 (SG_PDF_MAX_TABS for gates); View >
+  Reopen Documents at Start (off by default; `OpenDocuments`). The rail's
+  sign offers a handwritten or a certificate signature. Dump: `tabs N
+  ACTIVE`, `tabdoc I x y on dirty closex closey NAME`. Gate section `tabs`;
+  mutants TABKEEP, ENGINE, TABREUSE (and sg-session's ENGINES).
 - **Package `sg-pdf`** (from this source, like sg-office): the program,
   `defaults/80-sg-pdf.reg`, its icons (`gen-icon.py OUT.ico PNGDIR`) and
   `sg-pdf.desktop` (Linux programs' PDF handler: `sg-open-windows-file`,
