@@ -364,10 +364,15 @@ static BOOL png_size(const unsigned char *b, DWORD n, DWORD *w, DWORD *h)
     return *w && *h && *w <= 256 && *h <= 256;
 }
 
-/* Icon= names a theme icon, or is a path; the PNGs found, largest first, up to 4 */
+/* Icon= names a theme icon, or is a path; the PNGs found, largest first, up
+ * to max: every size the theme has, so the .ico has a frame for 100-250% */
 static int find_pngs(const char *icon, char found[][MAX_PATH], int max)
 {
+#ifndef SG_MUTANT_LINUX_ICON_FEW
+    static const char *sizes[] = { "256x256", "128x128", "96x96", "64x64", "48x48", "32x32", "24x24", "22x22", "16x16", NULL };
+#else
     static const char *sizes[] = { "256x256", "128x128", "64x64", "48x48", "32x32", NULL };
+#endif
     char dirs[16][MAX_PATH], name[256], *ext;
     int nd, i, s, n = 0;
 
@@ -418,10 +423,16 @@ static BOOL find_svg(const char *icon, char *out)
     return FALSE;
 }
 
-/* the SVG drawn at 256 and 48 px by rsvg-convert, as PNGs in DIR (kept: made once) */
+/* the SVG drawn by rsvg-convert at every size a display scale asks for
+ * (each drawn for its size, not reduced from one), as PNGs in DIR (kept:
+ * made once) */
 static int svg_pngs(const char *icon, const WCHAR *dir, const char *id, char found[][MAX_PATH], int max)
 {
+#ifndef SG_MUTANT_LINUX_ICON_FEW
+    static const int px[] = { 256, 96, 64, 48, 40, 32, 24, 20, 16 };
+#else
     static const int px[] = { 256, 48 };
+#endif
     LONG (WINAPI *spawnvp)(char * const argv[], int wait);
     char svg[MAX_PATH], *udir;
     int i, n = 0;
@@ -449,12 +460,12 @@ static int svg_pngs(const char *icon, const WCHAR *dir, const char *id, char fou
 /* the .ico for an app, written into DIR; FALSE if it has no PNG or SVG icon */
 static BOOL make_icon(const struct app *a, const WCHAR *dir, WCHAR *ico, int len)
 {
-    char pngs[4][MAX_PATH];
-    unsigned char *data[4];
-    DWORD size[4], w[4], h[4], off, i, count = 0;
-    int n = find_pngs(a->icon, pngs, 4);
+    char pngs[10][MAX_PATH];
+    unsigned char *data[10];
+    DWORD size[10], w[10], h[10], off, i, count = 0;
+    int n = find_pngs(a->icon, pngs, 10);
 #ifndef SG_MUTANT_NOSVG
-    if (!n) n = svg_pngs(a->icon, dir, a->id, pngs, 4);
+    if (!n) n = svg_pngs(a->icon, dir, a->id, pngs, 10);
 #endif
     HANDLE f;
     BOOL ok = FALSE;

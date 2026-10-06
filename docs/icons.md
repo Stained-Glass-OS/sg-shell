@@ -78,6 +78,16 @@ Not files but fonts: `src/sg-icons-font.py` draws Stained Glass Icons, the
 caption-button glyphs programs ask Segoe MDL2/Fluent Icons for (a TrueType
 outline font: sharp at every size by nature; gate `test-icons-font`).
 
+### Linux apps' icons (Start, taskbar, .desktop files)
+
+`src/linuxapps/sg-linuxapp.c` makes an .ico for each Linux app from the
+icon theme: every hicolor PNG size the theme has (256, 128, 96, 64, 48,
+32, 24, 22, 16), or, for an app with only an SVG, the SVG drawn by
+rsvg-convert at 256, 96, 64, 48, 40, 32, 24, 20 and 16 px (each drawn for
+its size). The taskbar (wine-sg 0612) and the .desktop files' icon handler
+(0767) use the same .ico. Gate: `test/linuxapps-check.sh` (mutant
+`SG_MUTANT_LINUX_ICON_FEW`: the old 48 and 256 only).
+
 ### Picture strips (image lists)
 
 | Strip | Drawn by | Sizes | Used |

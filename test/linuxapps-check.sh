@@ -23,6 +23,7 @@ export XDG_DATA_HOME="$T/home/.local/share" XDG_DATA_DIRS="$T/share" SG_LINUXAPP
 unset XDG_CONFIG_HOME
 trap '"${WINESERVER:-wineserver}" -k 2>/dev/null; rm -rf "$T"' EXIT INT TERM
 mkdir -p "$HOME" "$T/share/applications" "$T/share/icons/hicolor/48x48/apps" "$T/share/icons/hicolor/256x256/apps" \
+    "$T/share/icons/hicolor/16x16/apps" "$T/share/icons/hicolor/24x24/apps" "$T/share/icons/hicolor/32x32/apps" \
     "$XDG_DATA_HOME/applications"
 "$WINE" wineboot -i >/dev/null 2>&1
 
@@ -38,6 +39,7 @@ EOF
 }
 png "$T/share/icons/hicolor/48x48/apps/gate-game.png" 48
 png "$T/share/icons/hicolor/256x256/apps/gate-game.png" 256
+for n in 16 24 32; do png "$T/share/icons/hicolor/${n}x${n}/apps/gate-game.png" $n; done
 app() { # ID then the entry's lines
     id=$1; shift
     { echo '[Desktop Entry]'; for l in "$@"; do echo "$l"; done; } > "$T/share/applications/$id.desktop"
@@ -69,13 +71,13 @@ import struct, sys
 b = open(sys.argv[1], "rb").read()
 z, t, n = struct.unpack("<HHH", b[:6])
 sizes = sorted(b[6 + 16 * i] or 256 for i in range(n))
-ok = t == 1 and sizes == [48, 256]
+ok = t == 1 and sizes == [16, 24, 32, 48, 256]
 for i in range(n):
     size, off = struct.unpack("<II", b[6 + 16 * i + 8: 6 + 16 * i + 16])
     ok = ok and b[off:off + 8] == b"\x89PNG\r\n\x1a\n" and off + size <= len(b)
 sys.exit(0 if ok else 1)
 EOF
-then pass "the app's theme PNGs (48, 256) are its shortcut's icon"; else fail "icon: $(ls -la "$ico" 2>&1)"; fi
+then pass "the app's theme PNGs (16, 24, 32, 48, 256: every size the theme has) are its shortcut's icon"; else fail "icon: $(ls -la "$ico" 2>&1)"; fi
 strings -el "$PROGS/Gate Game.lnk" 2>/dev/null | grep -q 'gate-game.desktop' && strings -el "$PROGS/Gate Game.lnk" | grep -q 'A game for the gate' \
     && pass "the shortcut runs --run on the app's .desktop, with its Comment" || fail "lnk: $(strings -el "$PROGS/Gate Game.lnk" 2>&1 | head -5)"
 
@@ -105,9 +107,9 @@ import struct, sys
 try: b = open(sys.argv[1], "rb").read()
 except OSError: sys.exit(1)
 z, t, n = struct.unpack("<HHH", b[:6])
-sys.exit(0 if t == 1 and sorted(b[6 + 16 * i] or 256 for i in range(n)) == [48, 256] else 1)
+sys.exit(0 if t == 1 and sorted(b[6 + 16 * i] or 256 for i in range(n)) == [16, 20, 24, 32, 40, 48, 64, 96, 256] else 1)
 EOF
-    then pass "an app with only an SVG icon gets an .ico (48, 256)"; else fail "SVG icon: $(ls "$icons" 2>&1 | tr '\n' ' ')"; fi
+    then pass "an app with only an SVG icon gets an .ico drawn at every size (16-256)"; else fail "SVG icon: $(ls "$icons" 2>&1 | tr '\n' ' ')"; fi
     cmp -s "$icons/gate-svg.ico" "$icons/GateSvgClass.ico" && cmp -s "$icons/gate-svg.ico" "$icons/gate-svg-prog.ico" \
         && pass "copies named after its window class and program, for the taskbar" || fail "class copies: $(ls "$icons" | tr '\n' ' ')"
     rm "$T/share/applications/gate-svg.desktop"

@@ -1,3 +1,14 @@
+sg-shell (0.1.0-143) unstable; urgency=medium
+
+  * A Linux app's icon in Start, on the taskbar and on its .desktop file
+    has a frame for every display scale: every size the icon theme has
+    (256 down to 16 px), or, for an app with only an SVG icon (GNOME's),
+    the SVG drawn at 256, 96, 64, 48, 40, 32, 24, 20 and 16 px. It had
+    48 and 256 px only, so 16-32 px icons were shrunk from 48 (soft).
+    Test: test/linuxapps-check.sh (mutant SG_MUTANT_LINUX_ICON_FEW).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 11:04:06 -0700
+
 sg-shell (0.1.0-142) unstable; urgency=medium
 
   * sg-smooth.h: a drop-in shape or region on a DC already in GM_ADVANCED
