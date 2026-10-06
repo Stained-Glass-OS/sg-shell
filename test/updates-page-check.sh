@@ -9,7 +9,8 @@
 # answers "downloading" once after the check, then idle.
 #
 # Needs wine-sg, Xvfb, xdotool; skips (77) without. SG_SETTINGS_EXE runs
-# another build (the mutation test: SG_MUTANT_UPD_TICK_MEMORY).
+# another build (the mutation tests: SG_MUTANT_UPD_TICK_MEMORY,
+# SG_MUTANT_UPD_NO_PROBLEMS).
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -62,5 +63,19 @@ grep -q "Downloading updates" "$T/dump.txt" && pass "the page showed the check u
 sleep 8
 tr -d '\r' < "$T/dump.txt" | grep -q "You're up to date" && pass "...and, when it found nothing, comes back to \"You're up to date\" by itself" \
     || fail "still shows: $(tr -d '\r' < "$T/dump.txt" | grep -m1 -E "Downloading|Preparing|up to date")"
+
+# A package source the last check could not use (sg-session's sg-apt-sources:
+# a vendor's expired signing key): the page names it and says the others go on.
+WINEPREFIX="$T/pfx" wineserver -k 2>/dev/null; sleep 1
+cat > "$T/ctl2" <<EOS
+#!/bin/sh
+out=""; while [ \$# -gt 0 ]; do case "\$1" in --out) out="\$2"; shift 2 ;; *) shift ;; esac; done
+printf 'DOWNLOADING no\\nSTAGED no\\nPROBLEM packages.mozilla.org\\tits signing key has expired\\nOK\\n' > "\$out.part"; mv "\$out.part" "\$out"
+EOS
+chmod +x "$T/ctl2"; rm -f "$T/dump.txt"
+SG_SETTINGSCTL="$T/ctl2" SG_SETTINGS_DUMP=$(wine winepath -w "$T/dump.txt" | tr -d '\r') wine "$EXE" ms-settings:windowsupdate >/dev/null 2>&1 &
+i=0; while [ $i -lt 60 ] && ! grep -q ": Check for updates" "$T/dump.txt" 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+tr -d '\r' < "$T/dump.txt" | grep -q "Updates from packages.mozilla.org could not be checked: its signing key has expired" \
+    && pass "a source with an expired key is named on the page, the rest go on" || fail "the problem source is not shown"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

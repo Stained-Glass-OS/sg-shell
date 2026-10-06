@@ -523,6 +523,29 @@ r=$(browser "$ADMIND" firefox "mozilla.list:$A" "packages.mozilla.org.asc:$T/key
 [ "$r" = ok ] && pass "Firefox for Linux: Mozilla's source, key and pin" || fail "firefox: $r"
 grep -q '^Package: firefox firefox-l10n-\*$' "$HERE/admin/apt-vendors/mozilla.pref" && grep -q '^Pin-Priority: 100$' "$HERE/admin/apt-vendors/mozilla.pref" \
     && pass "the pin takes only firefox from Mozilla (everything else at 100, below Debian's)" || fail "mozilla.pref"
+# Mozilla's repository already configured by hand (Mozilla's own
+# instructions: mozilla.sources with its key in /etc/apt/keyrings): the Store
+# reuses it -- a second entry naming another keyring makes apt refuse every
+# source ("Conflicting values set for option Signed-By", David's VM
+# 2026-10-06). sg-session's sg-apt-sources does it; mutant: without it.
+TOOL=${SG_APT_SOURCES_TOOL:-}
+for c in "$HERE/../sg-session/lib/sg-apt-sources" "$HOME/Stained-Glass-OS/sg-session/lib/sg-apt-sources" /usr/lib/stained-glass/sg-apt-sources; do
+    [ -n "$TOOL" ] || { [ -x "$c" ] && TOOL=$c; }
+done
+own_mozilla() { # TOOL -- "reused" when no mozilla.list was added beside the user's .sources
+    rm -f "$A"/*; mkdir -p "$T/etckeys"; cp "$HERE/admin/apt-vendors/packages.mozilla.org.asc" "$T/etckeys/"
+    printf 'Types: deb\nURIs: https://packages.mozilla.org/apt\nSuites: mozilla\nComponents: main\nSigned-By: %s/etckeys/packages.mozilla.org.asc\n' "$T" > "$A/mozilla.sources"
+    id=$(next_id); printf 'apt-install\nfirefox\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    SG_ADMIN_APT_SOURCES_TOOL=$1 python3 "$ADMIND" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && [ ! -e "$A/mozilla.list" ] && [ -e "$A/mozilla.sources" ]; } && echo reused || echo "added:$(ls "$A" | tr '\n' ' ')"
+}
+if [ -n "$TOOL" ]; then
+    r=$(own_mozilla "$TOOL")
+    [ "$r" = reused ] && pass "Firefox for Linux with Mozilla's repository already set up by hand: reused, no conflicting second entry" || fail "own mozilla source: $r"
+    r=$(own_mozilla /nonexistent)
+    [ "$r" != reused ] && pass "MUTANT no sg-apt-sources: a second Mozilla entry is added (gate catches it)" || fail "NO_ADOPT mutant not detected"
+    rm -f "$A"/*
+else echo "SKIP  sg-session's sg-apt-sources not found (SG_APT_SOURCES_TOOL): the reuse case"; fi
 r=$(browser "$T/mut-novendor" firefox "mozilla.list:$A")
 [ "$r" != ok ] && pass "MUTANT NOVENDOR: no Mozilla source (gate catches it)" || fail "NOVENDOR not detected for firefox"
 rm -f "$B/apt-cache"

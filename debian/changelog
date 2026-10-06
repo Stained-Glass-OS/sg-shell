@@ -1,3 +1,21 @@
+sg-shell (0.1.0-150) unstable; urgency=medium
+
+  * SG Store's Linux Firefox, Chrome, Edge and Steam no longer add a second
+    entry for a repository that is already configured: sg-admind puts the
+    maker's source in place through sg-session's sg-apt-sources adopt,
+    which reuses an existing entry (any .list or .sources file, e.g.
+    Mozilla's own mozilla.sources with its key in /etc/apt/keyrings) and
+    replaces one whose keyring is gone. Two entries naming different
+    keyrings made apt refuse every source (David's VM 2026-10-06).
+    Depends sg-session (>= 0.1.0-150). Gate admind-check (reuse case, with a
+    mutant without the tool).
+  * Settings > Updates names a package source the last check could not use
+    (an expired or replaced signing key, a server out of reach) and says
+    the other sources still update (sg-settingsctl PROBLEM lines). Gate
+    updates-page-check, mutant SG_MUTANT_UPD_NO_PROBLEMS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 16:12:59 -0700
+
 sg-shell (0.1.0-149) unstable; urgency=medium
 
   * The touch keyboard follows the user's choices: its button in the

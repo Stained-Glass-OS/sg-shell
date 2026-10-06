@@ -454,6 +454,22 @@ void set_build_update(void)
     } else y = st_card(y, IC_G_UPDATE, L"You're up to date", u.checked ? u.last : L"Stained Glass OS checks for updates every day.");
     if (u.checked) { _snwprintf(line, ARRAYSIZE(line), L"Last checked: %ls", u.last); y = st_text(y, line); }
     if (u.managed) y = st_para(y, L"*Some settings are managed by your organization.");
+    /* a package source the last check could not use (an expired or replaced
+     * signing key, a server out of reach): named, and the others go on */
+    pos = NULL;
+#ifndef SG_MUTANT_UPD_NO_PROBLEMS
+    while (ans && ctl_line(ans, "PROBLEM", &pos, buf, sizeof(buf))) {
+        WCHAR host[200], why[200];
+        ctl_field(buf, 0, host, ARRAYSIZE(host));
+        ctl_field(buf, 1, why, ARRAYSIZE(why));
+        if (!lstrcmpW(host, L"apt"))
+            _snwprintf(line, ARRAYSIZE(line), L"Updates could not be checked: %ls.", why);
+        else
+            _snwprintf(line, ARRAYSIZE(line), L"Updates from %ls could not be checked: %ls. Updates from the other sources are not affected.", host, why);
+        y = st_para(y, line);
+    }
+#endif
+    pos = NULL;
     y += S(4);
     if (staged) st_button(&y, L"Restart now", CMD_RESTART);
     if (!downloading) st_button(&y, L"Check for updates", CMD_CHECK);

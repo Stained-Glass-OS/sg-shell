@@ -109,6 +109,9 @@ CURRENT_ID = None      # the request being answered (its progress file)
 VENDOR_DIR = "/usr/share/stained-glass/apt-vendors"
 KEYRINGS = "/usr/share/keyrings"
 PREFERENCES = "/etc/apt/preferences.d"
+# sg-session's: puts a maker's source in place unless that repository is
+# configured already, and keeps apt's sources readable (sg-apt-sources heal)
+APT_SOURCES_TOOL = "/usr/lib/stained-glass/sg-apt-sources"
 TEST = os.geteuid() != 0 and os.environ.get("SG_ADMIN_TEST") == "1"
 if TEST:
     # The gate runs this unprivileged against a spool of its own, with stand-ins
@@ -123,6 +126,7 @@ if TEST:
     VENDOR_DIR = os.environ.get("SG_ADMIN_VENDORS", VENDOR_DIR)
     KEYRINGS = os.environ.get("SG_ADMIN_KEYRINGS", KEYRINGS)
     PREFERENCES = os.environ.get("SG_ADMIN_PREFERENCES", PREFERENCES)
+    APT_SOURCES_TOOL = os.environ.get("SG_ADMIN_APT_SOURCES_TOOL", APT_SOURCES_TOOL)
 
 
 class Refused(Exception):
@@ -912,6 +916,21 @@ VENDOR_SOURCES = {
 }
 
 
+def adopt_source(pkg, src):
+    """the maker's source through sg-apt-sources: not added when the same
+    repository is configured already (Mozilla's own instructions put
+    packages.mozilla.org in mozilla.list or mozilla.sources with its key in
+    /etc/apt/keyrings; a second entry naming another keyring made apt refuse
+    every source, David's VM 2026-10-06); False if the tool is not there"""
+    if not os.access(APT_SOURCES_TOOL, os.X_OK):
+        return False
+    extra = {"SG_APT_ETC": os.path.dirname(APT_SOURCES)} if TEST else {}
+    r = run([APT_SOURCES_TOOL, "adopt", src], timeout=300, extra_env=extra)
+    for line in (r.stdout + r.stderr).splitlines():
+        log("%s: %s" % (pkg, line))
+    return True
+
+
 def add_vendor_source(pkg):
     """the maker's apt source for a package that comes from it (Steam), put
     in place before apt looks for the package; True if it has one"""
@@ -919,6 +938,8 @@ def add_vendor_source(pkg):
         return False
     for name, where in VENDOR_SOURCES[pkg]:
         dst = os.path.join({"sources": APT_SOURCES, "keyrings": KEYRINGS, "preferences": PREFERENCES}[where], name)
+        if where == "sources" and adopt_source(pkg, os.path.join(VENDOR_DIR, name)):
+            continue
         if not os.path.exists(dst):
             shutil.copyfile(os.path.join(VENDOR_DIR, name), dst)
             os.chmod(dst, 0o644)
