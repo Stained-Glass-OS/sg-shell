@@ -25,10 +25,14 @@
 #   5. (run first) at 1920x1080 nothing changes: no LogPixels written, a
 #      40 px bar, title bars as before (Scale8 11); its sizes are the ones
 #      3. compares with
+#   6. a new scale while the shell runs (needs wine-sg 0890): 100% -> 175%,
+#      the taskbar and Start 1.75 times their size, once; the Linux side
+#      told (sg-settingsctl display-scale 175)
 #
 #   SG_WINE_DIR=<wine-sg root> sh test/hidpi-check.sh
 #   Mutants (sg-control/sg-settings): SG_MUTANT_SCALE_RECOMMEND_100,
-#   SG_MUTANT_SCALE_NO_STICK, SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_CONF_UNSCALED.
+#   SG_MUTANT_SCALE_NO_STICK, SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_CONF_UNSCALED,
+#   SG_MUTANT_SCALE_LINUX_NOT_TOLD; sg-start: SG_MUTANT_START_SYSTEM_AWARE.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -186,6 +190,37 @@ sleep 1
 tr -d '\r' < "$T/sdump" 2>/dev/null | grep -q 'ComboBox.*: 175% (Recommended)$' \
     && pass "Settings > Display > Scale: 175% (Recommended), selected" || fail "Settings' scale: $(grep ComboBox "$T/sdump" 2>/dev/null | head -2)"
 unset SG_SETTINGS_DUMP
+
+# --- 6. a new scale while the shell runs (wine-sg 0890) ----------------------------------
+# 100% picked, the shell and Start started at it; then 175% picked while they
+# run: the taskbar and Start take 1.75 times their size once (Start is per-
+# monitor aware and sizes itself; aware of the system DPI only, Wine scaled
+# it as well: 3 times); the Linux side is told (sg-settingsctl display-scale)
+sgs scale 100 >/dev/null
+shell
+rm -f "$T/startdump"
+"$WINE" "$T/poke.exe" >/dev/null 2>&1; sleep 3
+p1=$(probe); s1=$(sed -n 's/^rect=//p' "$T/startdump" 2>/dev/null)
+"$WINE" "$T/poke.exe" >/dev/null 2>&1; sleep 1
+mkdir -p "$T/bin"
+printf '#!/bin/sh\necho "$*" >> "%s/ctl"\nout=""; while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done\n[ -n "$out" ] && printf "OK\\n" > "$out"\n' "$T" > "$T/bin/sg-settingsctl"
+chmod +x "$T/bin/sg-settingsctl"
+SG_SETTINGSCTL="$T/bin/sg-settingsctl" sgs scale 175 >/dev/null
+sleep 3
+rm -f "$T/startdump"
+"$WINE" "$T/poke.exe" >/dev/null 2>&1; sleep 3
+p2=$(probe); s2=$(sed -n 's/^rect=//p' "$T/startdump" 2>/dev/null)
+"$WINE" "$T/poke.exe" >/dev/null 2>&1; sleep 1
+ratio() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > 0 && b / a > 1.70 && b / a < 1.80) }'; }
+set -- $(echo "${s1:-0,0,0,0}" | tr ',' ' '); w1=$(( $3 - $1 )) h1=$(( $4 - $2 ))
+set -- $(echo "${s2:-0,0,0,0}" | tr ',' ' '); w2=$(( $3 - $1 )) h2=$(( $4 - $2 ))
+if ratio "$(val "$p1" barh)" "$(val "$p2" barh)" && ratio "$h1" "$h2" && ratio "$w1" "$w2" && [ "$(val "$p2" startpm)" = 1 ]; then
+    pass "100% -> 175% while the shell runs: the taskbar $(val "$p1" barh) -> $(val "$p2" barh) px, Start ${w1}x$h1 -> ${w2}x$h2, per-monitor aware (1.75 times, once)"
+else
+    fail "100% -> 175% while the shell runs: taskbar $(val "$p1" barh) -> $(val "$p2" barh), Start ${w1}x$h1 -> ${w2}x$h2, per-monitor $(val "$p2" startpm) (want 1.75 times; aware of the system DPI only, Wine scales it again)"
+fi
+grep -q '^display-scale 175 --out ' "$T/ctl" 2>/dev/null && pass "the Linux side is told: sg-settingsctl display-scale 175" \
+    || fail "the Linux side: sg-settingsctl got '$(cat "$T/ctl" 2>/dev/null)'"
 
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

@@ -3521,7 +3521,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 
     (void)prev; (void)cmd; (void)show;
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);   /* shortcuts' icons come through IShellLink */
-    SetProcessDPIAware();
+    {
+        /* per-monitor v2: Start sizes itself by the display scale, a new one
+         * too (apply_scale) -- aware of the system DPI only, Wine would also
+         * scale it to a new scale (wine-sg 0890): twice */
+        typedef BOOL (WINAPI *ctx_fn)(HANDLE);
+        ctx_fn set_ctx = (ctx_fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext");
+#ifndef SG_MUTANT_START_SYSTEM_AWARE
+        if (!set_ctx || !set_ctx((HANDLE)-4)) SetProcessDPIAware();
+#else
+        (void)set_ctx;
+        SetProcessDPIAware();
+#endif
+    }
     g_sys_dpi = GetDeviceCaps(screen, LOGPIXELSY);
     ReleaseDC(NULL, screen);
     if (g_sys_dpi < 96) g_sys_dpi = 96;

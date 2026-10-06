@@ -258,8 +258,7 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
             if (i >= 0 && i < (int)ARRAYSIZE(SCALES) && SCALES[i] != scale_current()) {
                 scale_set(SCALES[i]);
-                st_status(L"Some apps won't respond to scaling changes until you close and open them again, "
-                          L"or sign out.");
+                st_status(L"Some apps won't respond to scaling changes until you close and open them again.");
             }
         }
         return TRUE;
@@ -341,11 +340,25 @@ int scale_current(void)
 static void scale_write(int dpi)
 {
     DWORD_PTR r;
+    WCHAR args[32];
+    BOOL ok;
+    char *out;
     reg_set_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", dpi);
 #ifndef SG_MUTANT_SCALE_NO_BROADCAST
+    /* every window: Wine lays the running programs out at the new scale
+     * as it delivers this (wine-sg 0890), the taskbar and Start follow */
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"WindowMetrics", SMTO_ABORTIFHUNG, 2000, &r);
 #else
     (void)r;
+#endif
+#ifndef SG_MUTANT_SCALE_LINUX_NOT_TOLD
+    /* and the Linux programs, while they run: sg-session's sg-display-scale
+     * (the session's XSETTINGS manager: GTK, Qt, the pointer) */
+    _snwprintf(args, ARRAYSIZE(args), L"display-scale %d", MulDiv(dpi, 100, 96));
+    args[ARRAYSIZE(args) - 1] = 0;
+    if ((out = ctl_run(args, &ok, NULL, 0, 3000))) free(out);
+#else
+    (void)args; (void)ok; (void)out;
 #endif
 }
 

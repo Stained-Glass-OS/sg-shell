@@ -1,3 +1,17 @@
+sg-shell (0.1.0-131) unstable; urgency=medium
+
+  * A new display scale while the session runs (David 2026-10-05: "it'd be
+    nice if we could do so while logged in without having to restart the
+    session"): Settings > Display > Scale tells the Linux side too
+    (sg-settingsctl display-scale: GTK, Qt and the pointer follow at
+    once), after Wine lays the Windows programs out at it (wine-sg 0890).
+    Start is per-monitor aware: it sizes itself by the scale, so Wine no
+    longer scales it a second time. The note under the list no longer says
+    to sign out. Test: test/hidpi-check.sh part 6 (mutants
+    SG_MUTANT_SCALE_LINUX_NOT_TOLD, SG_MUTANT_START_SYSTEM_AWARE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 21:00:00 -0700
+
 sg-shell (0.1.0-130) unstable; urgency=medium
 
   * SG Store says when an administrator's consent was not given: an
