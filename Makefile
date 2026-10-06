@@ -303,6 +303,7 @@ lint:
 
 # The gate renders each panel headlessly and checks it docks and paints.
 test: build
+	@sh test/icon-sizes-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/render-check.sh
 	@sh test/start-check.sh
 	@sh test/taskbar-pins-check.sh
@@ -344,6 +345,11 @@ test: build
 .PHONY: test-battery
 test-battery: build
 	@sh test/battery-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
+# Every icon the build draws has every frame size (tools/sgicon.py).
+.PHONY: test-icon-sizes
+test-icon-sizes:
+	@sh test/icon-sizes-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
 # The taskbar's volume icon (sg-volume), against a stand-in sg-settingsctl.
 # The shell's icon font (caption buttons of Windows 10/11-era programs).

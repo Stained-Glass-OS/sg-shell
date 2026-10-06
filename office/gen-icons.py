@@ -6,7 +6,7 @@ Spreadsheets (green, a grid), Presentations (orange, a screen with a chart)
 
     gen-icons.py OUTDIR     writes OUTDIR/sg-{documents,spreadsheets,presentations}.ico
                             (icon 1: the program, icon 2: its files) and
-                            OUTDIR/png/<size>/sg-office-<kind>.png for Linux
+                            OUTDIR/png/<size>/apps/sg-office-<kind>.png for Linux (16-512 px)
 
 Copyright (C) 2026 Stained Glass OS contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -15,6 +15,9 @@ import os
 import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024   # drawn at 4x the largest size, then reduced (anti-aliasing)
 KINDS = {
@@ -116,19 +119,13 @@ def file_icon(kind):
 
 def main(out):
     os.makedirs(out, exist_ok=True)
-    sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]
     for kind in KINDS:
         app, doc = app_icon(kind), file_icon(kind)
-        # two icons in one .ico is not what PIL writes: the program's icon file
+        # two icons in one .ico is not what we write: the program's icon file
         # holds the program; its files' icon is a second .ico, bound as icon 2 by the .rc
-        app.resize((256, 256), Image.LANCZOS).save(os.path.join(out, "sg-%s.ico" % kind), format="ICO",
-                                                   sizes=[(s, s) for s in sizes])
-        doc.resize((256, 256), Image.LANCZOS).save(os.path.join(out, "sg-%s-file.ico" % kind), format="ICO",
-                                                   sizes=[(s, s) for s in sizes])
-        for s in (16, 24, 32, 48, 64, 128, 256):
-            d = os.path.join(out, "png", "%dx%d" % (s, s))
-            os.makedirs(d, exist_ok=True)
-            app.resize((s, s), Image.LANCZOS).save(os.path.join(d, "sg-office-%s.png" % kind))
+        sgicon.write_ico(os.path.join(out, "sg-%s.ico" % kind), app)
+        sgicon.write_ico(os.path.join(out, "sg-%s-file.ico" % kind), doc)
+        sgicon.write_hicolor(os.path.join(out, "png"), "sg-office-%s" % kind, app)
     # a sheet of them all, for looking at
     sheet = Image.new("RGBA", (6 * 140, 150), (240, 240, 240, 255))
     for i, kind in enumerate(KINDS):

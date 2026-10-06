@@ -7,9 +7,13 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024
 
@@ -39,9 +43,7 @@ def draw():
 
 
 def main():
-    big = draw()
-    sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]
-    big.resize((256, 256), Image.LANCZOS).save(sys.argv[1], format="ICO", sizes=[(s, s) for s in sizes])
+    sgicon.write_ico(sys.argv[1], draw())
 
 
 if __name__ == "__main__":

@@ -4,8 +4,13 @@ hands. Writes an .ico (16-256 px). Our own drawing -- no borrowed artwork.
 Copyright (C) 2026 Stained Glass OS contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
+import os
 import sys
+
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024
 img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -16,4 +21,4 @@ d.ellipse((250, 250, S - 250, S - 250), fill=(112, 48, 192, 255))
 d.line([(512, 512), (512, 330)], fill=(255, 255, 255, 255), width=56)
 d.line([(512, 512), (640, 600)], fill=(255, 255, 255, 255), width=56)
 d.ellipse((480, 480, 544, 544), fill=(255, 255, 255, 255))
-img.save(sys.argv[1], sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)])
+sgicon.write_ico(sys.argv[1], img)

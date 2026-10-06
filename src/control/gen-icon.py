@@ -9,8 +9,13 @@ path given. Our own drawing -- no borrowed artwork.
 Copyright (C) 2026 Stained Glass OS contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
+import os
 import sys
+
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024
 PURPLE = (112, 48, 192, 255)
@@ -37,8 +42,5 @@ def draw(small):
     return img
 
 
-big, little = draw(False), draw(True)
-# each size from the big drawing, smoothly
-sizes = [16, 20, 24, 32, 40, 48, 64, 96, 256]
-frames = [(little if n <= 24 else big).resize((n, n), Image.LANCZOS) for n in sizes]
-frames[-1].save(sys.argv[1], sizes=[(n, n) for n in sizes], append_images=frames[:-1])
+# 24 px and under: the simpler drawing, two thick sliders
+sgicon.write_ico(sys.argv[1], draw(False), small=lambda n: draw(True) if n <= 24 else None)

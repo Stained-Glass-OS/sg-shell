@@ -4,8 +4,13 @@ a cursor bar. Writes an .ico (16-256 px). Our own drawing -- no borrowed
 artwork. Copyright (C) 2026 Stained Glass OS contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
+import os
 import sys
+
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024
 img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -15,4 +20,4 @@ d.rounded_rectangle((64, 128, S - 64, 290), radius=110, fill=(58, 50, 78, 255))
 d.rectangle((64, 220, S - 64, 290), fill=(58, 50, 78, 255))
 d.line([(230, 440), (400, 560), (230, 680)], fill=(155, 108, 240, 255), width=70, joint="curve")
 d.rounded_rectangle((470, 640, 760, 700), radius=20, fill=(232, 228, 240, 255))
-img.save(sys.argv[1], sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)])
+sgicon.write_ico(sys.argv[1], img)

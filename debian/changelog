@@ -1,3 +1,20 @@
+sg-shell (0.1.0-136) unstable; urgency=medium
+
+  * Every icon we draw has every frame programs ask for at 100-250%
+    display scale: 16, 20, 24, 32, 40, 48, 64, 96, 128 and 256 px (the
+    256 one PNG), each drawn afresh at four times its size and reduced
+    (tools/sgicon.py, used by every icon generator; sizes up to 24 px are
+    sharpened a little). Before, most had 16, 24, 32, 48, 64 and 256 only,
+    so 20, 40 and 96 px (125%, 250% and large icons) were stretched.
+  * The administrative consoles' pictures come at 16, 20, 24, 32 and
+    40 px; a console takes the strip for its display scale (125%: 20,
+    150%: 24) instead of 16 px pictures (or 32 at 150%).
+  * SG Office's Linux icons are in hicolor at 16-512 px.
+  * Test: test/icon-sizes-check.sh (mutant SG_MUTANT_ICON_SIZES=1),
+    test/compmgmt-check.sh (mutant SG_MUTANT_MMC_ONE_STRIP).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 10:12:23 -0700
+
 sg-shell (0.1.0-135) unstable; urgency=medium
 
   * Tests: scratch-home.sh gives every gate a runtime directory of its own

@@ -7,9 +7,13 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 N = 1024  # drawn large, reduced with a good filter
 img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
@@ -30,5 +34,4 @@ d.line(S(62, 2, 34, 32), fill=(214, 160, 90, 255), width=int(5 * s))
 d.polygon(S(36, 28, 40, 32, 30, 44, 20, 48, 26, 38), fill=(60, 40, 90, 255))
 d.polygon(S(20, 48, 26, 38, 30, 44), fill=(112, 48, 192, 255))
 
-sizes = [16, 24, 32, 48, 64, 256]
-img.resize((256, 256), Image.LANCZOS).save(sys.argv[1], sizes=[(z, z) for z in sizes])
+sgicon.write_ico(sys.argv[1], img)

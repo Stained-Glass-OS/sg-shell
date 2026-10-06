@@ -8,9 +8,13 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 PURPLE = (112, 48, 192, 255)
 GREY = (150, 150, 160, 255)
@@ -38,15 +42,15 @@ def page(d, u, x0, y0, w, h):
 
 
 def viewer(size):
-    s = 4 * size
+    s = size                          # sgicon draws each frame at 4x and reduces it
     u = s / 16.0
     im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     page(ImageDraw.Draw(im), u, 2.5, 1, 11, 14)
-    return im.resize((size, size), Image.LANCZOS)
+    return im
 
 
 def folder(size):
-    s = 4 * size
+    s = size                          # sgicon draws each frame at 4x and reduces it
     u = s / 16.0
     im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
@@ -54,10 +58,8 @@ def folder(size):
     d.rounded_rectangle([0.5 * u, 4.5 * u, 15.5 * u, 14.5 * u], radius=1 * u, fill=FOLDER_DARK)
     page(d, u, 5, 1.5, 8, 10)
     d.rounded_rectangle([0.5 * u, 7 * u, 15.5 * u, 14.5 * u], radius=1 * u, fill=FOLDER)
-    return im.resize((size, size), Image.LANCZOS)
+    return im
 
 
-sizes = [16, 24, 32, 48, 64, 256]
 for fn, out in ((viewer, sys.argv[1]), (folder, sys.argv[2])):
-    big = fn(256)
-    big.save(out, format="ICO", sizes=[(n, n) for n in sizes], append_images=[fn(n) for n in sizes[:-1]])
+    sgicon.write_ico(out, fn)

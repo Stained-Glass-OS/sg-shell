@@ -72,7 +72,7 @@ PY
 # the icons as image files (SG Store's card points at the 256 px one)
 I="$T/icons"; "$PY" "$HERE/office/gen-icons.py" "$I" >/dev/null 2>&1
 for k in documents spreadsheets presentations; do
-    f="$I/png/256x256/sg-office-$k.png"
+    f="$I/png/256x256/apps/sg-office-$k.png"
     [ "$(head -c 8 "$f" 2>/dev/null | od -An -tx1 | tr -d ' ')" = 89504e470d0a1a0a ] || fail "no 256 px icon image for $k"
 done
 # debian/rules' own lines for them, run against the icons just made

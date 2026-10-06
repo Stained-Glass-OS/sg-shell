@@ -7,9 +7,13 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 N = 1024
 img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
@@ -29,4 +33,4 @@ ImageDraw.Draw(glass).polygon([(64, 64 + 200), (64 + 200, 64), (N - 64, 64), (N 
 img = Image.alpha_composite(img, Image.composite(glass, Image.new("RGBA", (N, N)), mask))
 d = ImageDraw.Draw(img)
 d.polygon([(400, 300), (400, 724), (760, 512)], fill=(255, 255, 255, 255))
-img.save(sys.argv[1], sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)])
+sgicon.write_ico(sys.argv[1], img)

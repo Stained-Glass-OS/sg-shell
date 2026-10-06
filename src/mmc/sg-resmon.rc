@@ -5,6 +5,9 @@
 1 ICON "sg-resmon.ico"
 2 BITMAP "mmc16.bmp"
 3 BITMAP "mmc32.bmp"
+4 BITMAP "mmc20.bmp"
+5 BITMAP "mmc24.bmp"
+6 BITMAP "mmc40.bmp"
 1 24 "sg-mmc.manifest"
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION 1,0,0,0

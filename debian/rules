@@ -85,6 +85,6 @@ override_dh_auto_install:
 	# /usr/share/icons/hicolor/<size>/apps/sg-office-<kind>.png
 	for d in build/office/icons/png/*; do \
 	    install -d debian/sg-office/usr/share/icons/hicolor/$$(basename $$d)/apps; \
-	    install -m0644 $$d/sg-office-*.png debian/sg-office/usr/share/icons/hicolor/$$(basename $$d)/apps/; done
+	    install -m0644 $$d/apps/sg-office-*.png debian/sg-office/usr/share/icons/hicolor/$$(basename $$d)/apps/; done
 	# Recommended per-program settings for the Compatibility tab (src/compat).
 	install -D -m0644 data/compat-presets.ini debian/sg-shell/usr/share/stained-glass/compat-presets.ini

@@ -156,5 +156,18 @@ go 'System Tools'; go 'Shared Folders'
 click $(tree_xy 'Shares')
 wait_dump '^EMPTY Samba is not installed' 10 && pass "without Samba: 'Samba is not installed'" || fail "no samba: $(d | grep -E '^(NODE|EMPTY)')"
 
+# At 150% the console's pictures are the 24 px strip, drawn for the size, not
+# 16 px ones stretched or 32 px ones too big (mutant SG_MUTANT_MMC_ONE_STRIP).
+wine taskkill /f /im sg-mmc64.exe >/dev/null 2>&1; sleep 1
+reg 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 144
+rm -f "$DUMP"
+wine "$winexe" compmgmt >/dev/null 2>&1 &
+wait_dump '^TREE' 30
+case "$(d | sed -n 's/^DPI //p')/$(d | sed -n 's/^ICONS //p')" in
+    144/24) pass "at 150% the console's pictures are drawn at 24 px" ;;
+    *) fail "at 150%: dpi $(d | sed -n 's/^DPI //p'), pictures $(d | sed -n 's/^ICONS //p') px (want 144/24)" ;;
+esac
+shot dpi150
+
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

@@ -6,8 +6,13 @@ Writes an .ico (16-256 px) to the path given.
 Copyright (C) 2026 Stained Glass OS contributors
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
+import os
 import sys
+
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 S = 1024
 img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -26,4 +31,4 @@ d.line((cx - r, cy, cx + r, cy), fill=(255, 255, 255, 255), width=w)
 d.line((cx, cy - r, cx, cy + r), fill=(255, 255, 255, 255), width=w)
 d.line((cx - r + 30, cy - 95, cx + r - 30, cy - 95), fill=(255, 255, 255, 255), width=w)
 d.line((cx - r + 30, cy + 95, cx + r - 30, cy + 95), fill=(255, 255, 255, 255), width=w)
-img.save(sys.argv[1], sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)])
+sgicon.write_ico(sys.argv[1], img)

@@ -5,14 +5,18 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import sys
+
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
+
 ACCENT = (112, 48, 192, 255)
-SS = 4
 
 def draw(size):
-    n = size * SS
+    n = size                          # sgicon draws each frame at 4x and reduces it
     im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     u = n / 32.0
@@ -25,8 +29,7 @@ def draw(size):
     pts = [(5 * u, 23 * u), (10 * u, 18 * u), (14 * u, 21 * u), (19 * u, 14 * u), (23 * u, 17 * u), (27 * u, 12 * u)]
     d.polygon(pts + [(27 * u, 25 * u), (5 * u, 25 * u)], fill=(231, 222, 246, 255))
     d.line(pts, fill=ACCENT, width=max(1, int(2 * u)), joint="curve")
-    return im.resize((size, size), Image.LANCZOS)
+    return im
 
-sizes = [16, 24, 32, 48, 64, 256]
-imgs = [draw(s) for s in sizes]
-imgs[-1].save(sys.argv[1], format="ICO", sizes=[(s, s) for s in sizes], append_images=imgs[:-1])
+
+sgicon.write_ico(sys.argv[1], draw)

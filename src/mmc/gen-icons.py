@@ -6,11 +6,20 @@
 #
 #   gen-icons.py OUT16.bmp OUT32.bmp OUT.ico [eventvwr.ico msinfo.ico resmon.ico cleanmgr.ico]
 #
+# Beside OUT16.bmp it also writes the 20, 24 and 40 px strips (mmc20.bmp ...):
+# the consoles take the strip for their display scale (125%: 20, 150%: 24,
+# 200%: 32, 250%: 40) rather than stretching 16 px pictures.
+#
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
 import struct
 import sys
+
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+import sgicon  # noqa: E402  (tools/sgicon.py: sizes, reduction, the .ico)
 
 ACCENT = (112, 48, 192, 255)
 ACCENT_LT = (200, 178, 236, 255)
@@ -367,15 +376,14 @@ def strip(size):
 
 
 def program_icon(path, names):
-    sizes = [16, 24, 32, 48, 64, 256]
-    imgs = []
-    for s in sizes:
-        im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    def art(n):
+        im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
         for nm in names:
-            layer = render(nm, s)
+            layer = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+            draw(nm, Pen(ImageDraw.Draw(layer), n))
             im.alpha_composite(layer)
-        imgs.append(im)
-    imgs[-1].save(path, format="ICO", sizes=[(s, s) for s in sizes], append_images=imgs[:-1])
+        return im
+    sgicon.write_ico(path, art)
 
 
 def check_enum():
@@ -393,6 +401,8 @@ if __name__ == "__main__":
     check_enum()
     write_bmp(sys.argv[1], strip(16))
     write_bmp(sys.argv[2], strip(32))
+    for extra_size in (20, 24, 40):
+        write_bmp(os.path.join(os.path.dirname(sys.argv[1]) or ".", "mmc%d.bmp" % extra_size), strip(extra_size))
     program_icon(sys.argv[3], ["COMPUTER"])
     extra = {4: ["EVENTS"], 5: ["SYSTEM"], 6: ["SCAN"], 7: ["DISK"]}
     for i, names in extra.items():

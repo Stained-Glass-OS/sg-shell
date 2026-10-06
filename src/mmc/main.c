@@ -919,6 +919,11 @@ void frame_dump(void)
     GetWindowRect(g_main, &r);
     fprintf(f, "TITLE %ls\nCONSOLE %ls\nWINDOW %ld %ld %ld %ld\n", g_title, g_console, r.left, r.top, r.right, r.bottom);
     fprintf(f, "ADMIN %d\nBRIDGED %d\n", is_admin(), sys_bridged());
+    {
+        int cx = 0, cy = 0;
+        ImageList_GetIconSize(g_icons, &cx, &cy);
+        fprintf(f, "DPI %d\nICONS %d\n", g_dpi, cx);
+    }
     fprintf(f, "NODE %ls\n", g_cur ? g_cur->title : L"");
     fprintf(f, "CUSTOM %d\n", g_cur ? g_cur->custom : 0);
     dump_tree(f, g_roots.child, 0);
@@ -1331,16 +1336,28 @@ static HFONT make_font(int pt, int weight)
     return CreateFontIndirectW(&lf);
 }
 
+/* The console's pictures at the display scale: strips drawn at 16, 20, 24, 32
+ * and 40 px (gen-icons.py; resources 2, 4, 5, 3, 6). The largest no bigger
+ * than 16 px at the scale is taken -- 20 at 125%, 24 at 150%, 32 at 200% --
+ * rather than 16 px pictures (soft, too small) or 32 at 150% (too big). */
 static void load_icons(void)
 {
-    HBITMAP bmp = LoadImageW(g_inst, MAKEINTRESOURCEW(2), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
-    int sz = g_dpi >= 144 ? 32 : 16;
-    g_icons = ImageList_Create(sz, sz, ILC_COLOR32, IC_COUNT, 4);
-    if (sz == 32)
+    static const struct { int size, res; } strips[] = { { 40, 6 }, { 32, 3 }, { 24, 5 }, { 20, 4 }, { 16, 2 } };
+    int want = MulDiv(16, g_dpi, 96), i, sz = 16, res = 2;
+    HBITMAP bmp;
+
+#ifdef SG_MUTANT_MMC_ONE_STRIP
+    want = g_dpi >= 144 ? 32 : 16;
+#endif
+    for (i = 0; i < (int)(sizeof(strips) / sizeof(strips[0])); i++)
+        if (strips[i].size <= want) { sz = strips[i].size; res = strips[i].res; break; }
+    bmp = LoadImageW(g_inst, MAKEINTRESOURCEW(res), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+    if (!bmp && res != 2)
     {
-        HBITMAP big = LoadImageW(g_inst, MAKEINTRESOURCEW(3), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
-        if (big) { DeleteObject(bmp); bmp = big; }
+        sz = 16;
+        bmp = LoadImageW(g_inst, MAKEINTRESOURCEW(2), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
     }
+    g_icons = ImageList_Create(sz, sz, ILC_COLOR32, IC_COUNT, 4);
     if (bmp) ImageList_Add(g_icons, bmp, NULL);
     DeleteObject(bmp);
     g_icons32 = ImageList_Create(32, 32, ILC_COLOR32, IC_COUNT, 4);
