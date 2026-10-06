@@ -556,27 +556,42 @@ static int do_user_type(const WCHAR *name)
     return 0;
 }
 
-static int do_user_password(const WCHAR *name)
+/* A person's own password (own: "Change your password") is changed with the
+ * current one, as on Windows: sg-admind's user-password-own, whose helper
+ * also re-encrypts their keyring (the saved passwords of VPN clients,
+ * browsers, mail) so it still opens when they sign in. An administrator
+ * resetting someone else's password has no current one to give, and the
+ * keyring then stays on the old password -- Windows likewise loses saved
+ * passwords on a reset, and says so. */
+static int do_user_password(const WCHAR *name, BOOL own)
 {
-    WCHAR pw[257] = L"", pw2[257] = L"", title[128], err[256] = L"", msg[512];
-    _snwprintf(title, ARRAYSIZE(title), L"Change %ls's password", name);
+    WCHAR cur[257] = L"", pw[257] = L"", pw2[257] = L"", title[128], err[256] = L"", msg[512];
+    _snwprintf(title, ARRAYSIZE(title), own ? L"Change your password" : L"Change %ls's password", name);
     for (;;) {
         struct form_field f[] = {
+            { L"Current password:", cur, ARRAYSIZE(cur), FF_PASSWORD },
             { L"New password:", pw, ARRAYSIZE(pw), FF_PASSWORD },
             { L"Confirm new password:", pw2, ARRAYSIZE(pw2), FF_PASSWORD },
         };
         BOOL ok;
-        if (!run_form(NULL, title, err[0] ? err : L"The new password takes effect immediately.", f, ARRAYSIZE(f), L"Change Password", TRUE)) break;
+        const WCHAR *intro = err[0] ? err : own ? L"The new password takes effect immediately. Your saved passwords stay available."
+            : L"The new password takes effect immediately. If you reset someone's password, the passwords they saved "
+              L"(VPN, browser, mail) stay locked with their old one until they enter it.";
+        if (!run_form(NULL, title, intro, own ? f : f + 1, own ? 3 : 2, L"Change Password", TRUE)) break;
+        if (own && !cur[0]) { lstrcpyW(err, L"Type your current password."); continue; }
         if (!pw[0]) { lstrcpyW(err, L"Type a new password."); continue; }
         if (lstrcmpW(pw, pw2)) { lstrcpyW(err, L"The passwords do not match."); pw[0] = pw2[0] = 0; continue; }
-        {
+        if (own) {
+            const WCHAR *req[] = { L"user-password-own", name, cur, pw };
+            ok = admin_request(req, 4, msg, ARRAYSIZE(msg), 90000);
+        } else {
             const WCHAR *req[] = { L"user-password", name, pw };
             ok = admin_request(req, 3, msg, ARRAYSIZE(msg), 60000);
         }
-        if (!ok) { lstrcpynW(err, msg, ARRAYSIZE(err)); pw[0] = pw2[0] = 0; continue; }
+        if (!ok) { lstrcpynW(err, msg, ARRAYSIZE(err)); cur[0] = pw[0] = pw2[0] = 0; continue; }
         break;
     }
-    SecureZeroMemory(pw, sizeof(pw)); SecureZeroMemory(pw2, sizeof(pw2));
+    SecureZeroMemory(cur, sizeof(cur)); SecureZeroMemory(pw, sizeof(pw)); SecureZeroMemory(pw2, sizeof(pw2));
     return 0;
 }
 
@@ -881,7 +896,8 @@ int admin_main(int argc, WCHAR **argv)
     if (!lstrcmpW(argv[0], L"rename-pc")) return do_rename_pc();
     if (!lstrcmpW(argv[0], L"user-add")) return do_user_add();
     if (!lstrcmpW(argv[0], L"user-type") && argc > 1) return do_user_type(argv[1]);
-    if (!lstrcmpW(argv[0], L"user-password") && argc > 1) return do_user_password(argv[1]);
+    if (!lstrcmpW(argv[0], L"user-password") && argc > 1) return do_user_password(argv[1], FALSE);
+    if (!lstrcmpW(argv[0], L"user-password-own") && argc > 1) return do_user_password(argv[1], TRUE);
     if (!lstrcmpW(argv[0], L"user-remove") && argc > 1) return do_user_remove(argv[1]);
     if (!lstrcmpW(argv[0], L"timezone")) return do_timezone();
     if (!lstrcmpW(argv[0], L"update-check")) return do_update_check();
@@ -921,24 +937,31 @@ int admin_do(int argc, WCHAR **argv)
 {
     static const WCHAR *const secret[] = { L"join-domain", L"user-add", L"user-password" };
     const WCHAR *fields[8];
-    WCHAR pw[257] = L"", msg[512];
-    int n = 0, i;
-    BOOL ok, needs_pw = FALSE;
-    if (argc < 1 || argc > 7) return 2;
-    for (i = 0; i < (int)ARRAYSIZE(secret); i++) if (!lstrcmpW(argv[0], secret[i])) needs_pw = TRUE;
+    WCHAR pw[2][257] = { L"", L"" }, msg[512];
+    int n = 0, i, npw = 0;
+    BOOL ok;
+    if (argc < 1 || argc > 6) return 2;
+    for (i = 0; i < (int)ARRAYSIZE(secret); i++) if (!lstrcmpW(argv[0], secret[i])) npw = 1;
+    /* user-password-own: the current password, then the new, one per line */
+    if (!lstrcmpW(argv[0], L"user-password-own")) npw = 2;
     for (i = 0; i < argc; i++) fields[n++] = argv[i];
-    if (needs_pw) {
-        char buf[512];
+    if (npw) {
+        char buf[1100], *line = buf, *nl;
         DWORD got = 0;
-        char *nl;
         ReadFile(GetStdHandle(STD_INPUT_HANDLE), buf, sizeof(buf) - 1, &got, NULL);
         buf[got] = 0;
-        if ((nl = strpbrk(buf, "\r\n"))) *nl = 0;
-        MultiByteToWideChar(CP_UTF8, 0, buf, -1, pw, ARRAYSIZE(pw));
+        for (i = 0; i < npw; i++) {
+            if ((nl = strpbrk(line, "\r\n"))) *nl = 0;
+            MultiByteToWideChar(CP_UTF8, 0, line, -1, pw[i], ARRAYSIZE(pw[i]));
+            fields[n++] = pw[i];
+            if (!nl) break;
+            line = nl + 1;
+            if (*line == '\n') line++;
+        }
         SecureZeroMemory(buf, sizeof(buf));
-        fields[n++] = pw;
+        while (i < npw - 1) fields[n++] = pw[++i];   /* missing lines: empty */
     }
-    ok = admin_request(fields, n, msg, ARRAYSIZE(msg), !lstrcmpW(argv[0], L"join-domain") ? 11 * 60 * 1000 : 60000);
+    ok = admin_request(fields, n, msg, ARRAYSIZE(msg), !lstrcmpW(argv[0], L"join-domain") ? 11 * 60 * 1000 : 90000);
     SecureZeroMemory(pw, sizeof(pw));
     wprintf(ok ? L"OK%ls%ls\n" : L"FAILED %ls%ls\n", ok && msg[0] ? L" " : L"", msg);
     fflush(stdout);

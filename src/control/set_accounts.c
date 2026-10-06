@@ -110,7 +110,7 @@ BOOL set_cmd_accounts(int id, int code, HWND ctl)
         return TRUE;
     }
     switch (id) {
-    case CMD_PASSWORD: acc_elevate(L"user-password", name); return TRUE;
+    case CMD_PASSWORD: acc_elevate(L"user-password-own", name); return TRUE;
     case CMD_TYPE_ME: acc_elevate(L"user-type", name); return TRUE;
     case CMD_ADD: acc_elevate(L"user-add", NULL); return TRUE;
     case CMD_CHTYPE: if (g_pick_name[0]) acc_elevate(L"user-type", g_pick_name); return TRUE;

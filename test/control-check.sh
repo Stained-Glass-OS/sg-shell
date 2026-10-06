@@ -198,10 +198,12 @@ if command -v python3 >/dev/null; then
     for tool in hostnamectl useradd chpasswd gpasswd userdel timedatectl systemctl; do
         printf '#!/bin/sh\nin=$(cat 2>/dev/null)\nprintf "%%s %%s | %%s\\n" "%s" "$*" "$in" >> "%s"\n' "$tool" "$CALLS" > "$B/$tool"
     done
-    printf '#!/bin/sh\n[ "$1" = group ] && { echo "$2:x:1:"; exit 0; }\nexit 2\n' > "$B/getent"
+    printf '#!/bin/sh\n[ "$1" = group ] && { echo "$2:x:1:"; exit 0; }\n[ "$1 $2" = "passwd bob" ] && { echo "bob:x:1001:1001:Bob:/home/bob:/bin/bash"; exit 0; }\nexit 2\n' > "$B/getent"
+    # sg-password-change (sg-session): records its NUL-separated stdin
+    printf '#!/bin/sh\nprintf "sg-password-change | %%s\\n" "$(tr "\\\\0" "|")" >> "%s"\necho OK\n' "$CALLS" > "$B/sg-password-change"
     printf '#!/bin/sh\nexit 1\n' > "$B/loginctl"
     chmod +x "$B"/*
-    export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_HOSTS="$T/hosts"
+    export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_PWCHANGE="$B/sg-password-change"
     : > "$T/hosts"
     # what sg-admind.path does: run it when a request appears
     ( while :; do for f in "$S"/requests/*.req; do [ -e "$f" ] && python3 "$ADMIND" 2>>"$T/admind.log"; break; done; sleep 0.2; done ) &
@@ -213,7 +215,12 @@ if command -v python3 >/dev/null; then
     r=$(printf 'Secr3t pw\n' | wine "$CTL" /admin-do user-add frank 'Frank Test' administrator 2>/dev/null | tr -d '\r')
     [ "$r" = OK ] && grep -q '^chpasswd  | frank:Secr3t pw$' "$CALLS" && grep -q -- '-G sgwine,sg-admins,sudo frank' "$CALLS" \
         && pass "Elevated: an account is created, the password passed on stdin, never argv" || fail "user-add: $r"
-    ! grep -rq 'Secr3t' "$S" "$T/admind.log" 2>/dev/null && pass "Elevated: no password is left in the spool or the log" || fail "password left behind"
+    # changing one's own password: the current and the new, one per line on stdin
+    r=$(printf 'Old pw 1\nNew pw 2\n' | wine "$CTL" /admin-do user-password-own bob 2>/dev/null | tr -d '\r')
+    [ "$r" = OK ] && grep -q '^sg-password-change | bob|Old pw 1|New pw 2|$' "$CALLS" \
+        && pass "Elevated: your own password changes with the current one, through sg-password-change (the keyring follows)" \
+        || fail "user-password-own: $r / $(grep sg-password-change "$CALLS")"
+    ! grep -rq 'Secr3t\|Old pw 1\|New pw 2' "$S" "$T/admind.log" 2>/dev/null && pass "Elevated: no password is left in the spool or the log" || fail "password left behind"
     r=$(SG_ADMIN_SPOOL="$T/nowhere" wine "$CTL" /admin-do update-check 2>/dev/null </dev/null | tr -d '\r')
     [ "${r%% *}" = FAILED ] && pass "Elevated: with no spool (not elevated), the request fails at once" || fail "no spool: $r"
 fi

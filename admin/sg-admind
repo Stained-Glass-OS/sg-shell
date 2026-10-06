@@ -33,7 +33,11 @@
 #   join-domain REALM USER DC PASSWORD        (DC may be empty)
 #   user-add NAME FULLNAME standard|administrator PASSWORD
 #   user-type NAME standard|administrator
-#   user-password NAME PASSWORD
+#   user-password NAME PASSWORD        an administrator's reset (chpasswd)
+#   user-password-own NAME CURRENT PASSWORD
+#                            a person changing their own password: the
+#                            current one is checked and their keyring
+#                            re-encrypted (sg-password-change, sg-session)
 #   user-remove NAME keep|delete
 #   timezone AREA/CITY                 (and "automatically" off)
 #   timezone-auto on|off                Set time zone automatically (sg-timezone-auto)
@@ -328,6 +332,42 @@ def op_user_password(args):
     local_account(name)
     must(["chpasswd"], "The password could not be changed", stdin="%s:%s\n" % (name, password(pw)))
     return []
+
+
+PWCHANGE = "/usr/libexec/stained-glass/sg-password-change"
+if TEST:
+    PWCHANGE = os.environ.get("SG_ADMIN_PWCHANGE", PWCHANGE)
+
+
+def op_user_password_own(args):
+    """A person changes their own password, giving the current one.
+
+    sg-password-change (sg-session) does it as passwd(1) would for them:
+    PAM checks the current password and the password rules, and
+    pam_gnome_keyring re-encrypts the keyring their programs keep passwords
+    in, so it still opens at sign-in. A reset (user-password, chpasswd)
+    cannot: there is no current password to open the keyring with."""
+    name, current, new = args
+    account_name(name)
+    local_account(name)
+    password(new)
+    if not current or len(current) > 256 or any(c in current for c in "\n\r\0"):
+        raise Refused("The current password is incorrect.")
+    if not os.access(PWCHANGE, os.X_OK):
+        # an sg-session without it: the reset, as before (the keyring stays
+        # on the old password)
+        log("%s missing: resetting the password instead" % PWCHANGE)
+        return op_user_password([name, new])
+    r = run([PWCHANGE], stdin="%s\0%s\0%s\0" % (name, current, new), timeout=90)
+    out = (r.stdout or "").strip().splitlines()
+    first = out[0] if out else ""
+    if r.returncode == 0 and first == "OK":
+        return []
+    if first == "FAIL current":
+        raise Refused("The current password is incorrect.")
+    why = first[5:] if first.startswith("FAIL ") else "(no answer)"
+    log("sg-password-change failed (%d): %s" % (r.returncode, why))
+    raise Refused("The password could not be changed: %s" % why)
 
 
 def op_user_remove(args):
@@ -1229,6 +1269,7 @@ OPS = {
     "user-add": (op_user_add, 4),
     "user-type": (op_user_type, 2),
     "user-password": (op_user_password, 2),
+    "user-password-own": (op_user_password_own, 3),
     "user-remove": (op_user_remove, 2),
     "timezone": (op_timezone, 1),
     "timezone-auto": (op_timezone_auto, 1),
@@ -1248,7 +1289,8 @@ OPS = {
     "apt-remove": (op_apt_remove, 1),
     "deb-install": (op_deb_install, 3),
 }
-SECRET = {"join-domain", "user-add", "user-password"}   # last field is a password
+# how many of the last fields are passwords (never logged)
+SECRET = {"join-domain": 1, "user-add": 1, "user-password": 1, "user-password-own": 2}
 
 
 def system_uid():
@@ -1313,7 +1355,7 @@ def handle(fields):
     fn, n = OPS[verb]
     if len(args) != n:
         raise Refused("Malformed request.")
-    shown = args[:-1] if verb in SECRET else args
+    shown = args[:-SECRET[verb]] if verb in SECRET else args
     log("%s %s" % (verb, " ".join(repr(a) for a in shown)))
     return fn(args)
 

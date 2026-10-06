@@ -114,7 +114,7 @@ BOOL cmd_users(int id, int code, HWND ctl)
     current_user(name, ARRAYSIZE(name), dom, ARRAYSIZE(dom));
     switch (id) {
     case CMD_MY_TYPE: acc_elevate(L"user-type", name); return TRUE;
-    case CMD_MY_PASSWORD: acc_elevate(L"user-password", name); return TRUE;
+    case CMD_MY_PASSWORD: acc_elevate(L"user-password-own", name); return TRUE;
     case CMD_ADD: acc_elevate(L"user-add", NULL); return TRUE;
     }
     return FALSE;

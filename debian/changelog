@@ -1,5 +1,27 @@
 sg-shell (0.1.0-147) unstable; urgency=medium
 
+  * Changing your own password (Control Panel "Change your password",
+    Settings > Sign-in options > Change) asks for the current password, as
+    on Windows, and goes to sg-admind's new user-password-own: sg-session's
+    sg-password-change checks it through PAM and re-encrypts the session
+    keyring (Eddie's, browsers' and mail programs' saved passwords) with
+    the new one, so it still opens at the next sign-in. It used to be a
+    reset (chpasswd), which left the keyring on the old password. A wrong
+    current password is refused as such; PAM's password rules are shown.
+    Without sg-password-change (an older sg-session) it falls back to the
+    reset. Resetting someone else's password says their saved passwords
+    stay locked with the old one.
+  * sg-admind never logs either password of user-password-own (SECRET now
+    counts the trailing password fields).
+  * Gates: admind-check (own password through sg-password-change, wrong
+    current, PAM's reason, root refused, fallback; MUTANT NOKEYRING, a reset
+    instead, caught); control-check (/admin-do user-password-own, current
+    and new on stdin, nothing left in the spool or log).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 14:52:02 -0700
+
+sg-shell (0.1.0-147) unstable; urgency=medium
+
   * Our programs follow a new display scale while they run, crisp (David
     2026-10-06: "top of the line DPI scaling across the board"): per-monitor
     aware (v2) and laid out again on WM_DPICHANGED -- fonts, child

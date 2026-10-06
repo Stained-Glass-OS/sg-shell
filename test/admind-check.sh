@@ -137,6 +137,44 @@ grep -q '^userdel -r bob ' "$CALLS" && pass "... or deleting them" || fail "remo
 : > "$CALLS"
 r=$(ask user-password bob 'n3w pass')
 grep -q '^chpasswd  | bob:n3w pass$' "$CALLS" && pass "resets a password through chpasswd" || fail "password: $r"
+# a person's own password: sg-password-change (a stand-in that records its
+# NUL-separated stdin and answers as the real one; "wrong" is the wrong
+# current password) -- not chpasswd, which cannot re-encrypt the keyring
+cat > "$B/sg-password-change" <<EOF
+#!/bin/sh
+in=\$(tr '\\0' '|')
+printf 'sg-password-change | %s\n' "\$in" >> "$CALLS"
+case "\$in" in *"|wrong|"*) echo "FAIL current"; exit 1;; *"|short|"*) echo "FAIL You must choose a longer password."; exit 1;; esac
+echo OK
+EOF
+chmod +x "$B/sg-password-change"
+export SG_ADMIN_PWCHANGE="$B/sg-password-change"
+: > "$CALLS"; : > "$T/log"
+r=$(ask user-password-own bob 'old pw1' 'n3w pw2')
+[ "$(first "$r")" = OK ] && grep -q '^sg-password-change | bob|old pw1|n3w pw2|$' "$CALLS" && ! grep -q '^chpasswd' "$CALLS" \
+    && pass "changes a person's own password through sg-password-change (current and new), not chpasswd" || fail "own password: $r / $(cat "$CALLS")"
+grep -q 'old pw1\|n3w pw2' "$T/log" && fail "a password of user-password-own reached the log" || pass "... neither password is logged"
+r=$(ask user-password-own bob wrong 'n3w pw2')
+[ "$(first "$r")" = "FAILED The current password is incorrect." ] && pass "a wrong current password is refused as such" || fail "wrong current: $r"
+r=$(ask user-password-own bob 'old pw1' short)
+case "$(first "$r")" in "FAILED "*"longer password"*) pass "PAM's reason for refusing a new password is shown";; *) fail "refused new: $r";; esac
+: > "$CALLS"
+r=$(ask user-password-own root 'old' 'new')
+case "$(first "$r")" in "FAILED "*) [ ! -s "$CALLS" ] && pass "will not change a system account's password" || fail "root reached a tool";; *) fail "own password for root: $r";; esac
+r=$(ask user-password-own bob '' 'new')
+case "$(first "$r")" in "FAILED "*) pass "an empty current password is refused";; *) fail "empty current: $r";; esac
+# an sg-session without the helper: the reset, as before
+r=$(SG_ADMIN_PWCHANGE="$T/none" ask user-password-own bob 'old pw1' 'n3w pw2')
+grep -q '^chpasswd  | bob:n3w pw2$' "$CALLS" && pass "without sg-password-change it falls back to the reset" || fail "fallback: $r / $(cat "$CALLS")"
+# MUTANT NOKEYRING: user-password-own as a plain reset (chpasswd) -- the
+# keyring would stay on the old password
+sed 's/^    "user-password-own": (op_user_password_own, 3),$/    "user-password-own": (lambda a: op_user_password([a[0], a[2]]), 3),/' "$ADMIND" > "$T/mut-nokeyring"
+grep -q 'op_user_password_own, 3' "$T/mut-nokeyring" && fail "the NOKEYRING mutant did not apply"
+: > "$CALLS"
+id=$(next_id); printf 'user-password-own\nbob\nold pw1\nn3w pw2\n' > "$S/requests/.m"; mv "$S/requests/.m" "$S/requests/$id.req"
+python3 "$T/mut-nokeyring" 2>>"$T/log"
+grep -q '^sg-password-change | bob|old pw1|n3w pw2|$' "$CALLS" && ! grep -q '^chpasswd' "$CALLS" \
+    && fail "NOKEYRING not detected" || pass "MUTANT NOKEYRING (a reset instead) is caught"
 
 # --- time ---
 : > "$CALLS"
