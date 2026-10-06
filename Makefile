@@ -391,6 +391,7 @@ test-notify: build
 	@sh test/pdf-editor-check.sh
 	@sh test/browser-check.sh
 	@sh test/store-check.sh
+	@sh test/store-busy-check.sh
 
 # SG Store: the catalogue engine (install/verify/update) against a mock winget
 # source and a stand-in installer, and the window. test/store-check.sh.

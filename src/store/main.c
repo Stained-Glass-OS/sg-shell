@@ -64,6 +64,13 @@ static int g_view[MAX_APPS], g_nview;     /* what the list shows, in order */
 static int g_view_y[MAX_APPS];
 static int g_cols = 1;                     /* the cards' columns, as last drawn */
 #define WM_ICONS (WM_APP + 1)
+#define WM_PROGRESS (WM_APP + 2)
+/* How far the install in hand is (the worker thread's progress callback):
+ * its stage (STAGE_*), bytes downloaded and the download's size (0: not
+ * known). The regression walk (2026-10-05): the Visual Basic 6 runtime's
+ * 332 MB download said only "Installing..." for minutes. */
+static volatile LONG g_prog_stage = -1;
+static volatile LONGLONG g_prog_done, g_prog_total;
 
 #define dpx(x) MulDiv((x), g_dpi, 96)
 
@@ -280,6 +287,8 @@ static void dump(void)
             dumpf(f, L"pair %ls %ls choice=%ls target=%ls\n", a->ord, g_apps[a->alt].ord,
                   a->use_alt ? L"linux" : L"windows", g_apps[card_target(i)].ord);
         if (a->queued) dumpf(f, L"queued %ls %ls\n", a->ord, g_qremove[i] ? L"remove" : L"install");
+        if (i == g_busy && a->state == AST_INSTALLING && g_prog_stage == STAGE_DOWNLOAD)
+            dumpf(f, L"progress %ls download %lld %lld\n", a->ord, (LONGLONG)g_prog_done, (LONGLONG)g_prog_total);
         if (a->checked) dumpf(f, L"checked %ls\n", a->ord);
     }
     dumpf(f, L"icons %d\n", icons_ready());
@@ -406,7 +415,33 @@ static void redetect(void)
 
 static void progress_cb(void *ctx, int stage, ULONGLONG done, ULONGLONG total)
 {
+#ifndef SG_MUTANT_NO_PROGRESS
+    static DWORD last;
+    DWORD now = GetTickCount();
+    (void)ctx;
+    InterlockedExchange64(&g_prog_done, (LONGLONG)done);
+    InterlockedExchange64(&g_prog_total, (LONGLONG)total);
+    InterlockedExchange(&g_prog_stage, stage);
+    /* the window repaints from its own thread, four times a second at most */
+    if (now - last < 250 && done != total) return;
+    last = now;
+    if (g_wnd) PostMessageW(g_wnd, WM_PROGRESS, 0, 0);
+#else
     (void)ctx; (void)stage; (void)done; (void)total;
+#endif
+}
+
+/* what the card and the page say while i is installed: how far its
+ * download is, when it is downloading */
+static const WCHAR *busy_text(int i, WCHAR *buf, int cch)
+{
+    LONGLONG done = g_prog_done, total = g_prog_total;
+    if (i != g_busy || g_apps[i].state != AST_INSTALLING || g_prog_stage != STAGE_DOWNLOAD) return L"Installing...";
+    if (total > 0)
+        swprintf(buf, cch, L"Downloading... %d%% (%lld of %lld MB)", (int)(done * 100 / total),
+                 done >> 20, (total + (1 << 20) - 1) >> 20);
+    else swprintf(buf, cch, L"Downloading... %lld MB", done >> 20);
+    return buf;
 }
 
 /* one turn: install (or update) a, or remove it */
@@ -416,6 +451,8 @@ static void run_one(int i, BOOL remove)
     WCHAR err[512];
     int rc;
     a->state = remove ? AST_REMOVING : AST_INSTALLING;
+    InterlockedExchange(&g_prog_stage, -1);
+    g_prog_done = g_prog_total = 0;
     a->msg[0] = 0;
     a->msg_error = FALSE;
     if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
@@ -699,7 +736,12 @@ static int draw_card(HDC dc, int x, int w, int y, int idx, int client_bottom)
         if (t == g_busy && s->state == AST_REMOVING) {
             text(dc, g_f_body, C_SUB, bt, L"Uninstalling...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else if (t == g_busy || s->state == AST_INSTALLING) {
-            text(dc, g_f_body, C_SUB, bt, L"Installing...", DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            WCHAR how[96];
+            const WCHAR *what = busy_text(t, how, ARRAYSIZE(how));
+            if (what == how) {   /* too long for the button's place: the status line's, beside it */
+                RECT wide = { st.left - dpx(120), bt.top, bt.right, bt.bottom };
+                text(dc, g_f_small, C_SUB, wide, what, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+            } else text(dc, g_f_body, C_SUB, bt, what, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else if (s->queued) {
             button(dc, bt, L"Cancel", FALSE); add_list_hit(H_UNQUEUE, t, bt, client_bottom);
             text(dc, g_f_small, C_SUB, st, g_qremove[t] ? L"Waiting to uninstall" : L"Waiting to install",
@@ -876,7 +918,11 @@ static void paint_details(HDC dc, const RECT *rc)
     {
         RECT bt = { bx, y, bx + dpx(140), y + dpx(34) };
         if (t == g_busy || s->state == AST_INSTALLING || s->state == AST_REMOVING) {
-            text(dc, g_f_body, C_SUB, bt, s->state == AST_REMOVING ? L"Uninstalling..." : L"Installing...", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            WCHAR how[96];
+            RECT wide = bt;
+            wide.right = bt.left + dpx(420);
+            text(dc, g_f_body, C_SUB, wide, s->state == AST_REMOVING ? L"Uninstalling..." : busy_text(t, how, ARRAYSIZE(how)),
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         } else if (s->queued) {
             button(dc, bt, L"Cancel", FALSE); add_hit(H_UNQUEUE, t, bt);
         } else if (has_it(s)) {
@@ -1270,6 +1316,10 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_ICONS:
         InvalidateRect(hwnd, NULL, FALSE);
         if (wp) dump();
+        return 0;
+    case WM_PROGRESS:
+        InvalidateRect(hwnd, NULL, FALSE);
+        dump();
         return 0;
     case WM_LBUTTONUP: {
         int verb, idx;

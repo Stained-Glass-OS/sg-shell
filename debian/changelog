@@ -1,3 +1,17 @@
+sg-shell (0.1.0-129) unstable; urgency=medium
+
+  * SG Store says how far a download is: "Downloading... 45% (150 of 332
+    MB)" on the app's card and page while an installer downloads (the
+    Visual Basic 6 runtime's 332 MB took minutes behind a bare
+    "Installing..." in the regression walk, 2026-10-05). The download
+    stays on the install's own thread; the window repaints from its own,
+    at most four times a second. Test: test/store-busy-check.sh (a 96 MB
+    download served slowly: the window answers every 100 ms round trip at
+    once, the progress grows, the SHA-256 check follows; mutant
+    SG_MUTANT_NO_PROGRESS).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 21:41:26 -0700
+
 sg-shell (0.1.0-128) unstable; urgency=medium
 
   * Start (the Glass look's search box): the magnifier at the search box's
