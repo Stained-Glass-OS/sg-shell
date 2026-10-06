@@ -1,3 +1,20 @@
+sg-shell (0.1.0-139) unstable; urgency=medium
+
+  * The touch keyboard (sg-touchkbd, TabTip.exe): a tablet's keyboard
+    across the bottom, above the taskbar, in the shell's light or dark
+    look -- letters, numbers and symbols, Shift and Caps Lock, Ctrl,
+    Backspace that repeats, arrows, a hide key. It shows itself when a
+    touch focuses a text field and no hardware keyboard is attached (a
+    Surface without its Type Cover), hides when a touch moves the focus
+    elsewhere, and never takes the focus. Its button sits in the
+    notification area on a computer with a touch screen or pen. Started at
+    sign-in (the Run key, /background). Needs wine-sg 1150 (the touch
+    stamp, SM_DIGITIZER).
+  * Gate: make test-touchkbd (test/touchkbd-check.sh; mutants
+    TOUCHKBD_NO_AUTOSHOW, TOUCHKBD_NO_KEYBOARD_CHECK).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 13:00:00 -0700
+
 sg-shell (0.1.0-138) unstable; urgency=medium
 
   * SG PDF gains the professional PDF editor's tools: Prepare Form (fields

@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the touch keyboard (sg-touchkbd, TabTip.exe). It starts
+; at sign-in in the background (the machine's Run key, as Windows' touch
+; keyboard service does) and stays only on a computer with a touch screen or a
+; pen (or with "Show touch keyboard button" on): a button in the notification
+; area, and the keyboard showing itself when a text field is touched with no
+; hardware keyboard attached. TabTip.exe through App Paths is how programs
+; show it themselves.
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run]
+"TouchKeyboard"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-touchkbd64.exe /background"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\TabTip.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-touchkbd64.exe"

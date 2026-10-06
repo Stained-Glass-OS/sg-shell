@@ -50,6 +50,8 @@ UNICODE_DATA ?= /usr/share/unicode/UnicodeData.txt
 # src/osk/, their icons drawn at build time.
 MAGNIFY_LIBS = -lshell32 -ldwmapi -lmsimg32 -lgdi32 -luser32 -ladvapi32
 OSK_LIBS     = -lwinmm -lshell32 -lgdi32 -luser32 -ladvapi32
+# The touch keyboard (sg-touchkbd, TabTip.exe): src/touchkbd/.
+TOUCHKBD_LIBS = -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32
 # The administrative consoles (sg-mmc: services.msc, eventvwr.msc, devmgmt.msc,
 # diskmgmt.msc, compmgmt.msc; the same program as sg-eventvwr for eventvwr.exe):
 # src/mmc/, pictures drawn at build time by gen-icons.py.
@@ -189,6 +191,8 @@ build:
 	@$(WINDRES64) -I src/osk -I $(BUILD) src/osk/osk.rc -O coff -o $(BUILD)/sg-osk-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-osk64.exe src/osk/main.c \
 	    $(BUILD)/sg-osk-res64.o $(OSK_LIBS) && echo "built sg-osk (64-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-touchkbd64.exe src/touchkbd/main.c \
+	    $(TOUCHKBD_LIBS) && echo "built sg-touchkbd (64-bit)"
 	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico $(BUILD)/sg-msinfo32.ico \
 	    $(BUILD)/sg-resmon.ico $(BUILD)/sg-cleanmgr.ico
 	@$(WINDRES64) -I src/mmc -I $(BUILD) src/mmc/sg-mmc.rc -O coff -o $(BUILD)/sg-mmc-res64.o
@@ -276,6 +280,19 @@ test-office: office
 
 # SG Office's programs starting SG Office's own editors, under Wine
 # (test/office-native-check.sh), and the broken builds it must fail.
+# The touch keyboard (sg-touchkbd): test/touchkbd-check.sh, and each mutant
+# build must fail it.
+.PHONY: test-touchkbd
+test-touchkbd: build
+	@sh test/touchkbd-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 for m in TOUCHKBD_NO_AUTOSHOW TOUCHKBD_NO_KEYBOARD_CHECK; do \
+	   $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_$$m -o $(BUILD)/sg-touchkbd-$$m.exe \
+	       src/touchkbd/main.c $(TOUCHKBD_LIBS) || exit 1; \
+	   SG_TOUCHKBD_EXE=$(BUILD)/sg-touchkbd-$$m.exe sh test/touchkbd-check.sh >/dev/null 2>&1; rc=$$?; \
+	   [ $$rc -eq 1 ] || { echo "touchkbd-check: the mutant $$m was not caught ($$rc)"; exit 1; }; \
+	   echo "touchkbd-check: mutant $$m caught"; \
+	 done
+
 .PHONY: test-office-native-mutants test-office-mutants
 test-office-native-mutants: office
 	@sh test/office-native-mutants.sh
@@ -394,6 +411,7 @@ test-notify: build
 	@sh test/magnify-check.sh
 	@sh test/osk-check.sh
 	@sh test/osk-layout-check.sh
+	@sh test/touchkbd-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 	@sh test/services-check.sh
 	@sh test/eventvwr-check.sh
 	@sh test/devmgmt-check.sh
