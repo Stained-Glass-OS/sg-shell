@@ -1,3 +1,16 @@
+sg-shell (0.1.0-126) unstable; urgency=medium
+
+  * Restart to finish updating: sg-restart-notice, a popup above the tray
+    (as SG Defender's notice) saying what was installed that needs a
+    restart -- read from /run/reboot-required, which a new kernel (a
+    security update, a Surface's touch and pen support) writes -- with
+    "Restart now" and "Later"; also kept in the notification centre's
+    history (opens Settings > Update). sg-session's sg-restart-notify
+    shows it once per boot. Gate: test/restart-notice-check.sh (mutant
+    SG_MUTANT_RESTART_BUTTON: Restart now does nothing).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 17:56:43 -0700
+
 sg-shell (0.1.0-125) unstable; urgency=medium
 
   * Start lists SG Mail, not Thunderbird's own entry too: Thunderbird is SG
