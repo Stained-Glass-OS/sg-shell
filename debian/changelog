@@ -1,3 +1,17 @@
+sg-shell (0.1.0-130) unstable; urgency=medium
+
+  * SG Store says when an administrator's consent was not given: an
+    unanswered (or refused) consent prompt ended as "msvbvm60.dll could not
+    be put in place (code 1)"; with wine-sg 10.0-196 (0981) ShellExecuteEx
+    then fails with ERROR_CANCELLED, as on Windows, and the store says
+    "Nothing was installed: an administrator's consent was not given." (an
+    uninstall: "... was not removed: an administrator's consent was not
+    given."). Test: test/store-consent-check.sh (a standard user, the
+    broker's client standing in and declining; mutant
+    SG_MUTANT_NOCONSENTMSG).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 05 Oct 2026 21:41:44 -0700
+
 sg-shell (0.1.0-129) unstable; urgency=medium
 
   * SG Store says how far a download is: "Downloading... 45% (150 of 332

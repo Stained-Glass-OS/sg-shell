@@ -729,7 +729,9 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) break;
     }
     if (!sei.hProcess) {
-        swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
+        if (GetLastError() == ERROR_CANCELLED)   /* the consent prompt said no, or went unanswered */
+            swprintf(err, cch, L"%ls was not removed: an administrator's consent was not given.", a->name);
+        else swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
         return 1;
     }
     WaitForSingleObject(sei.hProcess, INFINITE);

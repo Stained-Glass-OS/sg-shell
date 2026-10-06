@@ -325,7 +325,17 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
         /* an installer that must run as an administrator: ask (the consent prompt) */
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) attempt = 2;
     }
-    if (!sei.hProcess) { seterr(err, cch, L"The installer could not be started (error %lu).", GetLastError()); return FALSE; }
+    if (!sei.hProcess) {
+        DWORD e = GetLastError();
+#ifndef SG_MUTANT_NOCONSENTMSG
+        /* the consent prompt said no, or went unanswered (wine-sg 0981:
+         * ShellExecuteEx fails with ERROR_CANCELLED, as on Windows) */
+        if (e == ERROR_CANCELLED) seterr(err, cch, L"Nothing was installed: an administrator's consent was not given.");
+        else
+#endif
+        seterr(err, cch, L"The installer could not be started (error %lu).", e);
+        return FALSE;
+    }
     WaitForSingleObject(sei.hProcess, INFINITE);
     GetExitCodeProcess(sei.hProcess, code);
     CloseHandle(sei.hProcess);

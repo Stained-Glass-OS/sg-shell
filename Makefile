@@ -392,6 +392,7 @@ test-notify: build
 	@sh test/browser-check.sh
 	@sh test/store-check.sh
 	@sh test/store-busy-check.sh
+	@bash test/store-consent-check.sh || [ $$? -eq 77 ]   # 77: no second account to run it as
 
 # SG Store: the catalogue engine (install/verify/update) against a mock winget
 # source and a stand-in installer, and the window. test/store-check.sh.
