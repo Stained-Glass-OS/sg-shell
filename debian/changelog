@@ -1,3 +1,16 @@
+sg-shell (0.1.0-141) unstable; urgency=medium
+
+  * Our own programs answer to their names even when Start shows them
+    another way: a NoDisplay entry of ours (sg-*.desktop: SG Office's
+    sg-office.desktop, whose Documents, Spreadsheets... are Start's) gets
+    its App Paths names and no Start entry of its own -- Win+R sg-office
+    said "File not found" (s14 regression walk 2026-10-06). Other
+    packages' hidden entries still get nothing. Test:
+    test/linuxapps-check.sh (mutant SG_MUTANT_NODISPLAY_NO_NAME;
+    SG_LINUXAPP_EXE runs it on another build).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 10:58:53 -0700
+
 sg-shell (0.1.0-140) unstable; urgency=medium
 
   * SG Store: Ctrl+A in the search box selects the search, so what is

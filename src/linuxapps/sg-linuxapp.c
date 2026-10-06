@@ -136,6 +136,7 @@ struct app {
     char wmclass[128];          /* StartupWMClass: its windows' class */
     char exe[128];              /* Exec's program name: often its windows' class too */
     char mime[4096];            /* MimeType=: what it opens, ';'-separated */
+    BOOL name_only;             /* one of ours not shown (NoDisplay): its name only, no Start entry */
 };
 
 static struct app *g_apps;
@@ -256,13 +257,26 @@ static void add_desktop_file(const char *unix_file, const char *id)
     WCHAR w[MAX_PATH];
     char *text, v[512];
     struct app *a;
+    BOOL name_only = FALSE;
     int i;
 
     for (i = 0; i < g_napps; i++) if (!strcmp(g_apps[i].id, id)) return;   /* an earlier folder's wins */
     if (g_napps >= MAX_APPS || hidden_id(id) || !dos_path(unix_file, w, MAX_PATH)) return;
     if (!(text = read_file(w, 1 << 20, NULL))) return;
     if (!entry_value(text, "Type", v, sizeof(v)) || strcmp(v, "Application")) goto out;
-    if (is_true(text, "NoDisplay") || is_true(text, "Hidden")) goto out;
+    if (is_true(text, "Hidden")) goto out;
+    if (is_true(text, "NoDisplay")) {
+#ifndef SG_MUTANT_NODISPLAY_NO_NAME
+        /* one of our own programs that Start shows another way (SG Office's
+         * sg-office.desktop: its Documents, Spreadsheets... entries are
+         * Start's) still answers to its name -- Win+R sg-office said "File
+         * not found" (regression walk 2026-10-06) -- with no entry of its own */
+        if (strncmp(id, "sg-", 3)) goto out;
+        name_only = TRUE;
+#else
+        goto out;
+#endif
+    }
     if (entry_value(text, "OnlyShowIn", v, sizeof(v)) && v[0]) goto out;
     if (!entry_value(text, "Exec", v, sizeof(v)) || !v[0]) goto out;
     if (entry_value(text, "TryExec", v, sizeof(v)) && v[0] && !try_exec_ok(v)) goto out;
@@ -270,6 +284,7 @@ static void add_desktop_file(const char *unix_file, const char *id)
     a = &g_apps[g_napps];
     memset(a, 0, sizeof(*a));
     lstrcpynA(a->id, id, sizeof(a->id));
+    a->name_only = name_only;
     lstrcpynA(a->file, unix_file, sizeof(a->file));
     MultiByteToWideChar(CP_UTF8, 0, v, -1, a->name, ARRAYSIZE(a->name));
     a->name[ARRAYSIZE(a->name) - 1] = 0;
@@ -867,6 +882,11 @@ static int sync_apps(void)
     for (i = 0; i < g_napps; i++) {
         WCHAR name[140], lnk[MAX_PATH], args[1024], file[MAX_PATH], ico[MAX_PATH];
         BOOL dup = FALSE, has_icon;
+        if (g_apps[i].name_only) {
+            if (dos_path(g_apps[i].file, file, MAX_PATH))
+                register_app_paths(&g_apps[i], self, file, named, &nnamed, g_napps * MAX_APP_NAMES);
+            continue;
+        }
         safe_name(g_apps[i].name, name, ARRAYSIZE(name));
         if (!name[0]) continue;
         for (j = 0; j < i; j++) if (!lstrcmpiW(g_apps[j].name, g_apps[i].name)) dup = TRUE;

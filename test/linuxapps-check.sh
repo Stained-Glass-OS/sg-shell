@@ -7,7 +7,7 @@
 # Scratch HOME and prefix; the data folders are the gate's (XDG_DATA_DIRS).
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-EXE="$HERE/build/sg-linuxapp64.exe"
+EXE="${SG_LINUXAPP_EXE:-$HERE/build/sg-linuxapp64.exe}"
 WINE=${WINE:-wine}
 command -v "$WINE" >/dev/null 2>&1 || { echo "SKIP: no wine"; exit 77; }
 [ -f "$EXE" ] || { echo "SKIP: build sg-linuxapp64.exe first (make build)"; exit 77; }
@@ -233,6 +233,17 @@ if [ -x /usr/bin/gio ]; then
     [ "$(realpath "$(sed -n 1p "$T/named" 2>/dev/null)" 2>/dev/null)" = "$(realpath "$WINEPREFIX/drive_c/gate doc.txt")" ] && [ "$(sed -n 2p "$T/named" 2>/dev/null)" = 'https://example.org/?a=1&b=2' ] \
         && pass "--launch gives the app the file (its Unix path) and the URL" || fail "--launch gave: $(tr '\n' '|' < "$T/named" 2>/dev/null)"
 fi
+# one of our own programs that Start shows another way (NoDisplay: SG
+# Office's sg-office.desktop) still answers to its name, with no Start entry;
+# another package's hidden entry gets nothing (Win+R sg-office, regression
+# walk 2026-10-06)
+app sg-gatehidden 'Type=Application' 'Name=SG Gate Hidden' 'NoDisplay=true' "Exec=$T/bin/sg-gatehidden %F"
+app gate-plumbing 'Type=Application' 'Name=Gate Plumbing' 'NoDisplay=true' "Exec=$T/bin/gate-plumbing"
+"$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+rq "$AP\\sg-gatehidden.exe" SgArguments | grep -q 'sg-gatehidden.desktop' && pass "our own hidden program answers to its name (sg-gatehidden.exe)" || fail "sg-gatehidden.exe: $(rq "$AP\\sg-gatehidden.exe" | tr '\n' ' ')"
+ls "$PROGS"/SG\ Gate\ Hidden*.lnk >/dev/null 2>&1 && fail "it got a Start entry" || pass "...with no Start entry"
+rq "$AP\\gate-plumbing.exe" | grep -q SgArguments && fail "another package's hidden entry got a name" || pass "another package's hidden entry gets none"
+rm "$T/share/applications/sg-gatehidden.desktop" "$T/share/applications/gate-plumbing.desktop"
 rm "$T/share/applications/gate-namer.desktop" "$T/share/applications/gate-notepad.desktop"
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
 rq "$AP\\gatenamer.exe" | grep -q SgArguments && fail "an app gone kept its name" || pass "an app that goes loses its names"
