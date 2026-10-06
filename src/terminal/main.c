@@ -2675,6 +2675,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     MSG msg;
     HDC dc;
     (void)prev; (void)cmdline;
+    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
+     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+#ifndef SG_MUTANT_DPI_UNAWARE
+    SetProcessDPIAware();
+#endif
 
     g_inst = inst;
     dc = GetDC(NULL);

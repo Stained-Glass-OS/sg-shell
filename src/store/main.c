@@ -1487,6 +1487,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     (void)prev; (void)cmdline; (void)show;
     GetEnvironmentVariableW(L"SG_STORE_DUMP", g_dump, MAX_PATH);
     InitializeCriticalSection(&g_qlock);
+    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
+     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+#ifndef SG_MUTANT_DPI_UNAWARE
+    SetProcessDPIAware();
+#endif
 
     for (i = 1; argv && i < argc; i++) {
         if (!lstrcmpiW(argv[i], L"--list")) {

@@ -1310,6 +1310,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     HDC dc;
     HANDLE mutex;
     (void)prev; (void)cmdline;
+    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
+     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+#ifndef SG_MUTANT_DPI_UNAWARE
+    SetProcessDPIAware();
+#endif
 
     for (i = 1; i < argc; i++) {
         if (!_wcsicmp(argv[i], L"/background") || !_wcsicmp(argv[i], L"-background")) g_background = TRUE;

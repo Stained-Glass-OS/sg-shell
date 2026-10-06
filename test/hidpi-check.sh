@@ -26,13 +26,16 @@
 #      40 px bar, title bars as before (Scale8 11); its sizes are the ones
 #      3. compares with
 #   6. a new scale while the shell runs (needs wine-sg 0890): 100% -> 175%,
-#      the taskbar and Start 1.75 times their size, once; the Linux side
-#      told (sg-settingsctl display-scale 175)
+#      the taskbar and Start 1.75 times their size, once; Settings, open
+#      across the change, laid out again at it; the Linux side told
+#      (sg-settingsctl display-scale 175)
 #
 #   SG_WINE_DIR=<wine-sg root> sh test/hidpi-check.sh
 #   Mutants (sg-control/sg-settings): SG_MUTANT_SCALE_RECOMMEND_100,
 #   SG_MUTANT_SCALE_NO_STICK, SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_CONF_UNSCALED,
-#   SG_MUTANT_SCALE_LINUX_NOT_TOLD; sg-start: SG_MUTANT_START_SYSTEM_AWARE.
+#   SG_MUTANT_SCALE_LINUX_NOT_TOLD, SG_MUTANT_SETTINGS_DPI_IGNORED,
+#   SG_MUTANT_DPI_UNAWARE (control main.c, wordpad, store, charmap); sg-start:
+#   SG_MUTANT_START_SYSTEM_AWARE.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -182,6 +185,18 @@ share "${cap:-0}" 1824 "$ref_cap" 1080 && [ "$s8" = 10 ] \
     && pass "effects.conf in the screen's pixels: caption $(conf caption), taskbar $(conf taskbar), pointer $(conf cursor)" \
     || fail "effects.conf: caption $(conf caption) (want $cap), taskbar $(conf taskbar) (want $barh), cursor $(conf cursor) (want 42)"
 
+# Control Panel, WordPad, the Store and Character Map draw themselves at the
+# scale (their sizes go by the DPI): aware of the DPI, not Wine's scaled
+# picture -- soft at 175%
+for x in sg-control64.exe sg-wordpad64.exe sg-store64.exe sg-charmap64.exe; do
+    "$WINE" "$HERE/build/$x" >/dev/null 2>&1 &
+done
+sleep 8
+aw=$("$WINE" "$T/probe.exe" aware SgControlWindow WordPadClass SgStore SgCharMap 2>/dev/null | tr -d '\r')
+[ "$aw" = "SgControlWindow=1 WordPadClass=1 SgStore=1 SgCharMap=1 " ] \
+    && pass "Control Panel, WordPad, the Store and Character Map are aware of the DPI: drawn crisp at 175% ($aw)" \
+    || fail "aware of the DPI at 175%: '$aw' (want all 1)"
+
 # --- 4. Settings shows the recommendation ------------------------------------------------
 export SG_SETTINGS_DUMP="$("$WINE" winepath -w "$T/sdump" 2>/dev/null | tr -d '\r')"
 "$WINE" "$T/sg-settings64.exe" ms-settings:display >/dev/null 2>&1 &
@@ -198,6 +213,13 @@ unset SG_SETTINGS_DUMP
 # it as well: 3 times); the Linux side is told (sg-settingsctl display-scale)
 sgs scale 100 >/dev/null
 shell
+# Settings open at 100%, on its Display page
+export SG_SETTINGS_DUMP="$("$WINE" winepath -w "$T/sdump6" 2>/dev/null | tr -d '\r')"
+"$WINE" "$T/sg-settings64.exe" ms-settings:display >/dev/null 2>&1 &
+i=0; while [ $i -lt 40 ] && ! grep -q '^page Display' "$T/sdump6" 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+sleep 1
+sr1=$(tr -d '\r' < "$T/sdump6" | sed -n 's/^rect //p')
+unset SG_SETTINGS_DUMP
 rm -f "$T/startdump"
 "$WINE" "$T/poke.exe" >/dev/null 2>&1; sleep 3
 p1=$(probe); s1=$(sed -n 's/^rect=//p' "$T/startdump" 2>/dev/null)
@@ -219,6 +241,16 @@ if ratio "$(val "$p1" barh)" "$(val "$p2" barh)" && ratio "$h1" "$h2" && ratio "
 else
     fail "100% -> 175% while the shell runs: taskbar $(val "$p1" barh) -> $(val "$p2" barh), Start ${w1}x$h1 -> ${w2}x$h2, per-monitor $(val "$p2" startpm) (want 1.75 times; aware of the system DPI only, Wine scales it again)"
 fi
+# Settings, open across the change: per-monitor aware, laid out again at 175%
+# (its window 1.75 times as large in the screen's pixels -- not Wine's
+# scaled picture of a 100% window, which it reports at its old size)
+sleep 2
+sr2=$(tr -d '\r' < "$T/sdump6" | sed -n 's/^rect //p')
+set -- ${sr1:-0 0 0 0}; sw1=$(( $3 - $1 )) sh1=$(( $4 - $2 ))
+set -- ${sr2:-0 0 0 0}; sw2=$(( $3 - $1 )) sh2=$(( $4 - $2 ))
+ratio "$sw1" "$sw2" && ratio "$sh1" "$sh2" \
+    && pass "Settings open across 100% -> 175%: laid out again, ${sw1}x$sh1 -> ${sw2}x$sh2 in the screen's pixels" \
+    || fail "Settings open across 100% -> 175%: ${sw1}x$sh1 -> ${sw2}x$sh2 (want 1.75 times: per-monitor aware, laid out again)"
 grep -q '^display-scale 175 --out ' "$T/ctl" 2>/dev/null && pass "the Linux side is told: sg-settingsctl display-scale 175" \
     || fail "the Linux side: sg-settingsctl got '$(cat "$T/ctl" 2>/dev/null)'"
 

@@ -1043,6 +1043,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 
     register_page_classes();
     if (settings) return settings_main(argc, argv, show);
+#ifndef SG_MUTANT_DPI_UNAWARE
+    /* Control Panel: drawn at the display scale it starts at (its sizes go
+     * by g_dpi) -- unaware, Wine scaled its picture, soft at 175% */
+    SetProcessDPIAware();
+    make_fonts();
+#endif
     wc.hInstance = inst; wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     wc.lpfnWndProc = addr_proc; wc.lpszClassName = L"SgCplAddress";
     RegisterClassW(&wc);

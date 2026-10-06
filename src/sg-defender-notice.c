@@ -234,6 +234,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     (void)prev; (void)cmd; (void)show;
     if (argc < 2 || !load(argv[1])) return 0;
     dump();
+    /* drawn at the display scale it starts at (its sizes go by g_dpi): aware
+     * of the system DPI -- unaware, Wine scaled its picture, soft at 175% */
+#ifndef SG_MUTANT_DPI_UNAWARE
+    SetProcessDPIAware();
+#endif
 
     dc = GetDC(NULL);
     g_dpi = GetDeviceCaps(dc, LOGPIXELSY);

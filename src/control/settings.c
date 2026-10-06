@@ -782,6 +782,8 @@ void settings_page_shown(void)
     write_dump();
 }
 
+static void settings_fonts(void);
+
 static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
@@ -810,6 +812,22 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
         break;
+#ifndef SG_MUTANT_SETTINGS_DPI_IGNORED
+    case WM_DPICHANGED: {
+        /* a new display scale while Settings is open (it is per-monitor
+         * aware, wine-sg 0890): laid out and drawn at it, the window at the
+         * size the system suggests -- crisp, not Wine's scaled picture */
+        RECT *r = (RECT *)lp;
+        g_dpi = HIWORD(wp) < 96 ? 96 : HIWORD(wp);
+        settings_fonts();
+        if (g_nav_search) SendMessageW(g_nav_search, WM_SETFONT, (WPARAM)g_font_body, FALSE);
+        SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        layout();
+        refresh_page();
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+        return 0;
+    }
+#endif
     case WM_ERASEBKGND: return 1;
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
@@ -820,6 +838,20 @@ static HFONT font(int pt10, int weight)
 {
     return CreateFontW(-MulDiv(pt10, g_dpi, 720), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET,
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+}
+
+/* Settings' fonts at g_dpi (again, at a new display scale) */
+static void settings_fonts(void)
+{
+    HFONT old[] = { g_font_title, g_font_big, g_font_head, g_font_cat, g_font_body, g_font_small };
+    int i;
+    g_font_title = font(200, FW_LIGHT);
+    g_font_big   = font(220, FW_LIGHT);
+    g_font_head  = font(115, FW_SEMIBOLD);
+    g_font_cat   = font(105, FW_NORMAL);
+    g_font_body  = font(100, FW_NORMAL);
+    g_font_small = font(85, FW_NORMAL);
+    for (i = 0; i < (int)ARRAYSIZE(old); i++) if (old[i]) DeleteObject(old[i]);
 }
 
 /* Another Settings window is already open: hand it the page and bring it forward. */
@@ -877,16 +909,23 @@ int settings_main(int argc, WCHAR **argv, int show)
     }
     if (hand_off(start)) return 0;
 
+    {
+        /* per-monitor v2: drawn at the display scale, a new one too
+         * (WM_DPICHANGED); Wine scaled the picture of a program unaware of
+         * the DPI -- soft at 175% */
+        typedef BOOL (WINAPI *ctx_fn)(HANDLE);
+        ctx_fn set_ctx = (ctx_fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext");
+#ifndef SG_MUTANT_SETTINGS_DPI_IGNORED
+        if (!set_ctx || !set_ctx((HANDLE)-4)) SetProcessDPIAware();
+#else
+        (void)set_ctx;
+#endif
+    }
     dc = GetDC(NULL);
     g_dpi = GetDeviceCaps(dc, LOGPIXELSY);
     ReleaseDC(NULL, dc);
     if (g_dpi < 96) g_dpi = 96;
-    g_font_title = font(200, FW_LIGHT);
-    g_font_big   = font(220, FW_LIGHT);
-    g_font_head  = font(115, FW_SEMIBOLD);
-    g_font_cat   = font(105, FW_NORMAL);
-    g_font_body  = font(100, FW_NORMAL);
-    g_font_small = font(85, FW_NORMAL);
+    settings_fonts();
     a = reg_dword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", L"AccentColor", 0xFFC03070);
     g_accent = a & 0xFFFFFF;
     g_glyph_color = g_col_link = accent_text(g_accent, g_dark);
