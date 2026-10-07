@@ -93,6 +93,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_SPEECH]       = { L"Speech Recognition",         PG_CAT_HW,     build_speech,       cmd_speech, NULL, timer_speech },
     [PG_ADMINTOOLS]   = { L"Administrative Tools",       PG_CAT_SYSSEC, build_admintools,   cmd_admintools },
     [PG_PRINTERS]     = { L"Devices and Printers",       PG_CAT_HW,     build_printers,     cmd_printers },
+    [PG_CREDMGR]      = { L"Credential Manager",         PG_USERS,      build_credmgr,      cmd_credmgr },
     SETTINGS_PAGE_DEFS
 };
 
@@ -897,6 +898,7 @@ static const struct target TARGETS[] = {
     { L"system",         PG_SYSTEM },   { L"printers",      PG_PRINTERS },
     { L"mouse",          PG_CAT_HW },   { L"keyboard",      PG_CAT_HW },
     { L"admintools",     PG_ADMINTOOLS },
+    { L"keymgr.dll",     PG_CREDMGR },
     /* canonical names (control /name ...) */
     { L"Microsoft.System",                  PG_SYSTEM },
     { L"Microsoft.ProgramsAndFeatures",     PG_PROGRAMS },
@@ -915,10 +917,11 @@ static const struct target TARGETS[] = {
     { L"Microsoft.SecurityAndMaintenance",  PG_CAT_SYSSEC },
     { L"Microsoft.SpeechRecognition",       PG_SPEECH },
     { L"Microsoft.AdministrativeTools",     PG_ADMINTOOLS },
+    { L"Microsoft.CredentialManager",       PG_CREDMGR },
     /* our own page names, for --page */
     { L"home", PG_HOME }, { L"all", PG_ALL }, { L"programs", PG_PROGRAMS }, { L"users", PG_USERS },
     { L"accounts", PG_USERS_MANAGE }, { L"datetime", PG_DATETIME }, { L"personalization", PG_PERSONALIZE },
-    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"devices-and-printers", PG_PRINTERS }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
+    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"devices-and-printers", PG_PRINTERS }, { L"credentials", PG_CREDMGR }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
     { L"cat-hardware", PG_CAT_HW }, { L"cat-programs", PG_CAT_PROG }, { L"cat-users", PG_CAT_USERS },
     { L"cat-appearance", PG_CAT_APPEAR }, { L"cat-clock", PG_CAT_CLOCK },
 };
@@ -1007,6 +1010,7 @@ static int dump(const WCHAR *what)
         { L"system", dump_system }, { L"programs", dump_programs }, { L"users", dump_users },
         { L"datetime", dump_datetime }, { L"personalization", dump_personalize },
         { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech }, { L"admintools", dump_admintools }, { L"printers", dump_printers },
+        { L"credentials", dump_credmgr },
         { L"items", dump_items },
     };
     size_t i;
@@ -1067,6 +1071,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         /* the Environment Variables dialog (rundll32 sysdm.cpl,EditEnvironmentVariables) */
         if (!_wcsicmp(argv[1], L"/envvars") || !_wcsicmp(argv[1], L"EditEnvironmentVariables")) return envvars_main(FALSE);
         if (!_wcsicmp(argv[1], L"/admin")) return admin_main(argc - 2, argv + 2);
+        /* at sign-in (the Run key): a keyring that did not open, and why */
+        if (!_wcsicmp(argv[1], L"/keyring-signin")) return keyring_signin_main();
+        if (!wcscmp(argv[1], L"--credential-delete") && argc > 2) return credmgr_delete_cli(argv[2], argc > 3 ? argv[3] : NULL);
         if (!_wcsicmp(argv[1], L"/admin-do")) return admin_do(argc - 2, argv + 2);
         if (!_wcsicmp(argv[1], L"/cpl") && argc > 2) return cpl_run_inproc(argv[2], argc > 3 ? argv[3] : NULL) >= 0 ? 0 : 1;
         if (settings) return settings_main(argc, argv, show);

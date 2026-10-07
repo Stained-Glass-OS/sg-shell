@@ -20,7 +20,11 @@
  *     file in the user's private runtime directory that it removes at once;
  *   - the first connection to a computer asks whether to trust it, as mstsc
  *     does for a certificate it cannot verify; the certificate is then
- *     remembered (FreeRDP's /cert:tofu) and a changed one is refused.
+ *     remembered (FreeRDP's /cert:tofu) and a changed one is refused;
+ *   - "Remember me" saves the credentials as mstsc does, in Credential
+ *     Manager (a domain credential named TERMSRV/<computer>), which wine-sg
+ *     keeps in the person's keyring; the next connection to that computer
+ *     uses them without asking. Credential Manager deletes them.
  *
  * `/sg-dry-run` prints the client command line instead of starting it, which
  * is what the gate uses.
@@ -29,6 +33,7 @@
  * Copyright (C) 2026 David Hamner and the Stained Glass OS contributors
  */
 #include <windows.h>
+#include <wincred.h>
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
@@ -414,7 +419,7 @@ static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
  * the fields, and the fields on the dialog colour; the credentials asked in a
  * dialog of their own, the certificate question before the first connection. */
 
-enum { ID_COMPUTER = 100, ID_USER, ID_FULL, ID_PASSWORD, ID_CONNECT = IDOK, ID_CANCEL = IDCANCEL };
+enum { ID_COMPUTER = 100, ID_USER, ID_FULL, ID_PASSWORD, ID_REMEMBER, ID_SAVEDNOTE, ID_CONNECT = IDOK, ID_CANCEL = IDCANCEL };
 
 #define BANNER_H 76
 
@@ -510,8 +515,73 @@ static BOOL confirm_first_use(HWND owner, const struct conn *c)
     return TRUE;
 }
 
+/* --- saved credentials (Credential Manager, as mstsc keeps them) ------------------- */
+
+static void cred_target(const WCHAR *host, WCHAR *out, size_t cch)
+{
+    swprintf(out, cch, L"TERMSRV/%ls", host);
+}
+
+/* The saved credentials for this computer: the user ("DOMAIN\user") and the
+ * password. A user name typed for this connection that is not theirs means
+ * they are not used. */
+static BOOL saved_credentials(const struct conn *c, WCHAR *user, size_t ucch, WCHAR *pw, size_t pcch)
+{
+    WCHAR target[MAX_FIELD + 16], typed[MAX_FIELD * 2];
+    CREDENTIALW *cred;
+    DWORD n;
+    BOOL ok = FALSE;
+
+    if (!c->host[0]) return FALSE;
+    cred_target(c->host, target, ARRAYSIZE(target));
+    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred)) return FALSE;
+    if (c->domain[0]) swprintf(typed, ARRAYSIZE(typed), L"%ls\\%ls", c->domain, c->user);
+    else lstrcpynW(typed, c->user, ARRAYSIZE(typed));
+    n = cred->CredentialBlobSize / sizeof(WCHAR);
+    if (cred->UserName && cred->UserName[0] && (!typed[0] || !lstrcmpiW(typed, cred->UserName)) &&
+        cred->CredentialBlob && n && n < pcch)
+    {
+        lstrcpynW(user, cred->UserName, (int)ucch);
+        memcpy(pw, cred->CredentialBlob, n * sizeof(WCHAR));
+        pw[n] = 0;
+        ok = TRUE;
+    }
+    if (cred->CredentialBlob) SecureZeroMemory(cred->CredentialBlob, cred->CredentialBlobSize);
+    CredFree(cred);
+    return ok;
+}
+
+static BOOL has_saved_credentials(const WCHAR *host)
+{
+    WCHAR target[MAX_FIELD + 16];
+    CREDENTIALW *cred;
+    if (!host[0]) return FALSE;
+    cred_target(host, target, ARRAYSIZE(target));
+    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred)) return FALSE;
+    CredFree(cred);
+    return TRUE;
+}
+
+static BOOL remember_credentials(const struct conn *c, const WCHAR *pw)
+{
+    WCHAR target[MAX_FIELD + 16], user[MAX_FIELD * 2];
+    CREDENTIALW cred = { 0 };
+
+    cred_target(c->host, target, ARRAYSIZE(target));
+    if (c->domain[0]) swprintf(user, ARRAYSIZE(user), L"%ls\\%ls", c->domain, c->user);
+    else lstrcpynW(user, c->user, ARRAYSIZE(user));
+    if (!user[0]) return FALSE;
+    cred.Type = CRED_TYPE_DOMAIN_PASSWORD;
+    cred.TargetName = target;
+    cred.UserName = user;
+    cred.CredentialBlob = (BYTE *)pw;
+    cred.CredentialBlobSize = (DWORD)(wcslen(pw) * sizeof(WCHAR));
+    cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
+    return CredWriteW(&cred, 0);
+}
+
 /* "Enter your credentials": the password, and the user name to change it. */
-struct cred_dialog { HWND user, password; WCHAR host[MAX_FIELD]; WCHAR user_text[MAX_FIELD * 2]; WCHAR pw[MAX_FIELD]; BOOL ok, done; };
+struct cred_dialog { HWND user, password, remember; WCHAR host[MAX_FIELD]; WCHAR user_text[MAX_FIELD * 2]; WCHAR pw[MAX_FIELD]; BOOL ok, done, keep; };
 
 static LRESULT CALLBACK cred_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -533,8 +603,9 @@ static LRESULT CALLBACK cred_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         d->user = add(hwnd, L"EDIT", d->user_text, WS_TABSTOP | ES_AUTOHSCROLL, 24, 118, 352, 28, ID_USER);
         add(hwnd, L"STATIC", L"Password", 0, 24, 156, 360, 18, -1);
         d->password = add(hwnd, L"EDIT", L"", WS_TABSTOP | ES_AUTOHSCROLL | ES_PASSWORD, 24, 176, 352, 28, ID_PASSWORD);
-        add(hwnd, L"BUTTON", L"OK", WS_TABSTOP | BS_DEFPUSHBUTTON, 176, 228, 96, 30, IDOK);
-        add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 280, 228, 96, 30, IDCANCEL);
+        d->remember = add(hwnd, L"BUTTON", L"Remember me", WS_TABSTOP | BS_AUTOCHECKBOX, 24, 214, 200, 22, ID_REMEMBER);
+        add(hwnd, L"BUTTON", L"OK", WS_TABSTOP | BS_DEFPUSHBUTTON, 176, 252, 96, 30, IDOK);
+        add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 280, 252, 96, 30, IDCANCEL);
         SetFocus(d->user_text[0] ? d->password : d->user);
         return 0;
     }
@@ -547,6 +618,7 @@ static LRESULT CALLBACK cred_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             GetWindowTextW(d->user, d->user_text, ARRAYSIZE(d->user_text));
             GetWindowTextW(d->password, d->pw, ARRAYSIZE(d->pw));
             SetWindowTextW(d->password, L"");
+            d->keep = SendMessageW(d->remember, BM_GETCHECK, 0, 0) == BST_CHECKED;
             d->ok = TRUE;
             DestroyWindow(hwnd);
         }
@@ -564,11 +636,11 @@ static LRESULT CALLBACK cred_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 /* Asks for the password (and lets the user name change). The connection's
  * user and domain are updated; the password goes to pw. */
-static BOOL ask_credentials(HWND owner, struct conn *c, WCHAR *pw, size_t cap)
+static BOOL ask_credentials(HWND owner, struct conn *c, WCHAR *pw, size_t cap, BOOL *keep)
 {
     static struct cred_dialog d;
     WNDCLASSEXW wc = { .cbSize = sizeof(wc) };
-    RECT r = { 0, 0, 400, 276 }, o;
+    RECT r = { 0, 0, 400, 300 }, o;
     HWND hwnd;
     MSG msg;
     int x, y;
@@ -607,6 +679,7 @@ static BOOL ask_credentials(HWND owner, struct conn *c, WCHAR *pw, size_t cap)
     if (d.user_text[0]) set_user(c, d.user_text);
     lstrcpynW(pw, d.pw, (int)cap);
     SecureZeroMemory(d.pw, sizeof(d.pw));
+    *keep = d.keep;
     return TRUE;
 }
 
@@ -625,11 +698,29 @@ static BOOL connect_to(HWND owner, struct conn *c)
     if (GetEnvironmentVariableW(L"SG_MSTSC_TEST", pw, ARRAYSIZE(pw)) && !lstrcmpW(pw, L"1"))
         return launch(c, g_client, FALSE);
     if (!confirm_first_use(owner, c)) return FALSE;
-    if (!ask_credentials(owner, c, pw, ARRAYSIZE(pw))) return FALSE;
+    {
+        WCHAR user[MAX_FIELD * 2];
+        BOOL keep = FALSE;
+        /* saved for this computer ("Remember me"): used without asking */
+        if (saved_credentials(c, user, ARRAYSIZE(user), pw, ARRAYSIZE(pw)))
+        {
+            c->user[0] = c->domain[0] = 0;
+            set_user(c, user);
+        }
+        else
+        {
+            if (!ask_credentials(owner, c, pw, ARRAYSIZE(pw), &keep)) return FALSE;
+            if (keep && pw[0] && !remember_credentials(c, pw))
+                MessageBoxW(owner, L"Your credentials could not be saved.", L"Remote Desktop Connection", MB_ICONWARNING);
+        }
+    }
     ret = launch_with(c, g_client, FALSE, pw);
     SecureZeroMemory(pw, sizeof(pw));
     return ret;
 }
+
+static const WCHAR ASK_NOTE[] = L"You will be asked for credentials when you connect.";
+static const WCHAR SAVED_NOTE[] = L"Saved credentials will be used to connect to this computer. Credential Manager deletes them.";
 
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -640,8 +731,8 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         g_computer = add(hwnd, L"EDIT", g_conn.host, WS_TABSTOP | ES_AUTOHSCROLL, 120, BANNER_H + 20, 276, 28, ID_COMPUTER);
         add(hwnd, L"STATIC", L"User name:", 0, 24, BANNER_H + 62, 90, 20, -1);
         g_user = add(hwnd, L"EDIT", g_conn.user, WS_TABSTOP | ES_AUTOHSCROLL, 120, BANNER_H + 58, 276, 28, ID_USER);
-        add(hwnd, L"STATIC", L"You will be asked for credentials when you connect.",
-            0, 120, BANNER_H + 92, 276, 36, -1);
+        add(hwnd, L"STATIC", has_saved_credentials(g_conn.host) ? SAVED_NOTE : ASK_NOTE,
+            0, 120, BANNER_H + 92, 276, 36, ID_SAVEDNOTE);
         g_full = add(hwnd, L"BUTTON", L"Full screen", WS_TABSTOP | BS_AUTOCHECKBOX, 120, BANNER_H + 130, 200, 22, ID_FULL);
         add(hwnd, L"BUTTON", L"Connect", WS_TABSTOP | BS_DEFPUSHBUTTON, 196, BANNER_H + 172, 96, 30, ID_CONNECT);
         add(hwnd, L"BUTTON", L"Cancel", WS_TABSTOP, 300, BANNER_H + 172, 96, 30, ID_CANCEL);
@@ -653,6 +744,16 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 
     case WM_COMMAND:
+        if (LOWORD(wp) == ID_COMPUTER && HIWORD(wp) == EN_CHANGE)
+        {
+            /* as mstsc: say whether saved credentials will be used */
+            WCHAR computer[MAX_FIELD];
+            struct conn c = { 0 };
+            GetWindowTextW(g_computer, computer, MAX_FIELD);
+            set_address(&c, computer);
+            SetDlgItemTextW(hwnd, ID_SAVEDNOTE, has_saved_credentials(c.host) ? SAVED_NOTE : ASK_NOTE);
+            return 0;
+        }
         if (LOWORD(wp) == ID_CONNECT)
         {
             WCHAR computer[MAX_FIELD], user[MAX_FIELD];
@@ -764,6 +865,37 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         WaitForSingleObject(pi.hProcess, 30000);
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
+        return 0;
+    }
+
+    /* Test only (SG_MSTSC_TEST=1), the saved credentials for the gate:
+     * /sg-remember /v:HOST USER PASSWORD saves them as "Remember me" does;
+     * /sg-saved /v:HOST prints "SAVED <user> <password length>" or "NONE",
+     * as a connection would find them. */
+    if (argv && argc > 2 && !lstrcmpW(test_flag, L"1") && !_wcsnicmp(argv[2], L"/v:", 3) &&
+        (!lstrcmpiW(argv[1], L"/sg-remember") || !lstrcmpiW(argv[1], L"/sg-saved")))
+    {
+        WCHAR user[MAX_FIELD * 2], pw[MAX_FIELD];
+        char line[MAX_FIELD * 3];
+        struct conn c = { 0 };
+        DWORD w;
+        set_address(&c, argv[2] + 3);
+        if (!lstrcmpiW(argv[1], L"/sg-remember"))
+        {
+            if (argc < 5) return 2;
+            set_user(&c, argv[3]);
+            return remember_credentials(&c, argv[4]) ? 0 : 1;
+        }
+        if (argc > 3) set_user(&c, argv[3]);
+        if (saved_credentials(&c, user, ARRAYSIZE(user), pw, ARRAYSIZE(pw)))
+        {
+            char u8[MAX_FIELD * 2];
+            WideCharToMultiByte(CP_UTF8, 0, user, -1, u8, sizeof(u8), NULL, NULL);
+            snprintf(line, sizeof(line), "SAVED %s %u\n", u8, (unsigned)wcslen(pw));
+            SecureZeroMemory(pw, sizeof(pw));
+        }
+        else snprintf(line, sizeof(line), "NONE\n");
+        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), line, (DWORD)strlen(line), &w, NULL);
         return 0;
     }
 

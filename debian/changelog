@@ -1,3 +1,26 @@
+sg-shell (0.1.0-152) unstable; urgency=medium
+
+  * Credential Manager (Control Panel > User Accounts, `control /name
+    Microsoft.CredentialManager`, `control keymgr.dll`): the credentials
+    programs saved -- generic, then network and domain -- with their user
+    names and dates, Remove; it says whether they are kept in the person's
+    keyring (wine-sg 1380) or, with none, the registry.
+  * "Saved passwords are locked": after an administrator reset someone's
+    password, their keyring is still protected with the old one. At the
+    next sign-in (sg-control /keyring-signin, the machine's Run key,
+    defaults/91-sg-keyring.reg) they are told why and choose: unlock them
+    with the password used before (sg-session's sg-keyring re-encrypts them
+    with the current one, so later sign-ins open them) or start over.
+    Credential Manager offers the same while they are locked.
+  * Remote Desktop Connection: "Remember me" saves the credentials as
+    mstsc does (TERMSRV/<computer> in Credential Manager); the next
+    connection to that computer uses them without asking, and the window
+    says so.
+  * Gate: make test-credmgr (test/credmgr-check.sh), mutants
+    KEYRING_NOTICE and KEYRING_NOTICE_ORDER.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 20:20:00 -0700
+
 sg-shell (0.1.0-151) unstable; urgency=medium
 
   * The taskbar's flyouts (volume, network, battery), the On-Screen

@@ -38,6 +38,9 @@ static const struct applet PROGRAMS_A = { L"Programs and Features", IC_PROG, NAV
     { { L"Uninstall a program", NAV(PG_PROGRAMS) } } };
 static const struct applet USERS_A = { L"User Accounts", IC_USERS, NAV(PG_USERS), L"account password administrator user",
     { { L"Change account type", NAV(PG_USERS_MANAGE) }, { L"Remove user accounts", NAV(PG_USERS_MANAGE) } } };
+static const struct applet CREDMGR_A = { L"Credential Manager", IC_USERS, NAV(PG_CREDMGR),
+    L"credential manager saved passwords logon credentials keyring web network git remote desktop",
+    { { L"Manage saved credentials", NAV(PG_CREDMGR) } } };
 static const struct applet PERSONAL_A = { L"Personalization", IC_PERSONAL, NAV(PG_PERSONALIZE), L"wallpaper background color colour theme dark light accent",
     { { L"Change the desktop background", NAV(PG_PERSONALIZE) }, { L"Change accent color", NAV(PG_PERSONALIZE) },
       { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } } };
@@ -62,7 +65,7 @@ static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, 
 
 static const struct applet *const ALL[] = {
     &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[5]; };
@@ -82,7 +85,7 @@ static const struct category CATS[] = {
       { &PROGRAMS_A } },
     { PG_CAT_USERS, IC_USERS, L"User Accounts",
       { { L"Change account type", NAV(PG_USERS_MANAGE) }, { L"Add or remove user accounts", NAV(PG_USERS_MANAGE) } },
-      { &USERS_A } },
+      { &USERS_A, &CREDMGR_A } },
     { PG_CAT_APPEAR, IC_APPEAR, L"Appearance and Personalization",
       { { L"Change the desktop background", NAV(PG_PERSONALIZE) }, { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } },
       { &PERSONAL_A, &DISPLAY_A, &FONTS_A } },

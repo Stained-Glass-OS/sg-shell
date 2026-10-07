@@ -105,6 +105,35 @@ icons with it) while hiding its visual, and forward what it holds into our bar.
 Until that lands both may be visible; the gate runs the panel standalone so it
 tests our bar, not the interaction.
 
+## Credential Manager and saved passwords that did not open
+
+Control Panel > User Accounts > Credential Manager (`src/control/credmgr.c`,
+`control /name Microsoft.CredentialManager`, `control keymgr.dll`) lists the
+credentials programs saved (CredEnumerate with CRED_ENUMERATE_ALL_CREDENTIALS:
+generic, then network and domain) and removes them (CredDelete); it says where
+they are kept -- wine-sg 1380 keeps them in the person's keyring, else the
+registry. When the keyring did not open at sign-in (an administrator reset the
+password: it is still protected with the old one), the page and the sign-in
+question -- `sg-control64.exe /keyring-signin`, the machine's Run key
+(`defaults/91-sg-keyring.reg`), which exits at once unless the keyring is
+locked -- ask "Saved passwords are locked": unlock them with the password
+used before (and the current one), or start over. The work is sg-session's
+`sg-keyring` (status / recover / reset), started through `\\?\unix\` with
+the passwords on its standard input. **Wine gives a Unix program no pipes as
+stdio (wine-sg 0078), only files**, and no process handle: the input and
+output are FILE_FLAG_DELETE_ON_CLOSE files in `XDG_RUNTIME_DIR` (0700), the
+answer polled for (read at offset 0: the child shares the file position).
+
+sg-mstsc's credential dialog has **Remember me**: as mstsc, a domain
+credential `TERMSRV/<computer>` (user `DOMAIN\user`); the next connection to
+that computer uses it without asking unless another user name is typed, and
+the main window says "Saved credentials will be used". `--dump credentials`,
+`--credential-delete TARGET [generic|domain]`, and sg-mstsc's
+`/sg-remember`, `/sg-saved` (SG_MSTSC_TEST=1) exist for the gate:
+`make test-credmgr` (`test/credmgr-check.sh`, needs SG_SESSION_SRC; mutants
+KEYRING_NOTICE, KEYRING_NOTICE_ORDER). No window manager on its Xvfb: a
+click gives the form the focus.
+
 ## sg-mstsc: .rdp files are untrusted input
 
 They arrive as email attachments, so sg-mstsc treats them as hostile:

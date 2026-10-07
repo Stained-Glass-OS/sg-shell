@@ -101,8 +101,8 @@ build:
 	@python3 src/sg-mstsc-icon.py $(BUILD)/sg-mstsc.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res64.o
 	@$(WINDRES32) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res32.o
-	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) && echo "built sg-mstsc (64-bit)"
-	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) && echo "built sg-mstsc (32-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (64-bit)"
+	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (32-bit)"
 	@# Control Panel, with its own icon (src/control/gen-icon.py: smooth at every size)
 	@python3 src/control/gen-icon.py $(BUILD)/sg-control.ico
 	@$(WINDRES64) -I src/control -I $(BUILD) src/control/control.rc -O coff -o $(BUILD)/sg-control-res64.o
@@ -280,6 +280,17 @@ test-office: office
 
 # SG Office's programs starting SG Office's own editors, under Wine
 # (test/office-native-check.sh), and the broken builds it must fail.
+# Credential Manager, the sign-in question for a locked keyring, Remote
+# Desktop's "Remember me": test/credmgr-check.sh (needs sg-session's source,
+# SG_SESSION_SRC), and each mutant must fail it.
+.PHONY: test-credmgr
+test-credmgr: build
+	@sh test/credmgr-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 for m in KEYRING_NOTICE KEYRING_NOTICE_ORDER; do \
+	   sh test/credmgr-check.sh --mutant $$m >/dev/null 2>&1; rc=$$?; \
+	   [ $$rc -eq 1 ] || { echo "credmgr-check: the mutant $$m was not caught ($$rc)"; exit 1; }; \
+	   echo "mutant $$m killed"; done
+
 # The touch keyboard (sg-touchkbd): test/touchkbd-check.sh, and each mutant
 # build must fail it.
 .PHONY: test-touchkbd

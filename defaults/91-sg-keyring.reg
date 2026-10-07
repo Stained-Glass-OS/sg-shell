@@ -1,0 +1,13 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- saved passwords that did not open at sign-in. A
+; person's keyring (where Credential Manager and their Linux programs keep
+; saved passwords) opens with their sign-in password; after an
+; administrator's reset it is still protected with the old one. At sign-in
+; this checks (sg-session's sg-keyring) and, only then, asks: unlock them
+; with the password used before, or start over. It exits at once otherwise.
+;
+; The path is the package's install location reached through Z:.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run]
+"SgSavedPasswords"="Z:\\usr\\libexec\\stained-glass\\shell\\sg-control64.exe /keyring-signin"
