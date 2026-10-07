@@ -17,7 +17,7 @@
 #include "settings.h"
 #include <commdlg.h>
 
-#define FW_DOCS L"https://freesoft.page/docs/guide/firewall.html"
+#define FW_DOCS L"https://freesoft.page/docs/guide/07-firewall.html"
 #define FW_STATUS "/run/stained-glass-firewall/status"
 #define FW_RUN "/run/stained-glass-firewall"
 

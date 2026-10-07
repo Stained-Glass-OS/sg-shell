@@ -1,3 +1,10 @@
+sg-shell (0.1.0-163) unstable; urgency=medium
+
+  * Stained Glass Firewall's pages and question link to the guide's page
+    as it is published (docs/guide/07-firewall.html).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 16:44:13 -0700
+
 sg-shell (0.1.0-162) unstable; urgency=medium
 
   * Stained Glass Firewall (sg-session's sg-firewall, David 2026-10-07):
