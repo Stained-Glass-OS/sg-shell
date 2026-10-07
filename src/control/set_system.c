@@ -419,12 +419,37 @@ struct sdev { WCHAR name[200], desc[200]; int vol; BOOL def, muted; };
 static struct sdev g_sinks[24], g_sources[24];
 static int g_nsinks, g_nsources;
 
+/* the devices the page shows, as one string: a microphone or headset plugged
+ * in or out while the page is open shows at once (David, 2026-10-07: a new
+ * microphone worked but was not in the list) */
+static WCHAR g_sound_sig[4096];
+static int g_sound_ticks;
+
+static void sound_sig_of(const char *ans, WCHAR *sig, int cch)
+{
+    const char *p = ans;
+    int n = 0;
+    sig[0] = 0;
+    while (p && *p && n < cch - 2) {
+        if (!strncmp(p, "SINK ", 5) || !strncmp(p, "SOURCE ", 7)) {
+            const char *q = p;
+            while (*q && *q != '\t' && *q != '\n' && n < cch - 2) sig[n++] = *q++;
+            sig[n++] = '|';
+        }
+        p = strchr(p, '\n');
+        if (p) p++;
+    }
+    sig[n] = 0;
+}
+
 static void load_sound(WCHAR *err, int cch, BOOL *ok)
 {
     char *ans = ctl_run(L"sound", ok, err, cch, 8000), buf[1024];
     const char *pos = NULL;
     g_nsinks = g_nsources = 0;
+    g_sound_ticks = 0;
     if (!ans) { *ok = FALSE; return; }
+    sound_sig_of(ans, g_sound_sig, ARRAYSIZE(g_sound_sig));
     while (ctl_line(ans, "SINK", &pos, buf, sizeof(buf)) && g_nsinks < (int)ARRAYSIZE(g_sinks)) {
         struct sdev *d = &g_sinks[g_nsinks++];
         WCHAR f[16];
@@ -553,6 +578,20 @@ void set_timer_sound(void)
     static BOOL was;
     int lv = mic_meter_poll();
     if (!g_mictest || !IsWindow(g_mictest)) return;
+#ifndef SG_MUTANT_SOUND_LIST_STATIC
+    /* every 3 s, not while the microphone is being tested: the devices again */
+    if (lv < 0 && ++g_sound_ticks >= 15) {
+        BOOL ok;
+        WCHAR err[64], sig[ARRAYSIZE(g_sound_sig)];
+        char *ans = ctl_run(L"sound", &ok, err, ARRAYSIZE(err), 3000);
+        g_sound_ticks = 0;
+        if (ans) {
+            sound_sig_of(ans, sig, ARRAYSIZE(sig));
+            free(ans);
+            if (lstrcmpW(sig, g_sound_sig)) { refresh_page(); return; }
+        }
+    }
+#endif
     if (lv >= 0) { SendMessageW(g_miclevel, PBM_SETPOS, lv, 0); was = TRUE; }
     else if (was) {
         was = FALSE;

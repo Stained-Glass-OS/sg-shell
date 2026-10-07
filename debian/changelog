@@ -1,3 +1,14 @@
+sg-shell (0.1.0-160) unstable; urgency=medium
+
+  * Settings > Sound follows devices plugged in or out while it is open
+    (David: a new microphone worked but was not in the list).
+    settings-check; mutant SG_MUTANT_SOUND_LIST_STATIC.
+  * Report a problem: sound cards, PipeWire's devices (descriptions: no
+    serials) and input devices -- for dictation microphones and the like.
+  * A stray test file (.part) taken into the repository is gone, and ignored.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 15:48:16 -0700
+
 sg-shell (0.1.0-159) unstable; urgency=medium
 
   * Settings > Accounts > Kiosk (ms-settings:assignedaccess; David: "a

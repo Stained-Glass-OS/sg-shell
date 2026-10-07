@@ -76,6 +76,44 @@ if command -v lpstat >/dev/null 2>&1; then
     # the queues and their devices, a USB one's serial left out
     lpstat -v 2>/dev/null | sed 's/[?&]serial=[^ &]*//' | while read -r q; do line "Printer" "$q"; done
 fi
+# Sound devices (David 2026-10-07: a microphone that works but is not in
+# Settings, dictation microphones -- a Nuance PowerMic, a SpeechMike -- not
+# found): what the kernel's sound cards are, and what PipeWire offers
+if [ -r "${SG_PROCFS:-/proc}/asound/cards" ]; then
+    echo
+    echo "Sound cards (ALSA):"
+    sed 's/^/  /' "${SG_PROCFS:-/proc}/asound/cards"
+fi
+if command -v pactl >/dev/null 2>&1; then
+    echo
+    echo "Sound devices (PipeWire: outputs, inputs, cards):"
+    # descriptions, not names: a USB device's name carries its serial number
+    for k in sinks sources cards; do
+        timeout 5 pactl --format=json list "$k" 2>/dev/null | python3 -c '
+import json, sys
+kind = sys.argv[1]
+try:
+    devs = json.load(sys.stdin)
+except ValueError:
+    devs = []
+for d in devs:
+    p = d.get("properties") or {}
+    if kind == "sources" and (p.get("device.class") == "monitor" or str(d.get("name", "")).endswith(".monitor")):
+        continue
+    desc = d.get("description") or p.get("device.description") or p.get("device.product.name") or "?"
+    bus = p.get("device.bus") or ""
+    print("  %s: %s%s" % (kind[:-1], desc, " (" + bus + ")" if bus else ""))
+' "$k" 2>/dev/null
+    done
+fi
+# Input devices: a dictation microphone's buttons, a pen, a touch screen --
+# their names and handlers (the kernel's list; no serials)
+if [ -r "${SG_PROCFS:-/proc}/bus/input/devices" ]; then
+    echo
+    echo "Input devices:"
+    awk -F'"' '/^N: Name=/ { name = $2 } /^H: Handlers=/ { sub(/^H: Handlers=/, ""); printf "  %s [%s]\n", name, $0 }' \
+        "${SG_PROCFS:-/proc}/bus/input/devices"
+fi
 echo
 echo "Packages:"
 dpkg-query -W -f '  ${Package} ${Version}\n' wine-sg sg-shell sg-session sg-compositor sg-image \

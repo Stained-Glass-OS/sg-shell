@@ -90,7 +90,8 @@ echo "\${args# }" >> "$LOG"
 set -- \$args
 {
 case "\$1" in
-sound) [ \$# -eq 1 ] && printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tyes\t70\tno\tMicrophone (Stand-in)\n'; echo OK ;;
+sound) if [ \$# -eq 1 ] && [ -e "$T/second-mic" ]; then printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tno\t70\tno\tMicrophone (Stand-in)\nSOURCE mic.1\tyes\t60\tno\tPowerMic (Stand-in)\n'
+       elif [ \$# -eq 1 ]; then printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tyes\t70\tno\tMicrophone (Stand-in)\n'; fi; echo OK ;;
 nightlight) printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
 display) echo 'ERROR unsupported the display is not the compositor' ;;
 power) printf 'POWER 10\t0\tyes\tno\nOK\n' ;;
@@ -290,6 +291,13 @@ if [ $# -eq 3 ] && [ "$1" = 40 ]; then
     grep '^sound volume ' "$LOG" | tail -1 | grep -q '^sound volume sink spk.0 1$' && pass "the slider asks sg-settingsctl for that volume" || fail "sg-settingsctl heard: $(cat "$LOG")"
 else fail "no master volume slider at 40 ($*)"; fi
 shot sound
+# a microphone plugged in while the page is open shows without reopening it
+# (David, 2026-10-07: a new microphone worked but was not in the list)
+: > "$T/second-mic"
+i=0; while [ $i -lt 20 ] && ! has ": PowerMic (Stand-in)"; do sleep 0.5; i=$((i + 1)); done
+has ": PowerMic (Stand-in)" && pass "a microphone plugged in while Sound is open appears in its list (and as the default chosen)" \
+    || fail "the new microphone did not appear: $(tr -d '\r' < "$DUMP" | grep -i 'stand-in' | head -4 | tr '\n' ' ')"
+rm -f "$T/second-mic"
 
 # --- Privacy > Microphone ---------------------------------------------------------------------------
 wine start ms-settings:privacy-microphone >/dev/null 2>&1
