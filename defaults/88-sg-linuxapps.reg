@@ -34,3 +34,29 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxApp\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-linuxapp64.exe\" --run \"%1\""
+
+; An AppImage (Foo-x86_64.AppImage: a Linux program in one file) someone
+; downloaded: double-click (or right-click > Install) shows what it is and
+; installs it for the user alone -- ~/Applications and Start (sg-store64.exe
+; --appimage, sg-appimage). Nothing runs until it is started from Start.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.AppImage]
+@="SG.AppImage"
+"Content Type"="application/vnd.appimage"
+"PerceivedType"="application"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppImage]
+@="AppImage (Linux program)"
+"FriendlyTypeName"="AppImage (Linux program)"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppImage\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppImage\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppImage\shell\open]
+@="&Install"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppImage\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\" --appimage \"%1\""

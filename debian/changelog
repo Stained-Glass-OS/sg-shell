@@ -1,3 +1,26 @@
+sg-shell (0.1.0-156) unstable; urgency=medium
+
+  * AppImages: a downloaded Foo-x86_64.AppImage installs for the person
+    alone. Double-click (or right-click > Install) opens "Install an
+    AppImage" (sg-store64.exe --appimage): its name, version and file, and
+    Install -- no administrator. sg-appimage (/usr/libexec/stained-glass)
+    copies it (or moves it, if asked) into ~/Applications, reads its
+    desktop entry and icon with unsquashfs without running it, and writes
+    ~/.local/share/applications/appimage-<id>.desktop (our own Exec,
+    "sg-appimage run FILE", keeping only the image's %f/%F/%u/%U; name and
+    comment cleaned) and its icons into ~/.local/share/icons/hicolor. Start
+    lists it at once; a newer version of the same app replaces the old one;
+    an Uninstall entry (Settings > Apps, Programs and Features) removes the
+    file, entry and icons (sg-linuxapp64.exe --uninstall-appimage). Started
+    without usable FUSE it runs with APPIMAGE_EXTRACT_AND_RUN=1. Type 1
+    AppImages, DwarFS ones and other processors' are refused, saying why.
+    Depends: squashfs-tools, libfuse2t64, fuse3.
+    Gate: test/appimage-check.sh; mutants test/appimage-mutants.sh
+    (KEEP_EXEC, NO_REPLACE, KEEP_FILE, NO_EXTRACT_FALLBACK, ANY_MACHINE,
+    NO_APPIMAGE_UNINSTALL, AI_NO_SYNC).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 13:10:00 -0700
+
 sg-shell (0.1.0-155) unstable; urgency=medium
 
   * Tests found red by a sweep of every gate:

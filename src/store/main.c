@@ -13,6 +13,9 @@
  *   sg-store64.exe --page ID       open the store on one app's details page
  *   sg-store64.exe --deb FILE      "Install a Linux package": what a .deb is,
  *                                  and Install (File Explorer's .deb verb)
+ *   sg-store64.exe --appimage FILE "Install an AppImage": what it is, and
+ *                                  Install for this user (~/Applications,
+ *                                  Start; sg-appimage, sysinstall.c)
  *   --elevated-apt / --elevated-apt-remove / --elevated-deb
  *   --install-batch ORD...   install them as Install selected does: one consent
  *   --elevated-helper FILE   that consent's helper (sysinstall.c)
@@ -1539,6 +1542,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         }
         if (!lstrcmpiW(argv[i], L"--deb") && i + 1 < argc) {
             rc = sys_deb_window(inst, argv[i + 1]);
+            LocalFree(argv);
+            return rc;
+        }
+        if (!lstrcmpiW(argv[i], L"--appimage") && i + 1 < argc) {
+            rc = sys_appimage_window(inst, argv[i + 1]);
             LocalFree(argv);
             return rc;
         }

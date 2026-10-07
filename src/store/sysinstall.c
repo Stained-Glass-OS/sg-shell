@@ -1216,3 +1216,360 @@ int sys_deb_window(HINSTANCE inst, const WCHAR *file)
     deb_dump(d);
     return d->state == 2 ? d->code : d->valid ? SYS_CANCELLED : SYS_FAILED;
 }
+
+/* ---- --appimage FILE: an AppImage, installed for this user ----------------------------------------- */
+
+/* An AppImage (Foo-x86_64.AppImage: a Linux program in one file) someone
+ * downloaded: File Explorer's .AppImage verb, and Linux Firefox's "open"
+ * (sg-session's handler hands it to Wine's start). What it is -- its name
+ * and version, the file -- and Install, which the user's own sg-appimage
+ * does: no administrator, nothing system-wide. The file is copied (or moved,
+ * if the person asks) into ~/Applications, and Start lists it as a Linux app
+ * (sg-linuxapp64.exe --sync, run at once). Reading it never runs it. */
+
+typedef struct {
+    WCHAR file[MAX_PATH], shown[MAX_PATH];
+    WCHAR name[128], version[64], comment[256], installed[64], folder[MAX_PATH];
+    BOOL  valid, move;
+    WCHAR error[400];
+    int   state;                  /* 0 asking, 1 installing, 2 done */
+    BOOL  ok;
+    WCHAR result[512];
+    int   focus;                  /* 0 Install, 1 Cancel, 2 the "move" box */
+    WCHAR dump[MAX_PATH];
+    HWND  wnd;
+} aiwin_t;
+
+static aiwin_t g_ai;
+
+/* sg-appimage VERB FILE [--move] --out OUT: its KEY value lines (free them), or NULL */
+static char *ai_helper(const WCHAR *verb, const WCHAR *file, BOOL move, DWORD timeout)
+{
+    WCHAR helper[MAX_PATH] = L"/usr/libexec/stained-glass/sg-appimage", args[MAX_PATH * 8], tmpdir[MAX_PATH], out[MAX_PATH];
+    WCHAR wufile[MAX_PATH * 3], wuout[MAX_PATH * 3];
+    char ufile[MAX_PATH * 3], uout[MAX_PATH * 3], *text;
+    static LONG seq;
+    HANDLE process;
+    DWORD waited;
+    GetEnvironmentVariableW(L"SG_APPIMAGE_HELPER", helper, MAX_PATH);
+    GetTempPathW(MAX_PATH, tmpdir);
+    _snwprintf(out, MAX_PATH, L"%lssg-appimage-%lu-%ld.txt", tmpdir, GetCurrentProcessId(), InterlockedIncrement(&seq));
+    DeleteFileW(out);
+    CloseHandle(CreateFileW(out, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL));   /* so it has a Unix name */
+    if (!sys_unix_path(file, ufile, sizeof(ufile)) || !sys_unix_path(out, uout, sizeof(uout))) { DeleteFileW(out); return NULL; }
+    DeleteFileW(out);
+    MultiByteToWideChar(CP_UTF8, 0, ufile, -1, wufile, ARRAYSIZE(wufile));
+    MultiByteToWideChar(CP_UTF8, 0, uout, -1, wuout, ARRAYSIZE(wuout));
+    _snwprintf(args, ARRAYSIZE(args), L"%ls%ls \"%ls\" --out \"%ls\"", verb, move ? L" --move" : L"", wufile, wuout);
+    args[ARRAYSIZE(args) - 1] = 0;
+    if (!run_unix(helper, args, &process)) return NULL;
+    WaitForSingleObject(process, timeout);
+    CloseHandle(process);
+    for (waited = 0; GetFileAttributesW(out) == INVALID_FILE_ATTRIBUTES && waited < timeout; waited += 100) Sleep(100);
+    text = read_small(out, 65536);
+    DeleteFileW(out);
+    return text;
+}
+
+static BOOL ai_ok(const char *text)
+{
+    return text && (!strncmp(text, "OK", 2) || strstr(text, "\nOK"));
+}
+
+static void ai_read_info(aiwin_t *d)
+{
+    char *text;
+    char magic[12] = { 0 };
+    DWORD got = 0;
+    HANDLE h;
+    d->valid = FALSE;
+    h = CreateFileW(d->file, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) { lstrcpynW(d->error, L"The file could not be opened.", ARRAYSIZE(d->error)); return; }
+    ReadFile(h, magic, sizeof(magic), &got, NULL);
+    CloseHandle(h);
+    if (got < 4 || memcmp(magic, "\177ELF", 4)) {
+        lstrcpynW(d->error, L"This file is not an AppImage (a Linux program in one file), so it cannot be installed.", ARRAYSIZE(d->error));
+        return;
+    }
+    if (!(text = ai_helper(L"info", d->file, FALSE, 60000))) {
+        lstrcpynW(d->error, L"AppImages cannot be read here (sg-appimage is missing).", ARRAYSIZE(d->error));
+        return;
+    }
+    field(text, "NAME", d->name, ARRAYSIZE(d->name));
+    field(text, "VERSION", d->version, ARRAYSIZE(d->version));
+    field(text, "COMMENT", d->comment, ARRAYSIZE(d->comment));
+    field(text, "INSTALLED", d->installed, ARRAYSIZE(d->installed));
+    {
+        WCHAR ufolder[MAX_PATH];
+        char u[MAX_PATH * 3];
+        field(text, "FOLDER", ufolder, ARRAYSIZE(ufolder));
+        WideCharToMultiByte(CP_UTF8, 0, ufolder, -1, u, sizeof(u), NULL, NULL);
+        if (!ufolder[0] || !dos_path(u, d->folder, MAX_PATH)) lstrcpynW(d->folder, ufolder, MAX_PATH);
+    }
+    d->valid = ai_ok(text) && d->name[0];
+    if (!d->valid) {
+        field(text, "ERROR", d->error, ARRAYSIZE(d->error));
+        if (!d->error[0]) lstrcpynW(d->error, L"This file is not an AppImage, so it cannot be installed.", ARRAYSIZE(d->error));
+    }
+    free(text);
+}
+
+static void ai_dump(aiwin_t *d)
+{
+    WCHAR tmp[MAX_PATH + 8];
+    FILE *f;
+    char u[1024];
+    if (!d->dump[0]) return;
+    _snwprintf(tmp, ARRAYSIZE(tmp), L"%ls.tmp", d->dump);
+    if (!(f = _wfopen(tmp, L"wb"))) return;
+#define DL(fmt, ...) do { WCHAR w_[1024]; _snwprintf(w_, 1024, fmt, __VA_ARGS__); w_[1023] = 0; \
+        WideCharToMultiByte(CP_UTF8, 0, w_, -1, u, sizeof(u), NULL, NULL); fputs(u, f); fputc('\n', f); } while (0)
+    DL(L"appimage-window %d", d->wnd ? 1 : 0);
+    DL(L"valid %d", d->valid ? 1 : 0);
+    DL(L"name %ls", d->name);
+    DL(L"version %ls", d->version);
+    DL(L"file %ls", d->shown);
+    DL(L"move %d", d->move ? 1 : 0);
+    DL(L"state %d", d->state);
+    if (!d->valid) DL(L"error %ls", d->error);
+    if (d->state == 2) DL(L"result %d %ls", d->ok ? 0 : 1, d->result);
+#undef DL
+    fclose(f);
+    MoveFileExW(tmp, d->dump, MOVEFILE_REPLACE_EXISTING);
+}
+
+static RECT ai_button(HWND hwnd, int which)     /* 0 primary (Install / Close), 1 Cancel, 2 the box */
+{
+    RECT c, b;
+    GetClientRect(hwnd, &c);
+    if (which == 2) {
+        b.left = S(20); b.right = c.right - S(20); b.bottom = c.bottom - S(64); b.top = b.bottom - S(24);
+        return b;
+    }
+    b.bottom = c.bottom - S(18); b.top = b.bottom - S(34);
+    b.right = c.right - S(20) - (which ? 0 : S(130)); b.left = b.right - S(120);
+    return b;
+}
+
+/* Start lists it now, not at the watcher's next look */
+static void ai_sync_start(void)
+{
+    WCHAR exe[MAX_PATH], cmd[MAX_PATH + 16], *slash;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (!GetEnvironmentVariableW(L"SG_LINUXAPP_EXE", exe, MAX_PATH)) {
+        GetModuleFileNameW(NULL, exe, MAX_PATH);
+        if (!(slash = wcsrchr(exe, L'\\'))) return;
+        lstrcpyW(slash + 1, L"sg-linuxapp64.exe");
+    }
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --sync", exe);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return;
+    WaitForSingleObject(pi.hProcess, 120000);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+}
+
+static DWORD WINAPI ai_worker(void *arg)
+{
+    aiwin_t *d = arg;
+    char *text = ai_helper(L"install", d->file, d->move, 30 * 60 * 1000);
+    d->ok = ai_ok(text);
+    if (d->ok) {
+#ifndef SG_MUTANT_AI_NO_SYNC
+        ai_sync_start();
+#endif
+        _snwprintf(d->result, ARRAYSIZE(d->result), L"%ls is installed. Start lists it, with your other apps.", d->name);
+    } else {
+        WCHAR why[400] = L"";
+        if (text) field(text, "ERROR", why, ARRAYSIZE(why));
+        _snwprintf(d->result, ARRAYSIZE(d->result), L"%ls was not installed. %ls", d->name, why[0] ? why : L"The AppImage could not be copied.");
+    }
+    d->result[ARRAYSIZE(d->result) - 1] = 0;
+    free(text);
+    d->state = 2;
+    PostMessageW(d->wnd, WM_APP, 0, 0);
+    return 0;
+}
+
+static void ai_start(aiwin_t *d)
+{
+    HANDLE t;
+    if (d->state != 0 || !d->valid) return;
+    d->state = 1;
+    InvalidateRect(d->wnd, NULL, FALSE);
+    ai_dump(d);
+    if ((t = CreateThread(NULL, 0, ai_worker, d, 0, NULL))) CloseHandle(t);
+    else { d->state = 2; d->ok = FALSE; lstrcpynW(d->result, L"The install could not be started.", ARRAYSIZE(d->result)); }
+}
+
+static void ai_paint(HWND hwnd, aiwin_t *d)
+{
+    PAINTSTRUCT ps;
+    HDC wdc = BeginPaint(hwnd, &ps), dc = CreateCompatibleDC(wdc);
+    RECT c, r;
+    HBITMAP bmp, ob;
+    HBRUSH bg = CreateSolidBrush(C_BG);
+    WCHAR line[700];
+    int y;
+    GetClientRect(hwnd, &c);
+    bmp = CreateCompatibleBitmap(wdc, c.right, c.bottom);
+    ob = SelectObject(dc, bmp);
+    FillRect(dc, &c, bg);
+    DeleteObject(bg);
+
+    r.left = S(20); r.right = c.right - S(20); r.top = S(16); r.bottom = r.top + S(30);
+    draw_text(dc, f_head, C_TEXT, r, d->valid ? d->name : L"This file cannot be installed", DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    y = r.bottom + S(8);
+    if (d->valid) {
+        static const WCHAR *const labels[] = { L"Version", L"About", L"File", L"Installs to" };
+        const WCHAR *values[4];
+        int k;
+        values[0] = d->version; values[1] = d->comment; values[2] = d->shown; values[3] = d->folder;
+        for (k = 0; k < 4; k++) {
+            RECT lr = { S(20), y, S(110), y + S(22) }, vr = { S(114), y, c.right - S(20), y + S(22) };
+            if (!values[k][0]) continue;
+            draw_text(dc, f_body, C_SUB, lr, labels[k], DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            draw_text(dc, f_body, C_TEXT, vr, values[k], DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_PATH_ELLIPSIS);
+            y += S(22);
+        }
+        y += S(8);
+        r.top = y; r.bottom = ai_button(hwnd, 2).top - S(4);
+        if (d->state == 0) {
+            if (d->installed[0] && lstrcmpW(d->installed, L"-"))
+                _snwprintf(line, ARRAYSIZE(line), L"%ls%ls%ls is installed now; this replaces it. ", lstrcmpW(d->installed, L"yes") ? L"Version " : L"",
+                           lstrcmpW(d->installed, L"yes") ? d->installed : L"This app", L"");
+            else line[0] = 0;
+            lstrcatW(line, L"An AppImage is a Linux program in one file. It is installed for you alone: kept in your Applications "
+                           L"folder and listed in Start. It did not come from SG Store: install it only if you trust who made it.");
+            draw_text(dc, f_small, C_SUB, r, line, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        } else if (d->state == 1) {
+            draw_text(dc, f_body, C_SUB, r, L"Installing...", DT_LEFT | DT_TOP | DT_WORDBREAK);
+        } else {
+            draw_text(dc, f_body, d->ok ? C_ACCENT : C_ERR, r, d->result, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        }
+        if (d->state == 0) {
+            RECT b = ai_button(hwnd, 2), box = { b.left, b.top + S(4), b.left + S(16), b.top + S(20) }, t = b;
+            DrawFrameControl(dc, &box, DFC_BUTTON, DFCS_BUTTONCHECK | DFCS_FLAT | (d->move ? DFCS_CHECKED : 0));
+            t.left = box.right + S(8);
+            draw_text(dc, f_body, C_TEXT, t, L"Remove the downloaded file (move it, do not keep a copy)", DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            if (d->focus == 2) { RECT fr = t; fr.left -= S(2); fr.right = min(fr.right, t.left + S(380)); DrawFocusRect(dc, &fr); }
+        }
+    } else {
+        r.top = y; r.bottom = y + S(80);
+        draw_text(dc, f_body, C_ERR, r, d->error, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        r.top = r.bottom; r.bottom = r.top + S(24);
+        draw_text(dc, f_small, C_SUB, r, d->shown, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_PATH_ELLIPSIS);
+    }
+    if (d->valid && d->state == 0) {
+        draw_button(dc, ai_button(hwnd, 0), L"Install", TRUE, d->focus == 0);
+        draw_button(dc, ai_button(hwnd, 1), L"Cancel", FALSE, d->focus == 1);
+    } else if (d->state != 1) {
+        draw_button(dc, ai_button(hwnd, 1), L"Close", TRUE, TRUE);
+    }
+    BitBlt(wdc, 0, 0, c.right, c.bottom, dc, 0, 0, SRCCOPY);
+    SelectObject(dc, ob);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    EndPaint(hwnd, &ps);
+}
+
+static void ai_hits(aiwin_t *d)
+{
+    ai_dump(d);
+    if (d->valid && d->state == 0) {
+        write_screen_hit(d->dump, d->wnd, L"install", ai_button(d->wnd, 0));
+        write_screen_hit(d->dump, d->wnd, L"cancel", ai_button(d->wnd, 1));
+        write_screen_hit(d->dump, d->wnd, L"move", ai_button(d->wnd, 2));
+    } else if (d->state != 1) write_screen_hit(d->dump, d->wnd, L"close", ai_button(d->wnd, 1));
+}
+
+static LRESULT CALLBACK ai_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    aiwin_t *d = &g_ai;
+    switch (msg) {
+    case WM_DPICHANGED:
+        sys_dpi_changed(hwnd, wp, lp);
+        return 0;
+    case WM_PAINT:
+        ai_paint(hwnd, d);
+        return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_APP:
+        InvalidateRect(hwnd, NULL, FALSE);
+        UpdateWindow(hwnd);
+        ai_hits(d);
+        SetForegroundWindow(hwnd);
+        return 0;
+    case WM_LBUTTONUP: {
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+        RECT i = ai_button(hwnd, 0), c = ai_button(hwnd, 1), m = ai_button(hwnd, 2);
+        if (d->valid && d->state == 0 && PtInRect(&i, pt)) ai_start(d);
+        else if (d->valid && d->state == 0 && PtInRect(&m, pt)) { d->move = !d->move; InvalidateRect(hwnd, NULL, FALSE); ai_hits(d); }
+        else if (d->state != 1 && PtInRect(&c, pt)) DestroyWindow(hwnd);
+        return 0;
+    }
+    case WM_KEYDOWN:
+        if (d->state == 1) return 0;
+        if (wp == VK_ESCAPE) DestroyWindow(hwnd);
+        else if (wp == VK_TAB || wp == VK_LEFT || wp == VK_RIGHT) {
+            int n = d->valid && d->state == 0 ? 3 : 2;
+            d->focus = (d->focus + (GetKeyState(VK_SHIFT) < 0 || wp == VK_LEFT ? n - 1 : 1)) % n;
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (wp == VK_RETURN || wp == VK_SPACE) {
+            if (d->valid && d->state == 0 && d->focus == 2) { d->move = !d->move; InvalidateRect(hwnd, NULL, FALSE); ai_dump(d); }
+            else if (d->valid && d->state == 0 && d->focus == 0) ai_start(d);
+            else DestroyWindow(hwnd);
+        }
+        return 0;
+    case WM_CLOSE:
+        if (d->state != 1) DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+int sys_appimage_window(HINSTANCE inst, const WCHAR *file)
+{
+    aiwin_t *d = &g_ai;
+    WNDCLASSW wc = { 0 };
+    MSG m;
+    RECT wa;
+    const WCHAR *base;
+    make_fonts();
+    g_inst = inst;
+    memset(d, 0, sizeof(*d));
+    if (file[0] == L'/') {
+        /* a Unix path: Linux Firefox's download opened (sg-session's
+         * sg-open-windows-file --appimage) */
+        char u[MAX_PATH * 3];
+        WideCharToMultiByte(CP_UTF8, 0, file, -1, u, sizeof(u), NULL, NULL);
+        if (!dos_path(u, d->file, MAX_PATH)) lstrcpynW(d->file, file, MAX_PATH);
+    } else GetFullPathNameW(file, MAX_PATH, d->file, NULL);
+    base = wcsrchr(d->file, L'\\') ? wcsrchr(d->file, L'\\') + 1 : d->file;
+    lstrcpynW(d->shown, base, MAX_PATH);
+    GetEnvironmentVariableW(L"SG_STORE_DUMP", d->dump, MAX_PATH);
+    ai_read_info(d);
+    wc.lpfnWndProc = ai_proc;
+    wc.hInstance = inst;
+    wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+    wc.lpszClassName = L"SgStoreAppImage";
+    RegisterClassW(&wc);
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+    d->wnd = CreateWindowExW(0, wc.lpszClassName, L"Install an AppImage", WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                             wa.left + (wa.right - wa.left - S(580)) / 2, wa.top + (wa.bottom - wa.top - S(390)) / 3,
+                             S(580), S(390), NULL, NULL, inst, NULL);
+    if (!d->wnd) return 1;
+    ShowWindow(d->wnd, SW_SHOWNORMAL);
+    UpdateWindow(d->wnd);
+    ai_hits(d);
+    while (GetMessageW(&m, NULL, 0, 0) > 0) { TranslateMessage(&m); DispatchMessageW(&m); }
+    d->wnd = NULL;
+    ai_dump(d);
+    return d->state == 2 ? (d->ok ? SYS_OK : SYS_FAILED) : d->valid ? SYS_CANCELLED : SYS_FAILED;
+}

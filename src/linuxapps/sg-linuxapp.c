@@ -14,6 +14,9 @@
  *   sg-linuxapp64.exe --watch              the same, then again whenever the
  *                                          applications folders change (Start
  *                                          starts this, one per session)
+ *   sg-linuxapp64.exe --uninstall-appimage FILE.desktop [/quiet]
+ *                                          an AppImage's Uninstall entry
+ *                                          (sg-appimage installed it)
  *
  * Each app shown by a Linux desktop -- Type=Application, not NoDisplay or
  * Hidden, not for one desktop only (OnlyShowIn), its TryExec present, not
@@ -137,6 +140,9 @@ struct app {
     char exe[128];              /* Exec's program name: often its windows' class too */
     char mime[4096];            /* MimeType=: what it opens, ';'-separated */
     BOOL name_only;             /* one of ours not shown (NoDisplay): its name only, no Start entry */
+    char appimage[MAX_PATH];    /* X-SG-AppImage: an AppImage installed for this user (sg-appimage) */
+    char aiid[96];              /* X-SG-AppImage-Id: its own desktop id */
+    WCHAR version[64];          /* X-AppImage-Version */
 };
 
 static struct app *g_apps;
@@ -252,6 +258,9 @@ static BOOL try_exec_ok(const char *prog)
     return FALSE;
 }
 
+/* the user's own applications folder (XDG_DATA_HOME's), where sg-appimage puts its entries */
+static char g_user_apps[MAX_PATH];
+
 static void add_desktop_file(const char *unix_file, const char *id)
 {
     WCHAR w[MAX_PATH];
@@ -299,7 +308,20 @@ static void add_desktop_file(const char *unix_file, const char *id)
         char *end = v + strcspn(v, " \t"), *base;
         *end = 0;
         base = strrchr(v, '/') ? strrchr(v, '/') + 1 : v;
-        if (strcmp(base, "env") && strcmp(base, "flatpak") && strcmp(base, "sh")) lstrcpynA(a->exe, base, sizeof(a->exe));
+        if (strcmp(base, "env") && strcmp(base, "flatpak") && strcmp(base, "sh") && strcmp(base, "sg-appimage"))
+            lstrcpynA(a->exe, base, sizeof(a->exe));
+    }
+    /* an AppImage sg-appimage installed: only the user's own entries say so
+     * (a package's entry claiming one would get an Uninstall entry that
+     * deletes files) */
+    if (g_user_apps[0] && !strncmp(unix_file, g_user_apps, strlen(g_user_apps)) && unix_file[strlen(g_user_apps)] == '/'
+        && !strncmp(id, "appimage-", 9) && entry_value(text, "X-SG-AppImage", v, sizeof(v)) && v[0] == '/') {
+        lstrcpynA(a->appimage, v, sizeof(a->appimage));
+        if (entry_value(text, "X-SG-AppImage-Id", v, sizeof(v))) lstrcpynA(a->aiid, v, sizeof(a->aiid));
+        if (entry_value(text, "X-AppImage-Version", v, sizeof(v))) {
+            MultiByteToWideChar(CP_UTF8, 0, v, -1, a->version, ARRAYSIZE(a->version));
+            a->version[ARRAYSIZE(a->version) - 1] = 0;
+        }
     }
     g_napps++;
 out:
@@ -331,6 +353,15 @@ static void scan_apps(void)
     int nd = data_dirs(dirs, 16), i;
 
     g_napps = 0;
+    {
+        char home[MAX_PATH] = "", data[MAX_PATH] = "";
+        g_user_apps[0] = 0;
+        if (!env_a("XDG_DATA_HOME", data, sizeof(data)) && home_unix(home, sizeof(home)) && home[0])
+            _snprintf(data, sizeof(data), "%s/.local/share", home);
+        data[sizeof(data) - 1] = 0;
+        if (data[0] == '/' && _snprintf(g_user_apps, sizeof(g_user_apps), "%s/applications", data) < 0) g_user_apps[0] = 0;
+        g_user_apps[sizeof(g_user_apps) - 1] = 0;
+    }
     for (i = 0; i < nd; i++) {
         char dir[MAX_PATH];
         WCHAR pattern[MAX_PATH];
@@ -801,7 +832,7 @@ static void add_name(WCHAR names[][64], int *n, const char *base, size_t len)
  * .desktop file's), each without an -esr */
 static int app_names(const struct app *a, WCHAR names[][64])
 {
-    const char *bases[2] = { a->exe, a->id };
+    const char *bases[2] = { a->exe, a->aiid[0] ? a->aiid : a->id };
     int n = 0, i;
     for (i = 0; i < 2; i++) {
         const char *b = bases[i];
@@ -864,15 +895,97 @@ static void unregister_gone_app_paths(WCHAR (*made)[64], int nmade)
     }
 }
 
+/* ---- AppImages: their Uninstall entries --------------------------------- */
+
+/* An AppImage sg-appimage installed (~/Applications, its entry
+ * appimage-<id>.desktop with X-SG-AppImage) is listed in Settings > Apps and
+ * Programs and Features as any program the user installed: an Uninstall key
+ * of the user's, whose UninstallString is --uninstall-appimage (Start's
+ * Uninstall goes there too). Removed when the AppImage has gone. */
+#define UNINSTALL_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+#define APPIMAGE_PREFIX L"SG.AppImage."
+
+static void set_dword(HKEY root, const WCHAR *sub, const WCHAR *name, DWORD value)
+{
+    HKEY k;
+    if (RegCreateKeyExW(root, sub, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL)) return;
+    RegSetValueExW(k, name, 0, REG_DWORD, (const BYTE *)&value, sizeof(value));
+    RegCloseKey(k);
+}
+
+static BOOL register_appimage(const struct app *a, const WCHAR *self, const WCHAR *desktop, const WCHAR *ico, WCHAR *key, int len)
+{
+    WCHAR sub[300], cmd[MAX_PATH * 3], id[128], file[MAX_PATH], loc[MAX_PATH], *slash;
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+
+#ifdef SG_MUTANT_NO_APPIMAGE_UNINSTALL
+    return FALSE;
+#endif
+    if (!a->appimage[0] || !dos_path(a->appimage, file, MAX_PATH)) return FALSE;
+    MultiByteToWideChar(CP_UTF8, 0, a->aiid[0] ? a->aiid : a->id, -1, id, ARRAYSIZE(id));
+    id[ARRAYSIZE(id) - 1] = 0;
+    _snwprintf(key, len, APPIMAGE_PREFIX L"%ls", id);
+    key[len - 1] = 0;
+    _snwprintf(sub, ARRAYSIZE(sub), UNINSTALL_KEY L"\\%ls", key);
+    sub[ARRAYSIZE(sub) - 1] = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"DisplayName", a->name);
+    if (a->version[0]) set_sz(HKEY_CURRENT_USER, sub, L"DisplayVersion", a->version);
+    set_sz(HKEY_CURRENT_USER, sub, L"Publisher", L"AppImage");
+    if (ico) set_sz(HKEY_CURRENT_USER, sub, L"DisplayIcon", ico);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --uninstall-appimage \"%ls\"", self, desktop);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"UninstallString", cmd);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --uninstall-appimage \"%ls\" /quiet", self, desktop);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"QuietUninstallString", cmd);
+    lstrcpynW(loc, file, MAX_PATH);
+    if ((slash = wcsrchr(loc, '\\'))) *slash = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"InstallLocation", loc);
+    set_dword(HKEY_CURRENT_USER, sub, L"NoModify", 1);
+    set_dword(HKEY_CURRENT_USER, sub, L"NoRepair", 1);
+    if (GetFileAttributesExW(file, GetFileExInfoStandard, &fa)) {
+        ULONGLONG size = ((ULONGLONG)fa.nFileSizeHigh << 32 | fa.nFileSizeLow) / 1024;
+        SYSTEMTIME st;
+        WCHAR date[16];
+        set_dword(HKEY_CURRENT_USER, sub, L"EstimatedSize", size > 0xffffffff ? 0xffffffff : (DWORD)size);
+        if (FileTimeToSystemTime(&fa.ftLastWriteTime, &st)) {
+            _snwprintf(date, ARRAYSIZE(date), L"%04u%02u%02u", st.wYear, st.wMonth, st.wDay);
+            set_sz(HKEY_CURRENT_USER, sub, L"InstallDate", date);
+        }
+    }
+    return TRUE;
+}
+
+/* the Uninstall keys of AppImages that are gone */
+static void unregister_gone_appimages(WCHAR (*made)[128], int nmade)
+{
+    WCHAR name[260], sub[400], (*gone)[128];
+    DWORD n, i;
+    int ng = 0, j;
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, UNINSTALL_KEY, 0, KEY_READ, &k)) return;
+    if (!(gone = calloc(MAX_APPS, sizeof(*gone)))) { RegCloseKey(k); return; }
+    for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(k, i, name, &n, NULL, NULL, NULL, NULL); i++)
+        if (!_wcsnicmp(name, APPIMAGE_PREFIX, lstrlenW(APPIMAGE_PREFIX)) && !made_progid(made, nmade, name) && ng < MAX_APPS)
+            lstrcpynW(gone[ng++], name, 128);
+    RegCloseKey(k);
+    for (j = 0; j < ng; j++) {
+        _snwprintf(sub, ARRAYSIZE(sub), UNINSTALL_KEY L"\\%ls", gone[j]);
+        RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+        RegDeleteKeyW(HKEY_CURRENT_USER, sub);
+    }
+    free(gone);
+}
+
 static void sync_default_browser(void);
 
 static int sync_apps(void)
 {
     WCHAR programs[MAX_PATH], common[MAX_PATH], folder[MAX_PATH], icons[MAX_PATH], self[MAX_PATH], pattern[MAX_PATH];
-    WCHAR (*made)[MAX_PATH], (*progids)[128], (*named)[64];
+    WCHAR (*made)[MAX_PATH], (*progids)[128], (*named)[64], (*appimages)[128];
     WIN32_FIND_DATAW fd;
     HANDLE h;
-    int i, j, nmade = 0, nprogids = 0, nnamed = 0;
+    int i, j, nmade = 0, nprogids = 0, nnamed = 0, nappimages = 0;
 
     if (!SHGetSpecialFolderPathW(NULL, programs, CSIDL_PROGRAMS, TRUE)) return 1;
     if (!SHGetSpecialFolderPathW(NULL, icons, CSIDL_LOCAL_APPDATA, TRUE)) return 1;
@@ -889,6 +1002,7 @@ static int sync_apps(void)
     if (!(made = calloc(g_napps + 1, sizeof(*made)))) return 1;
     if (!(progids = calloc(g_napps + 1, sizeof(*progids)))) { free(made); return 1; }
     if (!(named = calloc(g_napps * MAX_APP_NAMES + 1, sizeof(*named)))) { free(made); free(progids); return 1; }
+    if (!(appimages = calloc(g_napps + 1, sizeof(*appimages)))) { free(made); free(progids); free(named); return 1; }
     if (g_napps) CreateDirectoryW(folder, NULL);
     for (i = 0; i < g_napps; i++) {
         WCHAR name[140], lnk[MAX_PATH], args[1024], file[MAX_PATH], ico[MAX_PATH];
@@ -916,7 +1030,10 @@ static int sync_apps(void)
         if (register_app(&g_apps[i], self, file, has_icon ? ico : NULL, progids[nprogids], 128)) nprogids++;
 #endif
         register_app_paths(&g_apps[i], self, file, named, &nnamed, g_napps * MAX_APP_NAMES);
+        if (register_appimage(&g_apps[i], self, file, has_icon ? ico : NULL, appimages[nappimages], 128)) nappimages++;
     }
+    unregister_gone_appimages(appimages, nappimages);
+    free(appimages);
     unregister_gone_app_paths(named, nnamed);
     free(named);
     unregister_gone(progids, nprogids);
@@ -1215,6 +1332,62 @@ static int launch_app(const WCHAR *desktop, WCHAR **args, int nargs)
     return r ? 1 : 0;
 }
 
+/* ---- uninstalling an AppImage ------------------------------------------- */
+
+/* --uninstall-appimage FILE.desktop [/quiet]: its Uninstall entry's command.
+ * Asks first (unless /quiet), then sg-appimage removes the AppImage from
+ * ~/Applications, its entry and its icons, and Start and the Uninstall
+ * entries are brought up to date at once. */
+static int uninstall_appimage(const WCHAR *desktop, BOOL quiet)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char helper[MAX_PATH], verb[] = "uninstall", outflag[] = "--out", *udesk = NULL, *uout = NULL, *argv[6], v[256];
+    WCHAR tmp[MAX_PATH], out[MAX_PATH], name[128] = L"", msg[600];
+    char *text = NULL;
+    int rc = 1;
+
+    if (!env_a("SG_APPIMAGE_HELPER", helper, sizeof(helper))) strcpy(helper, "/usr/libexec/stained-glass/sg-appimage");
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if ((text = read_file(desktop, 1 << 20, NULL)) && entry_value(text, "Name", v, sizeof(v)))
+        MultiByteToWideChar(CP_UTF8, 0, v, -1, name, ARRAYSIZE(name));
+    name[ARRAYSIZE(name) - 1] = 0;
+    free(text);
+    text = NULL;
+    if (!quiet) {
+        _snwprintf(msg, ARRAYSIZE(msg), L"Uninstall %ls?\n\nThe AppImage is removed from your Applications folder and from Start. "
+                   L"Its settings in your home folder are kept.", name[0] ? name : L"this app");
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        if (MessageBoxW(NULL, msg, L"Uninstall", MB_YESNO | MB_ICONQUESTION) != IDYES) return 1;
+    }
+    if (spawnvp && p_unix_name && GetTempPathW(MAX_PATH, tmp) && GetTempFileNameW(tmp, L"sga", 0, out)
+        && (udesk = p_unix_name(desktop)) && (uout = p_unix_name(out))) {
+        argv[0] = helper; argv[1] = verb; argv[2] = udesk; argv[3] = outflag; argv[4] = uout; argv[5] = NULL;
+        spawnvp(argv, TRUE);
+        text = read_file(out, 1 << 16, NULL);
+        DeleteFileW(out);
+    }
+    if (text && (!strncmp(text, "OK", 2) || strstr(text, "\nOK"))) rc = 0;
+    if (udesk) HeapFree(GetProcessHeap(), 0, udesk);
+    if (uout) HeapFree(GetProcessHeap(), 0, uout);
+    sync_apps();
+    if (rc && !quiet) {
+        const char *e = text ? strstr(text, "ERROR ") : NULL;
+        WCHAR why[400] = L"";
+        if (e) {
+            char line[400];
+            size_t n = strcspn(e + 6, "\n");
+            if (n >= sizeof(line)) n = sizeof(line) - 1;
+            memcpy(line, e + 6, n); line[n] = 0;
+            MultiByteToWideChar(CP_UTF8, 0, line, -1, why, ARRAYSIZE(why));
+        }
+        _snwprintf(msg, ARRAYSIZE(msg), L"%ls could not be uninstalled.\n\n%ls", name[0] ? name : L"The app", why);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        MessageBoxW(NULL, msg, L"Uninstall", MB_OK | MB_ICONERROR);
+    }
+    free(text);
+    return rc;
+}
+
 /* ---- keeping Start up to date ------------------------------------------ */
 
 static int watch_apps(void)
@@ -1276,6 +1449,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--launch")) ret = launch_app(argv[2], argv + 3, argc - 3);
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--sync")) ret = sync_apps();
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--watch")) ret = watch_apps();
+    else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--uninstall-appimage"))
+        ret = uninstall_appimage(argv[2], argc >= 4 && (!lstrcmpiW(argv[3], L"/quiet") || !lstrcmpiW(argv[3], L"--quiet")));
     CoUninitialize();
     return ret;
 }

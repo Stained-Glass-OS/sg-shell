@@ -458,6 +458,13 @@ test-store: build
 test-linuxapps: build
 	@sh test/linuxapps-check.sh
 
+# AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
+.PHONY: test-appimage test-appimage-mutants
+test-appimage: build
+	@sh test/appimage-check.sh
+test-appimage-mutants: build
+	@sh test/appimage-mutants.sh
+
 clean:
 	rm -rf $(BUILD)
 	rm -rf debian/sg-shell debian/.debhelper debian/*.substvars debian/files debian/debhelper-build-stamp

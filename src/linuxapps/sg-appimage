@@ -1,0 +1,622 @@
+#!/usr/bin/python3
+# sg-appimage -- AppImages a person downloaded, installed for them alone.
+#
+# An AppImage (Foo-x86_64.AppImage) is a Linux program in one file: a small
+# ELF "runtime" with the program's files appended as a SquashFS image. Here
+# it is installed the way the AppImage project suggests -- the file in
+# ~/Applications (made if missing; File Explorer shows it) -- and Start lists
+# it as any Linux app: a desktop entry in ~/.local/share/applications
+# (appimage-<id>.desktop) and its icon in ~/.local/share/icons/hicolor,
+# which sg-linuxapp64.exe turns into a Start entry, an Uninstall entry
+# (Settings > Apps) and its .ico. No root, nothing system-wide.
+#
+#   sg-appimage info FILE [--out OUT]         what the file is (KEY value lines)
+#   sg-appimage install [--move] FILE [--out OUT]
+#                                             install it (or the newer version
+#                                             of one installed: replaced)
+#   sg-appimage uninstall DESKTOP-FILE|ID [--out OUT]
+#   sg-appimage list                          the installed ones
+#   sg-appimage run APPIMAGE [ARG...]         start one (the entries' Exec)
+#
+# The file is never run to install it: an AppImage is a stranger's program
+# until the person starts it. What Start needs -- its desktop entry and its
+# icon -- is read out of the SquashFS with unsquashfs (-o: past the runtime;
+# -cat: one file, symbolic links resolved inside the image only), and every
+# value taken from it is cleaned: the name and comment are plain text, the
+# entry's command is ours ("sg-appimage run FILE"), of the image's own Exec
+# line only its file/URL placeholder is kept. Type 1 AppImages (an ISO 9660
+# image, before 2017) and other formats (DwarFS) are refused, saying so.
+#
+# Started from Start, an AppImage mounts itself with FUSE (libfuse2t64,
+# fusermount from fuse3); where FUSE cannot be used, it is started with
+# APPIMAGE_EXTRACT_AND_RUN=1 (it unpacks itself into /tmp instead).
+#
+# SG_APPIMAGE_DIR, XDG_DATA_HOME, SG_UNSQUASHFS and SG_APPIMAGE_FUSE (a
+# path standing for /dev/fuse) point all of this elsewhere for the gate
+# (test/appimage-check.sh); SG_MUTANT_* make the gate's mutants.
+#
+# Copyright (C) 2026 Stained Glass OS contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+import ctypes.util
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+
+SELF = os.environ.get("SG_APPIMAGE_SELF", "/usr/libexec/stained-glass/sg-appimage")
+UNSQUASHFS = os.environ.get("SG_UNSQUASHFS", "unsquashfs")
+MAX_ENTRY = 256 * 1024          # a desktop entry
+MAX_ICON = 4 * 1024 * 1024      # an icon file
+SAFE_PATH = re.compile(r"^[A-Za-z0-9._+@-]+(/[A-Za-z0-9._+@-]+)*$")   # no wildcards for unsquashfs
+ICON_SIZES = (16, 22, 24, 32, 48, 64, 96, 128, 256)
+MACHINES = {"x86_64": 62, "amd64": 62, "aarch64": 183, "arm64": 183, "i686": 3, "i386": 3}
+
+
+def mutant(name):
+    return os.environ.get("SG_MUTANT_" + name) == "1"
+
+
+class Refused(Exception):
+    pass
+
+
+# ---- where things go ---------------------------------------------------------------------------
+
+def home():
+    return os.environ.get("HOME") or os.path.expanduser("~")
+
+
+def apps_dir():
+    return os.environ.get("SG_APPIMAGE_DIR") or os.path.join(home(), "Applications")
+
+
+def data_home():
+    return os.environ.get("XDG_DATA_HOME") or os.path.join(home(), ".local", "share")
+
+
+def entries_dir():
+    return os.path.join(data_home(), "applications")
+
+
+def icons_dir():
+    return os.path.join(data_home(), "icons", "hicolor")
+
+
+# ---- reading the file --------------------------------------------------------------------------
+
+def squashfs_offset(path):
+    """(offset of the SquashFS image, AppImage type) -- or Refused, saying why"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(64)
+            if head[:4] != b"\x7fELF":
+                if head[:2] == b"\x1f\x8b" or head[:4] == b"PK\x03\x04":
+                    raise Refused("This file is an archive, not an AppImage.")
+                raise Refused("This file is not an AppImage (a Linux program in one file), so it cannot be installed.")
+            if head[8:11] == b"AI\x01":
+                raise Refused("This is an AppImage of the old kind (type 1), which cannot be installed here. "
+                              "The maker's newer AppImages (type 2) can.")
+            kind = 2 if head[8:11] == b"AI\x02" else 0
+            if head[4] == 2:      # 64-bit
+                endian = "<" if head[5] == 1 else ">"
+                machine = struct.unpack(endian + "H", head[18:20])[0]
+                shoff = struct.unpack(endian + "Q", head[40:48])[0]
+                shentsize, shnum = struct.unpack(endian + "HH", head[58:62])
+            elif head[4] == 1:
+                endian = "<" if head[5] == 1 else ">"
+                machine = struct.unpack(endian + "H", head[18:20])[0]
+                shoff = struct.unpack(endian + "I", head[32:36])[0]
+                shentsize, shnum = struct.unpack(endian + "HH", head[46:50])
+            else:
+                raise Refused("This file is not an AppImage, so it cannot be installed.")
+            want = MACHINES.get(os.uname().machine)
+            if not mutant("ANY_MACHINE") and want is not None and machine != want:
+                raise Refused("This AppImage is built for another kind of processor, so it cannot run on this PC.")
+            offset = shoff + shentsize * shnum
+            f.seek(offset)
+            magic = f.read(4)
+    except OSError as e:
+        raise Refused("The file could not be read (%s)." % e.strerror)
+    if magic == b"DWAR" or magic[:4] == b"DWAR":
+        raise Refused("This AppImage uses a format (DwarFS) that cannot be installed here.")
+    if magic != b"hsqs":
+        raise Refused("This file is not an AppImage (no program image was found in it), so it cannot be installed."
+                      if not kind else "This AppImage's program image could not be found; the file may be damaged.")
+    return offset, kind
+
+
+class Image:
+    """the SquashFS inside an AppImage, read with unsquashfs (never mounted, never run)"""
+
+    def __init__(self, path):
+        self.path = path
+        self.offset, self.kind = squashfs_offset(path)
+
+    def _run(self, args, limit):
+        try:
+            p = subprocess.Popen([UNSQUASHFS, "-o", str(self.offset)] + args + [self.path] + self._names,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        except OSError:
+            raise Refused("AppImages cannot be read here (unsquashfs, from squashfs-tools, is missing).")
+        data = p.stdout.read(limit + 1)
+        if len(data) > limit:
+            p.kill()
+        p.stdout.close()
+        try:
+            p.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            return None
+        return data if p.returncode == 0 and len(data) <= limit else None
+
+    def root_files(self):
+        self._names = []
+        out = self._run(["-lc", "-max-depth", "1"], 1 << 20)
+        if out is None:
+            raise Refused("This AppImage's program image could not be read; the file may be damaged.")
+        names = []
+        for line in out.decode("utf-8", "replace").splitlines():
+            if line.startswith("squashfs-root/"):
+                names.append(line[len("squashfs-root/"):])
+        return names
+
+    def cat(self, name, limit):
+        """one file's bytes (symbolic links resolved inside the image), or None"""
+        if not SAFE_PATH.match(name) or ".." in name.split("/"):
+            return None
+        self._names = [name]
+        return self._run(["-cat"], limit)
+
+
+# ---- the desktop entry -------------------------------------------------------------------------
+
+def parse_entry(text):
+    """the [Desktop Entry] group's keys (unlocalized ones, and Name[xx] etc. kept apart)"""
+    out, group = {}, None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            group = line
+            continue
+        if group == "[Desktop Entry]" and "=" in line:
+            k, v = line.split("=", 1)
+            out.setdefault(k.strip(), v.strip())
+    return out
+
+
+def unescape(v):
+    return v.replace("\\s", " ").replace("\\n", " ").replace("\\t", " ").replace("\\r", " ").replace("\\\\", "\\")
+
+
+def clean_text(v, limit):
+    """plain text: no control characters, one line, not too long"""
+    v = "".join(c if c.isprintable() else " " for c in unescape(v or ""))
+    v = re.sub(r"\s+", " ", v).strip()
+    return v[:limit].strip()
+
+
+def clean_id(v):
+    v = re.sub(r"[^A-Za-z0-9._-]+", "-", v or "").strip(".-_")
+    return v[:80].strip(".-_")
+
+
+def clean_list(v, pattern):
+    return ";".join(x for x in (v or "").split(";") if x and re.match(pattern, x) and len(x) < 128)
+
+
+def placeholder(exec_line):
+    """of the image's own Exec line, only what it is handed: %f, %F, %u or %U"""
+    if mutant("KEEP_EXEC"):
+        return exec_line
+    for tok in re.findall(r"%[fFuU]", exec_line or ""):
+        return tok
+    return ""
+
+
+def exec_quote(arg):
+    """an Exec argument, quoted (the Desktop Entry spec), then escaped as a string value"""
+    if re.match(r"^[A-Za-z0-9._+/@=,:-]+$", arg):
+        q = arg
+    else:
+        q = '"' + re.sub(r'(["`$\\])', r"\\\1", arg) + '"'
+    return q.replace("\\", "\\\\").replace("%", "%%")
+
+
+def png_size(data):
+    if len(data) >= 24 and data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+        return struct.unpack(">II", data[16:24])
+    return None
+
+
+def is_svg(data):
+    head = data[:4096].lstrip()
+    return head.startswith(b"<?xml") and b"<svg" in data[:8192] or head.startswith(b"<svg")
+
+
+def read_app(path):
+    """what the AppImage says it is: a dict, or Refused"""
+    img = Image(path)
+    roots = img.root_files()
+    desktops = sorted(n for n in roots if n.endswith(".desktop") and "/" not in n)
+    entry, entry_name = None, None
+    for n in desktops:
+        data = img.cat(n, MAX_ENTRY)
+        if data:
+            e = parse_entry(data.decode("utf-8", "replace"))
+            if e.get("Type", "Application") == "Application" and e.get("Name"):
+                entry, entry_name = e, n
+                break
+    if not entry:
+        raise Refused("This AppImage does not say what program it is (it has no desktop entry), so it cannot be installed.")
+    name = clean_text(entry.get("Name"), 100)
+    if not name:
+        raise Refused("This AppImage does not give its program's name, so it cannot be installed.")
+    app_id = clean_id(entry_name[:-len(".desktop")]) or clean_id(name) or "app"
+    app = {
+        "id": app_id,
+        "name": name,
+        "comment": clean_text(entry.get("Comment") or entry.get("GenericName"), 200),
+        "version": clean_text(entry.get("X-AppImage-Version"), 60),
+        "placeholder": placeholder(entry.get("Exec", "")),
+        "terminal": "true" if entry.get("Terminal", "").strip().lower() == "true" else "false",
+        "categories": clean_list(entry.get("Categories"), r"^[A-Za-z0-9-]+$"),
+        "mime": clean_list(entry.get("MimeType"), r"^[A-Za-z0-9.+_-]+/[A-Za-z0-9.+_-]+$"),
+        "wmclass": clean_text(entry.get("StartupWMClass"), 100),
+        "kind": img.kind,
+        "icons": [],
+    }
+    app["icons"] = read_icons(img, entry.get("Icon", ""), roots)
+    return app
+
+
+def read_icons(img, icon, roots):
+    """[(subdir, ext, bytes)]: the app's icons, as the theme's sizes"""
+    icon = os.path.basename(icon.strip())
+    for ext in (".png", ".svg", ".xpm"):
+        if icon.lower().endswith(ext):
+            icon = icon[:-len(ext)]
+    found = []
+    if icon and SAFE_PATH.match(icon):
+        for s in ICON_SIZES + (512,):
+            data = img.cat("usr/share/icons/hicolor/%dx%d/apps/%s.png" % (s, s, icon), MAX_ICON)
+            if data and png_size(data):
+                found.append(("%dx%d" % (s, s), ".png", data))
+        data = img.cat("usr/share/icons/hicolor/scalable/apps/%s.svg" % icon, MAX_ICON)
+        if data and is_svg(data):
+            found.append(("scalable", ".svg", data))
+    if not found:
+        # the image's own icon beside its entry, or .DirIcon (the AppImage's icon)
+        cands = []
+        if icon and SAFE_PATH.match(icon):
+            cands += [icon + ".png", icon + ".svg"]
+        cands.append(".DirIcon")
+        for c in cands:
+            if c not in roots:
+                continue
+            data = img.cat(c, MAX_ICON)
+            if not data:
+                continue
+            size = png_size(data)
+            if size and size[0] == size[1] and size[0] in ICON_SIZES + (512,):
+                found.append(("%dx%d" % size, ".png", data))
+            elif size:
+                found.append(("other", ".png", data))
+            elif is_svg(data):
+                found.append(("scalable", ".svg", data))
+            if found:
+                break
+    return found
+
+
+# ---- installing --------------------------------------------------------------------------------
+
+def installed():
+    """{id: {"desktop": path, "appimage": path, ...}} -- ours in ~/.local/share/applications"""
+    out = {}
+    d = entries_dir()
+    try:
+        names = sorted(os.listdir(d))
+    except OSError:
+        return out
+    for n in names:
+        if not (n.startswith("appimage-") and n.endswith(".desktop")):
+            continue
+        p = os.path.join(d, n)
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                e = parse_entry(f.read(MAX_ENTRY))
+        except OSError:
+            continue
+        if not e.get("X-SG-AppImage"):
+            continue
+        app_id = e.get("X-SG-AppImage-Id") or n[len("appimage-"):-len(".desktop")]
+        out[app_id] = {"desktop": p, "appimage": e["X-SG-AppImage"], "name": e.get("Name", ""),
+                       "version": e.get("X-AppImage-Version", "")}
+    return out
+
+
+def safe_file_name(src):
+    base = os.path.basename(src)
+    base = re.sub(r"[^A-Za-z0-9._+-]+", "_", base).strip("._") or "app"
+    if not base.lower().endswith(".appimage"):
+        base += ".AppImage"
+    return base[-200:]
+
+
+def inside(path, folder):
+    try:
+        return os.path.commonpath([os.path.realpath(path), os.path.realpath(folder)]) == os.path.realpath(folder)
+    except ValueError:
+        return False
+
+
+def remove_icons(app_id):
+    base = icons_dir()
+    try:
+        subs = os.listdir(base)
+    except OSError:
+        return
+    for s in subs:
+        for ext in (".png", ".svg"):
+            p = os.path.join(base, s, "apps", "appimage-%s%s" % (app_id, ext))
+            if os.path.lexists(p):
+                os.unlink(p)
+
+
+def write_atomic(path, data, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".sg-appimage.")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def scaled_png(data, size):
+    """a PNG of another size drawn at SIZE x SIZE (rsvg-convert, from an SVG that holds it)"""
+    import base64
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%d" height="%d">'
+           '<image width="%d" height="%d" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,%s"/></svg>'
+           % (size, size, size, size, base64.b64encode(data).decode()))
+    try:
+        p = subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size)], input=svg.encode(),
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return p.stdout if p.returncode == 0 and png_size(p.stdout) == (size, size) else None
+
+
+def install_icons(app_id, icons):
+    """the icons into ~/.local/share/icons/hicolor/<size>/apps/appimage-<id>.png|svg; True if any"""
+    remove_icons(app_id)
+    have = False
+    native_256 = any(sub == "256x256" for sub, _, _ in icons)
+    for sub, ext, data in icons:
+        if sub in ("512x512", "other") and not native_256:
+            # Start's icons go up to 256: one drawn at 256 as well
+            small = scaled_png(data, 256)
+            if small:
+                write_atomic(os.path.join(icons_dir(), "256x256", "apps", "appimage-%s.png" % app_id), small)
+                have = True
+        if sub == "other":
+            continue
+        write_atomic(os.path.join(icons_dir(), sub, "apps", "appimage-%s%s" % (app_id, ext)), data)
+        have = True
+    try:
+        os.utime(icons_dir())      # the theme's caches look again
+    except OSError:
+        pass
+    return have
+
+
+def desktop_text(app, appimage, source, have_icon):
+    args = [SELF, "run", appimage]
+    exec_line = " ".join(exec_quote(a) for a in args)
+    ph = app["placeholder"]
+    if ph:
+        exec_line += " " + ph
+    lines = [
+        "[Desktop Entry]",
+        "Type=Application",
+        "Name=" + app["name"],
+    ]
+    if app["comment"]:
+        lines.append("Comment=" + app["comment"])
+    lines += [
+        "Exec=" + exec_line,
+        "TryExec=" + appimage,
+        "Terminal=" + app["terminal"],
+    ]
+    if have_icon:
+        lines.append("Icon=appimage-" + app["id"])
+    if app["categories"]:
+        lines.append("Categories=" + app["categories"] + ";")
+    if app["mime"]:
+        lines.append("MimeType=" + app["mime"] + ";")
+    if app["wmclass"]:
+        lines.append("StartupWMClass=" + app["wmclass"])
+    if app["version"]:
+        lines.append("X-AppImage-Version=" + app["version"])
+    lines += [
+        "X-SG-AppImage=" + appimage,
+        "X-SG-AppImage-Id=" + app["id"],
+        "X-SG-AppImage-Source=" + clean_text(source, 400),
+    ]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def refresh_entries():
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", "-q", entries_dir()], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=60)
+
+
+def install(src, move=False):
+    src = os.path.abspath(src)
+    if not os.path.isfile(src):
+        raise Refused("The file could not be found.")
+    app = read_app(src)
+    folder = apps_dir()
+    os.makedirs(folder, mode=0o755, exist_ok=True)
+    have = installed()
+    old = have.get(app["id"])
+    if mutant("NO_REPLACE"):
+        old = None
+        while app["id"] in have:
+            app["id"] += "-2"
+    dest = os.path.join(folder, safe_file_name(src))
+    old_file = old["appimage"] if old else None
+    # a file of that name that is another app's (or not ours at all): a name of its own
+    taken = {v["appimage"] for k, v in have.items() if k != app["id"]}
+    stem, ext = dest[:-len(".AppImage")], dest[-len(".AppImage"):]
+    n = 2
+    while os.path.realpath(dest) != os.path.realpath(src) and dest != old_file and (dest in taken or os.path.lexists(dest)):
+        dest = "%s-%d%s" % (stem, n, ext)
+        n += 1
+    if os.path.realpath(dest) != os.path.realpath(src):
+        fd, tmp = tempfile.mkstemp(dir=folder, prefix=".sg-appimage.")
+        os.close(fd)
+        try:
+            shutil.copyfile(src, tmp)
+            os.chmod(tmp, 0o755)
+            os.replace(tmp, dest)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+        if move:
+            try:
+                os.unlink(src)
+            except OSError:
+                pass
+    else:
+        os.chmod(dest, 0o755)
+    # the version it replaces
+    if old_file and old_file != dest and inside(old_file, folder) and os.path.isfile(old_file) and not os.path.islink(old_file):
+        os.unlink(old_file)
+    if old and os.path.basename(old["desktop"]) != "appimage-%s.desktop" % app["id"]:
+        os.unlink(old["desktop"])
+    have_icon = install_icons(app["id"], app["icons"])
+    desktop = os.path.join(entries_dir(), "appimage-%s.desktop" % app["id"])
+    write_atomic(desktop, desktop_text(app, dest, src, have_icon))
+    refresh_entries()
+    return app, dest, desktop, bool(old)
+
+
+def find_installed(what):
+    have = installed()
+    if what in have:
+        return what, have[what]
+    for k, v in have.items():
+        if os.path.abspath(what) in (v["desktop"], v["appimage"]):
+            return k, v
+    return None, None
+
+
+def uninstall(what):
+    app_id, v = find_installed(what)
+    if not v:
+        raise Refused("That AppImage is not installed.")
+    f = v["appimage"]
+    if not mutant("KEEP_FILE") and inside(f, apps_dir()) and os.path.isfile(f) and not os.path.islink(f):
+        os.unlink(f)
+    remove_icons(app_id)
+    os.unlink(v["desktop"])
+    refresh_entries()
+    return app_id, v
+
+
+# ---- starting one ------------------------------------------------------------------------------
+
+def fuse_usable():
+    dev = os.environ.get("SG_APPIMAGE_FUSE", "/dev/fuse")
+    if not os.access(dev, os.R_OK | os.W_OK):
+        return False
+    if not (shutil.which("fusermount") or shutil.which("fusermount3")):
+        return False
+    return bool(ctypes.util.find_library("fuse")) or os.path.exists("/usr/lib/x86_64-linux-gnu/libfuse.so.2")
+
+
+def run(path, args):
+    env = dict(os.environ)
+    if not mutant("NO_EXTRACT_FALLBACK") and not fuse_usable():
+        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    try:
+        st = os.stat(path)
+        if not st.st_mode & 0o100 and os.access(path, os.W_OK):
+            os.chmod(path, st.st_mode | 0o755)
+        os.execve(path, [path] + args, env)
+    except OSError as e:
+        sys.stderr.write("sg-appimage: %s could not be started: %s\n" % (path, e.strerror))
+        return 1
+
+
+# ---- the command line ---------------------------------------------------------------------------
+
+def emit(lines, out):
+    text = "".join("%s %s\n" % (k, str(v).replace("\n", " ")) for k, v in lines)
+    if out:
+        write_atomic(out, text.encode("utf-8"), 0o600)
+    else:
+        sys.stdout.write(text)
+
+
+def main(argv):
+    if len(argv) < 2:
+        sys.stderr.write(__doc__ if __doc__ else "usage: sg-appimage info|install|uninstall|list|run ...\n")
+        return 2
+    cmd, rest = argv[1], argv[2:]
+    if cmd == "run":
+        if not rest:
+            return 2
+        return run(rest[0], rest[1:])
+    out = None
+    if "--out" in rest:
+        i = rest.index("--out")
+        out = rest[i + 1] if i + 1 < len(rest) else None
+        del rest[i:i + 2]
+    move = "--move" in rest
+    rest = [a for a in rest if a != "--move"]
+    try:
+        if cmd == "info" and rest:
+            app = read_app(rest[0])
+            have = installed().get(app["id"])
+            emit([("NAME", app["name"]), ("ID", app["id"]), ("VERSION", app["version"]),
+                  ("COMMENT", app["comment"]), ("ICON", "yes" if app["icons"] else "no"),
+                  ("INSTALLED", (have["version"] or "yes") if have else "-"),
+                  ("FOLDER", apps_dir()), ("OK", "")], out)
+        elif cmd == "install" and rest:
+            app, dest, desktop, replaced = install(rest[0], move)
+            emit([("NAME", app["name"]), ("ID", app["id"]), ("APPIMAGE", dest), ("DESKTOP", desktop),
+                  ("REPLACED", "yes" if replaced else "no"), ("OK", "")], out)
+        elif cmd == "uninstall" and rest:
+            app_id, v = uninstall(rest[0])
+            emit([("NAME", v["name"]), ("ID", app_id), ("OK", "")], out)
+        elif cmd == "list":
+            for k, v in sorted(installed().items()):
+                print("%s\t%s\t%s\t%s" % (k, v["name"], v["version"], v["appimage"]))
+        else:
+            sys.stderr.write("usage: sg-appimage info|install|uninstall|list|run ...\n")
+            return 2
+    except Refused as e:
+        emit([("ERROR", str(e))], out)
+        return 1
+    except OSError as e:
+        emit([("ERROR", "The AppImage could not be installed (%s)." % (e.strerror or e))], out)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -120,6 +120,7 @@ void sys_batch_begin(void);                                     /* several apps,
 void sys_batch_end(void);
 int  sys_helper_main(const WCHAR *file);                        /* --elevated-helper FILE */
 int  sys_deb_window(HINSTANCE inst, const WCHAR *file);         /* --deb FILE */
+int  sys_appimage_window(HINSTANCE inst, const WCHAR *file);    /* --appimage FILE */
 BOOL sys_unix_path(const WCHAR *dos, char *out, int cch);
 void sys_run_linux(const WCHAR *unix_path);
 char *sys_appinfo(const WCHAR *pkg);
