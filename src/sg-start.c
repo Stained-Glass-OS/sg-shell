@@ -1200,7 +1200,10 @@ static void power_menu(POINT pt)
         menu_add(m, 0, NULL);
         if (g_can_suspend) menu_add(m, P_SLEEP, L"&Sleep");
         if (g_can_hibernate) menu_add(m, P_HIBERNATE, L"&Hibernate");
-        menu_add(m, P_RESTART, L"&Restart");
+        /* updates downloaded and staged for the next boot: a restart installs
+         * them, and says so, as Windows' "Update and restart" does */
+        menu_add(m, P_RESTART, GetFileAttributesW(L"\\\\?\\unix\\system-update") != INVALID_FILE_ATTRIBUTES
+                 ? L"Update and &restart" : L"&Restart");
         menu_add(m, P_SHUTDOWN, L"Sh&ut down");
     }
     cmd = track(m, pt, L"power");

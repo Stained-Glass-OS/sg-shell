@@ -327,6 +327,11 @@ else fail "no Add Bluetooth or other device button"; fi
 wine start ms-settings:windowsupdate >/dev/null 2>&1
 page_is "Updates" "ms-settings:windowsupdate"
 has "text Updates available" && has "wine-sg 10.0-38 (installed: 10.0-37)" && pass "Update lists the pending updates" || fail "Update page: $(tr -d '\r' < "$DUMP" | grep '^text' | head -8)"
+# found, not downloaded: a restart now installs nothing, so the page says
+# they download first and offers that now (David, 2026-10-07)
+[ -n "$(ctl_at Button 'Download now')" ] && tr -d '\r' < "$DUMP" | grep -q 'restart to install them' \
+    && pass "updates found but not downloaded: the page says so and offers Download now" \
+    || fail "available, not downloaded: $(tr -d '\r' < "$DUMP" | grep -E '^(text|control)' | head -8)"
 shot update
 # David: "it should show the download progress of each update. and when they
 # are ready to be installed offer a reboot button"

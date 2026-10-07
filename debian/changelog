@@ -1,3 +1,13 @@
+sg-shell (0.1.0-158) unstable; urgency=medium
+
+  * Updates found but not downloaded say so (David, on the Surface: "it says
+    it has 8 updates but rebooting does not install them"): Settings >
+    Updates explains they download first and offers Download now; once
+    they are staged, Start's power menu says Update and restart.
+    settings-check covers the page.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 14:05:00 -0700
+
 sg-shell (0.1.0-157) unstable; urgency=medium
 
   * The taskbar's flyouts close on a second click of their icon, as on

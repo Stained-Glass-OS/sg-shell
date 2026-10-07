@@ -449,7 +449,11 @@ void set_build_update(void)
         else lstrcpyW(line, L"Preparing the download");
         y = st_card(y, IC_G_UPDATE, L"Downloading updates", line);
     } else if (n) {
-        _snwprintf(line, ARRAYSIZE(line), L"%d update%ls available", n, n == 1 ? L" is" : L"s are");
+        /* found, not downloaded yet: a restart now installs nothing (David,
+         * 2026-10-07: "it says it has 8 updates but rebooting does not
+         * install them") -- say so, and offer the download now */
+        _snwprintf(line, ARRAYSIZE(line), L"%d update%ls available. They download in the background; "
+                   L"when they are ready, restart to install them.", n, n == 1 ? L" is" : L"s are");
         y = st_card(y, IC_G_UPDATE, L"Updates available", line);
     } else y = st_card(y, IC_G_UPDATE, L"You're up to date", u.checked ? u.last : L"Stained Glass OS checks for updates every day.");
     if (u.checked) { _snwprintf(line, ARRAYSIZE(line), L"Last checked: %ls", u.last); y = st_text(y, line); }
@@ -472,7 +476,7 @@ void set_build_update(void)
     pos = NULL;
     y += S(4);
     if (staged) st_button(&y, L"Restart now", CMD_RESTART);
-    if (!downloading) st_button(&y, L"Check for updates", CMD_CHECK);
+    if (!downloading) st_button(&y, (n && !staged) ? L"Download now" : L"Check for updates", CMD_CHECK);
     st_button(&y, L"Advanced options", CMD_SOURCES);
     if (n) {
         y = st_head(y, staged ? L"Ready to install" : L"Available updates");
