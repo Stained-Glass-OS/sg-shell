@@ -44,6 +44,7 @@
 #include "sg-smooth.h"
 #include "sg-round.h"
 #include "sg-dpi.h"
+#include "sg-flyout.h"
 
 #define WM_TRAY   (WM_APP + 1)
 #define WM_TOGGLE (WM_APP + 2)
@@ -524,7 +525,11 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 #endif
     case WM_ERASEBKGND: return 1;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE) show_panel(FALSE);
+        if (LOWORD(wp) == WA_INACTIVE)
+        {
+            if (IsWindowVisible(hwnd)) sg_flyout_hidden(g_tray, 1);
+            show_panel(FALSE);
+        }
         return 0;
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) show_panel(FALSE);
@@ -626,7 +631,12 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         ask_missing();
         return 0;
     case WM_TRAY:
-        if (lp == WM_LBUTTONUP) show_panel(!IsWindowVisible(g_fly));
+        if (lp == WM_LBUTTONUP)
+        {
+            /* a second click on the icon closes it (sg-flyout.h) */
+            if (IsWindowVisible(g_fly)) show_panel(FALSE);
+            else if (sg_flyout_may_open()) show_panel(TRUE);
+        }
         else if (lp == WM_RBUTTONUP || lp == WM_CONTEXTMENU)
         {
             HMENU m = CreatePopupMenu();

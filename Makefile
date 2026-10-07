@@ -291,6 +291,20 @@ test-credmgr: build
 	   [ $$rc -eq 1 ] || { echo "credmgr-check: the mutant $$m was not caught ($$rc)"; exit 1; }; \
 	   echo "mutant $$m killed"; done
 
+# A flyout from the taskbar closes on a second click of its button (Start,
+# Volume, Notifications; src/sg-flyout.h): test/flyout-toggle-check.sh, and
+# the mutant build (the guard off) must fail it.
+.PHONY: test-flyout-toggle
+test-flyout-toggle: build
+	@sh test/flyout-toggle-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_FLYOUT_REOPENS -o $(BUILD)/sg-volume-mut.exe src/sg-volume.c \
+	     -lshell32 -luser32 -lgdi32 -municode -mwindows || exit 1; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_FLYOUT_REOPENS -o $(BUILD)/sg-notify-mut.exe src/sg-notify.c \
+	     -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows || exit 1; \
+	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe SG_NOTIFY_EXE=$(BUILD)/sg-notify-mut.exe sh test/flyout-toggle-check.sh >/dev/null 2>&1; rc=$$?; \
+	 [ $$rc -eq 1 ] || { echo "flyout-toggle-check: the mutant FLYOUT_REOPENS was not caught ($$rc)"; exit 1; }; \
+	 echo "flyout-toggle-check: mutant FLYOUT_REOPENS caught"
+
 # The touch keyboard (sg-touchkbd): test/touchkbd-check.sh, and each mutant
 # build must fail it.
 .PHONY: test-touchkbd

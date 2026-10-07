@@ -27,6 +27,7 @@
 #include "sg-smooth.h"
 #include "sg-round.h"
 #include "sg-dpi.h"
+#include "sg-flyout.h"
 
 #define FLY_W 360
 #define FLY_H 112
@@ -471,7 +472,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 #endif
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_dragging && !IsWindowVisible((HWND)lp)) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
+        if (LOWORD(wp) == WA_INACTIVE && !g_dragging && !IsWindowVisible((HWND)lp)) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); sg_flyout_hidden(g_tray, 1); }
         return 0;
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) ShowWindow(hwnd, SW_HIDE);
@@ -546,7 +547,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (lp == WM_LBUTTONUP)
         {
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
-            else if (GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed */ }
+            else if (!sg_flyout_may_open() || GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed (sg-flyout.h) */ }
             else
             {
                 place_flyout();

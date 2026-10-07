@@ -1,3 +1,16 @@
+sg-shell (0.1.0-157) unstable; urgency=medium
+
+  * The taskbar's flyouts close on a second click of their icon, as on
+    Windows (David): the click's press hid them on losing activation and
+    its release reopened them -- Notifications always, Volume with a click
+    held over 200 ms; Battery and Network the same way. src/sg-flyout.h: a
+    press on the flyout's own icon that hid it keeps that click from
+    reopening it. make test-flyout-toggle (Start, Volume, Notifications:
+    quick and held clicks, a third click reopens, another icon opens its
+    own); mutant SG_MUTANT_FLYOUT_REOPENS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 13:30:51 -0700
+
 sg-shell (0.1.0-156) unstable; urgency=medium
 
   * AppImages: a downloaded Foo-x86_64.AppImage installs for the person

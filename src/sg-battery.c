@@ -22,6 +22,7 @@
 #include "sg-mode.h"
 #include "sg-round.h"
 #include "sg-dpi.h"
+#include "sg-flyout.h"
 
 #define FLY_W 360
 #define FLY_H 150
@@ -222,7 +223,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 #endif
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE) ShowWindow(hwnd, SW_HIDE);
+        if (LOWORD(wp) == WA_INACTIVE && IsWindowVisible(hwnd)) { ShowWindow(hwnd, SW_HIDE); sg_flyout_hidden(g_tray, 1); }
         return 0;
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) ShowWindow(hwnd, SW_HIDE);
@@ -266,6 +267,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (lp == WM_LBUTTONUP)
         {
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
+            else if (!sg_flyout_may_open()) { /* this click's press just closed it (sg-flyout.h) */ }
             else
             {
                 read_status();

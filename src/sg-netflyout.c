@@ -26,6 +26,7 @@
 #include "sg-smooth.h"
 #include "sg-round.h"
 #include "sg-dpi.h"
+#include "sg-flyout.h"
 
 /* the flyout at the display scale, a new one too (per-monitor v2, sg-dpi.h):
  * its sizes are 100%'s, S() at the DPI it is drawn at */
@@ -833,7 +834,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 #endif
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && !g_busy && GetParent((HWND)lp) != hwnd && (HWND)lp != g_key) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); }
+        if (LOWORD(wp) == WA_INACTIVE && !g_busy && GetParent((HWND)lp) != hwnd && (HWND)lp != g_key) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); sg_flyout_hidden(g_tray_wnd, 1); }
         return 0;
     case WM_CTLCOLOREDIT:
     {
@@ -929,7 +930,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 return 0;
             }
             if (IsWindowVisible(g_fly)) ShowWindow(g_fly, SW_HIDE);
-            else if (GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed */ }
+            else if (!sg_flyout_may_open() || GetTickCount() - g_fly_hidden < 200) { /* this same click just dismissed the flyout: leave it closed (sg-flyout.h) */ }
             else show_flyout();
         }
         else if (lp == WM_RBUTTONUP || lp == WM_CONTEXTMENU)
