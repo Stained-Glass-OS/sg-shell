@@ -1,3 +1,11 @@
+sg-shell (0.1.0-154) unstable; urgency=medium
+
+  * test/pdf-pen-check.sh: SG PDF is started before the pen comes (the test
+    tablet plugged in after it) and is no longer restarted to see the pen:
+    wine-sg 1150/1420 give a running program a pen that appears later.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 21:55:00 -0700
+
 sg-shell (0.1.0-153) unstable; urgency=medium
 
   * SG PDF: draw with a pen's pressure. Comment's Draw takes the pen's own

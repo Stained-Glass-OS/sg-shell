@@ -2,9 +2,10 @@
 . "$(dirname "$0")/scratch-home.sh"
 # Gate for SG PDF's pen ink (src/pdf/interact.c tool_pointer, with sg-session's
 # sg-pdf drawing it): a real pen stroke -- sg-compositor's test build
-# (-Dtest-tablet=true) feeds a pen through its real input path, Xwayland makes
-# it an X tablet, wine-sg (1000/1150) gives SG PDF its WM_POINTER messages
-# with GetPointerPenInfo's pressure. The pen taps Comment's Draw and draws
+# (-Dtest-tablet=true) feeds a pen through its real input path, its tablet
+# plugged in only after SG PDF started; Xwayland makes it an X tablet, wine-sg
+# (1000/1150/1420) gives SG PDF its WM_POINTER messages with
+# GetPointerPenInfo's pressure. The pen taps Comment's Draw and draws
 # left to right pressing harder and harder; the pen taps Save. The saved file
 # (read with MuPDF from outside SG PDF): a standard Ink annotation whose
 # widths follow the pressure (/SGInkWidths, smallest to largest at least
@@ -50,7 +51,7 @@ for need in Xwayland meson ninja xdpyinfo; do command -v "$need" >/dev/null || {
 $PY -c 'import pymupdf' 2>/dev/null || { echo "SKIP: python3-pymupdf missing"; exit 77; }
 [ -x "$WINE" ] && [ -f "$EXE" ] || { echo "SKIP: no wine at $WINE or no $EXE"; exit 77; }
 [ -n "$HELPER" ] && [ -x "$HELPER" ] || { echo "SKIP: sg-pdf (sg-session) not found"; exit 77; }
-grep -q '"pressure %lf"' "$SRC/seat.c" 2>/dev/null || { echo "SKIP: no sg-compositor 0.2.0+sg39 or later at $SRC"; exit 77; }
+grep -q 'SG_TEST_TABLET_LATE' "$SRC/seat.c" 2>/dev/null || { echo "SKIP: no sg-compositor 0.2.0+sg40 or later at $SRC"; exit 77; }
 printf 'quit\n' | "$HELPER" --serve >/dev/null 2>&1
 grep -q 'pressure' "$(dirname "$HELPER")/../pdf/sgpdf.py" 2>/dev/null || grep -q 'SGInkWidths' /usr/lib/stained-glass/pdf/sgpdf.py 2>/dev/null \
     || { echo "SKIP: $HELPER draws no pen pressure (sg-session too old)"; exit 77; }
@@ -65,7 +66,7 @@ meson setup "$T/comp" "$SRC" -Dtest-tablet=true -Dman-pages=disabled --buildtype
     ninja -C "$T/comp" >"$T/ninja.log" 2>&1 || { tail -20 "$T/meson.log" "$T/ninja.log"; echo "SKIP: cannot build the test compositor"; exit 77; }
 mkfifo "$T/pen"
 unset DISPLAY WAYLAND_DISPLAY
-SG_TEST_TABLET_FIFO="$T/pen" WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+SG_TEST_TABLET_LATE=1 SG_TEST_TABLET_FIFO="$T/pen" WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
     "$T/comp/sg-compositor" -L "$T/priv.sock" -C "$T/ctl.sock" -U "$(id -u)" -- \
     sh -c "echo \$DISPLAY > $T/disp; exec sleep 900" >"$T/comp.log" 2>&1 &
 CP=$!
@@ -107,10 +108,11 @@ page_xy() {  # X Y (points) -> screen x y on page 1
     $PY -c "l,t,r,b=$3,$4,$5,$6; s=(r-l)/612.0; print(int(l+$1*s), int(t+$2*s))"
 }
 
-# Xwayland makes the pen's X device when the pen first comes over one of its
-# windows, and a Windows program reads the pens when it starts (wine-sg 1150
-# also takes a pen that appears later, where the X server says so): SG PDF
-# is started, the pen brought over it once, and SG PDF started again.
+# SG PDF is running before the pen comes: the test tablet is plugged in only
+# after it started (SG_TEST_TABLET_LATE), as a Surface's pen device appears
+# late (a Bluetooth pen, iptsd starting after the session). wine-sg 1150/1420
+# give a running program a pen that appears later; before, the pen reached
+# only a program started after it, and this check started SG PDF twice.
 start_pdf() {
     rm -f "$D"
     SG_PDF_DUMP="$(wd "$D")" timeout -s KILL 600 "$WINE" "$EXE" "$(wd "$DOCS/pen.pdf")" >"$T/app.log" 2>&1 &
@@ -118,11 +120,8 @@ start_pdf() {
     wait_field pages 1 30 || fail "the document did not open: pages '$(field pages)'"
 }
 start_pdf
-set -- $(field "page 1")
-[ $# -ge 4 ] && feed "in $(nx $(( ($1 + $3) / 2 ))) $(ny $(( ($2 + $4) / 2 )))" "move 0.5 0.5" out
-sleep 1
-"$WINE" taskkill /f /im sg-pdf64.exe >/dev/null 2>&1; sleep 2
-start_pdf
+sleep 2
+feed plug
 sleep 2
 [ "$(field pointerdevices)" != 0 ] || { echo "SKIP: $WINE lists no pen to programs (wine-sg 10.0-197 or later needed)"; exit 77; }
 # Comment's Draw, from the quick tools rail, with the pen
