@@ -892,6 +892,7 @@ int admin_main(int argc, WCHAR **argv)
 {
     if (argc < 1) return 2;
     if (!lstrcmpW(argv[0], L"envvars-system")) return envvars_main(TRUE);
+    if (!wcsncmp(argv[0], L"firewall-", 9)) return firewall_admin(argc, argv);
     if (!lstrcmpW(argv[0], L"rename")) return do_rename();
     if (!lstrcmpW(argv[0], L"rename-pc")) return do_rename_pc();
     if (!lstrcmpW(argv[0], L"user-add")) return do_user_add();

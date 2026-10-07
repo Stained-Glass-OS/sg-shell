@@ -805,6 +805,77 @@ static void show_flyout(void)
     SetTimer(g_tray_wnd, 2, 5000, NULL);
 }
 
+/* --- Stained Glass Firewall's questions ----------------------------------------------------
+ * sg-session's sg-firewall puts a question in this person's folder when a
+ * program they run starts listening and no rule names it (a Windows program,
+ * told by Wine, or a Linux one); the network icon, running all session,
+ * looks every two seconds and has Settings ask it -- "Stained Glass Firewall
+ * has blocked some features of this app" (sg-control /firewall-prompt),
+ * which takes the question (<id>.ask becomes <id>.open). */
+static void fw_unix_to_dos(const char *unix_path, WCHAR *out, int cch)
+{
+    typedef WCHAR *(CDECL *fn_t)(const char *);
+    fn_t fn = (fn_t)(void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
+    WCHAR *dos = fn ? fn(unix_path) : NULL;
+    out[0] = 0;
+    if (dos) { lstrcpynW(out, dos, cch); HeapFree(GetProcessHeap(), 0, dos); }
+}
+
+static void firewall_questions(void)
+{
+#ifndef SG_MUTANT_FW_NO_QUESTIONS
+    static WCHAR dir[MAX_PATH], shown[16][40];
+    static int nshown;
+    WCHAR pat[MAX_PATH + 8], exe[MAX_PATH], *slash, cmd[3 * MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    int i;
+
+    if (!dir[0])
+    {
+        char base[MAX_PATH] = "/run/stained-glass-firewall", unix_dir[MAX_PATH + 32], status[2048];
+        WCHAR env[MAX_PATH], self_status[MAX_PATH];
+        unsigned long uid = (unsigned long)-1;
+        DWORD got = 0;
+        HANDLE f;
+        char *p;
+        if (GetEnvironmentVariableW(L"SG_FIREWALL_RUN", env, MAX_PATH) && env[0] == L'/')
+            WideCharToMultiByte(CP_UTF8, 0, env, -1, base, sizeof(base), NULL, NULL);
+        fw_unix_to_dos("/proc/self/status", self_status, MAX_PATH);
+        f = CreateFileW(self_status, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (f == INVALID_HANDLE_VALUE) return;
+        ReadFile(f, status, sizeof(status) - 1, &got, NULL);
+        CloseHandle(f);
+        status[got] = 0;
+        if (!(p = strstr(status, "\nUid:"))) return;
+        uid = strtoul(p + 5, NULL, 10);
+        snprintf(unix_dir, sizeof(unix_dir), "%s/ask/%lu", base, uid);
+        fw_unix_to_dos(unix_dir, dir, MAX_PATH);
+        if (!dir[0]) return;
+    }
+    _snwprintf(pat, ARRAYSIZE(pat), L"%ls\\*.ask", dir);
+    if ((h = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return;
+    GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if ((slash = wcsrchr(exe, L'\\'))) lstrcpyW(slash + 1, L"sg-control64.exe");
+    do
+    {
+        STARTUPINFOW si = { sizeof(si) };
+        PROCESS_INFORMATION pi;
+        for (i = 0; i < nshown && lstrcmpW(shown[i], fd.cFileName); i++) ;
+        if (i < nshown || lstrlenW(fd.cFileName) >= 40) continue;     /* asked already, being taken */
+        lstrcpyW(shown[nshown % 16], fd.cFileName);
+        if (nshown < 16) nshown++;
+        _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" /firewall-prompt \"%ls\\%ls\"", exe, dir, fd.cFileName);
+        if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+        {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+#endif
+}
+
 static void make_fonts(void)
 {
     HFONT old[3] = { g_font, g_font_small, g_font_title };
@@ -947,6 +1018,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     case WM_TIMER:
+        if (wp == 3) { firewall_questions(); return 0; }
         if (wp == 2)
         {
             if (!IsWindowVisible(g_fly)) { KillTimer(hwnd, 2); return 0; }
@@ -1100,6 +1172,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     refresh(FALSE, FALSE);
     tray_update(TRUE);
     SetTimer(g_tray_wnd, 1, 15000, NULL);
+    SetTimer(g_tray_wnd, 3, 2000, NULL);   /* the firewall's questions */
     if (open)
     {
         show_flyout();

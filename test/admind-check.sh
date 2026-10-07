@@ -197,6 +197,40 @@ r=$(ask defender on)
 [ "$(first "$r")" = OK ] && grep -qx "enabled=1" "$T/defender.conf" && pass "...and on" || fail "defender on: $r"
 r=$(ask defender sometimes)
 case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted defender sometimes" ;; esac
+# --- Stained Glass Firewall: sg-admind runs sg-firewall's changes for an
+# elevated program (the prompt's Allow access, Settings, netsh, hnetcfg)
+cat > "$B/sg-firewall" <<EOF
+#!/bin/sh
+printf 'sg-firewall %s |\n' "\$*" >> "$CALLS"
+case "\$*" in
+*relative*) echo "ERROR invalid A program is its full path."; exit 2 ;;
+rule-add*) echo 0a1b2c3d; echo OK ;;
+*) echo OK ;;
+esac
+EOF
+chmod +x "$B/sg-firewall"
+fw_case() {   # expected first reply line (prefix), description, then the request
+    want=$1; what=$2; shift 2
+    : > "$CALLS"
+    r=$(ask firewall "$@")
+    case "$(first "$r")" in "$want"*) pass "$what" ;; *) fail "$what: $r" ;; esac
+}
+fw_case OK "firewall: an app allowed (the prompt's Allow access)" rule-add allow private,public any '*' 'C:\Program Files\Sonos\Sonos.exe' Sonos prompt
+grep -qF 'sg-firewall rule-add allow private,public any * C:\Program Files\Sonos\Sonos.exe Sonos prompt |' "$CALLS" \
+    && printf '%s\n' "$r" | grep -qx 0a1b2c3d && pass "...each field one argument, the new rule's id answered" \
+    || fail "firewall rule-add call: $(cat "$CALLS") / $r"
+fw_case OK "firewall: a profile off" profile public off
+fw_case OK "firewall: Restore defaults" reset
+fw_case OK "firewall: a rule a program stored" registry-push '{1234}' 'v2.30|Action=Allow|Dir=In|LPort=3400|'
+fw_case "FAILED A program is its full path" "firewall: sg-firewall's refusal is passed on" rule-add allow private any '*' relative.exe x
+fw_case "FAILED That is not" "firewall: only the changes an administrator makes (not migrate)" migrate
+[ ! -s "$CALLS" ] && pass "...and sg-firewall is not run for it" || fail "ran sg-firewall migrate"
+fw_case "FAILED Malformed" "firewall: the wrong number of fields" profile public
+sed 's/    if sub not in FIREWALL_COMMANDS:/    if False:/; s/    lo, hi = FIREWALL_COMMANDS\[sub\]/    lo, hi = 0, 9/' "$ADMIND" > "$T/admind-mut"
+: > "$CALLS"; id=$(next_id); printf 'firewall\nmigrate\n' > "$S/requests/.$id"; mv "$S/requests/.$id" "$S/requests/$id.req"
+python3 "$T/admind-mut" 2>>"$T/log"
+grep -q 'sg-firewall migrate' "$CALLS" && pass "MUTANT FW_ANY_COMMAND (any subcommand passed on) is caught" || fail "FW_ANY_COMMAND mutant not detected"
+
 # quarantine: what sg-defender left, restored as its owner or deleted
 Q="$T/def/quarantine"; mkdir -p "$Q" "$T/def/notices/$(id -u)" "$T/dl"
 quar() {   # ID NAME CONTENT

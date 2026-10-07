@@ -66,6 +66,15 @@
 #                            package"), installed with apt so its dependencies
 #                            come too -- only if it is still the PACKAGE at
 #                            VERSION the person was shown
+#   firewall SUBCOMMAND ARGS...
+#                            Stained Glass Firewall (sg-session's sg-firewall):
+#                            rule-add ACTION PROFILES PROTOCOL PORTS PROGRAM NAME [SOURCE],
+#                            rule-set ID ENABLED ACTION PROFILES, rule-remove ID,
+#                            group NAME PROFILES, profile NAME on|off,
+#                            network UUID private|public [NAME], reset,
+#                            registry-push ID [TEXT] -- the firewall prompt's
+#                            "Allow access", Settings' Firewall pages, and the
+#                            rules netsh and INetFwPolicy2 store (wine-sg)
 #
 # The two installs publish their progress while apt runs, for the elevated
 # program's progress bar: replies/<id>.progress (root:sgsystem 0640),
@@ -1445,6 +1454,29 @@ def op_deb_install(args):
     return ["%s %s" % (pkg, ver)] + (["Not installed: %s" % " ".join(failed)] if failed else [])
 
 
+# What an administrator may change in the firewall; sg-firewall checks every
+# value itself (programs are full paths, ports numbers, no tabs or breaks).
+FIREWALL_COMMANDS = {"rule-add": (6, 7), "rule-set": (4, 4), "rule-remove": (1, 1), "group": (2, 2),
+                     "profile": (2, 2), "network": (2, 3), "reset": (0, 0), "registry-push": (1, 2)}
+
+
+def op_firewall(args):
+    sub, rest = args[0], args[1:]
+    if sub not in FIREWALL_COMMANDS:
+        raise Refused("That is not something the firewall can change.")
+    lo, hi = FIREWALL_COMMANDS[sub]
+    if not lo <= len(rest) <= hi:
+        raise Refused("Malformed request.")
+    r = run(["sg-firewall", sub] + rest, timeout=60)
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    last = lines[-1] if lines else ""
+    if r.returncode == 0 and last == "OK":
+        return lines[:-1]
+    if last.startswith("ERROR "):
+        raise Refused(last.split(" ", 2)[2] if len(last.split(" ", 2)) > 2 else "The firewall refused.")
+    raise Refused("The firewall could not be changed.")
+
+
 OPS = {
     "ping": (op_ping, 0),
     "hostname": (op_hostname, 1),
@@ -1473,6 +1505,7 @@ OPS = {
     "apt-install": (op_apt_install, 1),
     "apt-remove": (op_apt_remove, 1),
     "deb-install": (op_deb_install, 3),
+    "firewall": (op_firewall, None),        # 1 to 8 fields: a subcommand and its arguments
 }
 # how many of the last fields are passwords (never logged)
 SECRET = {"join-domain": 1, "user-add": 1, "user-password": 1, "user-password-own": 2}
@@ -1538,7 +1571,7 @@ def handle(fields):
     if verb not in OPS:
         raise Refused("Unknown request.")
     fn, n = OPS[verb]
-    if len(args) != n:
+    if (len(args) != n) if n is not None else not 1 <= len(args) <= 8:
         raise Refused("Malformed request.")
     shown = args[:-SECRET[verb]] if verb in SECRET else args
     log("%s %s" % (verb, " ".join(repr(a) for a in shown)))

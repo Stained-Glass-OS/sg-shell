@@ -98,8 +98,6 @@ const struct page_def g_pages[PG_COUNT] = {
 };
 
 int S(int dip) { return MulDiv(dip, g_dpi, 96); }
-enum page_id current_page(void) { return g_cur; }
-
 /* ---- painted items -------------------------------------------------------------- */
 enum item_kind { IT_TEXT, IT_ICON, IT_FILL, IT_SWATCH };
 struct item {
@@ -587,6 +585,8 @@ static void show_page(enum page_id p)
         SetFocus(child);
 }
 
+enum page_id current_page(void) { return g_cur; }
+
 void navigate(enum page_id p)
 {
     if (p >= PG_COUNT) return;
@@ -988,6 +988,9 @@ static int open_target(const WCHAR *arg, enum page_id *page)
     }
     if (!_wcsicmp(arg, L"fonts") || !_wcsicmp(arg, L"Microsoft.Fonts") || !_wcsicmp(arg, L"shell:fonts"))
         return open_fonts_folder() ? 1 : 0;
+    /* the firewall's pages are Settings' (Stained Glass Firewall) */
+    if (!_wcsicmp(base, L"firewall.cpl") || !_wcsicmp(arg, L"Microsoft.WindowsFirewall"))
+        return (INT_PTR)ShellExecuteW(NULL, NULL, L"ms-settings:network-firewall", NULL, NULL, SW_SHOWNORMAL) > 32 ? 1 : 0;
     *page = resolve(arg, &cpl);
     if (*page != PG_COUNT) return 0;
     if (cpl) return cpl_run_inproc(cpl, NULL) >= 0 ? 1 : 0;
@@ -1071,6 +1074,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         /* the Environment Variables dialog (rundll32 sysdm.cpl,EditEnvironmentVariables) */
         if (!_wcsicmp(argv[1], L"/envvars") || !_wcsicmp(argv[1], L"EditEnvironmentVariables")) return envvars_main(FALSE);
         if (!_wcsicmp(argv[1], L"/admin")) return admin_main(argc - 2, argv + 2);
+        /* Stained Glass Firewall's question (the taskbar's network icon starts it) */
+        if (!_wcsicmp(argv[1], L"/firewall-prompt") && argc > 2) return firewall_prompt_main(argv[2]);
         /* at sign-in (the Run key): a keyring that did not open, and why */
         if (!_wcsicmp(argv[1], L"/keyring-signin")) return keyring_signin_main();
         if (!wcscmp(argv[1], L"--credential-delete") && argc > 2) return credmgr_delete_cli(argv[2], argc > 3 ? argv[3] : NULL);

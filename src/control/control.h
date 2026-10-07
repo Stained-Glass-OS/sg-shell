@@ -30,7 +30,7 @@ enum page_id {
     PG_S_HOME, PG_S_SEARCH,
     PG_S_DISPLAY, PG_S_SOUND, PG_S_NOTIFY, PG_S_POWER, PG_S_STORAGE, PG_S_MULTITASK, PG_S_ABOUT, PG_S_ENVVARS,
     PG_S_BLUETOOTH, PG_S_PRINTERS, PG_S_MOUSE, PG_S_TYPING,
-    PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
+    PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY, PG_S_FIREWALL, PG_S_FWAPPS, PG_S_FWRULES,
     PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_EFFECTS, PG_S_LOOKSHARE,
     PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP,
     PG_S_YOURINFO, PG_S_SIGNIN, PG_S_OTHERUSERS, PG_S_KIOSK,
@@ -193,6 +193,9 @@ int  privacy_admin_consent(const WCHAR *cap, const WCHAR *on_off);   /* set_misc
 int  envvars_main(BOOL system_only);         /* envvars.c: the Environment Variables dialog */
 int  admin_main(int argc, WCHAR **argv);        /* /admin VERB ...: the elevated dialogs */
 int  admin_do(int argc, WCHAR **argv);          /* /admin-do VERB ...: non-interactive */
+/* Stained Glass Firewall (set_firewall.c): /admin firewall-..., and its question */
+int  firewall_admin(int argc, WCHAR **argv);
+int  firewall_prompt_main(const WCHAR *ask);
 BOOL autologon_is_me(void);     /* kiosk.c: this account signs in by itself when the PC starts */
 /* a small modal form: title, fields, returns TRUE on OK */
 struct form_field {

@@ -1,3 +1,31 @@
+sg-shell (0.1.0-162) unstable; urgency=medium
+
+  * Stained Glass Firewall (sg-session's sg-firewall, David 2026-10-07):
+    - Settings > Network & Internet > Firewall (ms-settings:network-firewall,
+      control firewall.cpl, Control Panel > System and Security > Stained
+      Glass Firewall): each kind of network with the firewall on or off
+      (a warning when off), the networks in use and their profile
+      (Public/Private), Restore defaults.
+    - Allowed apps (ms-settings:network-firewall-apps, "Allow an app
+      through firewall"): the built-in groups and the apps, with Private
+      and Public boxes; Change settings opens it elevated, where a box,
+      Remove and "Allow another app..." change the firewall at once.
+    - Inbound port rules (ms-settings:network-firewall-rules): port rules,
+      and a new one by port, protocol, action and networks.
+    - The question: when a program starts listening with no rule, the
+      taskbar's network icon has Settings ask "Stained Glass Firewall has
+      blocked some features of this app" (name, publisher, path; Private
+      and Public, the network in use ticked); Allow access (shield) adds
+      the rule through sg-admind, Cancel blocks the program.
+    - sg-admind: firewall SUBCOMMAND ... runs sg-firewall's changes
+      (rule-add, rule-set, rule-remove, group, profile, network, reset,
+      registry-push), nothing else.
+  * Gates: test/firewall-check.sh (make test-firewall; mutants
+    FW_NO_QUESTIONS, FW_PROMPT_TICKS_NOTHING: make test-firewall-mutants),
+    admind-check's firewall cases (mutant FW_ANY_COMMAND).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 16:25:28 -0700
+
 sg-shell (0.1.0-161) unstable; urgency=medium
 
   * Touch keyboard: /notray (with /background) adds no taskbar button. The

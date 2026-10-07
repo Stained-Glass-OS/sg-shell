@@ -336,6 +336,14 @@ test-office-native-mutants: office
 	@sh test/office-native-mutants.sh
 
 # Both of SG Office's gates against the broken builds and sources they must fail.
+# Stained Glass Firewall's pages and question, and their mutants (each must fail)
+test-firewall:
+	@sh test/firewall-check.sh
+test-firewall-mutants:
+	@for m in FW_NO_QUESTIONS FW_PROMPT_TICKS_NOTHING; do \
+	    if sh test/firewall-check.sh --mutant $$m >/dev/null 2>&1; then echo "mutant $$m survived"; exit 1; fi; \
+	    echo "mutant $$m caught"; done
+
 test-office-mutants: office
 	@sh test/office-check-mutants.sh
 	@sh test/office-native-mutants.sh
@@ -383,6 +391,7 @@ test: build
 	@sh test/hidpi-check.sh
 	@sh test/hidpi-live-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/firewall-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/optionalfeatures-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/power-buttons-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/kiosk-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

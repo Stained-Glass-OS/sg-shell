@@ -35,6 +35,9 @@
     [PG_S_WIFI]         = { L"Wi-Fi",                        PG_S_HOME, set_build_wifi,      set_cmd_net }, \
     [PG_S_ETHERNET]     = { L"Ethernet",                     PG_S_HOME, set_build_ethernet,  set_cmd_net }, \
     [PG_S_PROXY]        = { L"Proxy",                        PG_S_HOME, set_build_proxy,     set_cmd_proxy }, \
+    [PG_S_FIREWALL]     = { L"Firewall",                     PG_S_HOME, set_build_firewall,  set_cmd_firewall }, \
+    [PG_S_FWAPPS]       = { L"Allowed apps",                 PG_S_HOME, set_build_fwapps,    set_cmd_firewall }, \
+    [PG_S_FWRULES]      = { L"Inbound port rules",           PG_S_HOME, set_build_fwrules,   set_cmd_firewall }, \
     [PG_S_BACKGROUND]   = { L"Background",                   PG_S_HOME, set_build_background, set_cmd_background }, \
     [PG_S_COLORS]       = { L"Colors",                       PG_S_HOME, set_build_colors,    set_cmd_colors }, \
     [PG_S_LOCKSCREEN]   = { L"Lock screen",                  PG_S_HOME, set_build_lockscreen, set_cmd_lockscreen }, \
@@ -110,6 +113,7 @@ void set_build_mouse(void);     BOOL set_cmd_mouse(int, int, HWND);
 void set_build_typing(void);    BOOL set_cmd_typing(int, int, HWND);
 void set_build_netstatus(void); void set_build_wifi(void); void set_build_ethernet(void); BOOL set_cmd_net(int, int, HWND);
 void set_build_proxy(void);     BOOL set_cmd_proxy(int, int, HWND);
+void set_build_firewall(void);  void set_build_fwapps(void); void set_build_fwrules(void); BOOL set_cmd_firewall(int, int, HWND);
 void set_build_background(void); BOOL set_cmd_background(int, int, HWND);
 void set_build_colors(void);    BOOL set_cmd_colors(int, int, HWND);
 void set_build_lockscreen(void); BOOL set_cmd_lockscreen(int, int, HWND);

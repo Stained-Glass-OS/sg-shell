@@ -269,6 +269,34 @@ navigate), and the "Create an account" dialog driven by the keyboard. Both
 have been seen to fail: dropping the owner check, logging passwords, and
 writing the accent in the wrong byte order each turn them red.
 
+## Stained Glass Firewall (set_firewall.c, sg-netflyout)
+
+The firewall itself is sg-session's `sg-firewall` (see its CLAUDE.md). Here:
+Settings > Network & Internet > **Firewall** (`ms-settings:network-firewall`,
+`control firewall.cpl`, `/name Microsoft.WindowsFirewall`, the Control
+Panel's System and Security applet), **Allowed apps**
+(`network-firewall-apps`) and **Inbound port rules**
+(`network-firewall-rules`), read from the firewall's status file
+(`/run/stained-glass-firewall/status`; `SG_FIREWALL_STATUS` for the gate).
+Changes are an administrator's: a page's switch or combo runs the elevated
+copy (`/admin firewall-profile|firewall-network|firewall-reset`); Allowed
+apps and port rules have **Change settings**, which opens the page in an
+elevated Settings, where each box, Remove and Add files `firewall ...` with
+sg-admind directly (`admin_request`). sg-admind's `firewall` verb passes only
+the changing subcommands to `sg-firewall` (never migrate/apply).
+
+**The question** ("Stained Glass Firewall has blocked some features of this
+app"): sg-firewall writes `/run/stained-glass-firewall/ask/<uid>/<id>.ask`
+(program, kind windows|linux, protocol, port, the network's category);
+sg-netflyout (running all session) looks every 2 s and starts
+`sg-control64.exe /firewall-prompt <file>`, which renames it `<id>.open`,
+shows the dialog (the network in use ticked) and on Allow access runs
+`/admin firewall-allow PROFILES PROGRAM NAME` elevated; Cancel or closing
+writes `<id>.cancel` (the name), and the firewall adds a block rule.
+`SG_FIREWALL_RUN`, `SG_FIREWALL_PROMPT_DUMP` for the gate:
+`make test-firewall` (`test/firewall-check.sh`), `make test-firewall-mutants`
+(FW_NO_QUESTIONS in sg-netflyout, FW_PROMPT_TICKS_NOTHING).
+
 ## Settings (sg-settings)
 
 `build/sg-settings64.exe` is `src/control/*.c` linked again with its own icon

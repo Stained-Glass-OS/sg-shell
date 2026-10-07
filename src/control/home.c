@@ -9,7 +9,7 @@
 
 /* commands the navigation pages share */
 enum {
-    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A, CMD_POWER,
+    CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A, CMD_POWER, CMD_FIREWALL, CMD_FIREWALL_APPS,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -61,18 +61,22 @@ static const struct applet FONTS_A = { L"Fonts", IC_FONTS, CMD_FONTS, L"font fon
 static const struct applet PRINTERS_A = { L"Devices and Printers", IC_HW, NAV(PG_PRINTERS),
     L"printer printers scanner default printer driver print queue label printer",
     { { L"View devices and printers", NAV(PG_PRINTERS) } } };
+/* Stained Glass Firewall: Settings' pages (Network & Internet > Firewall) */
+static const struct applet FIREWALL_A = { L"Stained Glass Firewall", IC_SHIELD, CMD_FIREWALL,
+    L"firewall windows firewall defender firewall allow an app through firewall network profile public private port blocked",
+    { { L"Allow an app through firewall", CMD_FIREWALL_APPS }, { L"Check firewall status", CMD_FIREWALL } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
     &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A, &FIREWALL_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[5]; };
 static const struct category CATS[] = {
     { PG_CAT_SYSSEC, IC_SYSSEC, L"System and Security",
       { { L"View basic information about this computer", NAV(PG_SYSTEM) }, { L"Check for updates", NAV(PG_UPDATE) } },
-      { &SYSTEM_A, &UPDATE_A, &ADMIN_A } },
+      { &SYSTEM_A, &FIREWALL_A, &UPDATE_A, &ADMIN_A } },
     { PG_CAT_NET, IC_NET, L"Network and Internet",
       { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"Internet Options", CMD_INET } },
       { &NETCENTER_A, &INET_A } },
@@ -229,6 +233,8 @@ BOOL cmd_home(int id, int code, HWND ctl)
     case CMD_JOY: cpl_open_file(L"joy.cpl", NULL); return TRUE;
     case CMD_DESK: cpl_open_file(L"desk.cpl", NULL); return TRUE;
     case CMD_POWER: ShellExecuteW(g_main, NULL, L"ms-settings:powersleep", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_FIREWALL: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_FIREWALL_APPS: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall-apps", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_NCPA: if (!open_network_connections()) navigate(PG_NETWORK); return TRUE;
     case CMD_FONTS: open_fonts_folder(); return TRUE;
     case CMD_RENAME: if (run_elevated(L"/admin rename")) refresh_when_back(); return TRUE;
