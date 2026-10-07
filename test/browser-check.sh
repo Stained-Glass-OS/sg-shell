@@ -204,7 +204,9 @@ fi
 rm -f "$D"
 wine start 'https://second.example/' >/dev/null 2>&1
 wait_line 'https://second.example/' 15 "$G/browser.log" && pass "the next link opens in the default browser" || fail "second link not opened"
-[ "$(field mode)" = none ] && pass "without asking: the user's choice (UserChoice) is honoured" || fail "second: mode '$(field mode)'"
+# no question: SG Browser's chooser not asked (the user's http class, set at
+# install, opens the browser itself), or asked and answering from UserChoice
+{ [ ! -e "$D" ] || [ "$(field mode)" = none ]; } && pass "without asking: the user's choice (UserChoice) is honoured" || fail "second: mode '$(field mode)'"
 wine start 'C:\page.html' >/dev/null 2>&1
 wait_line 'page.html' 15 "$G/browser.log" && pass "an .html file opens in the browser" || fail "page.html not opened"
 

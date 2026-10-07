@@ -105,6 +105,9 @@ else fail "no Paint window: $(dv "$D1" title)"; shot fail-start; exit 1; fi
 sleep 2
 [ "$(dv "$D1" tool)" = 2 ] && pass "the pencil is the tool at start" || fail "tool at start is $(dv "$D1" tool)"
 [ "$(dv "$D1" image | awk '{print ($1 >= 320 && $2 >= 240)}')" = 1 ] && pass "a blank picture: $(dv "$D1" image)" || fail "picture size $(dv "$D1" image)"
+# three fifths of the work area: 614 x 436 here once the taskbar has its
+# place (1024 x 768, a 40 px bar); the resize below is checked against it
+SIZE0=$(dv "$D1" image)
 shot start
 
 # --- 2. drawing -----------------------------------------------------------------------------
@@ -138,7 +141,8 @@ clickat "$D1" 550 300
 set -- $(item "$D1" 320); xdotool mousemove "$1" $(( $2 - 15 )) click 1; sleep 0.4
 [ "$(dv "$D1" tool)" = 8 ] && pass "Brushes chooses the brush" || fail "brush tool: $(dv "$D1" tool)"
 click_item "$D1" $((PAL + 3))
-drag "$D1" 300 440 400 440
+# beside the text, inside the picture's 436 px
+drag "$D1" 480 420 580 420
 shot drawn
 
 # --- 3. save as PNG through the dialog ------------------------------------------------------
@@ -171,7 +175,7 @@ if [ -f "$PNG" ]; then
         "60:21:ffffff:below the 1px pencil line" "150:100:000000:the rectangle's left edge" "250:100:000000:the rectangle's right edge" \
         "200:50:000000:the rectangle's top edge" "200:100:00a2e8:the fill inside the rectangle" "160:140:00a2e8:the fill's corner" \
         "260:100:ffffff:outside the rectangle" "100:200:22b14c:the green line" "320:250:ffffff:where the undone scribble was" \
-        "5:5:ffffff:the background" "350:440:ed1c24:the brush stroke" > "$T/png1.txt"
+        "5:5:ffffff:the background" "530:420:ed1c24:the brush stroke" > "$T/png1.txt"
     cat "$T/png1.txt"; grep -q '^FAIL' "$T/png1.txt" && RC=1
     n=$(python3 -c '
 import sys
@@ -224,9 +228,10 @@ cat "$T/png3.txt"; grep -q '^FAIL' "$T/png3.txt" && RC=1
 xdotool key ctrl+w; sleep 1.5
 shot resize
 xdotool key alt+h; sleep 0.3; xdotool key ctrl+a; xdotool type --delay 80 50; sleep 0.3; xdotool key Return; sleep 1
-[ "$(dv "$D1" image)" = "307 230" ] && pass "Resize 50% halves the picture" || fail "after resizing: $(dv "$D1" image)"
+half=$(echo "$SIZE0" | awk '{printf "%d %d", ($1 + 1) / 2, ($2 + 1) / 2}')
+[ "$(dv "$D1" image)" = "$half" ] && pass "Resize 50% halves the picture ($SIZE0 to $half)" || fail "after resizing: $(dv "$D1" image), wanted $half"
 xdotool key ctrl+z; sleep 0.7
-[ "$(dv "$D1" image)" = "614 460" ] && pass "Ctrl+Z undoes the resize" || fail "after undoing the resize: $(dv "$D1" image)"
+[ "$(dv "$D1" image)" = "$SIZE0" ] && pass "Ctrl+Z undoes the resize" || fail "after undoing the resize: $(dv "$D1" image), wanted $SIZE0"
 
 # --- 6. closing with unsaved changes asks ---------------------------------------------------
 front "$D2" in.png

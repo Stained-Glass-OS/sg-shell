@@ -12,11 +12,14 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; RC=1; }
 WINE="${WINE:-/opt/wine-sg/bin/wine}"
 [ -x "$WINE" ] || { echo "SKIP: no wine"; exit 77; }
+# an installed Wine's wineserver is beside it; a build tree's is in server/
+WINESERVER="${WINESERVER:-$(dirname "$WINE")/wineserver}"
+[ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
 for t in xvfb-run xdotool x86_64-w64-mingw32-gcc; do command -v "$t" >/dev/null || { echo "SKIP: $t missing"; exit 77; }; done
 [ -f "$HERE/build/sg-settings64.exe" ] || { echo "SKIP: not built"; exit 77; }
 T=$(mktemp -d /var/tmp/sg-teardown.XXXXXX)
 export WINEPREFIX="$T/prefix" WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=;winemenubuilder.exe=d"
-trap '"$(dirname "$WINE")/wineserver" -k 2>/dev/null; rm -rf "$T"' EXIT INT TERM
+trap '"$WINESERVER" -k 2>/dev/null; rm -rf "$T"' EXIT INT TERM
 cat > "$T/wl.c" <<'C'
 #include <windows.h>
 #include <stdio.h>
@@ -26,7 +29,7 @@ int main(void) { EnumWindows(cb, 0); return 0; }
 C
 x86_64-w64-mingw32-gcc -o "$T/wl.exe" "$T/wl.c" || { fail "probe did not build"; exit 1; }
 timeout -s KILL 300 env DISPLAY= "$WINE" wineboot -i >/dev/null 2>&1
-"$(dirname "$WINE")/wineserver" -w   # its desktop had no display: start afresh
+"$WINESERVER" -w   # its desktop had no display: start afresh
 cat > "$T/run.sh" <<EOI
 #!/bin/sh
 "$WINE" "$HERE/build/sg-settings64.exe" ms-settings:personalization &

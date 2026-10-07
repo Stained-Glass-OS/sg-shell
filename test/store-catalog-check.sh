@@ -24,10 +24,11 @@ norun=$(awk '/^\[/ {if (lx && !run) print key; key=$0; lx=0; run=0} /"Tier"="lin
 dup=$(grep -o '^\[HKEY_LOCAL_MACHINE\\Software\\Stained Glass\\Store\\Apps\\[^]]*\]' "$CAT" | sort | uniq -d)
 [ -z "$dup" ] && pass "no app key is used twice" || fail "used twice: $dup"
 grep -q '"Source"="linux:apt:secrets"' "$CAT" && pass "GNOME Secrets is listed (David 2026-10-03)" || fail "GNOME Secrets is not listed"
-# SG Mail: ours, from our apt repository; Open starts it by its program name
-# (sg-linuxapp gives Linux apps App Paths names: sg-mail.exe)
+# SG Mail: ours, from our apt repository; Open runs the desktop entry the
+# package installs, as the Store's Linux apps do (0.1.0-124: an sg-mail.exe
+# nothing provides did nothing)
 awk '/^\[/ {sec=$0} sec ~ /Apps\\128\]/' "$CAT" | grep -q '"Source"="ours:apt:sg-mail"' \
-  && awk '/^\[/ {sec=$0} sec ~ /Apps\\128\]/' "$CAT" | grep -q '"Run"="sg-mail.exe"' \
-  && pass "SG Mail is listed as ours (sg-mail), opened as sg-mail.exe" || fail "SG Mail is not listed as ours:apt:sg-mail"
+  && awk '/^\[/ {sec=$0} sec ~ /Apps\\128\]/' "$CAT" | grep -q '"Run"="/usr/share/applications/sg-mail.desktop"' \
+  && pass "SG Mail is listed as ours (sg-mail), opened by its desktop entry" || fail "SG Mail is not listed as ours:apt:sg-mail"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

@@ -1,3 +1,25 @@
+sg-shell (0.1.0-155) unstable; urgency=medium
+
+  * Tests found red by a sweep of every gate:
+    - store-catalog-check: SG Mail's Store entry opens its desktop entry
+      since 0.1.0-124; the check still wanted sg-mail.exe.
+    - paint-check and fontview-check: the taskbar now has its place in the
+      work area before programs start, so Paint's new picture (three fifths
+      of the work area) is 614 x 436 and the font viewer's window ends above
+      the 72 pt line. Paint's resize is checked against the picture's own
+      size and its brush stroke drawn inside it; the viewer's 48 pt line is
+      measured instead.
+    - fontview-check: fc-list for the other user with their XDG_DATA_HOME
+      (scratch-home.sh sets the gate's own, which fontconfig read).
+    - browser-check: a later link opening in the default browser without
+      SG Browser's chooser being asked at all is "without asking" too (the
+      user's http class, set at install, opens it directly).
+    - settings-teardown-check and bugreport-check: the wineserver of a build
+      tree (WINE=build/obj/wine) is server/wineserver; settings-teardown's
+      wineboot desktop, never let go, left Settings without a display.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 05:31:55 -0700
+
 sg-shell (0.1.0-154) unstable; urgency=medium
 
   * test/pdf-pen-check.sh: SG PDF is started before the pen comes (the test

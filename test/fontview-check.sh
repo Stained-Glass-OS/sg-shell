@@ -169,7 +169,9 @@ at() { xdotool mousemove "$(echo "$1" | cut -d, -f1)" "$(echo "$1" | cut -d, -f2
 ofam() { other wine "$fvwin" --families 'C:\users\Public\fam.txt' >/dev/null 2>&1; tr -d '\r' < "$C/users/Public/fam.txt" | grep -cx "$1"; }
 ureg() { other wine reg query 'HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts' 2>/dev/null | tr -d '\r'; }
 mreg() { wine reg query 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' 2>/dev/null | tr -d '\r'; }
-fclist() { HOME="$T/home-other" XDG_CACHE_HOME="$T/fc-cache" fc-list : family 2>/dev/null | grep -c "$1"; }
+# fontconfig reads ~/.local/share/fonts through XDG_DATA_HOME (scratch-home.sh
+# sets it to the gate's own): the other user's, as their session has it
+fclist() { HOME="$T/home-other" XDG_DATA_HOME="$T/home-other/.local/share" XDG_CACHE_HOME="$T/fc-cache" fc-list : family 2>/dev/null | grep -c "$1"; }
 cp "$T/gate/sggate-serif.ttf" "$C/users/Public/SG Gate Serif.ttf"; chmod 644 "$C/users/Public/SG Gate Serif.ttf"
 
 [ "$(ofam 'SG Gate Serif')" = 0 ] && [ "$(fclist 'SG Gate Serif')" = 0 ] && pass "SG Gate Serif is installed nowhere to begin with" \
@@ -192,10 +194,12 @@ band() {  # y0 y1 -> height of the dark ink's bounding box in that band
     convert "$OUT/fontview-viewer.png" -crop "600x$(( $2 - $1 ))+60+$1" +repage -colorspace Gray -threshold 50% -negate -trim \
         -format '%h' info: 2>/dev/null
 }
-y12=$(v size12); y18=$(v size18); y72=$(v size72)
-h12=$(band "$y12" "$y18"); h72=$(band "$y72" $((y72 + 110)))
-[ "${h12:-0}" -gt 6 ] && [ "${h72:-0}" -gt $(( ${h12:-99} * 4 )) ] && pass "the sample at 72 pt is drawn $h72 px tall, at 12 pt $h12 px" \
-    || fail "sample heights: 12 pt $h12 px, 72 pt $h72 px"
+# 48 pt, not 72: the window fits the work area beside the taskbar, and the
+# 72 pt line is below its bottom edge (1280 x 800, a 40 px bar)
+y12=$(v size12); y18=$(v size18); y48=$(v size48); y60=$(v size60)
+h12=$(band "$y12" "$y18"); h48=$(band "$y48" "$y60")
+[ "${h12:-0}" -gt 6 ] && [ "${h48:-0}" -gt $(( ${h12:-99} * 3 )) ] && pass "the sample at 48 pt is drawn $h48 px tall, at 12 pt $h12 px" \
+    || fail "sample heights: 12 pt $h12 px, 48 pt $h48 px"
 
 # Install (a click): for this user
 at "$(v install)"

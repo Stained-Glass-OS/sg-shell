@@ -50,7 +50,8 @@ if [ -x "$WINE" ]; then
     grep -q 'loaddll' "$T/run/log" && pass "Wine's debug log is written" || fail "no debug log"
     grep -q "^The log's last 60 lines" "$T/run/highlights" && grep -q '^Errors' "$T/run/highlights" \
         && pass "the highlights are made" || fail "no highlights"
-    "$(dirname "$WINE")/wineserver" -k 2>/dev/null
+    ws="${WINESERVER:-$(dirname "$WINE")/wineserver}"; [ -x "$ws" ] || ws="$(dirname "$WINE")/server/wineserver"
+    "$ws" -k 2>/dev/null
 else
     echo "info  no wine at $WINE: the run is not tried"
 fi
