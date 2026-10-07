@@ -1,3 +1,29 @@
+sg-shell (0.1.0-153) unstable; urgency=medium
+
+  * SG PDF: draw with a pen's pressure. Comment's Draw takes the pen's own
+    points and pressure from its WM_POINTER messages (GetPointerPenInfo;
+    wine-sg 1000/1150) while a stroke is drawn, shows each segment as wide
+    as the pen pressed, and sends the pressures with the stroke; sg-pdf
+    (sg-session 0.1.0-154) saves it as a standard Ink annotation with a
+    variable-width appearance. The mouse draws one width as before. Gate
+    test/pdf-pen-check.sh: a real pen through sg-compositor's test tablet
+    and Xwayland taps Draw, strokes pressing harder and harder, taps Save;
+    the saved widths run 0.65 to 3.5 pt and it is drawn thin to thick.
+    Skips with a Wine that lists no pen. Mutant SG_MUTANT_PEN_NO_PRESSURE.
+  * SG PDF: Full Screen Mode (View > Full Screen Mode, F11, Ctrl+L;
+    present.c): a page per screen, as large as the screen holds it, centred
+    on black, over the taskbar; click, Right, Down, Space, Enter, Page Down
+    forward; Left, Up, Backspace, Page Up, right click back; Home, End; the
+    wheel; Esc, F11 or Ctrl+L ends it on the page it was on; the pointer
+    hides when still. Gate test/pdf-present-check.sh; mutants
+    SG_MUTANT_PRESENT_WINDOWED, SG_MUTANT_PRESENT_STUCK.
+  * SG PDF: an encrypted document can be signed with a digital ID (it was
+    refused); it stays encrypted (sg-session 0.1.0-154). A security change
+    not yet saved asks to save first.
+  * make test-pdf-mutants.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 06 Oct 2026 20:48:50 -0700
+
 sg-shell (0.1.0-152) unstable; urgency=medium
 
   * Credential Manager (Control Panel > User Accounts, `control /name

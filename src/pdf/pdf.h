@@ -367,6 +367,7 @@ void toolui_fonts(void);
 
 /* interact.c: the mouse and the keyboard on the pages, by tool */
 BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+BOOL tool_pointer(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 BOOL tool_key(WPARAM vk);
 BOOL tool_setcursor(POINT pt);
 void tool_paint(HDC dc);
@@ -588,5 +589,11 @@ int org_selected(int *out, int cap);
 #define CMD_ORG_REPLACE 288
 #define CMD_ORG_SCAN 289
 extern const COLORREF COMMENT_COLORS[NCOLORS];
+
+/* present.c: Full Screen Mode (F11, Ctrl+L) */
+void present_start(void);
+void present_stop(void);
+BOOL present_active(void);
+int present_page(void);
 
 #endif

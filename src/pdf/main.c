@@ -17,7 +17,8 @@
  * pointer, Ctrl+Plus/Minus, the zoom menu), fit width (the default) and fit
  * page (Ctrl+\ switches), actual size (Ctrl+1); rotate the view (Ctrl+] and
  * Ctrl+[); the page box ("3 of 10", Ctrl+G); find (Ctrl+F, F3); select text
- * and Ctrl+C; links; print (Ctrl+P). Editing: see toolui.c, interact.c,
+ * and Ctrl+C; links; print (Ctrl+P); Full Screen Mode, a page per screen
+ * (F11, Ctrl+L: present.c). Editing: see toolui.c, interact.c,
  * doc.c, organize.c and dialogs.c; Ctrl+S saves, Ctrl+Shift+S saves as,
  * Ctrl+Z undoes and Ctrl+Y redoes.
  *
@@ -646,6 +647,8 @@ static HMENU build_menu(void)
     AppendMenuW(view, MF_STRING, CMD_FITWIDTH, L"Fit &Width\tCtrl+2");
     AppendMenuW(view, MF_STRING, CMD_FITPAGE, L"Fit &Page\tCtrl+0");
     AppendMenuW(view, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(view, MF_STRING, CMD_FULLSCREEN, L"F&ull Screen Mode\tCtrl+L");
+    AppendMenuW(view, MF_SEPARATOR, 0, NULL);
     AppendMenuW(view, MF_STRING, CMD_ROTATE, L"Rotate View &Clockwise\tCtrl+Shift+Plus");
     AppendMenuW(view, MF_STRING, CMD_ROTATE_LEFT, L"Rotate View Co&unterclockwise\tCtrl+Shift+Minus");
     AppendMenuW(view, MF_SEPARATOR, 0, NULL);
@@ -713,7 +716,7 @@ static HMENU build_menu(void)
 static void menu_state(HMENU m)
 {
     BOOL doc = g.npages > 0 && g.bridged;
-    static const int NEED_DOC[] = { CMD_SAVEAS, CMD_PRINT, CMD_PROPERTIES, CMD_CLOSE, CMD_COPY, CMD_SELECTALL, CMD_FIND,
+    static const int NEED_DOC[] = { CMD_SAVEAS, CMD_FULLSCREEN, CMD_PRINT, CMD_PROPERTIES, CMD_CLOSE, CMD_COPY, CMD_SELECTALL, CMD_FIND,
                                     CMD_ZOOMIN, CMD_ZOOMOUT, CMD_ACTUAL, CMD_FITWIDTH, CMD_FITPAGE, CMD_ROTATE,
                                     CMD_ROTATE_LEFT, CMD_EXPORT_DOCX, CMD_EXPORT_TXT, CMD_EXPORT_HTML, CMD_EXPORT_PNG,
                                     CMD_EXPORT_JPEG, CMD_EXPORT, CMD_TOOL + TOOL_EDIT, CMD_TOOL + TOOL_COMMENT,
@@ -878,6 +881,16 @@ void app_dump(void)
     dumpf(f, L"zoom %d\n", (int)floor(g.zoom * 100 + 0.5));
     dumpf(f, L"fit %ls\n", g.fit == FIT_WIDTH ? L"width" : g.fit == FIT_PAGE ? L"page" : L"none");
     dumpf(f, L"rot %d\n", g.rot);
+    dumpf(f, L"present %d %d\n", present_active(), present_page() + 1);
+    {
+        /* the pens Wine lists (wine-sg 1000): the pen gate skips without any */
+        static BOOL (WINAPI *get_devices)(UINT32 *, POINTER_DEVICE_INFO *);
+        static BOOL looked;
+        UINT32 n = 0;
+        if (!looked) { get_devices = (void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetPointerDevices"); looked = TRUE; }
+        if (!get_devices || !get_devices(&n, NULL)) n = 0;
+        dumpf(f, L"pointerdevices %u\n", n);
+    }
     dumpf(f, L"side %ls\n", g.side == SIDE_THUMBS ? L"thumbs" : g.side == SIDE_OUTLINE ? L"outline" :
                             g.side == SIDE_ATTACH ? L"attachments" : g.side == SIDE_SIGS ? L"signatures" : L"none");
     dumpf(f, L"layout %d\ncover %d\nnight %d\nuntitled %d\nreading %d\n", g.layout, g.cover, g.night, g.untitled, g.reading);
@@ -1349,6 +1362,9 @@ void app_command(int cmd)
     case CMD_ACTUAL: view_set_zoom(1.0, FIT_NONE, NULL); break;
     case CMD_FITWIDTH: view_set_zoom(g.zoom, FIT_WIDTH, NULL); break;
     case CMD_FITPAGE: view_set_zoom(g.zoom, FIT_PAGE, NULL); break;
+    case CMD_FULLSCREEN:
+        present_start();
+        break;
     case CMD_ROTATE: case CMD_ROTATE_LEFT: {
         int page = g.current;
         tool_commit_editor();
@@ -1559,6 +1575,7 @@ static BOOL accelerator(MSG *m)
     switch (m->wParam) {
     case VK_F3: app_command(shift ? CMD_FINDPREV : CMD_FINDNEXT); return TRUE;
     case VK_F4: app_command(shift ? CMD_PANE : CMD_SIDEBAR); return TRUE;
+    case VK_F11: if (!ctrl && !in_edit) { app_command(CMD_FULLSCREEN); return TRUE; } break;
     }
     if (!ctrl) return FALSE;
     if (shift) {
@@ -1579,6 +1596,7 @@ static BOOL accelerator(MSG *m)
     case VK_TAB: tab_cycle(shift ? -1 : 1); return TRUE;
     case 'N': app_command(CMD_CREATE_FILES); return TRUE;
     case 'E': app_command(CMD_PROPSBAR); return TRUE;
+    case 'L': if (!in_edit) { app_command(CMD_FULLSCREEN); return TRUE; } break;
     case VK_OEM_2: app_command(CMD_SHORTCUTS); return TRUE;
     case '2': case VK_NUMPAD2: app_command(CMD_FITWIDTH); return TRUE;
     case 'O': app_command(CMD_OPEN); return TRUE;

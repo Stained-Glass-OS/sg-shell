@@ -11,7 +11,7 @@
  *   Comment       Highlight, Underline and Strikethrough: drag over text;
  *                 a sticky note: a click, then its text; a text box: a click
  *                 or a drag, then type; rectangle, oval, arrow, line: a
- *                 drag; free-form: draw. With Select, a click picks a
+ *                 drag; free-form: draw (with a pen, as wide as it presses). With Select, a click picks a
  *                 comment, a drag moves it, a double-click edits its text.
  *   Fill & Sign   (and with no tool) a click on a text field types in it, on
  *                 a check box or radio button sets it, on a list offers its
@@ -43,7 +43,102 @@ static struct {
 } D;
 
 static float *g_ink;            /* the stroke being drawn: x, y pairs */
+static float *g_inkp;           /* its pen pressure per point (0..1), or -1 (the mouse: no pressure) */
 static int g_nink, g_capink;
+
+/* A pen (wine-sg 1000/1150: the pen's WM_POINTER messages with GetPointerPenInfo's
+ * pressure, beside the mouse messages X makes of it, which are marked as a pen's
+ * with MI_WP_SIGNATURE): while drawing, the stroke takes the pen's own points and
+ * pressure, and the engine draws it wide where it pressed hard (sgpdf ink pressure=). */
+static float g_pen_p = -1;      /* the pen's last pressure */
+static DWORD g_pen_tick;
+static BOOL g_ink_pen;          /* this stroke's points come from the pen's pointer messages */
+
+static float clampf(float v, float a, float b);
+static void page_size(int page, float *w, float *h);
+
+static BOOL ink_room(void)
+{
+    if (!g_ink) {
+        g_capink = 4096;
+        g_ink = malloc(g_capink * sizeof(float));
+        g_inkp = malloc(g_capink / 2 * sizeof(float));
+        if (!g_ink || !g_inkp) { free(g_ink); free(g_inkp); g_ink = g_inkp = NULL; return FALSE; }
+    }
+    if (g_nink + 2 > g_capink) {
+        float *t = realloc(g_ink, g_capink * 2 * sizeof(float)), *tp;
+        if (!t) return FALSE;
+        g_ink = t;
+        tp = realloc(g_inkp, g_capink * sizeof(float));
+        if (!tp) return FALSE;
+        g_inkp = tp;
+        g_capink *= 2;
+    }
+    return TRUE;
+}
+
+static void ink_add(float x, float y, float pressure)
+{
+    if (!ink_room()) return;
+    g_inkp[g_nink / 2] = pressure;
+    g_ink[g_nink++] = x;
+    g_ink[g_nink++] = y;
+}
+
+/* the pressure of the mouse message being handled, when the pen made it */
+static float mouse_pressure(void)
+{
+    if ((GetMessageExtraInfo() & 0xFFFFFF00) == 0xFF515700 && g_pen_p >= 0 && GetTickCount() - g_pen_tick < 500)
+        return g_pen_p;
+    return -1;
+}
+
+BOOL tool_pointer(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    static BOOL (WINAPI *get_type)(UINT32, POINTER_INPUT_TYPE *);
+    static BOOL (WINAPI *get_pen)(UINT32, POINTER_PEN_INFO *);
+    static BOOL looked;
+    POINTER_INPUT_TYPE type = 0;
+    POINTER_PEN_INFO pi;
+    UINT32 id = GET_POINTERID_WPARAM(wp);
+    (void)lp;
+    if (!looked) {
+        HMODULE u = GetModuleHandleW(L"user32.dll");
+        get_type = (void *)GetProcAddress(u, "GetPointerType");
+        get_pen = (void *)GetProcAddress(u, "GetPointerPenInfo");
+        looked = TRUE;
+    }
+    if (!get_type || !get_pen || !get_type(id, &type) || type != PT_PEN) return FALSE;
+    memset(&pi, 0, sizeof(pi));
+    if (!get_pen(id, &pi) || !(pi.penMask & PEN_MASK_PRESSURE)) return FALSE;
+#ifndef SG_MUTANT_PEN_NO_PRESSURE
+    g_pen_p = min(1024u, pi.pressure) / 1024.0f;
+#else
+    g_pen_p = 0.5f;
+#endif
+    g_pen_tick = GetTickCount();
+    if (msg == WM_POINTERUPDATE && D.mode == DRAG_INK && (pi.pointerInfo.pointerFlags & POINTER_FLAG_INCONTACT)) {
+        POINT pt = pi.pointerInfo.ptPixelLocation;
+        float x, y, w, h;
+        ScreenToClient(hwnd, &pt);
+        view_client_to_page(D.page, pt.x, pt.y, &x, &y);
+        page_size(D.page, &w, &h);
+        x = clampf(x, 0, w);
+        y = clampf(y, 0, h);
+        if (!g_ink_pen && g_nink >= 2) {
+            /* the pen's points from now on; the first point takes the pen's pressure */
+            g_inkp[0] = g_inkp[0] < 0 ? g_pen_p : g_inkp[0];
+            g_nink = 2;
+        }
+        g_ink_pen = TRUE;
+        if (g_nink < 2 || fabsf(g_ink[g_nink - 2] - x) + fabsf(g_ink[g_nink - 1] - y) > 0.05f) ink_add(x, y, g_pen_p);
+        else g_inkp[g_nink / 2 - 1] = g_pen_p;
+        D.x1 = x;
+        D.y1 = y;
+        InvalidateRect(hwnd, NULL, FALSE);
+    }
+    return FALSE;   /* DefWindowProc: the mouse messages are X's, not made of these */
+}
 
 static struct {
     HWND hwnd;
@@ -778,8 +873,8 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (g.sub == SUB_INK) {
             D.mode = DRAG_INK;
             g_nink = 0;
-            if (!g_ink) { g_capink = 4096; g_ink = malloc(g_capink * sizeof(float)); }
-            if (g_ink) { g_ink[g_nink++] = x; g_ink[g_nink++] = y; }
+            g_ink_pen = FALSE;
+            ink_add(x, y, mouse_pressure());
             return TRUE;
         }
         if (g.sub == SUB_ADDTEXT || g.sub == SUB_FILLTEXT) {
@@ -837,10 +932,7 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             D.y1 = clampf(y, 0, h);
         }
         if (D.mode == DRAG_ARMED && abs(pt.x - D.down.x) + abs(pt.y - D.down.y) > dpx(3)) D.mode = DRAG_MOVE;
-        if (D.mode == DRAG_INK && g_ink) {
-            if (g_nink + 2 > g_capink) { float *t = realloc(g_ink, (g_capink *= 2) * sizeof(float)); if (t) g_ink = t; }
-            if (g_nink + 2 <= g_capink) { g_ink[g_nink++] = D.x1; g_ink[g_nink++] = D.y1; }
-        }
+        if (D.mode == DRAG_INK && !g_ink_pen) ink_add(D.x1, D.y1, mouse_pressure());
         InvalidateRect(hwnd, NULL, FALSE);
         return TRUE;
     }
@@ -913,14 +1005,23 @@ BOOL tool_mouse(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             break;
         case DRAG_INK:
             if (g_ink && g_nink >= 4) {
-                char *buf = malloc(g_nink * 16 + 64);
-                int i, n = 0;
+                char *buf = malloc(g_nink * 24 + 64);
+                int i, n = 0, pressed = 0;
                 if (buf) {
-                    for (i = 0; i + 1 < g_nink; i += 2) n += sprintf(buf + n, "%s%.2f %.2f", i ? " " : "", g_ink[i], g_ink[i + 1]);
+                    for (i = 0; i + 1 < g_nink; i += 2) {
+                        n += sprintf(buf + n, "%s%.2f %.2f", i ? " " : "", g_ink[i], g_ink[i + 1]);
+                        if (g_inkp[i / 2] >= 0) pressed++;
+                    }
+                    if (pressed == g_nink / 2) {
+                        /* a pen's stroke: its pressure at each point */
+                        n += sprintf(buf + n, "\tpressure=");
+                        for (i = 0; i < g_nink / 2; i++) n += sprintf(buf + n, "%s%.3f", i ? " " : "", g_inkp[i]);
+                    }
                     doc_requestf("annot\t%d\tink\tink=%s\tcolor=%s\twidth=2", D.page, buf, col);
                     free(buf);
                 }
             }
+            g_ink_pen = FALSE;
             g_nink = 0;
             break;
         }
@@ -1125,14 +1226,21 @@ void tool_paint(HDC dc)
         SelectObject(dc, op);
         DeleteObject(pen);
     } else if (D.mode == DRAG_INK && g_ink && g_nink >= 4) {
-        HPEN pen = CreatePen(PS_SOLID, max(1, dpx(2)), g.ccolor);
-        HGDIOBJ op = SelectObject(dc, pen);
-        POINT a;
-        view_page_to_client(D.page, g_ink[0], g_ink[1], &a);
-        MoveToEx(dc, a.x, a.y, NULL);
-        for (i = 2; i + 1 < g_nink; i += 2) { view_page_to_client(D.page, g_ink[i], g_ink[i + 1], &a); LineTo(dc, a.x, a.y); }
-        SelectObject(dc, op);
-        DeleteObject(pen);
+        /* each segment as wide as the pen pressed there (as the engine will draw it) */
+        POINT a, b;
+        double s = view_scale();
+        for (i = 2; i + 1 < g_nink; i += 2) {
+            float pr = g_inkp[i / 2];
+            int wpx = pr < 0 ? max(1, (int)(2 * s + 0.5)) : max(1, (int)(2 * (0.25 + 1.5 * pr) * s + 0.5));
+            HPEN pen = CreatePen(PS_SOLID, wpx, g.ccolor);
+            HGDIOBJ op = SelectObject(dc, pen);
+            view_page_to_client(D.page, g_ink[i - 2], g_ink[i - 1], &a);
+            view_page_to_client(D.page, g_ink[i], g_ink[i + 1], &b);
+            MoveToEx(dc, a.x, a.y, NULL);
+            LineTo(dc, b.x, b.y);
+            SelectObject(dc, op);
+            DeleteObject(pen);
+        }
     }
     DeleteObject(acc);
 }

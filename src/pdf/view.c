@@ -1001,6 +1001,9 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_MOUSEMOVE: case WM_LBUTTONDBLCLK: case WM_RBUTTONUP:
         if (tool_mouse(hwnd, msg, wp, lp)) return 0;
         break;
+    case WM_POINTERDOWN: case WM_POINTERUPDATE: case WM_POINTERUP:
+        tool_pointer(hwnd, msg, wp, lp);
+        break;
     case WM_APP + 10:
         tool_commit_editor();
         return 0;

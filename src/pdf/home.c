@@ -987,6 +987,7 @@ void shortcuts_help(void)
                 L"  Ctrl+Plus / Ctrl+Minus  Zoom      Ctrl+0  Fit page      Ctrl+1  Actual size      Ctrl+2  Fit width\n"
                 L"  Ctrl+Shift+Plus / Ctrl+Shift+Minus  Rotate the view      F4  Navigation pane      Shift+F4  Tools pane\n"
                 L"  Ctrl+Shift+N or Ctrl+G  Go to page      Home / End  First / last page\n"
+                L"  F11 or Ctrl+L  Full screen (a page per screen; click, arrows or Space turn pages, Esc ends)\n"
                 L"  Ctrl+Shift+V  Read this page out loud      Ctrl+Shift+B  Read to the end      Ctrl+Shift+E  Stop reading\n\n"
                 L"Edit\n"
                 L"  Ctrl+Z / Ctrl+Y  Undo / Redo      Ctrl+C  Copy      Ctrl+A  Select all      Ctrl+F  Find      F3  Find next\n"

@@ -480,9 +480,11 @@ BOOL dlg_certsign(int field_xref)
     frect none = { 0, 0, 0, 0 };
     if (!g.npages || !g.bridged) return FALSE;
     tool_commit_editor();
-    if (g.encrypted) {
-        MessageBoxW(g_main, L"An encrypted document cannot be signed here. Remove its security first (File > Protect > "
-                            L"Remove Security), sign it, then protect it again if needed.", L"Sign", MB_OK | MB_ICONINFORMATION);
+    /* an encrypted document is signed as it is and stays encrypted (sg-pdf derives its key from the
+     * password it was opened with); only a security change not yet saved has to be saved first */
+    if (g.protect[0] && strcmp(g.protect, "keep")) {
+        MessageBoxW(g_main, L"The document's security changes when it is saved. Save it first, then sign it.", L"Sign",
+                    MB_OK | MB_ICONINFORMATION);
         return FALSE;
     }
     r = DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_CERTSIGN), g_main, certsign_proc, 0);

@@ -304,6 +304,11 @@ test-touchkbd: build
 	   echo "touchkbd-check: mutant $$m caught"; \
 	 done
 
+.PHONY: test-pdf-mutants
+test-pdf-mutants: build
+	@sh test/pdf-present-check.sh --mutants
+	@sh test/pdf-pen-check.sh --mutants
+
 .PHONY: test-office-native-mutants test-office-mutants
 test-office-native-mutants: office
 	@sh test/office-native-mutants.sh
@@ -435,6 +440,8 @@ test-notify: build
 	@sh test/pdf-check.sh
 	@sh test/pdf-editor-check.sh
 	@sh test/pdf-pro-check.sh
+	@sh test/pdf-present-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+	@sh test/pdf-pen-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc   # WINE= a wine-sg with pens (10.0-197+)
 	@sh test/browser-check.sh
 	@sh test/store-check.sh
 	@sh test/store-busy-check.sh
