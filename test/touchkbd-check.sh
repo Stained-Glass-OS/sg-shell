@@ -218,5 +218,16 @@ tap z
 [ "$(state TEXT)" = "${before}z" ] && pass "and a Wine program's in front again: SendInput as before" \
     || fail "back in the Wine program: '$(state TEXT)' after '$before'"
 
+# --- the sign-in screen and setup: /background /notray -- no taskbar there,
+# so no button (Wine stood it in an empty tray window of its own: a white box
+# on the Surface's sign-in screen, David 2026-10-07) ---
+wine taskkill /f /im sg-touchkbd64.exe >/dev/null 2>&1; sleep 2
+rm -f "$DUMP"
+wine 'C:\sg-touchkbd64.exe' /background /notray >/dev/null 2>&1 &
+i=0; while [ ! -s "$DUMP" ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
+grep -q 'tray=0' "$DUMP" && pass "started with /notray (sign-in, setup): no button in a notification area that is not there" \
+    || fail "/notray: $(val STATE)"
+[ "$(shown)" = 0 ] && pass "and hidden until a text field is touched" || fail "/notray: shown at start: $(val WINDOW)"
+
 [ $RC = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit $RC

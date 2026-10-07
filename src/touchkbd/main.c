@@ -98,6 +98,11 @@ static WCHAR g_dump[MAX_PATH], g_devices[MAX_PATH];
 static HFONT g_font, g_font_small;
 static DWORD g_last_touch, g_hide_time, g_touch_seen;
 static BOOL g_force_touch;
+/* /notray (with /background): no taskbar button -- the sign-in screen and the
+ * first-run setup have no taskbar, and Wine stood the icon in a little tray
+ * window of its own, an empty box on the Surface's sign-in screen (David,
+ * 2026-10-07). The automatic keyboard still shows for a text field. */
+static BOOL g_notray;
 
 /* the pointers holding keys down: pointer id (0: the mouse) -> key */
 static struct { UINT32 id; struct key *key; BOOL used; } g_down[10];
@@ -903,6 +908,9 @@ static HICON make_icon(int size)
  * TipbandDesiredVisibility; not set, on with a touch screen or pen */
 static BOOL tray_wanted(void)
 {
+#ifndef SG_MUTANT_TOUCHKBD_TRAY_ANYWAY
+    if (g_notray) return FALSE;
+#endif
     return reg_get(L"TipbandDesiredVisibility", has_touch_screen()) != 0;
 }
 
@@ -1046,7 +1054,11 @@ static int parse_command(const WCHAR *cmdline, BOOL *background)
     *background = FALSE;
     if (!cmdline) return CMD_SHOW;
     while (*cmdline == ' ') cmdline++;
-    if (!_wcsnicmp(cmdline, L"/background", 11)) { *background = TRUE; return 0; }
+    if (!_wcsnicmp(cmdline, L"/background", 11)) {
+        *background = TRUE;
+        if (wcsstr(cmdline + 11, L"/notray")) g_notray = TRUE;
+        return 0;
+    }
     if (!_wcsnicmp(cmdline, L"/hide", 5)) return CMD_HIDE;
     if (!_wcsnicmp(cmdline, L"/toggle", 7)) return CMD_TOGGLE;
     return CMD_SHOW;

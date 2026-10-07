@@ -1,3 +1,12 @@
+sg-shell (0.1.0-161) unstable; urgency=medium
+
+  * Touch keyboard: /notray (with /background) adds no taskbar button. The
+    sign-in screen and setup have no taskbar: Wine stood the button in an
+    empty tray window of its own, a white box on the Surface's sign-in
+    screen (David). touchkbd-check; mutant SG_MUTANT_TOUCHKBD_TRAY_ANYWAY.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 16:09:09 -0700
+
 sg-shell (0.1.0-160) unstable; urgency=medium
 
   * Settings > Sound follows devices plugged in or out while it is open
