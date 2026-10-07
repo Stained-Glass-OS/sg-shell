@@ -194,6 +194,12 @@ static BOOL keyring_ask(HWND owner)
 int keyring_signin_main(void)
 {
     char st[64];
+    /* the account that signs in by itself (Settings > Accounts > Kiosk):
+     * nobody typed a password, so its keyring never opens at sign-in -- and
+     * asking at every start would put the question in front of a kiosk app */
+#ifndef SG_MUTANT_AUTOLOGON_KEYRING
+    if (autologon_is_me()) return 0;
+#endif
     keyring_status(st, sizeof(st));
 #ifndef SG_MUTANT_KEYRING_NOTICE
     if (strcmp(st, "locked")) return 0;

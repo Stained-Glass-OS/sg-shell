@@ -127,6 +127,9 @@ build:
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-defender-notice (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-restart-notice64.exe src/sg-restart-notice.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-restart-notice (64-bit)"
+	@# the kiosk app's launcher (Settings > Accounts > Kiosk; sg-session's sg-kiosk runs it)
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-kiosk64.exe src/sg-kiosk.c \
+	    -lshell32 -luser32 -lole32 -luuid -municode -mwindows && echo "built sg-kiosk (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe src/sg-volume.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-volume (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-notify64.exe src/sg-notify.c \
@@ -284,6 +287,11 @@ test-office: office
 # Desktop's "Remember me": test/credmgr-check.sh (needs sg-session's source,
 # SG_SESSION_SRC), and each mutant must fail it.
 .PHONY: test-credmgr
+# The kiosk: sg-kiosk64.exe, Settings > Accounts > Kiosk, Startup's Add an app (test/kiosk-check.sh).
+.PHONY: test-kiosk
+test-kiosk: build
+	@sh test/kiosk-check.sh
+
 test-credmgr: build
 	@sh test/credmgr-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
 	 for m in KEYRING_NOTICE KEYRING_NOTICE_ORDER; do \
@@ -377,6 +385,7 @@ test: build
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/optionalfeatures-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/power-buttons-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/kiosk-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/envreload-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/control-icon-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

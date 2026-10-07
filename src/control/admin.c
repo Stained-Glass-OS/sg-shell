@@ -922,6 +922,15 @@ int admin_main(int argc, WCHAR **argv)
         const WCHAR *req[] = { L"power-buttons", argv[1], argv[2], argv[3] };
         return do_one(L"Power buttons and lid", req, 4);
     }
+    /* Settings > Accounts > Kiosk */
+    if (!lstrcmpW(argv[0], L"autologon") && argc > 1) {
+        const WCHAR *req[] = { L"autologon", argv[1] };
+        return do_one(L"Automatic sign-in", req, 2);
+    }
+    if (!lstrcmpW(argv[0], L"kiosk") && argc > 5) {
+        const WCHAR *req[] = { L"kiosk", argv[1], argv[2], argv[3], argv[4], argv[5] };
+        return do_one(L"Kiosk app", req, 6);
+    }
     if (!lstrcmpW(argv[0], L"ntp") && argc > 1) {
         const WCHAR *req[] = { L"ntp", argv[1] };
         return do_one(L"Set time automatically", req, 2);

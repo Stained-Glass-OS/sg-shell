@@ -50,6 +50,10 @@
 #   font-install FILE        a font SYSTEM put in the machine's %WINDIR%\Fonts,
 #   font-remove FILE         copied to (removed from) /usr/local/share/fonts/
 #                            stained-glass for Linux programs (fontconfig)
+#   autologon NAME           NAME signs in automatically when the PC starts
+#                            (greetd's initial session; empty: nobody)
+#   kiosk NAME APP ARGS DIR DESKTOP
+#                            that account's kiosk app (all empty: none)
 #   apt-install PACKAGE      SG Store's Linux apps: apt-get install PACKAGE
 #   apt-remove PACKAGE       SG Store's Uninstall: apt-get remove PACKAGE, and
 #                            what it alone brought in (its dependencies apt
@@ -458,6 +462,164 @@ def op_power_buttons(args):
     os.replace(tmp, LOGIND_DROPIN)
     if not TEST:
         subprocess.run(["systemctl", "kill", "-s", "HUP", "systemd-logind"], check=False)
+    return []
+
+
+# ---- automatic sign-in and the kiosk app (Settings > Accounts > Kiosk) ----------
+# What Windows keeps as AutoAdminLogon and Assigned access. Automatic sign-in is
+# greetd's initial session: run once per boot, with no password asked (greetd
+# skips PAM's authentication for it, not its account and session checks), and
+# never again in the same boot (greetd's runfile in /run) -- signing out, or
+# Ctrl+Alt+Del's Sign out, shows the sign-in screen as always. No password is
+# stored anywhere. The account and its kiosk app are in AUTOLOGON_CONF, which
+# the session (sg-session's sg-kiosk) and Settings read.
+AUTOLOGON_CONF = "/etc/stained-glass/autologon.conf"
+GREETD_CONF = "/etc/greetd/config.toml"
+if TEST:
+    AUTOLOGON_CONF = os.environ.get("SG_ADMIN_AUTOLOGON_CONF", AUTOLOGON_CONF)
+    GREETD_CONF = os.environ.get("SG_ADMIN_GREETD_CONF", GREETD_CONF)
+SESSION_CMD = "/usr/bin/sg-session-start"
+AUTOLOGON_BEGIN = "# BEGIN Stained Glass OS automatic sign-in (Settings > Accounts > Kiosk; sg-admind)"
+AUTOLOGON_END = "# END Stained Glass OS automatic sign-in"
+
+
+def write_root_file(path, text):
+    """path, whole, root's and readable by everyone, never through a link"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".sg-new"
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def read_autologon():
+    conf = {}
+    try:
+        with open(AUTOLOGON_CONF) as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    conf[k] = v
+    except OSError:
+        pass
+    return conf
+
+
+def write_autologon(conf):
+    if not conf.get("user"):
+        try:
+            os.unlink(AUTOLOGON_CONF)
+        except FileNotFoundError:
+            pass
+        return
+    lines = ["# Stained Glass OS: automatic sign-in and the kiosk app (Settings > Accounts > Kiosk).",
+             "# Written by sg-admind; sg-kiosk starts the kiosk app in this account's session."]
+    for k in ("user", "kiosk-name", "kiosk-app", "kiosk-args", "kiosk-dir", "kiosk-desktop"):
+        if conf.get(k):
+            lines.append("%s=%s" % (k, conf[k]))
+    write_root_file(AUTOLOGON_CONF, "\n".join(lines) + "\n")
+
+
+def greetd_autologon(user):
+    """greetd's [initial_session] for USER, or none (USER empty). Only our own
+    block is ever changed; one somebody else wrote is left alone (refused)."""
+    try:
+        with open(GREETD_CONF) as f:
+            text = f.read()
+    except OSError:
+        raise Refused("The sign-in screen's settings (%s) were not found." % GREETD_CONF)
+    out, inside = [], False
+    for line in text.splitlines():
+        if line.strip() == AUTOLOGON_BEGIN:
+            inside = True
+            continue
+        if inside:
+            if line.strip() == AUTOLOGON_END:
+                inside = False
+            continue
+        out.append(line)
+    while out and not out[-1].strip():
+        out.pop()
+    if user:
+        if any(re.match(r"^\s*\[\s*initial_session\s*\]", line) for line in out):
+            raise Refused("The sign-in screen already signs an account in automatically (%s). "
+                          "Remove that first." % GREETD_CONF)
+        out += ["", AUTOLOGON_BEGIN, "[initial_session]",
+                'command = "%s"' % SESSION_CMD, 'user = "%s"' % user, AUTOLOGON_END]
+    write_root_file(GREETD_CONF, "\n".join(out) + "\n")
+
+
+def op_autologon(args):
+    """autologon NAME: NAME signs in automatically when the PC starts; empty:
+    nobody (the sign-in screen, and no kiosk app)."""
+    (name,) = args
+    conf = read_autologon()
+    if not name:
+        greetd_autologon("")
+        write_autologon({})
+        return ["restart"]
+    account_name(name)
+    local_account(name)
+    greetd_autologon(name)
+    if conf.get("user") != name:
+        conf = {}      # another account: its kiosk app is not this one's
+    conf["user"] = name
+    write_autologon(conf)
+    return ["restart"]
+
+
+def kiosk_text(v, what, most):
+    if len(v) > most or any(ord(c) < 32 for c in v):
+        raise Refused("The kiosk app's %s cannot be used." % what)
+    return v
+
+
+WINPATH_RE = re.compile(r"^[A-Za-z]:\\[^<>\"|?*]*$")
+
+
+def op_kiosk(args):
+    """kiosk NAME APP ARGS DIR DESKTOP: the app the automatic sign-in's
+    account opens full screen, and opens again when it closes. A Windows
+    program (APP, a C:\\ path to its .exe or a shortcut, with ARGS and its
+    folder DIR) or a Linux app (DESKTOP, its .desktop file). All empty: none."""
+    name, app, app_args, folder, desktop = args
+    conf = read_autologon()
+    if not any(args):
+        for k in [k for k in conf if k.startswith("kiosk-")]:
+            del conf[k]
+        write_autologon(conf)
+        return []
+    if not conf.get("user"):
+        raise Refused("Choose an account to sign in automatically first: the kiosk app runs in that account.")
+    kiosk_text(name, "name", 128)
+    kiosk_text(app, "program", 520)
+    kiosk_text(app_args, "arguments", 1024)
+    kiosk_text(folder, "folder", 520)
+    kiosk_text(desktop, "Linux app", 1024)
+    if not name:
+        raise Refused("The kiosk app needs a name.")
+    if bool(app) == bool(desktop):
+        raise Refused("A kiosk app is one program, not two.")
+    if app and (not WINPATH_RE.match(app) or not app.lower().endswith((".exe", ".lnk"))):
+        raise Refused("'%s' is not a program the kiosk can start." % app)
+    if folder and not WINPATH_RE.match(folder):
+        raise Refused("'%s' is not a folder." % folder)
+    if desktop:
+        if (not desktop.startswith("/") or not desktop.endswith(".desktop") or "/../" in desktop
+                or not os.path.isfile(desktop)):
+            raise Refused("'%s' is not a Linux app." % desktop)
+    for k in [k for k in conf if k.startswith("kiosk-")]:
+        del conf[k]
+    conf.update({"kiosk-name": name, "kiosk-app": app, "kiosk-args": app_args, "kiosk-dir": folder,
+                 "kiosk-desktop": desktop})
+    write_autologon(conf)
     return []
 
 
@@ -1297,6 +1459,8 @@ OPS = {
     "ntp": (op_ntp, 1),
     "defender": (op_defender, 1),
     "power-buttons": (op_power_buttons, 3),
+    "autologon": (op_autologon, 1),
+    "kiosk": (op_kiosk, 5),
     "defender-restore": (op_defender_restore, 1),
     "defender-delete": (op_defender_delete, 1),
     "time": (op_time, 1),

@@ -33,7 +33,7 @@ enum page_id {
     PG_S_NETSTATUS, PG_S_WIFI, PG_S_ETHERNET, PG_S_PROXY,
     PG_S_BACKGROUND, PG_S_COLORS, PG_S_LOCKSCREEN, PG_S_THEMES, PG_S_START, PG_S_TASKBAR, PG_S_EFFECTS, PG_S_LOOKSHARE,
     PG_S_APPS, PG_S_DEFAULTAPPS, PG_S_STARTUP,
-    PG_S_YOURINFO, PG_S_SIGNIN, PG_S_OTHERUSERS,
+    PG_S_YOURINFO, PG_S_SIGNIN, PG_S_OTHERUSERS, PG_S_KIOSK,
     PG_S_DATETIME, PG_S_REGION,
     PG_S_EOA_DISPLAY, PG_S_EOA_KEYBOARD, PG_S_EOA_MOUSE, PG_S_EOA_MAGNIFIER,
     PG_S_PRIV_GENERAL, PG_S_PRIV_MIC, PG_S_PRIV_CAMERA, PG_S_PRIV_LOCATION,
@@ -193,6 +193,7 @@ int  privacy_admin_consent(const WCHAR *cap, const WCHAR *on_off);   /* set_misc
 int  envvars_main(BOOL system_only);         /* envvars.c: the Environment Variables dialog */
 int  admin_main(int argc, WCHAR **argv);        /* /admin VERB ...: the elevated dialogs */
 int  admin_do(int argc, WCHAR **argv);          /* /admin-do VERB ...: non-interactive */
+BOOL autologon_is_me(void);     /* kiosk.c: this account signs in by itself when the PC starts */
 /* a small modal form: title, fields, returns TRUE on OK */
 struct form_field {
     const WCHAR *label;

@@ -451,10 +451,10 @@ BOOL set_cmd_defaultapps(int id, int code, HWND ctl)
 
 /* ---- Startup ------------------------------------------------------------------------------------- */
 #define APPROVED L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved"
-struct sitem { HKEY root; WCHAR approved[160], value[128], name[128], cmd[MAX_PATH]; BOOL on; };
+struct sitem { HKEY root; WCHAR approved[160], value[128], name[128], cmd[MAX_PATH]; BOOL on, folder; };
 static struct sitem g_st[64];
 static int g_nst;
-enum { CMD_ST_FIRST = CMD_PAGE_FIRST + 1 };
+enum { CMD_ST_FIRST = CMD_PAGE_FIRST + 1, CMD_ST_ADD = CMD_PAGE_FIRST + 200, CMD_ST_REMOVE = CMD_PAGE_FIRST + 300 };
 
 static BOOL approved_on(HKEY root, const WCHAR *sub, const WCHAR *value)
 {
@@ -474,6 +474,7 @@ static void add_item(HKEY root, const WCHAR *approved, const WCHAR *value, const
     WCHAR *dot;
     if (g_nst >= (int)ARRAYSIZE(g_st)) return;
     s = &g_st[g_nst++];
+    s->folder = FALSE;
     s->root = root;
     lstrcpynW(s->approved, approved, ARRAYSIZE(s->approved));
     lstrcpynW(s->value, value, ARRAYSIZE(s->value));
@@ -510,6 +511,7 @@ static void read_folder(int csidl, HKEY root)
         if (!_wcsicmp(fd.cFileName, L"desktop.ini")) continue;
         _snwprintf(path, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
         add_item(root, APPROVED L"\\StartupFolder", fd.cFileName, path);
+        if (g_nst) g_st[g_nst - 1].folder = TRUE;
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
@@ -526,12 +528,20 @@ void set_build_startup(void)
     y = st_head(y, L"Startup Apps");
     y = st_para(y, L"Apps can be configured to start when you sign in. In most cases, they'll start minimized or might only "
                    L"start a background task.");
+    /* any app of Start's, Windows or Linux (David 2026-10-07: the Sonos app
+     * at sign-in): a shortcut in the person's Startup folder */
+    st_button(&y, L"Add an app", CMD_ST_ADD);
     for (i = 0; i < g_nst; i++) {
         HWND c;
         pg_text(st_x(), y + S(4), st_w() - S(140), S(22), g_font_body, COL_TEXT, g_st[i].name, DT_SINGLELINE | DT_END_ELLIPSIS);
         pg_text(st_x(), y + S(26), st_w() - S(140), S(18), g_font_small, COL_SUBTLE, g_st[i].cmd, DT_SINGLELINE | DT_PATH_ELLIPSIS);
         c = pg_control(SET_TOGGLE_CLASS, g_st[i].name, WS_TABSTOP, st_x() + st_w() - S(110), y + S(6), S(110), S(26), CMD_ST_FIRST + i);
         SendMessageW(c, BM_SETCHECK, g_st[i].on ? BST_CHECKED : BST_UNCHECKED, 0);
+        /* the person's own (their Startup folder) can be taken away again */
+        if (g_st[i].root == HKEY_CURRENT_USER && g_st[i].folder) {
+            pg_link(st_x() + st_w() - S(110), y + S(36), L"Remove", CMD_ST_REMOVE + i, 0);
+            y += S(16);
+        }
         y += S(56);
     }
     if (!g_nst) y = st_para(y, L"No apps start when you sign in.");
@@ -539,7 +549,27 @@ void set_build_startup(void)
 
 BOOL set_cmd_startup(int id, int code, HWND ctl)
 {
+    WCHAR msg[300];
     (void)code;
+    if (id == CMD_ST_ADD) {
+        struct start_app app;
+        if (!start_app_pick(L"Add an app", L"Choose an app to start when you sign in.", L"Add", &app)) return TRUE;
+        if (startup_add_app(&app)) _snwprintf(msg, ARRAYSIZE(msg), L"%ls will start when you sign in.", app.name);
+        else _snwprintf(msg, ARRAYSIZE(msg), L"%ls could not be added to your startup apps.", app.name);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        refresh_page();
+        st_status(msg);
+        return TRUE;
+    }
+    if (id >= CMD_ST_REMOVE && id < CMD_ST_REMOVE + g_nst) {
+        struct sitem *s = &g_st[id - CMD_ST_REMOVE];
+        BOOL ok = s->root == HKEY_CURRENT_USER && s->folder && DeleteFileW(s->cmd);
+        _snwprintf(msg, ARRAYSIZE(msg), ok ? L"%ls no longer starts when you sign in." : L"%ls could not be removed.", s->name);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        refresh_page();
+        st_status(msg);
+        return TRUE;
+    }
     if (id >= CMD_ST_FIRST && id < CMD_ST_FIRST + g_nst) {
         struct sitem *s = &g_st[id - CMD_ST_FIRST];
         BYTE b[12] = { 0 };

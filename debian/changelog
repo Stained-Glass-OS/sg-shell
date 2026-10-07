@@ -1,3 +1,27 @@
+sg-shell (0.1.0-159) unstable; urgency=medium
+
+  * Settings > Accounts > Kiosk (ms-settings:assignedaccess; David: "a
+    tablet that boots to the Sonos player"): the account that signs in
+    automatically when the PC starts, and its kiosk app -- any app in Start,
+    a Windows program (its path, arguments and folder) or a Linux app (its
+    .desktop file) -- through sg-admind's new autologon and kiosk verbs: an
+    [initial_session] block of ours in greetd's configuration (no password
+    kept) and /etc/stained-glass/autologon.conf, which sg-session's
+    sg-kiosk reads. The page says how to leave the kiosk (Ctrl+Alt+Del >
+    Sign out).
+  * sg-kiosk64.exe: starts the kiosk app maximized (its windows maximized as
+    they appear), waits for it, and follows a launcher that hands over to
+    the real app.
+  * Settings > Apps > Startup: Add an app (any Start app, into the person's
+    Startup folder) and Remove for the person's own items.
+  * The account that signs in automatically is not asked about its locked
+    saved passwords at every sign-in.
+  * Gates: test/kiosk-check.sh (mutants KIOSK_NOT_MAXIMIZED,
+    KIOSK_NO_HANDOFF, AUTOLOGON_KEYRING, STARTUP_ADD_NOOP), admind-check
+    (autologon/kiosk; mutants AUTOLOGON_NOINITIAL, AUTOLOGON_NOOFF).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 15:40:00 -0700
+
 sg-shell (0.1.0-158) unstable; urgency=medium
 
   * Updates found but not downloaded say so (David, on the Surface: "it says

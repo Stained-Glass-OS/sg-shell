@@ -648,6 +648,104 @@ set -- $(remove_cases "$T/mut-nounreg")
 unset SG_ADMIN_DEFAULTS
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"; cp "$T/runuser.others" "$B/runuser"
 
+# --- automatic sign-in and the kiosk app (Settings > Accounts > Kiosk) ---
+# greetd's configuration as the image ships it
+cat > "$T/greetd.toml" <<'TOML'
+# greetd: the Windows-style login screen (ADR 0008).
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/lib/stained-glass/sg-login-ui"
+user = "sggreet"
+TOML
+cp "$T/greetd.toml" "$T/greetd.orig"
+export SG_ADMIN_GREETD_CONF="$T/greetd.toml" SG_ADMIN_AUTOLOGON_CONF="$T/etc-sg/autologon.conf"
+# what greetd will read: TOML, its initial session's user and command (tomllib: python 3.11)
+toml_get() {   # FILE -> "initial_user|initial_command|default_command|default_user"
+    python3 - "$1" <<'PY'
+import sys, tomllib
+c = tomllib.load(open(sys.argv[1], "rb"))
+i = c.get("initial_session", {}); d = c.get("default_session", {})
+print("%s|%s|%s|%s" % (i.get("user", ""), i.get("command", ""), d.get("command", ""), d.get("user", "")))
+PY
+}
+autologon_checks() {   # ADMIND -> sets K_* results
+    K_ON=no; K_OFF=no
+    id=$(next_id); printf 'autologon\nbob\n' > "$S/requests/.k"; mv "$S/requests/.k" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"
+    [ "$(toml_get "$T/greetd.toml" 2>/dev/null)" = "bob|/usr/bin/sg-session-start|/usr/lib/stained-glass/sg-login-ui|sggreet" ] && K_ON=yes
+    id=$(next_id); printf 'autologon\n\n' > "$S/requests/.k"; mv "$S/requests/.k" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"
+    cmp -s "$T/greetd.toml" "$T/greetd.orig" && [ ! -e "$T/etc-sg/autologon.conf" ] && K_OFF=yes
+    cp "$T/greetd.orig" "$T/greetd.toml"; rm -f "$T/etc-sg/autologon.conf"
+}
+if python3 -c 'import tomllib' 2>/dev/null; then
+    r=$(ask autologon bob)
+    [ "$(first "$r")" = OK ] && [ "$(toml_get "$T/greetd.toml")" = "bob|/usr/bin/sg-session-start|/usr/lib/stained-glass/sg-login-ui|sggreet" ] \
+        && grep -qx 'user=bob' "$T/etc-sg/autologon.conf" \
+        && pass "automatic sign-in: greetd's initial session signs bob in; the sign-in screen stays the default session" \
+        || fail "autologon bob: $r / $(cat "$T/greetd.toml")"
+    [ "$(stat -c %a "$T/greetd.toml")" = 644 ] && [ "$(stat -c %a "$T/etc-sg/autologon.conf")" = 644 ] \
+        && pass "...both files readable by everyone (greetd, the session, Settings), written whole" || fail "modes: $(stat -c '%n %a' "$T/greetd.toml" "$T/etc-sg/autologon.conf")"
+    grep -qi 'password' "$T/greetd.toml" "$T/etc-sg/autologon.conf" && fail "a password is kept" || pass "...and no password is kept anywhere"
+    r=$(ask autologon bob)
+    [ "$(grep -c '^\[initial_session\]' "$T/greetd.toml")" = 1 ] && pass "...asked again: still one initial session" || fail "twice: $(cat "$T/greetd.toml")"
+    r=$(ask kiosk Sonos 'C:\Program Files (x86)\Sonos\Sonos.exe' '--kiosk "x"' 'C:\Program Files (x86)\Sonos' '')
+    [ "$(first "$r")" = OK ] && grep -qxF 'kiosk-app=C:\Program Files (x86)\Sonos\Sonos.exe' "$T/etc-sg/autologon.conf" \
+        && grep -qxF 'kiosk-args=--kiosk "x"' "$T/etc-sg/autologon.conf" && grep -qx 'kiosk-name=Sonos' "$T/etc-sg/autologon.conf" \
+        && grep -qx 'user=bob' "$T/etc-sg/autologon.conf" && pass "the kiosk app (a Windows program) is kept for that account" || fail "kiosk: $r / $(cat "$T/etc-sg/autologon.conf")"
+    cp "$T/etc-sg/autologon.conf" "$T/kiosk.before"
+    r=$(ask kiosk Sonos 'C:\Sonos.exe' 'a
+user=root' '' '')
+    case "$(first "$r")" in "FAILED "*) cmp -s "$T/kiosk.before" "$T/etc-sg/autologon.conf" && pass "...no line can be slipped into it" || fail "changed by a refused request";; *) fail "accepted a line break: $r";; esac
+    r=$(ask kiosk Both 'C:\a.exe' '' '' "$T/app.desktop")
+    case "$(first "$r")" in "FAILED "*) pass "...one program, not two";; *) fail "accepted two: $r";; esac
+    r=$(ask kiosk Shell 'C:\a.bat' '' '' '')
+    case "$(first "$r")" in "FAILED "*) pass "...a program or a shortcut to one, not a script";; *) fail "accepted .bat: $r";; esac
+    r=$(ask kiosk Gone '' '' '' "$T/none.desktop")
+    case "$(first "$r")" in "FAILED "*) pass "...a Linux app that is not there is refused";; *) fail "accepted a missing .desktop: $r";; esac
+    printf '[Desktop Entry]\nType=Application\nName=App\nExec=true\n' > "$T/app.desktop"
+    r=$(ask kiosk App '' '' '' "$T/app.desktop")
+    [ "$(first "$r")" = OK ] && grep -qx "kiosk-desktop=$T/app.desktop" "$T/etc-sg/autologon.conf" && ! grep -q '^kiosk-app=' "$T/etc-sg/autologon.conf" \
+        && pass "a Linux app as the kiosk app (its .desktop file), replacing the Windows one" || fail "kiosk desktop: $r / $(cat "$T/etc-sg/autologon.conf")"
+    r=$(ask kiosk '' '' '' '' '')
+    [ "$(first "$r")" = OK ] && ! grep -q '^kiosk-' "$T/etc-sg/autologon.conf" && grep -qx 'user=bob' "$T/etc-sg/autologon.conf" \
+        && pass "no kiosk app: removed, automatic sign-in stays" || fail "kiosk off: $r / $(cat "$T/etc-sg/autologon.conf")"
+    r=$(ask kiosk App '' '' '' "$T/app.desktop")
+    r=$(ask autologon carol)
+    grep -qx 'user=carol' "$T/etc-sg/autologon.conf" && ! grep -q '^kiosk-' "$T/etc-sg/autologon.conf" \
+        && [ "$(toml_get "$T/greetd.toml" | cut -d'|' -f1)" = carol ] \
+        && pass "another account: its own sign-in, without bob's kiosk app" || fail "switch: $(cat "$T/etc-sg/autologon.conf")"
+    for who in root sgsystem nosuch 'bob"'; do
+        r=$(ask autologon "$who")
+        case "$(first "$r")" in "FAILED "*) ;; *) fail "signed $who in automatically: $r";; esac
+    done
+    [ "$(toml_get "$T/greetd.toml" | cut -d'|' -f1)" = carol ] && pass "never a system account, an unknown one or a made-up name" || fail "refusals changed it"
+    r=$(ask autologon '')
+    [ "$(first "$r")" = OK ] && cmp -s "$T/greetd.toml" "$T/greetd.orig" && [ ! -e "$T/etc-sg/autologon.conf" ] \
+        && pass "off: greetd's configuration exactly as before, nothing kept" || fail "off: $r / $(diff "$T/greetd.orig" "$T/greetd.toml")"
+    r=$(ask kiosk App '' '' '' "$T/app.desktop")
+    case "$(first "$r")" in "FAILED "*) [ ! -e "$T/etc-sg/autologon.conf" ] && pass "no kiosk app without automatic sign-in";; *) fail "kiosk without autologon: $r";; esac
+    # an initial session somebody else configured is not ours to replace
+    printf '\n[initial_session]\ncommand = "sway"\nuser = "john"\n' >> "$T/greetd.toml"; cp "$T/greetd.toml" "$T/greetd.foreign"
+    r=$(ask autologon bob)
+    case "$(first "$r")" in "FAILED "*) cmp -s "$T/greetd.toml" "$T/greetd.foreign" && pass "an initial session not ours is left alone (refused)";; *) fail "replaced a foreign initial session: $r";; esac
+    cp "$T/greetd.orig" "$T/greetd.toml"
+    # MUTANTS: no initial session written / turning it off leaves it
+    autologon_checks "$ADMIND"
+    [ "$K_ON $K_OFF" = "yes yes" ] && pass "(the mutants' baseline holds)" || fail "baseline: $K_ON $K_OFF"
+    sed 's/"\[initial_session\]",/"[initial_sessions]",/' "$ADMIND" > "$T/mut-noinitial"
+    autologon_checks "$T/mut-noinitial"
+    [ "$K_ON" = no ] && pass "MUTANT AUTOLOGON_NOINITIAL (greetd never signs in) is caught" || fail "AUTOLOGON_NOINITIAL not detected"
+    sed 's/^        greetd_autologon("")$/        pass/' "$ADMIND" > "$T/mut-nooff"
+    autologon_checks "$T/mut-nooff"
+    [ "$K_OFF" = no ] && pass "MUTANT AUTOLOGON_NOOFF (turning it off leaves it on) is caught" || fail "AUTOLOGON_NOOFF not detected"
+else
+    echo "SKIP  automatic sign-in: no tomllib (python3 < 3.11)"
+fi
+
 # --- what is not a request ---
 r=$(ask reboot-now); case "$(first "$r")" in "FAILED Unknown"*) pass "refuses an unknown verb";; *) fail "unknown verb: $r";; esac
 r=$(ask hostname a b); case "$(first "$r")" in "FAILED Malformed"*) pass "refuses the wrong number of fields";; *) fail "arity: $r";; esac

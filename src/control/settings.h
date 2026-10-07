@@ -49,6 +49,7 @@
     [PG_S_YOURINFO]     = { L"Your info",                    PG_S_HOME, set_build_yourinfo,  set_cmd_accounts }, \
     [PG_S_SIGNIN]       = { L"Sign-in options",              PG_S_HOME, set_build_signin,    set_cmd_accounts }, \
     [PG_S_OTHERUSERS]   = { L"Other users",                  PG_S_HOME, set_build_otherusers, set_cmd_accounts }, \
+    [PG_S_KIOSK]        = { L"Kiosk",                        PG_S_HOME, set_build_kiosk,     set_cmd_kiosk }, \
     [PG_S_DATETIME]     = { L"Date & time",                  PG_S_HOME, set_build_datetime,  set_cmd_datetime, NULL, set_timer_datetime }, \
     [PG_S_REGION]       = { L"Region",                       PG_S_HOME, set_build_region,    set_cmd_region }, \
     [PG_S_EOA_DISPLAY]  = { L"Display",                      PG_S_HOME, set_build_eoa_display, set_cmd_eoa }, \
@@ -129,6 +130,20 @@ void set_build_priv_location(void); BOOL set_cmd_privacy(int, int, HWND);
 void set_build_update(void);    BOOL set_cmd_update(int, int, HWND);    void set_timer_update(void);
 void set_build_recovery(void);  BOOL set_cmd_recovery(int, int, HWND);
 void set_build_defender(void);  BOOL set_cmd_defender(int, int, HWND);
+
+void set_build_kiosk(void);     BOOL set_cmd_kiosk(int, int, HWND);
+
+/* ---- automatic sign-in and the kiosk app (kiosk.c) ------------------------------------- */
+/* /etc/stained-glass/autologon.conf, which sg-admind writes */
+struct autologon { WCHAR user[64], name[128], app[MAX_PATH], args[1024], dir[MAX_PATH], desktop[1024]; };
+void autologon_read(struct autologon *a);
+/* Start's apps (.lnk/.url in the Start Menu folders, Start's own programs), by name */
+struct start_app { WCHAR name[128], path[MAX_PATH]; };
+int  start_apps(const struct start_app **out);
+BOOL start_app_pick(const WCHAR *title, const WCHAR *intro, const WCHAR *ok, struct start_app *out);
+BOOL start_app_resolve(const WCHAR *path, WCHAR *target, WCHAR *args, int acch, WCHAR *dir);
+BOOL start_app_linux(const WCHAR *target, const WCHAR *args, WCHAR *unix_path, int cch);
+BOOL startup_add_app(const struct start_app *a);   /* a shortcut in the person's Startup folder */
 
 /* the microphone switch voice typing honours (privacy) */
 BOOL privacy_mic_allowed(void);
