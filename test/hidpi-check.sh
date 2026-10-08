@@ -32,7 +32,8 @@
 #
 #   SG_WINE_DIR=<wine-sg root> sh test/hidpi-check.sh
 #   Mutants (sg-control/sg-settings): SG_MUTANT_SCALE_RECOMMEND_100,
-#   SG_MUTANT_SCALE_NO_STICK, SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_CONF_UNSCALED,
+#   SG_MUTANT_SCALE_NO_STICK, SG_MUTANT_TITLE_DOUBLE_SCALE, SG_MUTANT_TITLE_IGNORES_SCALE,
+#   SG_MUTANT_CONF_UNSCALED,
 #   SG_MUTANT_SCALE_LINUX_NOT_TOLD, SG_MUTANT_SETTINGS_DPI_IGNORED,
 #   SG_MUTANT_DPI_UNAWARE (control main.c, wordpad, store, charmap); sg-start:
 #   SG_MUTANT_START_SYSTEM_AWARE.
@@ -196,6 +197,17 @@ aw=$("$WINE" "$T/probe.exe" aware SgControlWindow WordPadClass SgStore SgCharMap
 [ "$aw" = "SgControlWindow=1 WordPadClass=1 SgStore=1 SgCharMap=1 " ] \
     && pass "Control Panel, WordPad, the Store and Character Map are aware of the DPI: drawn crisp at 175% ($aw)" \
     || fail "aware of the DPI at 175%: '$aw' (want all 1)"
+
+# a scale picked over the recommended one makes the title bars larger with
+# it, as on Windows: 225% on the Surface, 225/175 of their size at 175%
+# (they stayed the share of the screen whatever the scale: smaller than at
+# 175%; David 2026-10-08)
+sgs scale 225 >/dev/null
+p=$(probe); cap225=$(val "$p" caption); s8=$(regv 'HKCU\Software\Stained Glass\Style' Scale8)
+awk -v a="${cap225:-0}" -v b="${cap:-1}" 'BEGIN { q = (a / b) / (225 / 175); exit !(q > 0.92 && q < 1.08) }' && [ "$s8" = 10 ] \
+    && pass "225% picked: a title bar ${cap225} px, 225/175 of its ${cap} px at 175% (Scale8 $s8 still)" \
+    || fail "title bars at 225%: caption $cap225 (175%: $cap; want about $(( ${cap:-0} * 225 / 175 ))), Scale8 $s8 (want 10)"
+sgs scale 175 >/dev/null
 
 # --- 4. Settings shows the recommendation ------------------------------------------------
 export SG_SETTINGS_DUMP="$("$WINE" winepath -w "$T/sdump" 2>/dev/null | tr -d '\r')"

@@ -1,3 +1,15 @@
+sg-shell (0.1.0-169) unstable; urgency=medium
+
+  * Title bars grow with the display scale, as on Windows: a scale picked
+    over the recommended one (225% on a Surface Pro 7) made them no larger
+    -- smaller than at 175% (David 2026-10-08: "the dpi setting does not
+    affect the title bars"). Their share of the screen is now reckoned at
+    the screen's recommended scale, so the recommended scale looks as
+    before. Gate hidpi-check: 225% picked, 225/175 of the title bar at
+    175%; mutant SG_MUTANT_TITLE_IGNORES_SCALE.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 08 Oct 2026 17:10:00 -0700
+
 sg-shell (0.1.0-168) unstable; urgency=medium
 
   * The touch keyboard shows itself for a text field a program focuses

@@ -90,25 +90,35 @@ int look_frame_style(void)
 
 /* the title bars' scale for this screen, in eighths: 8 up to 800 px of
  * height, then with it (900 p 9, 1080 p 11, 1440 p 14, 2160 p 22), at most
- * 24. The height is the screen's at the display scale (LogPixels): the
+ * 24. The height is the screen's at its recommended display scale: the
  * sizes are kept at 96 DPI and Wine draws them at the scale, so at 175% on
  * a 1824 px screen they are 1042 px's -- 10 eighths, made 1.75 times as
  * large: the share of the screen they have at 1080p and 100%. At 100%
- * nothing changes. */
+ * nothing changes. A scale the user picks over the recommended one makes
+ * them larger with it, as on Windows -- the LogPixels in use here undid
+ * the pick (225% on the Surface: title bars smaller than at 175%; David
+ * 2026-10-08). */
 int look_scale8(void)
 {
     DEVMODEW dm = { .dmSize = sizeof(dm) };
-    int h = GetSystemMetrics(SM_CYSCREEN), s;
+    int h = GetSystemMetrics(SM_CYSCREEN), w = GetSystemMetrics(SM_CXSCREEN), s;
     /* the mode just set (a resolution change in this process) before the metric follows */
-    if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsHeight >= 200) h = (int)dm.dmPelsHeight;
+    if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsHeight >= 200 && dm.dmPelsWidth >= 200) {
+        h = (int)dm.dmPelsHeight;
+        w = (int)dm.dmPelsWidth;
+    }
     {
         /* the gates' stand-in for a bigger screen than their X server's */
         WCHAR fake[16];
-        if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN_HEIGHT", fake, ARRAYSIZE(fake)) && _wtoi(fake) >= 200) h = _wtoi(fake);
+        if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN_HEIGHT", fake, ARRAYSIZE(fake)) && _wtoi(fake) >= 200) w = h = _wtoi(fake);
     }
 #ifndef SG_MUTANT_TITLE_DOUBLE_SCALE
     {
+#ifdef SG_MUTANT_TITLE_IGNORES_SCALE
         DWORD dpi = reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"LogPixels", 96);
+#else
+        DWORD dpi = (DWORD)MulDiv(scale_for_screen(w, h), 96, 100);
+#endif
         if (dpi > 96 && dpi <= 480) h = MulDiv(h, 96, (int)dpi);
     }
 #endif
