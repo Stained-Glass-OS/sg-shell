@@ -18,7 +18,7 @@ static const WCHAR DESKTOP[] = L"Control Panel\\Desktop";
 /* ---- Display ------------------------------------------------------------------------------- */
 enum {
     CMD_NIGHT = CMD_PAGE_FIRST + 1, CMD_NIGHT_STRENGTH, CMD_SCALE, CMD_RES, CMD_OUTPUT, CMD_KEEP, CMD_REVERT,
-    CMD_ADVANCED,
+    CMD_ADVANCED, CMD_ORIENT, CMD_RLOCK,
 };
 
 struct mode { int w, h; WCHAR text[48]; char spec[48]; };
@@ -27,6 +27,11 @@ static int g_nmodes, g_cur_mode = -1;
 static BOOL g_modes_ctl;                    /* the compositor's modes, through sg-settingsctl */
 static char g_output[64];
 static WCHAR g_output_desc[128];
+/* the output's orientation (the compositor's transform): Landscape, Portrait,
+ * Landscape (flipped), Portrait (flipped) -- Portrait is the PC turned
+ * clockwise, its left side up, as iio-sensor-proxy and GNOME have it */
+static const char *const TRANSFORMS[] = { "normal", "90", "180", "270" };
+static int g_orient;
 static int g_revert_left;                   /* > 0: "keep these display settings?" is counting */
 static char g_prev_spec[48];
 static DEVMODEW g_prev_dm;
@@ -66,6 +71,19 @@ static void load_modes(void)
             g_nmodes++;
         }
         g_modes_ctl = g_nmodes > 0;
+        g_orient = 0;
+        pos = NULL;
+        while (ctl_line(ans, "TRANSFORM", &pos, buf, sizeof(buf))) {
+            WCHAR name[64], t[8];
+            char tn[8];
+            int k;
+            ctl_field(buf, 0, name, ARRAYSIZE(name));
+            ctl_field(buf, 1, t, ARRAYSIZE(t));
+            WideCharToMultiByte(CP_UTF8, 0, name, -1, buf, sizeof(buf), NULL, NULL);
+            if (strcmp(buf, g_output)) continue;
+            WideCharToMultiByte(CP_UTF8, 0, t, -1, tn, sizeof(tn), NULL, NULL);
+            for (k = 0; k < (int)ARRAYSIZE(TRANSFORMS); k++) if (!strcmp(tn, TRANSFORMS[k])) g_orient = k;
+        }
     }
     free(ans);
     if (g_modes_ctl) return;
@@ -160,6 +178,30 @@ void set_build_display(void)
         WCHAR line[200];
         _snwprintf(line, ARRAYSIZE(line), L"Display: %ls", g_output_desc);
         y = st_para(y - S(6), line);
+    }
+    /* orientation, and the rotation lock where the PC has an accelerometer
+     * (David 2026-10-07: a tablet turns its screen, or not) */
+    {
+        static const WCHAR *ORIENTS[] = { L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)" };
+        BOOL sensor = FALSE, locked = FALSE;
+        HWND oc;
+        ans = g_modes_ctl ? ctl_run(L"rotation", &ok, NULL, 0, 5000) : NULL;
+        if (ans && ok && ctl_line(ans, "ROTATION", NULL, buf, sizeof(buf))) {
+            WCHAR f[8];
+            ctl_field(buf, 0, f, ARRAYSIZE(f)); locked = !lstrcmpW(f, L"yes");
+            ctl_field(buf, 1, f, ARRAYSIZE(f)); sensor = !lstrcmpW(f, L"yes");
+        }
+        free(ans);
+        oc = st_combo(&y, L"Display orientation", ORIENTS, ARRAYSIZE(ORIENTS), g_orient, CMD_ORIENT);
+        if (!g_modes_ctl) EnableWindow(oc, FALSE);
+        if (sensor) {
+            st_toggle(&y, L"Rotation lock", locked, CMD_RLOCK);
+#ifndef SG_MUTANT_ROTATION_ORIENT_WHILE_TURNING
+            if (!locked) EnableWindow(oc, FALSE);
+#endif
+            y = st_para(y - S(8), locked ? L"The screen stays as it is when you turn this PC."
+                                         : L"The screen turns as you turn this PC. Turn on rotation lock to keep it as it is.");
+        }
     }
     y = st_head(y, L"Multiple displays");
     y = st_para(y, L"Older displays might not always connect automatically. The displays this PC has are arranged by the "
@@ -267,6 +309,27 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
             if (i != g_cur_mode && apply_mode(i, TRUE)) { g_revert_left = 15; refresh_page(); }
         }
+        return TRUE;
+    case CMD_ORIENT:
+        if (code == CBN_SELCHANGE) {
+            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            WCHAR err[256];
+            if (i < 0 || i >= (int)ARRAYSIZE(TRANSFORMS) || i == g_orient || !g_output[0]) return TRUE;
+            _snwprintf(args, ARRAYSIZE(args), L"display transform %S %S", g_output, TRANSFORMS[i]);
+            free(ctl_run(args, &ok, err, ARRAYSIZE(err), 10000));
+            if (!ok) { st_status(err[0] ? err : L"The display could not be turned."); return TRUE; }
+            /* the desktop takes the turned size at once (sg-session follows too) */
+            if (g_cur_mode >= 0) {
+                int w = g_modes[g_cur_mode].w, h = g_modes[g_cur_mode].h;
+                if (i % 2) desktop_follow(h, w); else desktop_follow(w, h);
+            }
+            refresh_page();
+        }
+        return TRUE;
+    case CMD_RLOCK:
+        _snwprintf(args, ARRAYSIZE(args), L"rotation lock %ls", st_checked(ctl) ? L"yes" : L"no");
+        free(ctl_run(args, &ok, NULL, 0, 10000));
+        refresh_page();
         return TRUE;
     case CMD_KEEP: g_revert_left = 0; KillTimer(g_page, 1); refresh_page(); return TRUE;
     case CMD_REVERT: revert_mode(); return TRUE;

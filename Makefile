@@ -287,6 +287,11 @@ test-office: office
 # Desktop's "Remember me": test/credmgr-check.sh (needs sg-session's source,
 # SG_SESSION_SRC), and each mutant must fail it.
 .PHONY: test-credmgr
+# Settings > Display: the orientation and the rotation lock (test/rotation-check.sh).
+.PHONY: test-rotation
+test-rotation: build
+	sh test/rotation-check.sh
+
 # The kiosk: sg-kiosk64.exe, Settings > Accounts > Kiosk, Startup's Add an app (test/kiosk-check.sh).
 .PHONY: test-kiosk
 test-kiosk: build

@@ -1,3 +1,15 @@
+sg-shell (0.1.0-165) unstable; urgency=medium
+
+  * Settings > Display: Display orientation (Landscape, Portrait, Landscape
+    (flipped), Portrait (flipped)) and, where the PC has an accelerometer,
+    Rotation lock (David: a tablet turns its screen, or not). While the
+    screen turns with the PC the orientation list is greyed; through
+    sg-settingsctl display transform and rotation lock (sg-session
+    0.1.0-176). Gate test-rotation; mutant
+    SG_MUTANT_ROTATION_ORIENT_WHILE_TURNING.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 21:11:41 -0700
+
 sg-shell (0.1.0-164) unstable; urgency=medium
 
   * Settings shows an administrator's change at once (David 2026-10-07: the
