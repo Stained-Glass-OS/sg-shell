@@ -1,3 +1,15 @@
+sg-shell (0.1.0-168) unstable; urgency=medium
+
+  * The touch keyboard shows itself for a text field a program focuses
+    late: it looks at the focus for three seconds after a touch (it gave up
+    after 0.6 s), until a text field has it. Sonos's search on the Surface
+    is a button that opens its field after an animation, and a WPF text
+    box's caret (what says it is one) comes with its next drawing (David
+    2026-10-08). Gate test-touchkbd: touch-late (the focus on the window,
+    its caret 2 s later); mutant SG_MUTANT_TOUCHKBD_SHORT_LOOK.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 08 Oct 2026 15:20:00 -0700
+
 sg-shell (0.1.0-167) unstable; urgency=medium
 
   * Control Panel as Windows 10's (David: "match what Windows does"):

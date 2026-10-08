@@ -23,7 +23,8 @@
 #
 # SG_TOUCHKBD_EXE runs another build (mutants: -DSG_MUTANT_TOUCHKBD_NO_AUTOSHOW,
 # -DSG_MUTANT_TOUCHKBD_NO_KEYBOARD_CHECK, -DSG_MUTANT_TOUCHKBD_NO_LIVE_KEYBOARD,
-# -DSG_MUTANT_TOUCHKBD_NO_XTYPE);
+# -DSG_MUTANT_TOUCHKBD_NO_XTYPE,
+# -DSG_MUTANT_TOUCHKBD_SHORT_LOOK);
 # SG_WINE_DIR another Wine (a build tree works). Display :176. Screenshot:
 # build/touchkbd-shown.png.
 set -u
@@ -163,6 +164,18 @@ tap u0031 page space
 
 cmd touch-button
 [ "$(shown)" = 0 ] && pass "a touch moving the focus off the text field hides it" || fail "still shown on the button: $(val WINDOW)"
+
+# a program that focuses its text field late, and a WPF text box (the focus
+# its own window, WPF's empty caret coming with its next drawing): Sonos's
+# search on the Surface (David 2026-10-08)
+cmd touch-late
+[ "$(shown)" = 0 ] && [ "$(state FOCUS)" = window ] && pass "a touch focusing a window with no caret yet leaves it hidden" \
+    || fail "touch-late, before the caret: shown $(shown), focus $(state FOCUS)"
+sleep 2
+[ "$(shown)" = 1 ] && pass "...its caret 2 s later (a WPF text box opened late) shows it ($(val STATE))" \
+    || fail "a text field focused 2 s after the touch did not show it: $(val WINDOW)"
+cmd touch-button
+[ "$(shown)" = 0 ] && pass "and a touch on the button hides it again" || fail "still shown on the button: $(val WINDOW)"
 
 cp "$C/keyboard.txt" "$C/devices.txt"
 cmd touch-edit

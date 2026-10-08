@@ -14,9 +14,12 @@
  * showed itself). The touch: wine-sg 1150 stamps the desktop window's
  * __wine_sg_touch_time with the time of every touch going down, and
  * __wine_sg_touch_hwnd with the window it went down on; checked four times a
- * second, the focus looked at in that window's thread. A text field: the focus is an edit control (its class
+ * second, the focus looked at in that window's thread (four times a second
+ * for three seconds, until a text field has it: a program may focus its
+ * field late). A text field: the focus is an edit control (its class
  * names Edit or RichEdit, a .NET TextBox's too) that is not read-only, or
- * its thread shows a caret. A hardware keyboard: an input device of the
+ * its thread shows a caret (a WPF text box: WPF makes an empty Win32 caret
+ * for programs such as this one). A hardware keyboard: an input device of the
  * kernel's (/proc/bus/input/devices) that repeats keys and has letters and
  * a space bar -- a Surface's power and volume buttons are not one.
  * HKCU\Software\Microsoft\TabletTip\1.7 EnableDesktopModeAutoInvoke = 1
@@ -67,6 +70,13 @@
 #define WM_COMMAND_LINE (WM_APP + 2)
 enum { CMD_SHOW = 1, CMD_HIDE, CMD_TOGGLE };
 enum { T_POLL = 1, T_REPEAT, T_FOCUS };
+
+/* how long after a touch the focus is looked at for a text field */
+#ifdef SG_MUTANT_TOUCHKBD_SHORT_LOOK
+#define LOOK_MS 600
+#else
+#define LOOK_MS 3000
+#endif
 
 enum { K_CHAR, K_BACK, K_ENTER, K_SHIFT, K_TAB, K_SPACE, K_LEFT, K_RIGHT, K_PAGE, K_MORE, K_CTRL, K_HIDE };
 
@@ -978,8 +988,12 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         else if (wp == T_FOCUS)
         {
             check_focus();
-            /* once more a little later: a program focusing its field late */
-            if (GetTickCount() - g_touch_seen < 600) SetTimer(hwnd, T_FOCUS, 400, NULL);
+            /* again until the field has come or LOOK_MS have gone by: a
+             * program focusing its field late -- Sonos's search is a button
+             * that opens the field after it animates, and a WPF program's
+             * caret (what says it is a text field) comes with its next
+             * drawing, a second or more on a tablet (David 2026-10-08) */
+            if (!(g_shown && g_auto) && GetTickCount() - g_touch_seen < LOOK_MS) SetTimer(hwnd, T_FOCUS, 250, NULL);
             else KillTimer(hwnd, T_FOCUS);
         }
         return 0;

@@ -4,6 +4,11 @@
  *                  and touched window (what wine-sg 1150 stamps for every
  *                  touch going down), then the focus moves to the edit control
  *   touch-button   the same for the button
+ *   touch-late     a touch focuses the window itself, which shows a caret
+ *                  2 seconds later -- a WPF text box (the focus is the
+ *                  program's own window; WPF's empty Win32 caret comes with
+ *                  its next drawing), in a program that opens its field late
+ *                  (Sonos's search)
  *   linux-front    a window of the class a Linux program's frame has
  *                  (SgLinuxWindow) comes to the front
  *   front          this window to the front again, the text field focused
@@ -26,6 +31,8 @@ static long g_done;
 
 static void touch_focus(HWND hwnd)
 {
+    KillTimer(g_wnd, 2);
+    DestroyCaret();
     SetPropW(GetDesktopWindow(), L"__wine_sg_touch_hwnd", g_wnd);
     SetPropW(GetDesktopWindow(), L"__wine_sg_touch_time", (HANDLE)(ULONG_PTR)(GetTickCount() | 1));
     /* a touch on the window brings it to the front, as a click does */
@@ -79,6 +86,7 @@ static void tick(void)
             g_done = n;
             if (!strncmp(line, "touch-edit", 10)) touch_focus(g_edit);
             else if (!strncmp(line, "touch-button", 12)) touch_focus(g_button);
+            else if (!strncmp(line, "touch-late", 10)) { touch_focus(g_wnd); SetTimer(g_wnd, 2, 2000, NULL); }
             else if (!strncmp(line, "linux-front", 11)) linux_front();
             else if (!strncmp(line, "front", 5)) { SetForegroundWindow(g_wnd); SetFocus(g_edit); }
             else if (!strncmp(line, "set ", 4))
@@ -103,7 +111,7 @@ static void tick(void)
         if (GetForegroundWindow()) GetClassNameW(GetForegroundWindow(), fgclass, 64);
         fwprintf(f, L"FG %ls\n", fgclass);
         fwprintf(f, L"TEXT %ls\nFRONT %d\nFOCUS %ls\nWORK %ld %ld %ld %ld\n", text, GetForegroundWindow() == g_wnd,
-                 focus == g_edit ? L"edit" : focus == g_button ? L"button" : L"other",
+                 focus == g_edit ? L"edit" : focus == g_button ? L"button" : focus == g_wnd ? L"window" : L"other",
                  work.left, work.top, work.right, work.bottom);
         fclose(f);
         MoveFileExW(L"C:\\touchkbd-state.tmp", L"C:\\touchkbd-state.txt", MOVEFILE_REPLACE_EXISTING);
@@ -112,6 +120,14 @@ static void tick(void)
 
 static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (msg == WM_TIMER && wp == 2)
+    {
+        KillTimer(hwnd, 2);
+        CreateCaret(hwnd, NULL, 1, 16);
+        SetCaretPos(10, 50);
+        ShowCaret(hwnd);
+        return 0;
+    }
     if (msg == WM_TIMER) { tick(); return 0; }
     if (msg == WM_DESTROY) { PostQuitMessage(0); return 0; }
     return DefWindowProcW(hwnd, msg, wp, lp);
