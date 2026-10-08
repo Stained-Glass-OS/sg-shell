@@ -14,7 +14,9 @@
 #    in test mode on the gate's spool and files: choosing the account to sign
 #    in automatically writes greetd's initial session; "Choose an app" (the
 #    Start app named by SG_TEST_PICK) keeps a Windows program's path, folder
-#    and arguments, or a Linux app's .desktop file; both undone again.
+#    and arguments, or a Linux app's .desktop file; both undone again. The
+#    open page shows each change at once (the elevated change's end refreshes
+#    it). Mutant SG_MUTANT_SETTINGS_NO_ELEVATED_REFRESH.
 # 3. Settings > Apps > Startup: "Add an app" puts a Start app's shortcut in
 #    the person's Startup folder (the shell opens it at sign-in, wine-sg
 #    0754); Remove takes it away. Mutant SG_MUTANT_STARTUP_ADD_NOOP.
@@ -153,6 +155,10 @@ for _try in 1 2 3; do   # the drop-down can miss a click while the page settles
 done
 [ "$(toml_user)" = "$ME" ] && grep -qx "user=$ME" "$T/autologon.conf" \
     && pass "choosing the account (as an administrator): greetd signs $ME in when the PC starts" || fail "autologon: $(cat "$T/greetd.toml") $(tail -2 "$T/admind.log")"
+# the open page shows the kiosk app's part at once, not after a restart (David
+# 2026-10-07): Settings refreshes when the elevated change ends
+waitfor "grep -q 'Button .*: Choose an app' '$T/dump.txt'" >/dev/null \
+    && pass "...and the open page shows the kiosk app's part at once" || fail "the open page did not refresh: $(grep '^text' "$T/dump.txt" | tail -3)"
 
 # the kiosk app: a Windows program from Start
 SMP="$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs"
@@ -166,6 +172,8 @@ xy=$(at "$out" 'control Button .*: Choose an app$')
 # shellcheck disable=SC2086
 xdotool mousemove $xy click 1
 waitfor "grep -q '^kiosk-app=' '$T/autologon.conf'" >/dev/null
+waitfor "grep -q '^text Kiosk Probe opens full screen' '$T/dump.txt'" >/dev/null \
+    && pass "...and the open page names the app at once" || fail "the open page did not show the app: $(grep '^text' "$T/dump.txt" | tail -3)"
 grep -qxF 'kiosk-name=Kiosk Probe' "$T/autologon.conf" && grep -qxF 'kiosk-app=C:\kprobe\sg-kiosk-probe64.exe' "$T/autologon.conf" \
     && grep -qxF 'kiosk-args=--fullscreen "x y"' "$T/autologon.conf" && grep -qixF 'kiosk-dir=C:\kprobe' "$T/autologon.conf" \
     && pass "Choose an app: a Start app's program, arguments and folder kept for the kiosk" || fail "kiosk app: $(cat "$T/autologon.conf")"

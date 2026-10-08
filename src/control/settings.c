@@ -806,6 +806,16 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_ACTIVATE:
         if (LOWORD(wp) != WA_INACTIVE && refresh_pending()) refresh_page();
         break;
+#ifndef SG_MUTANT_SETTINGS_NO_ELEVATED_REFRESH
+    /* the administrator's change is done: an elevated program runs on a
+     * display of its own, so this window is never deactivated and activated
+     * again for the above (David 2026-10-07: the kiosk app's part of the
+     * page did not appear after choosing the account, nor the app after
+     * choosing it, until the PC restarted) */
+    case WM_ELEVATED_DONE:
+        if (refresh_pending()) refresh_page();
+        return 0;
+#endif
     case WM_SETTINGCHANGE:
         /* the accent changed (here or elsewhere): the switches and links follow */
         if (lp && !lstrcmpW((const WCHAR *)lp, L"ImmersiveColorSet")) {
