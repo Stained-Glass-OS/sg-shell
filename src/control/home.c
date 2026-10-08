@@ -10,6 +10,7 @@
 /* commands the navigation pages share */
 enum {
     CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A, CMD_POWER, CMD_FIREWALL, CMD_FIREWALL_APPS,
+    CMD_S_ABOUT, CMD_S_BACKGROUND, CMD_S_COLORS, CMD_S_TASKBAR,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -22,18 +23,15 @@ struct applet { const WCHAR *name; int icon; int id; const WCHAR *keywords; stru
 static const struct applet ENVVARS_A = { L"Environment Variables", IC_SYSTEM, CMD_ENVVARS_A,
     L"edit the system environment variables path pathext system properties advanced system settings",
     { { L"Edit environment variables", CMD_ENVVARS_A } } };
-static const struct applet SYSTEM_A = { L"System", IC_SYSTEM, NAV(PG_SYSTEM), L"computer name domain workgroup ram processor about",
-    { { L"View amount of RAM and processor speed", NAV(PG_SYSTEM) }, { L"Rename this computer", CMD_RENAME } } };
-static const struct applet UPDATE_A = { L"Updates", IC_UPDATE, NAV(PG_UPDATE), L"updates upgrade patch apt",
-    { { L"Check for updates", NAV(PG_UPDATE) }, { L"View update history", NAV(PG_UPDATE) } } };
+/* System, as in Windows 10: Settings > About (System Properties is sysdm.cpl) */
+static const struct applet SYSTEM_A = { L"System", IC_SYSTEM, CMD_S_ABOUT, L"computer name domain workgroup ram processor about",
+    { { L"View amount of RAM and processor speed", CMD_S_ABOUT }, { L"See the name of this computer", CMD_S_ABOUT } } };
 static const struct applet NETCENTER_A = { L"Network and Sharing Center", IC_NETCENTER, NAV(PG_NETWORK), L"network ip address adapter ethernet wifi dns",
     { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"View network connections", CMD_NCPA } } };
 static const struct applet INET_A = { L"Internet Options", IC_INET, CMD_INET, L"browser proxy homepage cookies",
     { { L"Change your homepage", CMD_INET }, { L"Delete browsing history and cookies", CMD_INET } } };
 static const struct applet GAME_A = { L"Game Controllers", IC_GAME, CMD_JOY, L"joystick gamepad controller",
     { { L"Set up USB game controllers", CMD_JOY } } };
-static const struct applet DISPLAY_A = { L"Display", IC_DISPLAY, CMD_DESK, L"screen resolution monitor",
-    { { L"Adjust screen resolution", CMD_DESK } } };
 static const struct applet PROGRAMS_A = { L"Programs and Features", IC_PROG, NAV(PG_PROGRAMS), L"uninstall remove software applications",
     { { L"Uninstall a program", NAV(PG_PROGRAMS) } } };
 static const struct applet USERS_A = { L"User Accounts", IC_USERS, NAV(PG_USERS), L"account password administrator user",
@@ -41,9 +39,6 @@ static const struct applet USERS_A = { L"User Accounts", IC_USERS, NAV(PG_USERS)
 static const struct applet CREDMGR_A = { L"Credential Manager", IC_USERS, NAV(PG_CREDMGR),
     L"credential manager saved passwords logon credentials keyring web network git remote desktop",
     { { L"Manage saved credentials", NAV(PG_CREDMGR) } } };
-static const struct applet PERSONAL_A = { L"Personalization", IC_PERSONAL, NAV(PG_PERSONALIZE), L"wallpaper background color colour theme dark light accent",
-    { { L"Change the desktop background", NAV(PG_PERSONALIZE) }, { L"Change accent color", NAV(PG_PERSONALIZE) },
-      { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } } };
 static const struct applet DATETIME_A = { L"Date and Time", IC_DATETIME, NAV(PG_DATETIME), L"clock time zone ntp calendar",
     { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } } };
 static const struct applet SPEECH_A = { L"Speech Recognition", IC_SPEECH, NAV(PG_SPEECH), L"speech voice typing dictation microphone dictate talk",
@@ -65,25 +60,28 @@ static const struct applet PRINTERS_A = { L"Devices and Printers", IC_HW, NAV(PG
 static const struct applet FIREWALL_A = { L"Stained Glass Firewall", IC_SHIELD, CMD_FIREWALL,
     L"firewall windows firewall defender firewall allow an app through firewall network profile public private port blocked",
     { { L"Allow an app through firewall", CMD_FIREWALL_APPS }, { L"Check firewall status", CMD_FIREWALL } } };
+/* Taskbar and Navigation: Settings > Personalization > Taskbar, as in Windows 10 */
+static const struct applet TASKBAR_A = { L"Taskbar and Navigation", IC_APPEAR, CMD_S_TASKBAR,
+    L"taskbar start menu notification area tray jump lists navigation", { { L"Customize the taskbar", CMD_S_TASKBAR } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
 static const struct applet *const ALL[] = {
-    &ADMIN_A, &DATETIME_A, &DISPLAY_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A, &PERSONAL_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &UPDATE_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A, &FIREWALL_A,
+    /* as Windows 10's: Display, Personalization and Windows Update are Settings' */
+    &ADMIN_A, &DATETIME_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A, &FIREWALL_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[5]; };
 static const struct category CATS[] = {
     { PG_CAT_SYSSEC, IC_SYSSEC, L"System and Security",
-      { { L"View basic information about this computer", NAV(PG_SYSTEM) }, { L"Check for updates", NAV(PG_UPDATE) } },
-      { &SYSTEM_A, &FIREWALL_A, &UPDATE_A, &ADMIN_A } },
+      { { L"View amount of RAM and processor speed", CMD_S_ABOUT }, { L"Allow an app through firewall", CMD_FIREWALL_APPS } },
+      { &SYSTEM_A, &FIREWALL_A, &POWER_A, &ADMIN_A } },
     { PG_CAT_NET, IC_NET, L"Network and Internet",
       { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"Internet Options", CMD_INET } },
       { &NETCENTER_A, &INET_A } },
     { PG_CAT_HW, IC_HW, L"Hardware and Sound",
-      { { L"View devices and printers", NAV(PG_PRINTERS) }, { L"Set up game controllers", CMD_JOY },
-        { L"Adjust screen resolution", CMD_DESK } },
-      { &PRINTERS_A, &DISPLAY_A, &GAME_A, &SPEECH_A, &POWER_A } },
+      { { L"View devices and printers", NAV(PG_PRINTERS) }, { L"Set up game controllers", CMD_JOY } },
+      { &PRINTERS_A, &GAME_A, &SPEECH_A, &POWER_A } },
     { PG_CAT_PROG, IC_PROG, L"Programs",
       { { L"Uninstall a program", NAV(PG_PROGRAMS) } },
       { &PROGRAMS_A } },
@@ -91,8 +89,8 @@ static const struct category CATS[] = {
       { { L"Change account type", NAV(PG_USERS_MANAGE) }, { L"Add or remove user accounts", NAV(PG_USERS_MANAGE) } },
       { &USERS_A, &CREDMGR_A } },
     { PG_CAT_APPEAR, IC_APPEAR, L"Appearance and Personalization",
-      { { L"Change the desktop background", NAV(PG_PERSONALIZE) }, { L"Choose light or dark mode", NAV(PG_PERSONALIZE) } },
-      { &PERSONAL_A, &DISPLAY_A, &FONTS_A } },
+      { { L"Change the desktop background", CMD_S_BACKGROUND }, { L"Choose light or dark mode", CMD_S_COLORS } },
+      { &TASKBAR_A, &FONTS_A } },
     { PG_CAT_CLOCK, IC_CLOCK, L"Clock and Region",
       { { L"Set the time and date", NAV(PG_DATETIME) }, { L"Change the time zone", CMD_TIMEZONE } },
       { &DATETIME_A } },
@@ -231,7 +229,11 @@ BOOL cmd_home(int id, int code, HWND ctl)
     }
     case CMD_INET: cpl_open_file(L"inetcpl.cpl", NULL); return TRUE;
     case CMD_JOY: cpl_open_file(L"joy.cpl", NULL); return TRUE;
-    case CMD_DESK: cpl_open_file(L"desk.cpl", NULL); return TRUE;
+    case CMD_DESK: ShellExecuteW(g_main, NULL, L"ms-settings:display", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_S_ABOUT: ShellExecuteW(g_main, NULL, L"ms-settings:about", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_S_BACKGROUND: ShellExecuteW(g_main, NULL, L"ms-settings:personalization-background", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_S_COLORS: ShellExecuteW(g_main, NULL, L"ms-settings:colors", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_S_TASKBAR: ShellExecuteW(g_main, NULL, L"ms-settings:taskbar", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_POWER: ShellExecuteW(g_main, NULL, L"ms-settings:powersleep", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_FIREWALL: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_FIREWALL_APPS: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall-apps", NULL, NULL, SW_SHOWNORMAL); return TRUE;

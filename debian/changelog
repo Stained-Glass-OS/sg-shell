@@ -1,3 +1,18 @@
+sg-shell (0.1.0-167) unstable; urgency=medium
+
+  * Control Panel as Windows 10's (David: "match what Windows does"):
+    System, Display, Personalization and Windows Update are Settings' --
+    control /name Microsoft.System, system, Microsoft.Display, desk.cpl,
+    Microsoft.Personalization, desktop, color, Microsoft.WindowsUpdate,
+    wuaucpl.cpl and update open their Settings pages; All Items lists no
+    Display, Personalization or Updates; System opens Settings > About
+    (System Properties stays sysdm.cpl); the categories' links follow;
+    Taskbar and Navigation under Appearance. Start's System, Display and
+    Personalization open Settings directly. control-check; mutant
+    SG_MUTANT_CONTROL_NO_SETTINGS_REDIRECT.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 08 Oct 2026 11:32:59 -0700
+
 sg-shell (0.1.0-166) unstable; urgency=medium
 
   * Settings > Sound: Device sounds -- "Play a sound when a device connects

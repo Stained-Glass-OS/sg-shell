@@ -590,6 +590,15 @@ enum page_id current_page(void) { return g_cur; }
 void navigate(enum page_id p)
 {
     if (p >= PG_COUNT) return;
+#ifndef SG_MUTANT_CONTROL_NO_SETTINGS_REDIRECT
+    /* Windows 10's Control Panel has no Windows Update and no Personalization
+     * of its own: their links open Settings */
+    if (!g_settings && (p == PG_UPDATE || p == PG_PERSONALIZE)) {
+        ShellExecuteW(g_main, NULL, p == PG_UPDATE ? L"ms-settings:windowsupdate" : L"ms-settings:personalization",
+                      NULL, NULL, SW_SHOWNORMAL);
+        return;
+    }
+#endif
     if (p != PG_ALL) { g_search_text[0] = 0; if (g_search && GetWindowTextLengthW(g_search)) SetWindowTextW(g_search, L""); }
     if (p != g_cur) users_reset();
     if (g_hist_pos < 0 || g_hist[g_hist_pos] != p) {
@@ -877,41 +886,45 @@ static void make_fonts(void)
 
 /* ---- control.exe's command line ------------------------------------------------ */
 /* What Windows programs and scripts pass to control.exe, and where it goes. A
- * hosted applet (a .cpl this Control Panel does not replace) runs as itself. */
-struct target { const WCHAR *name; enum page_id page; const WCHAR *cpl; };
+ * hosted applet (a .cpl this Control Panel does not replace) runs as itself.
+ * What Windows 10 sends to Settings goes there too (David 2026-10-08: "match
+ * what Windows does"): System, Personalization, Windows Update and Display
+ * open their Settings pages, not pages of Control Panel's own. */
+struct target { const WCHAR *name; enum page_id page; const WCHAR *cpl; const WCHAR *settings; };
 static const struct target TARGETS[] = {
     /* .cpl files */
     { L"appwiz.cpl",   PG_PROGRAMS },   { L"timedate.cpl", PG_DATETIME },
-    { L"sysdm.cpl",    PG_SYSTEM },     { L"desk.cpl",     PG_COUNT, L"desk.cpl" },
+    { L"sysdm.cpl",    PG_SYSTEM },     { L"desk.cpl",     PG_COUNT, NULL, L"ms-settings:display" },
     { L"ncpa.cpl",     PG_NETWORK },    { L"inetcpl.cpl",  PG_COUNT, L"inetcpl.cpl" },
     { L"joy.cpl",      PG_COUNT, L"joy.cpl" },
     { L"nusrmgr.cpl",  PG_USERS },      { L"wscui.cpl",    PG_CAT_SYSSEC },
     { L"intl.cpl",     PG_DATETIME },   { L"mmsys.cpl",    PG_CAT_HW },
     { L"main.cpl",     PG_CAT_HW },     { L"powercfg.cpl", PG_CAT_HW },
-    { L"hdwwiz.cpl",   PG_CAT_HW },     { L"wuaucpl.cpl",  PG_UPDATE },
+    { L"hdwwiz.cpl",   PG_CAT_HW },     { L"wuaucpl.cpl",  PG_COUNT, NULL, L"ms-settings:windowsupdate" },
     { L"firewall.cpl", PG_CAT_SYSSEC },
     /* keywords */
     { L"userpasswords",  PG_USERS },    { L"userpasswords2", PG_USERS_MANAGE },
-    { L"desktop",        PG_PERSONALIZE }, { L"color",       PG_PERSONALIZE },
+    { L"desktop",        PG_COUNT, NULL, L"ms-settings:personalization-background" },
+    { L"color",          PG_COUNT, NULL, L"ms-settings:colors" },
     { L"date/time",      PG_DATETIME }, { L"international", PG_DATETIME },
-    { L"netconnections", PG_NETWORK },  { L"update",        PG_UPDATE },
-    { L"system",         PG_SYSTEM },   { L"printers",      PG_PRINTERS },
+    { L"netconnections", PG_NETWORK },  { L"update",        PG_COUNT, NULL, L"ms-settings:windowsupdate" },
+    { L"system",         PG_COUNT, NULL, L"ms-settings:about" },   { L"printers",      PG_PRINTERS },
     { L"mouse",          PG_CAT_HW },   { L"keyboard",      PG_CAT_HW },
     { L"admintools",     PG_ADMINTOOLS },
     { L"keymgr.dll",     PG_CREDMGR },
     /* canonical names (control /name ...) */
-    { L"Microsoft.System",                  PG_SYSTEM },
+    { L"Microsoft.System",                  PG_COUNT, NULL, L"ms-settings:about" },
     { L"Microsoft.ProgramsAndFeatures",     PG_PROGRAMS },
     { L"Microsoft.UserAccounts",            PG_USERS },
     { L"Microsoft.DateAndTime",             PG_DATETIME },
     { L"Microsoft.RegionAndLanguage",       PG_DATETIME },
-    { L"Microsoft.Personalization",         PG_PERSONALIZE },
-    { L"Microsoft.WindowsUpdate",           PG_UPDATE },
+    { L"Microsoft.Personalization",         PG_COUNT, NULL, L"ms-settings:personalization" },
+    { L"Microsoft.WindowsUpdate",           PG_COUNT, NULL, L"ms-settings:windowsupdate" },
     { L"Microsoft.NetworkAndSharingCenter", PG_NETWORK },
     { L"Microsoft.NetworkConnections",      PG_NETWORK },
     { L"Microsoft.InternetOptions",         PG_COUNT, L"inetcpl.cpl" },
     { L"Microsoft.GameControllers",         PG_COUNT, L"joy.cpl" },
-    { L"Microsoft.Display",                 PG_COUNT, L"desk.cpl" },
+    { L"Microsoft.Display",                 PG_COUNT, NULL, L"ms-settings:display" },
     { L"Microsoft.DevicesAndPrinters",      PG_PRINTERS },
     { L"Microsoft.ActionCenter",            PG_CAT_SYSSEC },
     { L"Microsoft.SecurityAndMaintenance",  PG_CAT_SYSSEC },
@@ -957,18 +970,22 @@ BOOL open_fonts_folder(void)
 
 /* Resolve a control.exe argument. Returns the page, or PG_COUNT with *cpl set
  * to a hosted applet, or PG_COUNT with *cpl NULL for "unknown". */
-static enum page_id resolve(const WCHAR *arg, const WCHAR **cpl)
+static enum page_id resolve(const WCHAR *arg, const WCHAR **cpl, const WCHAR **settings)
 {
     WCHAR name[MAX_PATH], *comma;
     const WCHAR *base;
     size_t i;
     *cpl = NULL;
+    *settings = NULL;
     lstrcpynW(name, arg, MAX_PATH);
     if ((comma = wcschr(name, L','))) *comma = 0;          /* appwiz.cpl,,2 / desk.cpl,@0 */
     base = wcsrchr(name, L'\\') ? wcsrchr(name, L'\\') + 1 : name;
     for (i = 0; i < ARRAYSIZE(TARGETS); i++)
         if (!_wcsicmp(base, TARGETS[i].name)) {
             *cpl = TARGETS[i].cpl;
+#ifndef SG_MUTANT_CONTROL_NO_SETTINGS_REDIRECT
+            *settings = TARGETS[i].settings;
+#endif
             return TARGETS[i].page;
         }
     return PG_COUNT;
@@ -977,7 +994,7 @@ static enum page_id resolve(const WCHAR *arg, const WCHAR **cpl)
 /* open the applet: our page, a hosted .cpl, or a .cpl file named by path */
 static int open_target(const WCHAR *arg, enum page_id *page)
 {
-    const WCHAR *cpl;
+    const WCHAR *cpl, *settings;
     WCHAR base[MAX_PATH];
     const WCHAR *b = wcsrchr(arg, L'\\') ? wcsrchr(arg, L'\\') + 1 : arg;
     lstrcpynW(base, b, MAX_PATH);
@@ -991,7 +1008,8 @@ static int open_target(const WCHAR *arg, enum page_id *page)
     /* the firewall's pages are Settings' (Stained Glass Firewall) */
     if (!_wcsicmp(base, L"firewall.cpl") || !_wcsicmp(arg, L"Microsoft.WindowsFirewall"))
         return (INT_PTR)ShellExecuteW(NULL, NULL, L"ms-settings:network-firewall", NULL, NULL, SW_SHOWNORMAL) > 32 ? 1 : 0;
-    *page = resolve(arg, &cpl);
+    *page = resolve(arg, &cpl, &settings);
+    if (settings) return (INT_PTR)ShellExecuteW(NULL, NULL, settings, NULL, NULL, SW_SHOWNORMAL) > 32 ? 1 : 0;
     if (*page != PG_COUNT) return 0;
     if (cpl) return cpl_run_inproc(cpl, NULL) >= 0 ? 1 : 0;
     /* any other .cpl -- a third party's -- runs as itself */
@@ -1057,14 +1075,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         if (!wcscmp(argv[1], L"--uninstall") && argc > 2) return programs_uninstall_cli(argv[2]);
         if (!wcscmp(argv[1], L"--resolve") && argc > 2 && !settings) {
             /* what control.exe ARG would open, without opening it */
-            const WCHAR *cpl, *a = argv[2];
+            const WCHAR *cpl, *settings, *a = argv[2];
             enum page_id p;
             WCHAR base[MAX_PATH];
             lstrcpynW(base, wcsrchr(a, L'\\') ? wcsrchr(a, L'\\') + 1 : a, MAX_PATH);
             if (wcschr(base, L',')) *wcschr(base, L',') = 0;
             if (!_wcsicmp(base, L"ncpa.cpl") || !_wcsicmp(a, L"netconnections") || !_wcsicmp(a, L"Microsoft.NetworkConnections"))
                 wprintf(L"program=sg-ncpa (else page=%ls)\n", g_pages[PG_NETWORK].title);
-            else if ((p = resolve(a, &cpl)) != PG_COUNT) wprintf(L"page=%ls\n", g_pages[p].title);
+            else if ((p = resolve(a, &cpl, &settings)) != PG_COUNT || settings)
+                settings ? wprintf(L"settings=%ls\n", settings) : wprintf(L"page=%ls\n", g_pages[p].title);
             else if (cpl) wprintf(L"cpl=%ls\n", cpl);
             else if (wcslen(base) > 4 && !_wcsicmp(base + wcslen(base) - 4, L".cpl")) wprintf(L"cpl=%ls\n", a);
             else wprintf(L"page=%ls\n", g_pages[PG_HOME].title);

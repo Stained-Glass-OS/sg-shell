@@ -5,7 +5,7 @@
 # cplopen, and they said "There is no program configured to open this type of
 # file" (QA 2026-10-02). With a stand-in Control Panel (App Paths control.exe,
 # wine-sg's control-probe), `start sysdm.cpl` must reach it asking for the
-# System page. Needs wine-sg with sysdm.cpl (10.0-136, SG_WINE_DIR) and its
+# System page. Needs wine-sg with sysdm.cpl (10.0-278, SG_WINE_DIR) and its
 # test/control-probe.c (SG_CONTROL_PROBE_C); skips (77) without them.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -27,8 +27,10 @@ x86_64-w64-mingw32-gcc -municode -O2 -o "$WINEPREFIX/drive_c/control-probe.exe" 
 wine reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe' /ve /d 'C:\control-probe.exe' /f >/dev/null 2>&1
 wineserver -w
 timeout 120 xvfb-run -a sh -c 'wine start sysdm.cpl >/dev/null 2>&1; sleep 4'
-grep -q 'cmdline=.*Microsoft.System' "$WINEPREFIX/drive_c/standin.log" 2>/dev/null \
-    && pass "start sysdm.cpl (Run's sysdm.cpl) opens the Control Panel's System page" \
+# System Properties: "control sysdm.cpl" (wine-sg 10.0-278; before, /name
+# Microsoft.System, which is Settings > About now, as in Windows 10)
+grep -q 'cmdline=.*sysdm\.cpl' "$WINEPREFIX/drive_c/standin.log" 2>/dev/null \
+    && pass "start sysdm.cpl (Run's sysdm.cpl) opens the Control Panel's System Properties" \
     || fail "start sysdm.cpl: $(tr -d '\r' < "$WINEPREFIX/drive_c/standin.log" 2>/dev/null)"
 [ "$RC" = 0 ] && echo "cplfile-check: PASS" || echo "cplfile-check: FAIL"
 exit "$RC"

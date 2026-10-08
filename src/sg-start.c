@@ -226,14 +226,14 @@ static struct entry g_settings[] = {
     { .name = L"About your PC", .path = L"ms-settings:about", .args = L"", .keywords = L"about pc name rename specifications version", .kind = K_SETTING },
     { .name = L"Control Panel", .path = L"control.exe", .args = L"", .keywords = L"settings control panel", .kind = K_SETTING },
     { .name = L"Apps & features", .path = L"ms-settings:appsfeatures", .args = L"", .keywords = L"programs uninstall remove install add apps features", .kind = K_SETTING },
-    { .name = L"System", .path = L"control.exe", .args = L"/name Microsoft.System", .keywords = L"about pc computer name rename domain join edition", .kind = K_SETTING },
+    { .name = L"System", .path = L"ms-settings:about", .args = L"", .keywords = L"about pc computer name rename domain join edition", .kind = K_SETTING },
     { .name = L"Network Connections", .path = L"control.exe", .args = L"ncpa.cpl", .keywords = L"network adapter ethernet wifi ip address dhcp static dns", .kind = K_SETTING },
     { .name = L"Network and Sharing Center", .path = L"control.exe", .args = L"/name Microsoft.NetworkAndSharingCenter", .keywords = L"network internet sharing status", .kind = K_SETTING },
     { .name = L"Date and time", .path = L"ms-settings:dateandtime", .args = L"", .keywords = L"clock time zone date", .kind = K_SETTING },
     { .name = L"User Accounts", .path = L"control.exe", .args = L"userpasswords", .keywords = L"users account password administrator family", .kind = K_SETTING },
-    { .name = L"Personalization", .path = L"control.exe", .args = L"/name Microsoft.Personalization", .keywords = L"background wallpaper colors colour theme dark light accent", .kind = K_SETTING },
+    { .name = L"Personalization", .path = L"ms-settings:personalization", .args = L"", .keywords = L"background wallpaper colors colour theme dark light accent", .kind = K_SETTING },
     { .name = L"Updates", .path = L"ms-settings:windowsupdate", .args = L"", .keywords = L"windows update updates upgrade", .kind = K_SETTING },
-    { .name = L"Display", .path = L"control.exe", .args = L"desk.cpl", .keywords = L"screen resolution monitor scale", .kind = K_SETTING },
+    { .name = L"Display", .path = L"ms-settings:display", .args = L"", .keywords = L"screen resolution monitor scale", .kind = K_SETTING },
     { .name = L"Internet Options", .path = L"control.exe", .args = L"inetcpl.cpl", .keywords = L"internet proxy browser", .kind = K_SETTING },
     /* David 2026-10-01: "Environment" found nothing when a program asked for
      * PATH to be changed. Both open the Environment Variables dialog, whose

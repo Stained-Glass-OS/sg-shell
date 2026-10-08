@@ -179,17 +179,37 @@ res() { ctl --resolve "$1"; }
 ok=1
 for pair in 'appwiz.cpl=page=Programs and Features' 'timedate.cpl=page=Date and Time' 'sysdm.cpl=page=System' \
             'C:\Windows\System32\appwiz.cpl,,2=page=Programs and Features' 'userpasswords=page=User Accounts' \
-            'userpasswords2=page=Manage Accounts' 'desktop=page=Personalization' 'Microsoft.WindowsUpdate=page=Updates' \
-            'Microsoft.NetworkAndSharingCenter=page=Network and Sharing Center' 'inetcpl.cpl=cpl=inetcpl.cpl' \
-            'desk.cpl,@0=cpl=desk.cpl' 'Microsoft.GameControllers=cpl=joy.cpl' 'thirdparty.cpl=cpl=thirdparty.cpl' \
+            'userpasswords2=page=Manage Accounts' 'Microsoft.NetworkAndSharingCenter=page=Network and Sharing Center' \
+            'inetcpl.cpl=cpl=inetcpl.cpl' 'Microsoft.GameControllers=cpl=joy.cpl' 'thirdparty.cpl=cpl=thirdparty.cpl' \
+            'Microsoft.System=settings=ms-settings:about' 'system=settings=ms-settings:about' \
+            'Microsoft.Personalization=settings=ms-settings:personalization' \
+            'desktop=settings=ms-settings:personalization-background' 'color=settings=ms-settings:colors' \
+            'Microsoft.WindowsUpdate=settings=ms-settings:windowsupdate' 'wuaucpl.cpl=settings=ms-settings:windowsupdate' \
+            'Microsoft.Display=settings=ms-settings:display' 'desk.cpl,@0=settings=ms-settings:display' \
             'nonsense=page=Control Panel'; do
     a=${pair%%=*}; w=${pair#*=}
     [ "$(res "$a")" = "$w" ] || { ok=0; fail "control $a -> $(res "$a"), want $w"; }
 done
 [ "$(res ncpa.cpl)" = "program=sg-ncpa (else page=Network and Sharing Center)" ] || { ok=0; fail "ncpa.cpl"; }
 [ $ok = 1 ] && pass "control.exe: .cpl names, keywords and canonical names open the right applet"
+if command -v "${MINGW64:-x86_64-w64-mingw32-gcc}" >/dev/null && [ -f "$HERE/build/sg-control-res64.o" ]; then
+    "${MINGW64:-x86_64-w64-mingw32-gcc}" -O2 -municode -mwindows -Wno-missing-field-initializers -DSG_MUTANT_CONTROL_NO_SETTINGS_REDIRECT \
+        -o "$T/mut-control.exe" "$HERE"/src/control/*.c "$HERE/build/sg-control-res64.o" \
+        -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 \
+        -lole32 -luuid -lwindowscodecs -lcomdlg32 -lshlwapi -lwininet -lversion -lwinspool 2>/dev/null
+    m=$(wine "$T/mut-control.exe" --resolve Microsoft.Display 2>/dev/null </dev/null | tr -d '\r')
+    [ -n "$m" ] && [ "$m" != "settings=ms-settings:display" ] \
+        && pass "MUTANT CONTROL_NO_SETTINGS_REDIRECT (Display stays Control Panel's) is caught ($m)" \
+        || fail "MUTANT CONTROL_NO_SETTINGS_REDIRECT not caught ($m)"
+fi
 out=$(ctl --dump items)
 [ "$(echo "$out" | grep -c '^category=')" = 7 ] && pass "Items: the seven categories" || fail "categories"
+# as Windows 10 (David 2026-10-08: "match what Windows does"): System, Display,
+# Personalization and Windows Update are Settings'; All Items lists no Display,
+# Personalization or Updates, and System opens Settings > About
+echo "$out" | grep -qx 'item=System' && ! echo "$out" | grep -qx 'item=Display' && ! echo "$out" | grep -qx 'item=Personalization' \
+    && ! echo "$out" | grep -qx 'item=Updates' && pass "Items: as Windows 10's -- no Display, Personalization or Updates; System is there" \
+    || fail "items: $(echo "$out" | grep '^item=' | tr '\n' ' ')"
 
 # ---- 9. The elevated half, end to end through the spool -----------------------------------------
 if command -v python3 >/dev/null; then
