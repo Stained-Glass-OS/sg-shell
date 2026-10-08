@@ -93,6 +93,7 @@ case "\$1" in
 sound) if [ \$# -eq 1 ] && [ -e "$T/second-mic" ]; then printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tno\t70\tno\tMicrophone (Stand-in)\nSOURCE mic.1\tyes\t60\tno\tPowerMic (Stand-in)\n'
        elif [ \$# -eq 1 ]; then printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tyes\t70\tno\tMicrophone (Stand-in)\n'; fi; echo OK ;;
 nightlight) printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
+device-sounds) [ -n "\${2:-}" ] && echo "\$2" > "$T/devsounds"; printf 'DEVICESOUNDS %s\nOK\n' "\$(cat "$T/devsounds" 2>/dev/null || echo on)" ;;
 display) echo 'ERROR unsupported the display is not the compositor' ;;
 power) printf 'POWER 10\t0\tyes\tno\nOK\n' ;;
 lockscreen) printf 'LOCKSCREEN yes\tyes\nOK\n' ;;
@@ -298,6 +299,16 @@ i=0; while [ $i -lt 20 ] && ! has ": PowerMic (Stand-in)"; do sleep 0.5; i=$((i 
 has ": PowerMic (Stand-in)" && pass "a microphone plugged in while Sound is open appears in its list (and as the default chosen)" \
     || fail "the new microphone did not appear: $(tr -d '\r' < "$DUMP" | grep -i 'stand-in' | head -4 | tr '\n' ' ')"
 rm -f "$T/second-mic"
+# the device sounds (David 2026-10-07: a sound when a device comes or goes): on,
+# and the switch turns them off
+line=$(tr -d '\r' < "$DUMP" | grep ': Play a sound when a device connects or disconnects$' | head -1)
+case "$line" in *state=1*) pass "Sound: Device sounds, on" ;; *) fail "no Device sounds switch, on ($line)" ;; esac
+set -- $(printf '%s\n' "$line" | sed -n 's/.* at=\([0-9]*\),\([0-9]*\).*/\1 \2/p')
+: > "$LOG"
+[ $# -eq 2 ] && [ "$2" -lt 740 ] && click_at "$1" "$2"
+i=0; while [ $i -lt 10 ] && ! grep -qx 'device-sounds off' "$LOG"; do sleep 0.5; i=$((i + 1)); done
+grep -qx 'device-sounds off' "$LOG" && pass "...the switch turns them off (sg-settingsctl device-sounds off)" \
+    || fail "the switch at ($*): sg-settingsctl heard $(tr '\n' ' ' < "$LOG")"
 
 # --- Privacy > Microphone ---------------------------------------------------------------------------
 wine start ms-settings:privacy-microphone >/dev/null 2>&1

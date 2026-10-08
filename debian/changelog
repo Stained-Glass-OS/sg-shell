@@ -1,3 +1,11 @@
+sg-shell (0.1.0-166) unstable; urgency=medium
+
+  * Settings > Sound: Device sounds -- "Play a sound when a device connects
+    or disconnects" (sg-session 0.1.0-177's device-sounds; David: like
+    Windows). settings-check: on, and the switch turns them off.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 07 Oct 2026 21:29:18 -0700
+
 sg-shell (0.1.0-165) unstable; urgency=medium
 
   * Settings > Display: Display orientation (Landscape, Portrait, Landscape

@@ -475,7 +475,8 @@ const WCHAR *scale_set_auto(void)
 }
 
 /* ---- Sound --------------------------------------------------------------------------------- */
-enum { CMD_OUT = CMD_PAGE_FIRST + 1, CMD_OUT_VOL, CMD_IN, CMD_IN_VOL, CMD_MUTE, CMD_SPEECH, CMD_MICPRIV, CMD_MICTEST };
+enum { CMD_OUT = CMD_PAGE_FIRST + 1, CMD_OUT_VOL, CMD_IN, CMD_IN_VOL, CMD_MUTE, CMD_SPEECH, CMD_MICPRIV, CMD_MICTEST,
+       CMD_DEVSOUNDS };
 static HWND g_mictest, g_miclevel;
 
 struct sdev { WCHAR name[200], desc[200]; int vol; BOOL def, muted; };
@@ -581,6 +582,20 @@ void set_build_sound(void)
     if (!privacy_mic_allowed())
         y = st_para(y, L"Microphone access for this device is off, so apps and voice typing cannot use it.");
 
+    /* the sounds a USB device makes coming and going (sg-session's device-sounds;
+     * David 2026-10-07) */
+    {
+        char *ans, buf[64];
+        BOOL on = TRUE, known = FALSE;
+        ans = ctl_run(L"device-sounds", &ok, NULL, 0, 5000);
+        if (ans && ok && ctl_line(ans, "DEVICESOUNDS", NULL, buf, sizeof(buf))) { known = TRUE; on = !strcmp(buf, "on"); }
+        free(ans);
+        if (known) {
+            y = st_head(y, L"Device sounds");
+            st_toggle(&y, L"Play a sound when a device connects or disconnects", on, CMD_DEVSOUNDS);
+        }
+    }
+
     y = st_head(y, L"Related settings");
     st_link(&y, L"Microphone privacy settings", CMD_MICPRIV);
     st_link(&y, L"Speech recognition", CMD_SPEECH);
@@ -622,6 +637,12 @@ BOOL set_cmd_sound(int id, int code, HWND ctl)
     case CMD_MUTE:
         if ((d = default_of(g_sinks, g_nsinks)) >= 0) sound_set(L"mute", L"sink", g_sinks[d].name, st_checked(ctl) ? L"yes" : L"no");
         return TRUE;
+    case CMD_DEVSOUNDS: {
+        BOOL ok;
+        free(ctl_run(st_checked(ctl) ? L"device-sounds on" : L"device-sounds off", &ok, NULL, 0, 5000));
+        if (!ok) st_status(L"The device sounds could not be changed.");
+        return TRUE;
+    }
     case CMD_SPEECH: navigate(PG_SPEECH); return TRUE;
     case CMD_MICPRIV: navigate(PG_S_PRIV_MIC); return TRUE;
     case CMD_MICTEST:
