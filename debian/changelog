@@ -1,3 +1,28 @@
+sg-shell (0.1.0-171) unstable; urgency=medium
+
+  * Restore points (sg-session 0.1.0-179's sg-snapshot). Settings > Update &
+    Security > Recovery: "Go back to the previous version of Stained Glass
+    OS" (Get started) and the restore points, each "Before the update of
+    <date>" with what the update changed and "Go back to this version";
+    Restart required while going back waits; "You started an earlier
+    version" / Keep this version while a restore point runs; Create a
+    restore point now. On an ext4 system drive: Undo the last update.
+  * Control Panel > System and Security > Recovery (new; control
+    /name Microsoft.Recovery): "Turn on system restore points (convert the
+    system drive)", offered only while the system drive is ext4, with the
+    warning to back up and what stands in the way; after a conversion,
+    Keep the conversion / Undo the conversion.
+  * The elevated half (/admin restore-point SUB [ID]) files sg-admind's new
+    restore-point verb (rollback, delete, create, undo-update, undo-cancel,
+    convert-schedule, convert-cancel, convert-keep, convert-undo; ids
+    checked), which runs sg-snapshot.
+  * SG_SETTINGS_DUMP works in the Control Panel's frame too.
+  * Gates: test/restore-points-check.sh (in make test; make
+    test-restore-points-mutants: RP_CONVERT_ALWAYS), admind-check's
+    restore-point cases (mutant RP_ANY_COMMAND).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 08 Oct 2026 19:53:35 -0700
+
 sg-shell (0.1.0-170) unstable; urgency=medium
 
   * Settings > Devices > AutoPlay, as Windows 10's: "Use AutoPlay for all

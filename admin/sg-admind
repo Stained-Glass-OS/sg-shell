@@ -75,6 +75,14 @@
 #                            registry-push ID [TEXT] -- the firewall prompt's
 #                            "Allow access", Settings' Firewall pages, and the
 #                            rules netsh and INetFwPolicy2 store (wine-sg)
+#   restore-point SUBCOMMAND [ID]
+#                            restore points and going back (sg-session's
+#                            sg-snapshot): rollback ID, delete ID, create,
+#                            undo-update, undo-cancel (ext4: the previous
+#                            versions of our packages), convert-schedule,
+#                            convert-cancel, convert-keep, convert-undo
+#                            (Control Panel > Recovery: converting the system
+#                            drive to btrfs at the next start)
 #
 # The two installs publish their progress while apt runs, for the elevated
 # program's progress bar: replies/<id>.progress (root:sgsystem 0640),
@@ -1477,6 +1485,34 @@ def op_firewall(args):
     raise Refused("The firewall could not be changed.")
 
 
+# Restore points (sg-snapshot): what an administrator may ask, and how long
+# each may take (making the conversion's initrd takes a minute or more).
+RESTORE_COMMANDS = {"rollback": (1, 300), "delete": (1, 300), "create": (0, 300), "undo-update": (0, 60),
+                    "undo-cancel": (0, 60), "convert-schedule": (0, 1800), "convert-cancel": (0, 120),
+                    "convert-keep": (0, 600), "convert-undo": (0, 1800)}
+RESTORE_ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}$")
+
+
+def op_restore_point(args):
+    sub, rest = args[0], args[1:]
+    if sub not in RESTORE_COMMANDS:
+        raise Refused("That is not something restore points can do.")
+    n, timeout = RESTORE_COMMANDS[sub]
+    if len(rest) != n or not all(RESTORE_ID_RE.match(a) for a in rest):
+        raise Refused("Malformed request.")
+    argv = ["sg-snapshot", sub] + rest
+    if sub == "create":
+        argv += ["--label", "Restore point made in Settings", "--kind", "manual"]
+    r = run(argv, timeout=timeout)
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    last = lines[-1] if lines else ""
+    if r.returncode == 0 and last == "OK":
+        return lines[:-1]
+    if last.startswith("ERROR "):
+        raise Refused(last[6:])
+    raise Refused("The restore point could not be used.")
+
+
 OPS = {
     "ping": (op_ping, 0),
     "hostname": (op_hostname, 1),
@@ -1506,6 +1542,7 @@ OPS = {
     "apt-remove": (op_apt_remove, 1),
     "deb-install": (op_deb_install, 3),
     "firewall": (op_firewall, None),        # 1 to 8 fields: a subcommand and its arguments
+    "restore-point": (op_restore_point, None),
 }
 # how many of the last fields are passwords (never logged)
 SECRET = {"join-domain": 1, "user-add": 1, "user-password": 1, "user-password-own": 2}

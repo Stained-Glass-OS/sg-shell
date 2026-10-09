@@ -231,6 +231,39 @@ sed 's/    if sub not in FIREWALL_COMMANDS:/    if False:/; s/    lo, hi = FIREW
 python3 "$T/admind-mut" 2>>"$T/log"
 grep -q 'sg-firewall migrate' "$CALLS" && pass "MUTANT FW_ANY_COMMAND (any subcommand passed on) is caught" || fail "FW_ANY_COMMAND mutant not detected"
 
+# --- restore points: sg-admind runs sg-snapshot's administrator commands
+cat > "$B/sg-snapshot" <<EOF
+#!/bin/sh
+printf 'sg-snapshot %s |\n' "\$*" >> "$CALLS"
+case "\$1" in
+rollback) echo "PENDING \$2"; echo OK ;;
+convert-schedule) echo "ERROR Connect your PC to power first."; exit 1 ;;
+*) echo OK ;;
+esac
+EOF
+chmod +x "$B/sg-snapshot"
+rp_case() {   # expected first reply line (prefix), description, then the request
+    want=$1; what=$2; shift 2
+    : > "$CALLS"
+    r=$(ask restore-point "$@")
+    case "$(first "$r")" in "$want"*) pass "$what" ;; *) fail "$what: $r" ;; esac
+}
+rp_case OK "restore points: going back to one" rollback 20261008-185501
+grep -qF 'sg-snapshot rollback 20261008-185501 |' "$CALLS" && printf '%s\n' "$r" | grep -qx 'PENDING 20261008-185501' \
+    && pass "...sg-snapshot rollback ID, its answer passed back" || fail "rollback call: $(cat "$CALLS") / $r"
+rp_case OK "restore points: one made by hand" create
+grep -qF 'sg-snapshot create --label Restore point made in Settings --kind manual |' "$CALLS" && pass "...labelled as Settings' own" || fail "create: $(cat "$CALLS")"
+rp_case OK "restore points: undo the last update (ext4)" undo-update
+rp_case "FAILED Connect your PC to power first." "restore points: sg-snapshot's refusal of a conversion is passed on" convert-schedule
+rp_case "FAILED Malformed" "restore points: an id that is not one" rollback '../../etc'
+[ ! -s "$CALLS" ] && pass "...and sg-snapshot is not run for it" || fail "ran sg-snapshot with a bad id: $(cat "$CALLS")"
+rp_case "FAILED That is not" "restore points: not the boot service's commands (boot, apt-hook)" boot
+[ ! -s "$CALLS" ] && pass "...and sg-snapshot is not run for them" || fail "ran sg-snapshot boot"
+sed 's/    if sub not in RESTORE_COMMANDS:/    if False:/; s/    n, timeout = RESTORE_COMMANDS\[sub\]/    n, timeout = len(rest), 60/' "$ADMIND" > "$T/admind-mut"
+: > "$CALLS"; id=$(next_id); printf 'restore-point\nboot\n' > "$S/requests/.$id"; mv "$S/requests/.$id" "$S/requests/$id.req"
+python3 "$T/admind-mut" 2>>"$T/log"
+grep -q 'sg-snapshot boot' "$CALLS" && pass "MUTANT RP_ANY_COMMAND (any subcommand passed on) is caught" || fail "RP_ANY_COMMAND mutant not detected"
+
 # quarantine: what sg-defender left, restored as its owner or deleted
 Q="$T/def/quarantine"; mkdir -p "$Q" "$T/def/notices/$(id -u)" "$T/dl"
 quar() {   # ID NAME CONTENT

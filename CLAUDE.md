@@ -297,6 +297,27 @@ writes `<id>.cancel` (the name), and the firewall adds a block rule.
 `make test-firewall` (`test/firewall-check.sh`), `make test-firewall-mutants`
 (FW_NO_QUESTIONS in sg-netflyout, FW_PROMPT_TICKS_NOTHING).
 
+### Recovery and restore points (restore.c)
+
+sg-session's `sg-snapshot` publishes `/run/stained-glass-snapshot/status`
+(`SG_SNAPSHOT_STATUS` for the gate: FS, LAYOUT, BOOTED, PENDING, SNAPSHOT
+id/when/kind/bootable/label, UNDO, CONVERT, PROBLEM, READY, SAVED, ending
+OK); `rp_read()` reads it for both frames. Settings > Recovery
+(`set_build_recovery`, set_misc.c): "Go back to the previous version of
+Stained Glass OS" (Windows 10's words), Get started (the newest restore
+point taken before an update), each restore point with "Go back to this
+version", Restart required while going back waits, Keep this version while
+a restore point runs, Create a restore point now; on ext4, Undo the last
+update. The Control Panel's Recovery (`PG_RECOVERY`, System and Security,
+`/name Microsoft.Recovery`): "Turn on system restore points (convert the
+system drive)" **only when the root is ext4** (`rp_convert_offered`; the
+category's applet task changes with it, `applet_now`), with the warning to
+back up and sg-snapshot's PROBLEM lines; after a conversion, Keep / Undo.
+Every change is `/admin restore-point SUB [ID]` (`rp_elevated`, `rp_admin`)
+-> sg-admind's `restore-point` verb -> `sg-snapshot SUB`. Gate:
+`test/restore-points-check.sh` (Xvfb :131; a stand-in sg-snapshot behind a
+real spool), mutant `RP_CONVERT_ALWAYS`.
+
 ## Settings (sg-settings)
 
 `build/sg-settings64.exe` is `src/control/*.c` linked again with its own icon

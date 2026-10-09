@@ -24,7 +24,7 @@ enum page_id {
     PG_HOME, PG_ALL,
     PG_CAT_SYSSEC, PG_CAT_NET, PG_CAT_HW, PG_CAT_PROG, PG_CAT_USERS, PG_CAT_APPEAR, PG_CAT_CLOCK,
     PG_SYSTEM, PG_PROGRAMS, PG_USERS, PG_USERS_MANAGE, PG_DATETIME, PG_PERSONALIZE,
-    PG_UPDATE, PG_NETWORK, PG_SPEECH, PG_ADMINTOOLS, PG_PRINTERS, PG_CREDMGR,
+    PG_UPDATE, PG_NETWORK, PG_SPEECH, PG_ADMINTOOLS, PG_PRINTERS, PG_CREDMGR, PG_RECOVERY,
     /* Settings (SystemSettings, ms-settings:): the same page machinery in
      * the Settings window (settings.c) */
     PG_S_HOME, PG_S_SEARCH,
@@ -360,6 +360,7 @@ void build_speech(void);        BOOL cmd_speech(int, int, HWND);     void timer_
 void build_admintools(void);    BOOL cmd_admintools(int, int, HWND); void dump_admintools(void);
 /* credmgr.c: Credential Manager, and the sign-in notice for a locked keyring */
 void build_credmgr(void);       BOOL cmd_credmgr(int, int, HWND);    void dump_credmgr(void);
+void build_recovery_cpl(void);  BOOL cmd_recovery_cpl(int, int, HWND); void dump_recovery(void);   /* restore.c */
 int  keyring_signin_main(void);                  /* /keyring-signin */
 int  credmgr_delete_cli(const WCHAR *target, const WCHAR *type);   /* --credential-delete */
 /* set_printers.c: Devices and Printers, and Settings' Printers & scanners */

@@ -349,6 +349,16 @@ test-firewall-mutants:
 	    if sh test/firewall-check.sh --mutant $$m >/dev/null 2>&1; then echo "mutant $$m survived"; exit 1; fi; \
 	    echo "mutant $$m caught"; done
 
+# Restore points in Settings > Recovery and the Control Panel's Recovery, and the
+# mutant it must catch (the conversion offered on a btrfs system drive)
+.PHONY: test-restore-points test-restore-points-mutants
+test-restore-points: build
+	@sh test/restore-points-check.sh
+test-restore-points-mutants:
+	@for m in RP_CONVERT_ALWAYS; do \
+	    if sh test/restore-points-check.sh --mutant $$m >/dev/null 2>&1; then echo "mutant $$m survived"; exit 1; fi; \
+	    echo "mutant $$m caught"; done
+
 test-office-mutants: office
 	@sh test/office-check-mutants.sh
 	@sh test/office-native-mutants.sh
@@ -396,6 +406,7 @@ test: build
 	@sh test/hidpi-check.sh
 	@sh test/hidpi-live-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/restore-points-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/firewall-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/optionalfeatures-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/power-buttons-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

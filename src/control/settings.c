@@ -110,7 +110,7 @@ static const struct { enum page_id page; const WCHAR *words; } KEYWORDS[] = {
     { PG_S_PRIV_LOCATION, L"location gps" },
     { PG_S_UPDATE, L"windows update check for updates install restart history" },
     { PG_S_DEFENDER, L"virus antivirus malware threat protection defender security scan quarantine clamav" },
-    { PG_S_RECOVERY, L"reset restart advanced startup recovery" },
+    { PG_S_RECOVERY, L"reset restart advanced startup recovery go back previous version restore point system restore undo update rollback" },
 };
 
 static int category_of(enum page_id p)

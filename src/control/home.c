@@ -5,12 +5,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "restore.h"
 #include <shellapi.h>
 
 /* commands the navigation pages share */
 enum {
     CMD_INET = CMD_PAGE_FIRST + 1, CMD_JOY, CMD_DESK, CMD_NCPA, CMD_FONTS, CMD_ENVVARS_A, CMD_POWER, CMD_FIREWALL, CMD_FIREWALL_APPS,
-    CMD_S_ABOUT, CMD_S_BACKGROUND, CMD_S_COLORS, CMD_S_TASKBAR,
+    CMD_S_ABOUT, CMD_S_BACKGROUND, CMD_S_COLORS, CMD_S_TASKBAR, CMD_S_RECOVERY,
     CMD_RENAME = SHIELD_ID(CMD_PAGE_FIRST + 10),
     CMD_TIMEZONE = SHIELD_ID(CMD_PAGE_FIRST + 11),
     CMD_HOSTED = CMD_PAGE_FIRST + 100,        /* + index into the hosted list */
@@ -65,17 +66,36 @@ static const struct applet TASKBAR_A = { L"Taskbar and Navigation", IC_APPEAR, C
     L"taskbar start menu notification area tray jump lists navigation", { { L"Customize the taskbar", CMD_S_TASKBAR } } };
 static const struct applet NCPA_A = { L"Network Connections", IC_NET, CMD_NCPA, L"adapter ethernet wifi tcp ip settings", { { 0 } } };
 
+/* Recovery: restore points and going back (restore.c). Converting the system
+ * drive to btrfs is offered only while it is ext4 */
+static const struct applet RECOVERY_A = { L"Recovery", IC_UPDATE, NAV(PG_RECOVERY),
+    L"recovery restore point system restore go back previous version undo update rollback snapshot",
+    { { L"Go back to a restore point", CMD_S_RECOVERY } } };
+static const struct applet RECOVERY_EXT4_A = { L"Recovery", IC_UPDATE, NAV(PG_RECOVERY),
+    L"recovery restore point system restore go back previous version undo update rollback snapshot convert btrfs",
+    { { L"Turn on system restore points (convert the system drive)", NAV(PG_RECOVERY) } } };
+/* the applet as this PC has it */
+static const struct applet *applet_now(const struct applet *a)
+{
+    if (a == &RECOVERY_A) {
+        struct rp_status st;
+        rp_read(&st);
+        if (rp_convert_offered(&st)) return &RECOVERY_EXT4_A;
+    }
+    return a;
+}
+
 static const struct applet *const ALL[] = {
     /* as Windows 10's: Display, Personalization and Windows Update are Settings' */
     &ADMIN_A, &DATETIME_A, &FONTS_A, &GAME_A, &INET_A, &NETCENTER_A, &NCPA_A,
-    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A, &FIREWALL_A,
+    &PROGRAMS_A, &SPEECH_A, &SYSTEM_A, &USERS_A, &ENVVARS_A, &POWER_A, &PRINTERS_A, &CREDMGR_A, &FIREWALL_A, &RECOVERY_A,
 };
 
 struct category { enum page_id page; int icon; const WCHAR *title; struct task links[3]; const struct applet *applets[5]; };
 static const struct category CATS[] = {
     { PG_CAT_SYSSEC, IC_SYSSEC, L"System and Security",
       { { L"View amount of RAM and processor speed", CMD_S_ABOUT }, { L"Allow an app through firewall", CMD_FIREWALL_APPS } },
-      { &SYSTEM_A, &FIREWALL_A, &POWER_A, &ADMIN_A } },
+      { &SYSTEM_A, &FIREWALL_A, &POWER_A, &ADMIN_A, &RECOVERY_A } },
     { PG_CAT_NET, IC_NET, L"Network and Internet",
       { { L"View network status and tasks", NAV(PG_NETWORK) }, { L"Internet Options", CMD_INET } },
       { &NETCENTER_A, &INET_A } },
@@ -138,7 +158,7 @@ void build_category(void)
     x = pg_left_pane(labels, ids, n) + S(36);
     y = S(28);
     for (i = 0; i < 5 && cat->applets[i]; i++) {
-        const struct applet *a = cat->applets[i];
+        const struct applet *a = applet_now(cat->applets[i]);
         int tx = x + S(56), j;
         pg_icon(x, y, S(40), a->icon);
         pg_link(tx, y - S(2), a->name, a->id, LINK_CATEGORY);
@@ -197,7 +217,7 @@ void build_all(void)
     if (cols < 1) cols = 1;
     for (i = 0; i < (int)ARRAYSIZE(ALL); i++) {
         int x, y;
-        if (!matches(ALL[i]->name, ALL[i]->keywords)) continue;
+        if (!matches(ALL[i]->name, applet_now(ALL[i])->keywords)) continue;
         x = x0 + (n % cols) * colw; y = y0 + (n / cols) * S(56);
         pg_icon(x, y, S(32), ALL[i]->icon);
         pg_link(x + S(42), y + S(6), ALL[i]->name, ALL[i]->id, 0);
@@ -234,6 +254,7 @@ BOOL cmd_home(int id, int code, HWND ctl)
     case CMD_S_BACKGROUND: ShellExecuteW(g_main, NULL, L"ms-settings:personalization-background", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_S_COLORS: ShellExecuteW(g_main, NULL, L"ms-settings:colors", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_S_TASKBAR: ShellExecuteW(g_main, NULL, L"ms-settings:taskbar", NULL, NULL, SW_SHOWNORMAL); return TRUE;
+    case CMD_S_RECOVERY: ShellExecuteW(g_main, NULL, L"ms-settings:recovery", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_POWER: ShellExecuteW(g_main, NULL, L"ms-settings:powersleep", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_FIREWALL: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall", NULL, NULL, SW_SHOWNORMAL); return TRUE;
     case CMD_FIREWALL_APPS: ShellExecuteW(g_main, NULL, L"ms-settings:network-firewall-apps", NULL, NULL, SW_SHOWNORMAL); return TRUE;
@@ -257,5 +278,12 @@ void dump_items(void)
     load_hosted();
     for (i = 0; i < (int)ARRAYSIZE(CATS); i++) wprintf(L"category=%ls\n", CATS[i].title);
     for (i = 0; i < (int)ARRAYSIZE(ALL); i++) wprintf(L"item=%ls\n", ALL[i]->name);
+    for (i = 0; i < (int)ARRAYSIZE(CATS); i++) {
+        int j, k;
+        for (j = 0; j < 5 && CATS[i].applets[j]; j++) {
+            const struct applet *a = applet_now(CATS[i].applets[j]);
+            for (k = 0; k < 3 && a->tasks[k].label; k++) wprintf(L"task=%ls|%ls|%ls\n", CATS[i].title, a->name, a->tasks[k].label);
+        }
+    }
     for (i = 0; i < g_nhosted; i++) wprintf(L"item=%ls (%ls)\n", g_hosted[i].name, g_hosted[i].file);
 }

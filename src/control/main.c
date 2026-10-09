@@ -94,6 +94,7 @@ const struct page_def g_pages[PG_COUNT] = {
     [PG_ADMINTOOLS]   = { L"Administrative Tools",       PG_CAT_SYSSEC, build_admintools,   cmd_admintools },
     [PG_PRINTERS]     = { L"Devices and Printers",       PG_CAT_HW,     build_printers,     cmd_printers },
     [PG_CREDMGR]      = { L"Credential Manager",         PG_USERS,      build_credmgr,      cmd_credmgr },
+    [PG_RECOVERY]     = { L"Recovery",                   PG_CAT_SYSSEC, build_recovery_cpl, cmd_recovery_cpl },
     SETTINGS_PAGE_DEFS
 };
 
@@ -543,9 +544,26 @@ static LRESULT CALLBACK page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 /* ---- navigation ----------------------------------------------------------------- */
 static void layout(void);
 
+/* SG_SETTINGS_DUMP in the Control Panel's frame too: the page it shows, as
+ * text, after each page (written whole, then renamed) -- for the gates */
+static void cpl_dump(void)
+{
+    WCHAR path[MAX_PATH], tmp[MAX_PATH + 8];
+    FILE *f;
+    if (!GetEnvironmentVariableW(L"SG_SETTINGS_DUMP", path, MAX_PATH)) return;
+    _snwprintf(tmp, ARRAYSIZE(tmp), L"%ls.tmp", path);
+    tmp[ARRAYSIZE(tmp) - 1] = 0;
+    if (!(f = _wfopen(tmp, L"w, ccs=UTF-8"))) return;
+    fwprintf(f, L"window Control Panel\npage %ls\n", g_pages[g_cur].title);
+    page_dump(f);
+    fclose(f);
+    MoveFileExW(tmp, path, MOVEFILE_REPLACE_EXISTING);
+}
+
 static void set_title(void)
 {
     if (g_settings) { settings_page_shown(); return; }
+    cpl_dump();
     SetWindowTextW(g_main, g_pages[g_cur].title);
     InvalidateRect(g_addr, NULL, TRUE);
     EnableWindow(g_back, g_hist_pos > 0);
@@ -931,10 +949,11 @@ static const struct target TARGETS[] = {
     { L"Microsoft.SpeechRecognition",       PG_SPEECH },
     { L"Microsoft.AdministrativeTools",     PG_ADMINTOOLS },
     { L"Microsoft.CredentialManager",       PG_CREDMGR },
+    { L"Microsoft.Recovery",                PG_RECOVERY },
     /* our own page names, for --page */
     { L"home", PG_HOME }, { L"all", PG_ALL }, { L"programs", PG_PROGRAMS }, { L"users", PG_USERS },
     { L"accounts", PG_USERS_MANAGE }, { L"datetime", PG_DATETIME }, { L"personalization", PG_PERSONALIZE },
-    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"devices-and-printers", PG_PRINTERS }, { L"credentials", PG_CREDMGR }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
+    { L"network", PG_NETWORK }, { L"speech", PG_SPEECH }, { L"administrative-tools", PG_ADMINTOOLS }, { L"devices-and-printers", PG_PRINTERS }, { L"credentials", PG_CREDMGR }, { L"recovery", PG_RECOVERY }, { L"cat-system", PG_CAT_SYSSEC }, { L"cat-network", PG_CAT_NET },
     { L"cat-hardware", PG_CAT_HW }, { L"cat-programs", PG_CAT_PROG }, { L"cat-users", PG_CAT_USERS },
     { L"cat-appearance", PG_CAT_APPEAR }, { L"cat-clock", PG_CAT_CLOCK },
 };
@@ -1031,7 +1050,7 @@ static int dump(const WCHAR *what)
         { L"system", dump_system }, { L"programs", dump_programs }, { L"users", dump_users },
         { L"datetime", dump_datetime }, { L"personalization", dump_personalize },
         { L"update", dump_update }, { L"network", dump_network }, { L"speech", dump_speech }, { L"admintools", dump_admintools }, { L"printers", dump_printers },
-        { L"credentials", dump_credmgr },
+        { L"credentials", dump_credmgr }, { L"recovery", dump_recovery },
         { L"items", dump_items },
     };
     size_t i;

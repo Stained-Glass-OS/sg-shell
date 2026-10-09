@@ -12,6 +12,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "restore.h"
 #include <shellapi.h>
 
 /* ---- elevation ----------------------------------------------------------------- */
@@ -903,6 +904,8 @@ int admin_main(int argc, WCHAR **argv)
     if (!lstrcmpW(argv[0], L"timezone")) return do_timezone();
     if (!lstrcmpW(argv[0], L"update-check")) return do_update_check();
     if (!lstrcmpW(argv[0], L"update-sources")) return do_update_sources();
+    /* restore points: going back, Undo the last update, converting the system drive (restore.c) */
+    if (!lstrcmpW(argv[0], L"restore-point")) return rp_admin(argc - 1, argv + 1);
     if (!lstrcmpW(argv[0], L"set-zone") && argc > 1) {
         const WCHAR *req[] = { L"timezone", argv[1] };
         return do_one(L"Time zone", req, 2);

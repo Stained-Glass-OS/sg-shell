@@ -12,6 +12,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "settings.h"
+#include "restore.h"
 
 /* ---- Ease of Access --------------------------------------------------------------------------- */
 static const WCHAR ACCESS[] = L"Software\\Microsoft\\Accessibility";
@@ -570,17 +571,95 @@ BOOL set_cmd_update(int id, int code, HWND ctl)
 }
 
 /* ---- Recovery ------------------------------------------------------------------------------------- */
-enum { CMD_ADV_RESTART = CMD_PAGE_FIRST + 1, CMD_RESET_INFO = CMD_PAGE_FIRST + 2 };
+/* "Go back to the previous version of Stained Glass OS", as Windows 10 words
+ * it: restore points (btrfs: sg-snapshot keeps one from before each update)
+ * or, on an ext4 system drive, Undo the last update (the previous versions of
+ * our own packages). The changes are an administrator's (restore.c). */
+enum { CMD_ADV_RESTART = CMD_PAGE_FIRST + 1, CMD_RESET_INFO = CMD_PAGE_FIRST + 2, CMD_RP_GETSTARTED = CMD_PAGE_FIRST + 3,
+       CMD_RP_RESTART = CMD_PAGE_FIRST + 4, CMD_RP_KEEP_THIS = CMD_PAGE_FIRST + 5, CMD_RP_CREATE = CMD_PAGE_FIRST + 6,
+       CMD_RP_UNDO_CANCEL = CMD_PAGE_FIRST + 7, CMD_RP_CPL = CMD_PAGE_FIRST + 8, CMD_RP_GO_FIRST = CMD_PAGE_FIRST + 20 };
+static struct rp_status g_rp;
+
+static const WCHAR *rp_when_of(const WCHAR *id)
+{
+    int i;
+    for (i = 0; i < g_rp.n; i++) if (!lstrcmpW(g_rp.snap[i].id, id)) return g_rp.snap[i].when;
+    return id;
+}
+
+/* the restore point to go back to with "Get started": the newest one taken
+ * before an update, else the newest */
+static int rp_previous(void)
+{
+    int i;
+    for (i = 0; i < g_rp.n; i++) if (!lstrcmpW(g_rp.snap[i].kind, L"auto") && g_rp.snap[i].bootable) return i;
+    for (i = 0; i < g_rp.n; i++) if (g_rp.snap[i].bootable) return i;
+    return -1;
+}
 
 void set_build_recovery(void)
 {
-    int y = st_title(L"Recovery");
+    WCHAR line[600];
+    int y = st_title(L"Recovery"), i;
+    rp_read(&g_rp);
+    if (g_rp.booted[0]) {
+        _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS is running as it was before the update of %ls. To keep this version, "
+                   L"make it the system; to go back to the current version, restart.", rp_when_of(g_rp.booted));
+        y = st_card(y, IC_G_UPDATE, L"You started an earlier version", line);
+        st_button(&y, L"Keep this version", CMD_RP_KEEP_THIS);
+        st_button(&y, L"Restart", CMD_RP_RESTART);
+    } else if (g_rp.pending_rollback || g_rp.pending_undo) {
+        y = st_card(y, IC_G_UPDATE, L"Restart required", g_rp.pending_rollback
+                    ? L"Stained Glass OS goes back to the earlier version when you restart."
+                    : L"The last update is undone when you restart, before anyone signs in.");
+        st_button(&y, L"Restart now", CMD_RP_RESTART);
+        if (g_rp.pending_undo) st_button(&y, L"Cancel", CMD_RP_UNDO_CANCEL);
+    }
+    y = st_head(y, L"Go back to the previous version of Stained Glass OS");
+    if (g_rp.ok && g_rp.layout) {
+        int prev = rp_previous();
+        y = st_para(y, L"If this version isn't working for you, try going back to the previous one. Your files, and the "
+                       L"Windows programs you installed, are kept.");
+        if (!g_rp.booted[0] && !g_rp.pending_rollback && prev >= 0) st_button(&y, L"Get started", CMD_RP_GETSTARTED);
+        if (g_rp.wentback[0]) {
+            _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS went back to the version from before the update of %ls.", g_rp.wentback);
+            y = st_para(y, line);
+        }
+        y = st_head(y, L"Restore points");
+        if (!g_rp.n) y = st_para(y, L"There are no restore points yet. One is made before every update; the last three are kept.");
+        for (i = 0; i < g_rp.n; i++) {
+            const struct rp_snap *p = &g_rp.snap[i];
+            _snwprintf(line, ARRAYSIZE(line), !lstrcmpW(p->kind, L"auto") ? L"Before the update of %ls" : L"%ls", p->when);
+            y = st_text(y, line);
+            if (p->label[0]) y = st_para(y, p->label);
+            if (!p->bootable) y = st_para(y, L"This restore point cannot be started: its Linux kernel is no longer installed.");
+            else if (!g_rp.booted[0] && !g_rp.pending_rollback && i < 16) st_link(&y, L"Go back to this version", CMD_RP_GO_FIRST + i);
+            y += S(6);
+        }
+        y = st_para(y, L"Restore points are also in the boot menu: hold Space while your PC starts, or use Advanced startup below.");
+        if (!g_rp.booted[0]) st_button(&y, L"Create a restore point now", CMD_RP_CREATE);
+    } else if (g_rp.ok && !lstrcmpW(g_rp.fs, L"ext4")) {
+        if (g_rp.has_undo && !g_rp.pending_undo) {
+            _snwprintf(line, ARRAYSIZE(line), L"If this version isn't working for you, undo the last update of Stained Glass OS's own "
+                       L"programs (%ls): their previous versions are installed again when you restart.", g_rp.undo_when);
+            y = st_para(y, line);
+            if (g_rp.undo_label[0]) y = st_para(y, g_rp.undo_label);
+            st_button(&y, L"Get started", CMD_RP_GETSTARTED);
+        } else if (!g_rp.pending_undo) y = st_para(y, L"There is no earlier version to go back to.");
+        if (g_rp.undone >= 0) {
+            _snwprintf(line, ARRAYSIZE(line), g_rp.undone ? L"The update of %ls was undone." : L"Undoing the update of %ls failed.", g_rp.undone_when);
+            y = st_para(y, line);
+        }
+        y = st_para(y, L"This PC keeps no restore points of the whole system: its system drive uses ext4. To turn them on, "
+                       L"convert the system drive in Control Panel > System and Security > Recovery.");
+        st_link(&y, L"Turn on system restore points", CMD_RP_CPL);
+    } else y = st_para(y, L"This PC keeps no restore points.");
     y = st_head(y, L"Reset this PC");
     y = st_para(y, L"To start again with a clean system, reinstall Stained Glass OS from its installation media: "
                    L"Setup can keep your other partitions. Back up your files first.");
     y = st_head(y, L"Advanced startup");
-    y = st_para(y, L"Start up from a device or disc (such as a USB drive or DVD), or choose another system to start: "
-                   L"the boot menu is shown when your PC restarts.");
+    y = st_para(y, L"Start up from a device or disc (such as a USB drive or DVD), or choose another system or a restore point to "
+                   L"start: the boot menu is shown when your PC restarts.");
     st_button(&y, L"Restart now", CMD_ADV_RESTART);
     y = st_head(y, L"More recovery options");
     y = st_para(y, L"Updates are installed before anyone signs in, at the next restart, so an interrupted update does not "
@@ -604,9 +683,42 @@ static BOOL boot_menu_next_start(void)
     return spawnvp && !spawnvp(argv, TRUE);
 }
 
+static void rp_go_back(int i)
+{
+    WCHAR q[600];
+    if (i < 0 || i >= g_rp.n) return;
+    _snwprintf(q, ARRAYSIZE(q), L"Go back to the version of Stained Glass OS from before the update of %ls?\n\n"
+               L"Your files, and the Windows programs you installed since, are kept. The system as it is now is kept as a "
+               L"restore point, so you can return to it. You'll be asked to restart.", g_rp.snap[i].when);
+    if (MessageBoxW(g_main, q, L"Go back to the previous version", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return;
+    if (rp_elevated(L"rollback", g_rp.snap[i].id)) refresh_when_back();
+}
+
 BOOL set_cmd_recovery(int id, int code, HWND ctl)
 {
     (void)code; (void)ctl;
+    if (id >= CMD_RP_GO_FIRST && id < CMD_RP_GO_FIRST + RP_MAX_SNAP) { rp_go_back(id - CMD_RP_GO_FIRST); return TRUE; }
+    switch (id) {
+    case CMD_RP_GETSTARTED:
+        if (g_rp.layout) { rp_go_back(rp_previous()); return TRUE; }
+        if (MessageBoxW(g_main, L"Undo the last update? The previous versions of Stained Glass OS's own programs are installed "
+                        L"again when you restart, before anyone signs in. Your files and Windows programs are kept.",
+                        L"Go back to the previous version", MB_OKCANCEL | MB_ICONQUESTION) == IDOK && rp_elevated(L"undo-update", NULL))
+            refresh_when_back();
+        return TRUE;
+    case CMD_RP_KEEP_THIS:
+        if (MessageBoxW(g_main, L"Make this version the system? The version you were running before is kept as a restore point.",
+                        L"Recovery", MB_OKCANCEL | MB_ICONQUESTION) == IDOK && rp_elevated(L"rollback", g_rp.booted))
+            refresh_when_back();
+        return TRUE;
+    case CMD_RP_RESTART:
+        rp_restart(g_rp.booted[0] ? L"to go back to the current version" : g_rp.pending_rollback ? L"to go back to the earlier version"
+                   : L"to undo the last update");
+        return TRUE;
+    case CMD_RP_UNDO_CANCEL: if (rp_elevated(L"undo-cancel", NULL)) refresh_when_back(); return TRUE;
+    case CMD_RP_CREATE: if (rp_elevated(L"create", NULL)) refresh_when_back(); return TRUE;
+    case CMD_RP_CPL: ShellExecuteW(g_main, NULL, L"control.exe", L"/name Microsoft.Recovery", NULL, SW_SHOWNORMAL); return TRUE;
+    }
     if (id == CMD_ADV_RESTART) {
         if (MessageBoxW(g_main, L"Restart now? Save your work first.\n\nThe boot menu will wait at the next start: choose "
                         L"a device, a disc or another system there.", L"Advanced startup", MB_OKCANCEL | MB_ICONQUESTION) != IDOK)
