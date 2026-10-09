@@ -653,7 +653,9 @@ void set_build_recovery(void)
             else if (!g_rp.booted[0] && !g_rp.pending_rollback && i < 16) st_link(&y, L"Go back to this version", CMD_RP_GO_FIRST + i);
             y += S(6);
         }
-        y = st_para(y, L"Restore points are also in the boot menu: hold Space while your PC starts, or use Advanced startup below.");
+        rp_menu_hint_text(line, ARRAYSIZE(line));
+        y = st_para(y, line);
+        y = st_para(y, L"Advanced startup, below, shows the boot menu at the next start and waits for you.");
         if (!g_rp.booted[0]) st_button(&y, L"Create a restore point now", CMD_RP_CREATE);
     } else if (g_rp.ok && !lstrcmpW(g_rp.fs, L"ext4")) {
         if (g_rp.has_undo && !g_rp.pending_undo) {

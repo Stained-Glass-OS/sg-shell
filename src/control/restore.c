@@ -120,6 +120,19 @@ void rp_retention_text(WCHAR *out, int cch)
               L"updates are kept, and, apart from them, the last two from before SG Store installs.", cch);
 }
 
+/* how a person reaches the restore points when the PC starts: the boot menu
+ * shows for a few seconds at every start (systemd-boot's hidden menu waits for a
+ * held key for a tenth of a second only) */
+void rp_menu_hint_text(WCHAR *out, int cch)
+{
+#ifdef SG_MUTANT_RP_NO_HINT
+    lstrcpynW(out, L"Restore points are also in the boot menu.", cch);
+#else
+    lstrcpynW(out, L"Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Esc (or an "
+              L"arrow key) to stop the countdown, then choose a restore point.", cch);
+#endif
+}
+
 /* undoing the conversion is offered for 14 days; the days left */
 BOOL rp_convert_days_text(const struct rp_status *s, WCHAR *out, int cch)
 {
@@ -307,7 +320,9 @@ void build_recovery_cpl(void)
         WCHAR keep[300];
         rp_retention_text(keep, ARRAYSIZE(keep));
         _snwprintf(line, ARRAYSIZE(line), s.n == 1 ? L"There is %d restore point. %ls" : L"There are %d restore points. %ls", s.n, keep);
-        y += pg_para(x, y, w, g_font_body, COL_TEXT, line) + S(8);
+        y += pg_para(x, y, w, g_font_body, COL_TEXT, line) + S(4);
+        rp_menu_hint_text(keep, ARRAYSIZE(keep));
+        y += pg_para(x, y, w, g_font_body, COL_TEXT, keep) + S(8);
     } else if (s.ok && !lstrcmpW(s.fs, L"ext4"))
         y += pg_para(x, y, w, g_font_body, COL_TEXT, s.has_undo
                      ? L"The last update of Stained Glass OS's own programs can be undone."
@@ -368,6 +383,8 @@ void dump_recovery(void)
     if (rp_kept_text(&s, text, ARRAYSIZE(text))) wprintf(L"recovery.kept=%ls|%ls\nrecovery.kept_text=%ls\n", s.kept_when, s.kept_auto ? L"auto" : L"you", text);
     rp_retention_text(text, ARRAYSIZE(text));
     wprintf(L"recovery.retention=%ls\n", text);
+    rp_menu_hint_text(text, ARRAYSIZE(text));
+    wprintf(L"recovery.menu_hint=%ls\n", text);
     wprintf(L"recovery.ready=%ls\n", s.ready ? L"yes" : L"no");
     for (i = 0; i < s.nprob; i++) wprintf(L"recovery.problem=%ls\n", s.prob[i]);
     wprintf(L"recovery.booted=%ls\n", s.booted[0] ? s.booted : L"current");

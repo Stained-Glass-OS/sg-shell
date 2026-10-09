@@ -355,7 +355,7 @@ test-firewall-mutants:
 test-restore-points: build
 	@sh test/restore-points-check.sh
 test-restore-points-mutants:
-	@for m in RP_CONVERT_ALWAYS RP_STORE_TITLE RP_NO_DAYS RP_PREVIOUS_STORE; do \
+	@for m in RP_CONVERT_ALWAYS RP_STORE_TITLE RP_NO_DAYS RP_PREVIOUS_STORE RP_NO_HINT; do \
 	    if sh test/restore-points-check.sh --mutant $$m >/dev/null 2>&1; then echo "mutant $$m survived"; exit 1; fi; \
 	    echo "mutant $$m caught"; done
 

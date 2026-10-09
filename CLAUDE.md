@@ -317,7 +317,9 @@ Every change is `/admin restore-point SUB [ID]` (`rp_elevated`, `rp_admin`)
 -> sg-admind's `restore-point` verb -> `sg-snapshot SUB`. Gate:
 `test/restore-points-check.sh` (Xvfb :131; a stand-in sg-snapshot behind a
 real spool), mutants `RP_CONVERT_ALWAYS`, `RP_STORE_TITLE`, `RP_NO_DAYS`,
-`RP_PREVIOUS_STORE`. Store changes (`SG_SNAP_SOURCE=store`, set by sg-admind's
+`RP_PREVIOUS_STORE`, `RP_NO_HINT`. The page says how to reach the restore points at
+start (`rp_menu_hint_text`: the boot menu shows 3 s at every start; Esc or an arrow key
+holds it; dump `recovery.menu_hint`). Store changes (`SG_SNAP_SOURCE=store`, set by sg-admind's
 `apt_get`; SNAPSHOT field 6 `pool`, WENTBACK field 3) are named "the SG Store
 change of ...", kept apart from updates (3 + 2), and never offered as Get
 started. "Undo the conversion" lasts 14 days: `CONVERT_DEADLINE days\tdate`

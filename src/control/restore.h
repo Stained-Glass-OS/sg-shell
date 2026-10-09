@@ -35,6 +35,7 @@ BOOL rp_convert_unconfirmed(const struct rp_status *s);
 void rp_snap_title(const struct rp_snap *p, WCHAR *out, int cch);
 void rp_before_text(BOOL store, const WCHAR *when, WCHAR *out, int cch);
 void rp_retention_text(WCHAR *out, int cch);
+void rp_menu_hint_text(WCHAR *out, int cch);
 BOOL rp_convert_days_text(const struct rp_status *s, WCHAR *out, int cch);
 BOOL rp_kept_text(const struct rp_status *s, WCHAR *out, int cch);
 BOOL rp_elevated(const WCHAR *sub, const WCHAR *id);

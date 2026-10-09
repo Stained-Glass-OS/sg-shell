@@ -30,7 +30,7 @@
 #     (KEPT .. auto) is said so; the offer on ext4 says "kept for 14 days".
 #
 # Needs wine-sg and Xvfb; skips (77) without. SG_WINE_DIR another Wine.
-#   sh test/restore-points-check.sh [--mutant RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE]   (must fail)
+#   sh test/restore-points-check.sh [--mutant RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE|RP_NO_HINT]   (must fail)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -56,7 +56,7 @@ trap cleanup EXIT INT TERM
 SET="$HERE/build/sg-settings64.exe" CTL="$HERE/build/sg-control64.exe"
 case "$MUTANT" in
     "") [ -f "$SET" ] && [ -f "$CTL" ] || { echo "SKIP: build/sg-settings64.exe or sg-control64.exe missing"; exit 77; } ;;
-    RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE)
+    RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE|RP_NO_HINT)
         B="$T/build"; mkdir -p "$B"
         python3 "$HERE/src/control/gen-icon.py" "$B/sg-control.ico" && python3 "$HERE/src/settings/gen-icon.py" "$B/sg-settings.ico" && \
         x86_64-w64-mingw32-windres -I "$HERE/src/control" -I "$B" "$HERE/src/control/control.rc" -O coff -o "$B/res.o" && \
@@ -177,6 +177,9 @@ has "Before the SG Store change of 2026-10-09 10:15" && has "SG Store: gimp 2.10
     || { fail "store restore point not named"; printf '%s\n' "$out" | head -30; }
 has "The last three from before updates are kept, and, apart from them, the last two from before SG Store installs" \
     && pass "...and the page says what is kept: the last three before updates, apart, the last two before SG Store installs" || fail "retention text missing"
+has "press Esc (or an arrow key) to stop the countdown, then choose a restore point" \
+    && wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.menu_hint=Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Esc' \
+    && pass "Settings and the Control Panel say how to reach the restore points at start: press Esc during the boot menu's countdown" || fail "boot menu hint missing"
 # Get started goes back to the update's point, though the Store's is newer
 wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.snapshot=20261009-101500|2026-10-09 10:15|auto|yes|SG Store: gimp 2.10-1|store' \
     && pass "the Control Panel's Recovery knows each point's pool (store | update)" || fail "dump lacks the pool"
