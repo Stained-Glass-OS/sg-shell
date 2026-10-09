@@ -31,6 +31,7 @@
     [PG_S_PRINTERS]     = { L"Printers & scanners",          PG_S_HOME, set_build_printers,  set_cmd_printers }, \
     [PG_S_MOUSE]        = { L"Mouse",                        PG_S_HOME, set_build_mouse,     set_cmd_mouse }, \
     [PG_S_TYPING]       = { L"Typing",                       PG_S_HOME, set_build_typing,    set_cmd_typing }, \
+    [PG_S_AUTOPLAY]     = { L"AutoPlay",                     PG_S_HOME, set_build_autoplay,  set_cmd_autoplay }, \
     [PG_S_NETSTATUS]    = { L"Status",                       PG_S_HOME, set_build_netstatus, set_cmd_net }, \
     [PG_S_WIFI]         = { L"Wi-Fi",                        PG_S_HOME, set_build_wifi,      set_cmd_net }, \
     [PG_S_ETHERNET]     = { L"Ethernet",                     PG_S_HOME, set_build_ethernet,  set_cmd_net }, \
@@ -111,6 +112,7 @@ void set_build_bluetooth(void); BOOL set_cmd_bluetooth(int, int, HWND);
 void set_build_printers(void);  BOOL set_cmd_printers(int, int, HWND);
 void set_build_mouse(void);     BOOL set_cmd_mouse(int, int, HWND);
 void set_build_typing(void);    BOOL set_cmd_typing(int, int, HWND);
+void set_build_autoplay(void);  BOOL set_cmd_autoplay(int, int, HWND);
 void set_build_netstatus(void); void set_build_wifi(void); void set_build_ethernet(void); BOOL set_cmd_net(int, int, HWND);
 void set_build_proxy(void);     BOOL set_cmd_proxy(int, int, HWND);
 void set_build_firewall(void);  void set_build_fwapps(void); void set_build_fwrules(void); BOOL set_cmd_firewall(int, int, HWND);

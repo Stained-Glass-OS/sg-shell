@@ -310,6 +310,26 @@ i=0; while [ $i -lt 10 ] && ! grep -qx 'device-sounds off' "$LOG"; do sleep 0.5;
 grep -qx 'device-sounds off' "$LOG" && pass "...the switch turns them off (sg-settingsctl device-sounds off)" \
     || fail "the switch at ($*): sg-settingsctl heard $(tr '\n' ' ' < "$LOG")"
 
+# --- Devices > AutoPlay (Windows' values, read by explorer's AutoPlay, wine-sg 0748/1514) ----------
+AP='HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers'
+wine start ms-settings:autoplay >/dev/null 2>&1
+page_is AutoPlay "ms-settings:autoplay"
+sleep 0.5
+line=$(tr -d '\r' < "$DUMP" | grep ': Use AutoPlay for all media and devices$' | head -1)
+case "$line" in *state=1*) pass "AutoPlay: Use AutoPlay for all media and devices, on" ;; *) fail "no AutoPlay switch, on ($line)" ;; esac
+set -- $(printf '%s\n' "$line" | sed -n 's/.* at=\([0-9]*\),\([0-9]*\).*/\1 \2/p')
+[ $# -eq 2 ] && click_at "$1" "$2"
+[ "$(regq "$AP" DisableAutoplay)" = 0x1 ] && pass "...the switch turns AutoPlay off (DisableAutoplay 1)" \
+    || fail "AutoPlay switch at ($*): DisableAutoplay '$(regq "$AP" DisableAutoplay)'"
+set -- $(ctl_at ComboBox 'Ask me every time')
+if [ $# -eq 2 ]; then
+    click_at "$1" "$2"; xdotool key Down Return; sleep 1
+    [ "$(regq "$AP\\UserChosenExecuteHandlers" StorageOnArrival)" = MSOpenFolder ] \
+        && pass "Removable drive: Open folder to view files (StorageOnArrival MSOpenFolder)" \
+        || fail "Removable drive: StorageOnArrival '$(regq "$AP\\UserChosenExecuteHandlers" StorageOnArrival)'"
+    shot autoplay
+else fail "no Removable drive list showing Ask me every time"; fi
+
 # --- Privacy > Microphone ---------------------------------------------------------------------------
 wine start ms-settings:privacy-microphone >/dev/null 2>&1
 page_is Microphone "ms-settings:privacy-microphone"

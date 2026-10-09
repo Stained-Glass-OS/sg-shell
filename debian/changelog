@@ -1,3 +1,15 @@
+sg-shell (0.1.0-170) unstable; urgency=medium
+
+  * Settings > Devices > AutoPlay, as Windows 10's: "Use AutoPlay for all
+    media and devices" (AutoplayHandlers DisableAutoplay) and the
+    removable drive's default -- Ask me every time, Open folder to view
+    files, Take no action (UserChosenExecuteHandlers StorageOnArrival) --
+    which explorer's AutoPlay reads (wine-sg 1514). ms-settings:autoplay
+    opened Bluetooth. Gate settings-check; mutant
+    SG_MUTANT_AUTOPLAY_SWITCH_NOOP.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 08 Oct 2026 19:45:00 -0700
+
 sg-shell (0.1.0-169) unstable; urgency=medium
 
   * Title bars grow with the display scale, as on Windows: a scale picked

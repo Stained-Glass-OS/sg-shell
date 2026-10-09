@@ -178,6 +178,51 @@ BOOL set_cmd_mouse(int id, int code, HWND ctl)
     return FALSE;
 }
 
+/* ---- AutoPlay ------------------------------------------------------------------------------------
+ * Windows' page and Windows' values, read by explorer's AutoPlay (wine-sg
+ * 0748, 1514) each time a drive arrives: AutoplayHandlers DisableAutoplay
+ * ("Use AutoPlay for all media and devices" off), and the removable drive's
+ * default, UserChosenExecuteHandlers StorageOnArrival -- MSPromptEachTime
+ * (ask: the notification, and selecting it asks), MSOpenFolder (File
+ * Explorer at once), MSTakeNoAction. */
+static const WCHAR AUTOPLAY[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers";
+static const WCHAR AUTOPLAY_CHOSEN[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers\\UserChosenExecuteHandlers";
+static const WCHAR *const AUTOPLAY_VALUES[] = { L"MSPromptEachTime", L"MSOpenFolder", L"MSTakeNoAction" };
+enum { CMD_AUTOPLAY_ON = CMD_PAGE_FIRST + 1, CMD_AUTOPLAY_REMOVABLE };
+
+void set_build_autoplay(void)
+{
+    static const WCHAR *const items[] = { L"Ask me every time", L"Open folder to view files (File Explorer)", L"Take no action" };
+    WCHAR chosen[64] = L"";
+    int y = st_title(L"AutoPlay"), sel = 0, i;
+    st_toggle(&y, L"Use AutoPlay for all media and devices", !reg_dword(HKEY_CURRENT_USER, AUTOPLAY, L"DisableAutoplay", 0),
+              CMD_AUTOPLAY_ON);
+    y = st_head(y, L"Choose AutoPlay defaults");
+    reg_sz(HKEY_CURRENT_USER, AUTOPLAY_CHOSEN, L"StorageOnArrival", chosen, ARRAYSIZE(chosen));
+    for (i = 0; i < (int)ARRAYSIZE(AUTOPLAY_VALUES); i++)
+        if (!lstrcmpiW(chosen, AUTOPLAY_VALUES[i])) sel = i;
+    st_combo(&y, L"Removable drive", items, ARRAYSIZE(items), sel, CMD_AUTOPLAY_REMOVABLE);
+}
+
+BOOL set_cmd_autoplay(int id, int code, HWND ctl)
+{
+    switch (id) {
+    case CMD_AUTOPLAY_ON:
+#ifndef SG_MUTANT_AUTOPLAY_SWITCH_NOOP
+        reg_set_dword(HKEY_CURRENT_USER, AUTOPLAY, L"DisableAutoplay", !st_checked(ctl));
+#endif
+        return TRUE;
+    case CMD_AUTOPLAY_REMOVABLE:
+        if (code == CBN_SELCHANGE) {
+            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            if (i >= 0 && i < (int)ARRAYSIZE(AUTOPLAY_VALUES))
+                reg_set_sz(HKEY_CURRENT_USER, AUTOPLAY_CHOSEN, L"StorageOnArrival", AUTOPLAY_VALUES[i]);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
 /* ---- Typing ------------------------------------------------------------------------------------ */
 static const WCHAR TABLET[] = L"Software\\Microsoft\\TabletTip\\1.7";
 enum { CMD_AUTOCORRECT = CMD_PAGE_FIRST + 1, CMD_HIGHLIGHT, CMD_DELAY, CMD_RATE, CMD_BLINK, CMD_TRY,
