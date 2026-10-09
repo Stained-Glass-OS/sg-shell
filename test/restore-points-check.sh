@@ -21,8 +21,16 @@
 #     the warning to back up and what stands in the way); on btrfs it does
 #     not.
 #
+#   - SG Store restore points (SNAPSHOT's 6th field "store") are named "Before
+#     the SG Store change of <date>", the Settings page says what is kept (the
+#     last three before updates and the last two before SG Store installs), and
+#     "Get started" never goes back to a Store point;
+#   - a conversion waiting to be kept says how many days are left to undo it
+#     (CONVERT_DEADLINE) and that it is then kept automatically; one kept by itself
+#     (KEPT .. auto) is said so; the offer on ext4 says "kept for 14 days".
+#
 # Needs wine-sg and Xvfb; skips (77) without. SG_WINE_DIR another Wine.
-#   sh test/restore-points-check.sh [--mutant RP_CONVERT_ALWAYS]   (must fail)
+#   sh test/restore-points-check.sh [--mutant RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE]   (must fail)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -44,20 +52,24 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# the programs: this tree's, or a mutant's build
+# the programs: this tree's, or a mutant's build (both programs, from the same sources)
 SET="$HERE/build/sg-settings64.exe" CTL="$HERE/build/sg-control64.exe"
 case "$MUTANT" in
     "") [ -f "$SET" ] && [ -f "$CTL" ] || { echo "SKIP: build/sg-settings64.exe or sg-control64.exe missing"; exit 77; } ;;
-    RP_CONVERT_ALWAYS)
+    RP_CONVERT_ALWAYS|RP_STORE_TITLE|RP_NO_DAYS|RP_PREVIOUS_STORE)
         B="$T/build"; mkdir -p "$B"
-        python3 "$HERE/src/control/gen-icon.py" "$B/sg-control.ico" && \
-        x86_64-w64-mingw32-windres -I "$HERE/src/control" -I "$B" "$HERE/src/control/control.rc" -O coff -o "$B/res.o" || exit 1
-        # shellcheck disable=SC2046
-        x86_64-w64-mingw32-gcc -O2 -municode -mwindows -Wall -Wno-missing-field-initializers -DSG_MUTANT_$MUTANT \
-            -o "$B/sg-control64.exe" "$HERE"/src/control/*.c "$B/res.o" \
-            -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 -lole32 -luuid -lwindowscodecs \
-            -lcomdlg32 -lshlwapi -lwininet -lversion -lwinspool || exit 1
-        CTL="$B/sg-control64.exe" ;;
+        python3 "$HERE/src/control/gen-icon.py" "$B/sg-control.ico" && python3 "$HERE/src/settings/gen-icon.py" "$B/sg-settings.ico" && \
+        x86_64-w64-mingw32-windres -I "$HERE/src/control" -I "$B" "$HERE/src/control/control.rc" -O coff -o "$B/res.o" && \
+        x86_64-w64-mingw32-windres -I "$HERE/src/settings" -I "$B" "$HERE/src/settings/settings.rc" -O coff -o "$B/set-res.o" || exit 1
+        for pair in "sg-control64.exe res.o" "sg-settings64.exe set-res.o"; do
+            # shellcheck disable=SC2086
+            set -- $pair
+            x86_64-w64-mingw32-gcc -O2 -municode -mwindows -Wall -Wno-missing-field-initializers -DSG_MUTANT_$MUTANT \
+                -o "$B/$1" "$HERE"/src/control/*.c "$B/$2" \
+                -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -lmsimg32 -liphlpapi -lws2_32 -lole32 -luuid -lwindowscodecs \
+                -lcomdlg32 -lshlwapi -lwininet -lversion -lwinspool || exit 1
+        done
+        CTL="$B/sg-control64.exe" SET="$B/sg-settings64.exe" ;;
     *) echo "unknown mutant $MUTANT"; exit 2 ;;
 esac
 
@@ -150,6 +162,57 @@ printf "FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT converted\t\nSAVED yes\nOK
 out=$(show "$CTL" "--page recovery" "Keep the conversion"); wineserver -k 2>/dev/null; sleep 1
 has "The system drive was converted" && has "Keep the conversion" && has "Undo the conversion..." \
     && pass "converted: Keep the conversion or Undo it" || fail "converted page"
+
+# --- SG Store restore points: named for the Store, kept apart from the updates ------------
+store_status() {
+    printf 'FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT none\t\n' > "$T/status"
+    printf 'SNAPSHOT 20261009-101500\t2026-10-09 10:15\tauto\tyes\tSG Store: gimp 2.10-1\tstore\n' >> "$T/status"
+    printf 'SNAPSHOT 20261008-185501\t2026-10-08 18:55\tauto\tyes\tUpdates: sg-shell 0.1.0-169 to 0.1.0-170\tupdate\n' >> "$T/status"
+    printf 'SAVED no\nOK\n' >> "$T/status"
+}
+store_status
+out=$(show "$SET" ms-settings:recovery "Restore points"); wineserver -k 2>/dev/null; sleep 1
+has "Before the SG Store change of 2026-10-09 10:15" && has "SG Store: gimp 2.10-1" && has "Before the update of 2026-10-08 18:55" \
+    && pass "Settings: a restore point from an SG Store change is 'Before the SG Store change of <date>', the update's 'Before the update of <date>'" \
+    || { fail "store restore point not named"; printf '%s\n' "$out" | head -30; }
+has "The last three from before updates are kept, and, apart from them, the last two from before SG Store installs" \
+    && pass "...and the page says what is kept: the last three before updates, apart, the last two before SG Store installs" || fail "retention text missing"
+# Get started goes back to the update's point, though the Store's is newer
+wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.snapshot=20261009-101500|2026-10-09 10:15|auto|yes|SG Store: gimp 2.10-1|store' \
+    && pass "the Control Panel's Recovery knows each point's pool (store | update)" || fail "dump lacks the pool"
+printf 'FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT none\t\nSNAPSHOT 20261009-101500\t2026-10-09 10:15\tauto\tyes\tSG Store: gimp 2.10-1\tstore\nSAVED no\nOK\n' > "$T/status"
+out=$(show "$SET" ms-settings:recovery "Restore points"); wineserver -k 2>/dev/null; sleep 1
+! has "Get started" && has "Go back to this version" \
+    && pass "with only an SG Store restore point: no 'Get started' (the previous version is the update's), the point is still listed to go back to" \
+    || { fail "Get started offered for a Store point"; printf '%s\n' "$out" | head -30; }
+printf 'FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT none\t\nWENTBACK 20261009-101500\t2026-10-09 10:15\tstore\nOK\n' > "$T/status"
+out=$(show "$SET" ms-settings:recovery "went back"); wineserver -k 2>/dev/null; sleep 1
+has "went back to the version from before the SG Store change of 2026-10-09 10:15" \
+    && pass "after going back to a Store point: said so, by its name" || fail "wentback wording: $(printf '%s\n' "$out" | grep -i 'went back')"
+
+# --- the conversion: 14 days to undo it, then it is kept by itself -----------------------------
+printf "FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT converted\t20261001-120000\nSAVED yes\nCONVERT_DEADLINE 11\t2026-10-23\nOK\n" > "$T/status"
+out=$(show "$CTL" "--page recovery" "Keep the conversion"); wineserver -k 2>/dev/null; sleep 1
+has "You can undo the conversion for 11 more days (until 2026-10-23). After that it is kept automatically" && has "Keep the conversion" \
+    && pass "converted: the page shows the days left (11), the day it is kept by itself, and that the old file system is then deleted" \
+    || { fail "days left not shown"; printf '%s\n' "$out" | head -20; }
+wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qx 'recovery.convert_days=11|2026-10-23' \
+    && pass "...and the dump says so" || fail "dump: convert_days"
+printf "FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT converted\t20261001-120000\nSAVED yes\nCONVERT_DEADLINE 1\t2026-10-10\nOK\n" > "$T/status"
+wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'for 1 more day (until 2026-10-10)' \
+    && pass "one day left: '1 more day'" || fail "singular"
+printf "FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT kept\t20261015-090000 auto\nSAVED no\nKEPT 2026-10-15 09:00\tauto\nOK\n" > "$T/status"
+out=$(show "$CTL" "--page recovery" "kept automatically"); wineserver -k 2>/dev/null; sleep 1
+has "The conversion was kept automatically on 2026-10-15 09:00, 14 days after it was made" && ! has "Keep the conversion" && ! has "Undo the conversion" \
+    && pass "after 14 days: 'The conversion was kept automatically on <date>' -- nothing left to keep or undo" \
+    || { fail "auto-kept page"; printf '%s\n' "$out" | head -20; }
+printf "FS btrfs\nLAYOUT yes\nBOOTED current\nCONVERT kept\t20261012-090000\nSAVED no\nKEPT 2026-10-12 09:00\tyou\nOK\n" > "$T/status"
+wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'You kept the conversion on 2026-10-12 09:00' \
+    && pass "kept by the person: 'You kept the conversion on <date>'" || fail "kept by you"
+ext4_status
+out=$(show "$CTL" "--page recovery" "Convert the system drive"); wineserver -k 2>/dev/null; sleep 1
+has "kept for 14 days" && has "kept automatically" && pass "the offer on ext4 says the old file system is kept for 14 days, then the conversion is kept automatically" \
+    || { fail "offer text"; printf '%s\n' "$out" | head -30; }
 
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

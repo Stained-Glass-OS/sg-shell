@@ -316,7 +316,13 @@ back up and sg-snapshot's PROBLEM lines; after a conversion, Keep / Undo.
 Every change is `/admin restore-point SUB [ID]` (`rp_elevated`, `rp_admin`)
 -> sg-admind's `restore-point` verb -> `sg-snapshot SUB`. Gate:
 `test/restore-points-check.sh` (Xvfb :131; a stand-in sg-snapshot behind a
-real spool), mutant `RP_CONVERT_ALWAYS`.
+real spool), mutants `RP_CONVERT_ALWAYS`, `RP_STORE_TITLE`, `RP_NO_DAYS`,
+`RP_PREVIOUS_STORE`. Store changes (`SG_SNAP_SOURCE=store`, set by sg-admind's
+`apt_get`; SNAPSHOT field 6 `pool`, WENTBACK field 3) are named "the SG Store
+change of ...", kept apart from updates (3 + 2), and never offered as Get
+started. "Undo the conversion" lasts 14 days: `CONVERT_DEADLINE days\tdate`
+shows the days left (`rp_convert_days_text`); after it, `KEPT when\tauto|you`
+shows that it was kept (`rp_kept_text`) and the Undo link is gone.
 
 ## Settings (sg-settings)
 

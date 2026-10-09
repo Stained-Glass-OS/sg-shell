@@ -1,3 +1,17 @@
+sg-shell (0.1.0-172) unstable; urgency=medium
+
+  * Restore points, three follow-ups (sg-session 0.1.0-183). SG Store
+    installs get their own restore points ("the SG Store change of <date>"),
+    kept apart from the updates' (last 3 + last 2); sg-admind marks Store
+    apt runs (SG_SNAP_SOURCE=store); a Store point is never "Get started".
+    Recovery says that "Undo the conversion" lasts 14 days, shows the days
+    left and the date, and, once the conversion was kept (by you or
+    automatically), says so. Gates: restore-points-check (mutants
+    RP_STORE_TITLE, RP_NO_DAYS, RP_PREVIOUS_STORE, RP_CONVERT_ALWAYS) and
+    admind-check (NOSOURCE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 09 Oct 2026 11:38:37 -0700
+
 sg-shell (0.1.0-171) unstable; urgency=medium
 
   * Restore points (sg-session 0.1.0-179's sg-snapshot). Settings > Update &

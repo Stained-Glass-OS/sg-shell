@@ -1022,7 +1022,9 @@ def apt_env():
 
 def apt_get(args, what, base=0, span=100):
     """apt-get with its status on a pipe: dlstatus (downloading) and pmstatus
-    (dpkg) lines become the progress file, base..base+span percent."""
+    (dpkg) lines become the progress file, base..base+span percent. Every use
+    is the SG Store's: its restore point (the APT hook, sg-snapshot) is kept
+    apart from the updates', SG_SNAP_SOURCE=store."""
     rfd, wfd = os.pipe()
     log_fd, log_path = tempfile.mkstemp(prefix="sg-apt-", dir=WORK_DIR)
     argv = ["apt-get", "-y", "-q", "-o", "APT::Status-Fd=%d" % wfd, "-o", "DPkg::Lock::Timeout=600",
@@ -1030,7 +1032,7 @@ def apt_get(args, what, base=0, span=100):
     try:
         try:
             p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log_fd, stderr=subprocess.STDOUT,
-                                 pass_fds=(wfd,), env=apt_env())
+                                 pass_fds=(wfd,), env=dict(apt_env(), SG_SNAP_SOURCE="store"))
         except FileNotFoundError:
             raise Refused("apt-get is not installed.")
         finally:

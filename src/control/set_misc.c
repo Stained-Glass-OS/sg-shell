@@ -587,24 +587,38 @@ static const WCHAR *rp_when_of(const WCHAR *id)
     return id;
 }
 
+/* "the update of <date>" or "the SG Store change of <date>" for a restore point's id */
+static const WCHAR *rp_before_of(const WCHAR *id, WCHAR *buf, int cch)
+{
+    int i;
+    BOOL store = FALSE;
+    for (i = 0; i < g_rp.n; i++) if (!lstrcmpW(g_rp.snap[i].id, id)) store = g_rp.snap[i].store;
+    rp_before_text(store, rp_when_of(id), buf, cch);
+    return buf;
+}
+
 /* the restore point to go back to with "Get started": the newest one taken
- * before an update, else the newest */
+ * before an update, else the newest by hand -- never one taken for an SG Store
+ * change (that one is for going back from a bad app, chosen in the list) */
 static int rp_previous(void)
 {
     int i;
-    for (i = 0; i < g_rp.n; i++) if (!lstrcmpW(g_rp.snap[i].kind, L"auto") && g_rp.snap[i].bootable) return i;
+#ifdef SG_MUTANT_RP_PREVIOUS_STORE
     for (i = 0; i < g_rp.n; i++) if (g_rp.snap[i].bootable) return i;
+#endif
+    for (i = 0; i < g_rp.n; i++) if (!lstrcmpW(g_rp.snap[i].kind, L"auto") && g_rp.snap[i].bootable && !g_rp.snap[i].store) return i;
+    for (i = 0; i < g_rp.n; i++) if (g_rp.snap[i].bootable && !g_rp.snap[i].store) return i;
     return -1;
 }
 
 void set_build_recovery(void)
 {
-    WCHAR line[600];
+    WCHAR line[600], what[96];
     int y = st_title(L"Recovery"), i;
     rp_read(&g_rp);
     if (g_rp.booted[0]) {
-        _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS is running as it was before the update of %ls. To keep this version, "
-                   L"make it the system; to go back to the current version, restart.", rp_when_of(g_rp.booted));
+        _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS is running as it was before %ls. To keep this version, "
+                   L"make it the system; to go back to the current version, restart.", rp_before_of(g_rp.booted, what, ARRAYSIZE(what)));
         y = st_card(y, IC_G_UPDATE, L"You started an earlier version", line);
         st_button(&y, L"Keep this version", CMD_RP_KEEP_THIS);
         st_button(&y, L"Restart", CMD_RP_RESTART);
@@ -622,14 +636,17 @@ void set_build_recovery(void)
                        L"Windows programs you installed, are kept.");
         if (!g_rp.booted[0] && !g_rp.pending_rollback && prev >= 0) st_button(&y, L"Get started", CMD_RP_GETSTARTED);
         if (g_rp.wentback[0]) {
-            _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS went back to the version from before the update of %ls.", g_rp.wentback);
+            rp_before_text(g_rp.wentback_store, g_rp.wentback, what, ARRAYSIZE(what));
+            _snwprintf(line, ARRAYSIZE(line), L"Stained Glass OS went back to the version from before %ls.", what);
             y = st_para(y, line);
         }
         y = st_head(y, L"Restore points");
-        if (!g_rp.n) y = st_para(y, L"There are no restore points yet. One is made before every update; the last three are kept.");
+        rp_retention_text(line, ARRAYSIZE(line));
+        y = st_para(y, line);
+        if (!g_rp.n) y = st_para(y, L"There are no restore points yet.");
         for (i = 0; i < g_rp.n; i++) {
             const struct rp_snap *p = &g_rp.snap[i];
-            _snwprintf(line, ARRAYSIZE(line), !lstrcmpW(p->kind, L"auto") ? L"Before the update of %ls" : L"%ls", p->when);
+            rp_snap_title(p, line, ARRAYSIZE(line));
             y = st_text(y, line);
             if (p->label[0]) y = st_para(y, p->label);
             if (!p->bootable) y = st_para(y, L"This restore point cannot be started: its Linux kernel is no longer installed.");

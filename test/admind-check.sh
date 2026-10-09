@@ -356,6 +356,7 @@ cat > "$B/apt-get" <<EOF
 fd=; last=
 for a in "\$@"; do case \$a in APT::Status-Fd=*) fd=\${a#APT::Status-Fd=} ;; esac; last=\$a; done
 printf 'apt-get %s\n' "\$*" >> "$CALLS"
+printf '%s\n' "\${SG_SNAP_SOURCE:-none}" >> "$T/apt-source"
 case " \$* " in *" update "*) exit 0 ;; esac
 [ -n "\$fd" ] && eval "printf 'pmstatus:x:50:Unpacking the thing\n' >&\$fd"
 sleep 0.6
@@ -379,6 +380,17 @@ export SG_ADMIN_DEBS="$DEBS" SG_ADMIN_WORK="$T/work"
 r=$(ask apt-install gimp)
 { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* install gimp$' "$CALLS" && printf '%s' "$r" | grep -q 'gimp 9.9'; } \
     && pass "apt-install runs apt-get install and answers the installed version" || fail "apt-install: $r / $(cat "$CALLS")"
+source_case() { # ADMIND -- what apt-get was told about who asked
+    : > "$T/apt-source"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"
+    sort -u "$T/apt-source" | tr '\n' ' '
+}
+[ "$(source_case "$ADMIND")" = "store " ] && pass "apt runs for the SG Store as SG_SNAP_SOURCE=store (its restore points are kept apart from the updates')" \
+    || fail "apt's SG_SNAP_SOURCE: $(sort -u "$T/apt-source" | tr '\n' ' ')"
+sed 's/, SG_SNAP_SOURCE="store"))/))/' "$ADMIND" > "$T/mut-nosource"
+grep -q 'SG_SNAP_SOURCE="store"' "$T/mut-nosource" && fail "the NOSOURCE mutant did not apply"
+[ "$(source_case "$T/mut-nosource")" != "store " ] && pass "MUTANT NOSOURCE (apt not told it is the Store) is caught" || fail "NOSOURCE not detected"
 grep -q '^PROGRESS [0-9]' "$T/progress-seen" 2>/dev/null && grep -q 'Unpacking the thing' "$T/progress-seen" \
     && pass "and publishes apt's progress while it runs" || fail "progress: $(cat "$T/progress-seen" 2>/dev/null)"
 [ -z "$(ls "$S"/replies/*.progress 2>/dev/null)" ] && pass "the progress file goes with the answer" || fail "progress left behind"
