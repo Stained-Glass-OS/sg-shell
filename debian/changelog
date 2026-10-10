@@ -1,3 +1,12 @@
+sg-shell (0.1.0-175) unstable; urgency=medium
+
+  * Recovery: the way to the restore points at start is Space or an arrow key,
+    not Esc. In a VM, Esc at systemd-boot's menu answers "Press Enter to
+    reboot into the firmware interface"; Space and the arrows hold the
+    countdown. Gate: restore-points-check (mutant RP_NO_HINT).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 09 Oct 2026 17:04:35 -0700
+
 sg-shell (0.1.0-174) unstable; urgency=medium
 
   * Recovery says how to reach the restore points when the PC starts: the boot

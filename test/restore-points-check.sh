@@ -177,9 +177,9 @@ has "Before the SG Store change of 2026-10-09 10:15" && has "SG Store: gimp 2.10
     || { fail "store restore point not named"; printf '%s\n' "$out" | head -30; }
 has "The last three from before updates are kept, and, apart from them, the last two from before SG Store installs" \
     && pass "...and the page says what is kept: the last three before updates, apart, the last two before SG Store installs" || fail "retention text missing"
-has "press Esc (or an arrow key) to stop the countdown, then choose a restore point" \
-    && wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.menu_hint=Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Esc' \
-    && pass "Settings and the Control Panel say how to reach the restore points at start: press Esc during the boot menu's countdown" || fail "boot menu hint missing"
+has "press Space (or an arrow key) to stop the countdown, then choose a restore point" \
+    && wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.menu_hint=Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Space' \
+    && pass "Settings and the Control Panel say how to reach the restore points at start: press Space during the boot menu's countdown" || fail "boot menu hint missing"
 # Get started goes back to the update's point, though the Store's is newer
 wine "$CTL" --dump recovery 2>/dev/null | tr -d '\r' | grep -qF 'recovery.snapshot=20261009-101500|2026-10-09 10:15|auto|yes|SG Store: gimp 2.10-1|store' \
     && pass "the Control Panel's Recovery knows each point's pool (store | update)" || fail "dump lacks the pool"

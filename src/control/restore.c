@@ -128,7 +128,7 @@ void rp_menu_hint_text(WCHAR *out, int cch)
 #ifdef SG_MUTANT_RP_NO_HINT
     lstrcpynW(out, L"Restore points are also in the boot menu.", cch);
 #else
-    lstrcpynW(out, L"Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Esc (or an "
+    lstrcpynW(out, L"Restore points are also in the boot menu, which shows for a few seconds when your PC starts: press Space (or an "
               L"arrow key) to stop the countdown, then choose a restore point.", cch);
 #endif
 }
