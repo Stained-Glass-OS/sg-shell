@@ -1,0 +1,60 @@
+#!/bin/sh
+# sg-location on|off|apply -- the device's location switch: Settings > Privacy
+# > Location ("Location access for this device") and the first-run setup's
+# Location choice (David 2026-10-12: the Linux location service, with a
+# setting to turn it off and a choice at setup). GeoClue, the Linux location
+# service, runs only while it is on: off masks geoclue.service, so neither a
+# Windows program (wine-sg's Windows.Devices.Geolocation asks GeoClue, and
+# also honours the per-user switches) nor a Linux one can start it.
+#
+# on|off records the choice in /etc/stained-glass/location and applies it.
+# apply (the package's postinst) applies the recorded choice; never recorded,
+# the device switch the shared prefix's registry holds (the first-run setup
+# writes it), and with none there, on -- what Settings shows for a switch
+# never set, as Windows does.
+#
+# SG_LOCATION_SETTING, SG_LOCATION_HIVE, SG_LOCATION_SYSTEMCTL: the test.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -u
+SETTING=${SG_LOCATION_SETTING:-/etc/stained-glass/location}
+HIVE=${SG_LOCATION_HIVE:-/var/lib/stained-glass/prefix/system.reg}
+SYSTEMCTL=${SG_LOCATION_SYSTEMCTL:-systemctl}
+
+# the device switch in the shared prefix's HKLM: Allow, Deny or nothing
+from_hive() {
+    [ -r "$HIVE" ] || return 0
+    awk '
+        /^\[/ { inkey = (tolower($0) ~ /^\[software\\\\microsoft\\\\windows\\\\currentversion\\\\capabilityaccessmanager\\\\consentstore\\\\location\]/); next }
+        inkey && tolower($0) ~ /^"value"="/ { v = $0; sub(/^"[Vv]alue"="/, "", v); sub(/".*/, "", v); print v; exit }
+    ' "$HIVE"
+}
+
+apply() {   # on|off
+    if [ "$1" = on ]; then
+        "$SYSTEMCTL" unmask geoclue.service >/dev/null 2>&1
+    else
+        "$SYSTEMCTL" mask geoclue.service >/dev/null 2>&1
+        "$SYSTEMCTL" stop geoclue.service >/dev/null 2>&1
+    fi
+    echo "sg-location: $1"
+}
+
+record() {
+    mkdir -p "$(dirname "$SETTING")" || return 1
+    printf '%s\n' "$1" > "$SETTING.sg-new" && chmod 644 "$SETTING.sg-new" && mv "$SETTING.sg-new" "$SETTING"
+}
+
+case "${1:-}" in
+on|off)
+    record "$1" || { echo "sg-location: $SETTING not written" >&2; exit 1; }
+    apply "$1" ;;
+apply)
+    v=$(cat "$SETTING" 2>/dev/null)
+    case "$v" in
+    on|off) ;;
+    *) case "$(from_hive)" in [Dd][Ee][Nn][Yy]) v=off ;; *) v=on ;; esac ;;
+    esac
+    apply "$v" ;;
+*)
+    echo "usage: sg-location on|off|apply" >&2; exit 2 ;;
+esac

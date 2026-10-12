@@ -56,6 +56,15 @@ override_dh_auto_install:
 	install -D -m0644 admin/sg-timezone-auto.service debian/sg-shell/usr/lib/systemd/system/sg-timezone-auto.service
 	install -D -m0644 admin/sg-timezone-auto.timer debian/sg-shell/usr/lib/systemd/system/sg-timezone-auto.timer
 	install -D -m0755 admin/sg-timezone-auto.nm-dispatcher debian/sg-shell/usr/lib/NetworkManager/dispatcher.d/90-sg-timezone-auto
+	# Location (Settings > Privacy > Location, the first-run setup): GeoClue,
+	# the Linux location service, runs while the device's switch is on
+	install -D -m0755 admin/sg-location debian/sg-shell/usr/libexec/stained-glass/sg-location
+	install -D -m0644 admin/geoclue-stained-glass.conf debian/sg-shell/etc/geoclue/conf.d/90-stained-glass.conf
+	# GeoClue answers a person's programs only once their agent registered
+	install -D -m0755 admin/sg-geoclue-agent debian/sg-shell/usr/libexec/stained-glass/sg-geoclue-agent
+	install -D -m0644 admin/sg-geoclue-agent.service debian/sg-shell/usr/lib/systemd/user/sg-geoclue-agent.service
+	install -d debian/sg-shell/usr/lib/systemd/user/default.target.wants
+	ln -sf ../sg-geoclue-agent.service debian/sg-shell/usr/lib/systemd/user/default.target.wants/sg-geoclue-agent.service
 	# Window colours and other registry defaults: sg-prefix-init imports these
 	# into every new prefix's Default User profile.
 	# Wallpapers: our own art, generated here (theme/wallpapers).

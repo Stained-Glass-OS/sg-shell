@@ -1,0 +1,11 @@
+[Unit]
+Description=Location agent for GeoClue (Stained Glass OS)
+Documentation=file:///usr/libexec/stained-glass/sg-geoclue-agent
+
+[Service]
+ExecStart=/usr/libexec/stained-glass/sg-geoclue-agent
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

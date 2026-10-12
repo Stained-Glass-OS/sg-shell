@@ -1,0 +1,11 @@
+#!/bin/sh
+# Location: GeoClue runs only while the device's switch is on (sg-location);
+# a machine that had it before this package knew keeps its choice. A GeoClue
+# already running re-reads its configuration (our agent, 90-stained-glass.conf).
+set -e
+if [ "$1" = configure ]; then
+    /usr/libexec/stained-glass/sg-location apply >/dev/null 2>&1 || true
+    systemctl try-restart geoclue.service >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

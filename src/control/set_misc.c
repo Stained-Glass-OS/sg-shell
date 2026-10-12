@@ -288,6 +288,16 @@ BOOL privacy_mic_allowed(void)
 int privacy_admin_consent(const WCHAR *cap, const WCHAR *v)
 {
     if (lstrcmpW(cap, L"microphone") && lstrcmpW(cap, L"webcam") && lstrcmpW(cap, L"location")) return 2;
+    /* location: GeoClue, the Linux location service, runs only while the device's switch is on (sg-location),
+     * for Linux programs too; the switch is not changed when that fails */
+    if (!lstrcmpW(cap, L"location")) {
+        const WCHAR *req[] = { L"location", !lstrcmpW(v, L"on") ? L"on" : L"off" };
+        WCHAR msg[512];
+        if (!admin_request(req, 2, msg, ARRAYSIZE(msg), 60000)) {
+            message(NULL, L"Location", msg, TRUE);
+            return 1;
+        }
+    }
     set_consent(HKEY_LOCAL_MACHINE, cap, NULL, !lstrcmpW(v, L"on"));
     return consent(HKEY_LOCAL_MACHINE, cap, NULL) == !lstrcmpW(v, L"on") ? 0 : 1;
 }
@@ -314,6 +324,10 @@ static void build_capability(const WCHAR *title, const WCHAR *cap, const WCHAR *
     EnableWindow(c, device && consent(HKEY_CURRENT_USER, cap, NULL));
     if (!lstrcmpW(cap, L"microphone"))
         y = st_para(y, L"Voice typing (Win+H) is a desktop app: with any of these off, it does not listen.");
+    if (!lstrcmpW(cap, L"location"))
+        y = st_para(y, L"This PC's location comes from GeoClue, the Linux location service: from the Wi-Fi networks nearby, "
+                       L"looked up in beaconDB, an open database. With access for this device off, the service does not run, "
+                       L"for Linux programs either.");
 }
 
 void set_build_priv_mic(void) { build_capability(L"Microphone", L"microphone", L"microphone"); }

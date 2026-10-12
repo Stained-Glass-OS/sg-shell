@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+# sg-geoclue-agent -- GeoClue's agent for each signed-in person (a systemd user
+# service). GeoClue 2.7 answers a person's programs only once an agent for
+# that person has registered (Manager.AddAgent), and asks it about any program
+# its configuration does not name. Ours says yes: whether location is used at
+# all is the device's switch (Settings > Privacy > Location; sg-location
+# masks GeoClue when it is off), and Windows programs ("wine" in
+# 90-stained-glass.conf, allowed there) are checked against the per-user
+# switches by wine-sg before they ask.
+#
+# GeoClue starts on demand and exits when idle: the agent registers each time
+# it appears on the system bus, and never starts it.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+import sys
+
+from gi.repository import Gio, GLib
+
+AGENT_ID = "stained-glass"          # [agent] whitelist in 90-stained-glass.conf
+ACCURACY_EXACT = 8                  # GClueAccuracyLevel EXACT
+XML = """<node><interface name="org.freedesktop.GeoClue2.Agent">
+  <property name="MaxAccuracyLevel" type="u" access="read"/>
+  <method name="AuthorizeApp">
+    <arg name="desktop_id" type="s" direction="in"/>
+    <arg name="req_accuracy_level" type="u" direction="in"/>
+    <arg name="authorized" type="b" direction="out"/>
+    <arg name="allowed_accuracy_level" type="u" direction="out"/>
+  </method>
+</interface></node>"""
+
+
+def method(conn, sender, path, iface, name, params, invocation):
+    if name == "AuthorizeApp":
+        _app, level = params.unpack()
+        invocation.return_value(GLib.Variant("(bu)", (True, min(level, ACCURACY_EXACT))))
+    else:
+        invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", name)
+
+
+def prop(conn, sender, path, iface, name):
+    return GLib.Variant("u", ACCURACY_EXACT) if name == "MaxAccuracyLevel" else None
+
+
+def appeared(conn, name, owner):
+    # asynchronously: GeoClue reads MaxAccuracyLevel from us before it answers
+    def done(c, res):
+        try:
+            c.call_finish(res)
+            print("sg-geoclue-agent: registered with GeoClue", flush=True)
+        except GLib.Error as e:
+            print("sg-geoclue-agent: not registered: %s" % e.message, file=sys.stderr, flush=True)
+    conn.call("org.freedesktop.GeoClue2", "/org/freedesktop/GeoClue2/Manager", "org.freedesktop.GeoClue2.Manager",
+              "AddAgent", GLib.Variant("(s)", (AGENT_ID,)), None, Gio.DBusCallFlags.NO_AUTO_START, 20000, None, done)
+
+
+def main():
+    conn = Gio.bus_get_sync(Gio.BusType.SYSTEM)
+    iface = Gio.DBusNodeInfo.new_for_xml(XML).interfaces[0]
+    conn.register_object("/org/freedesktop/GeoClue2/Agent", iface, method, prop, None)
+    Gio.bus_watch_name_on_connection(conn, "org.freedesktop.GeoClue2", Gio.BusNameWatcherFlags.NONE,
+                                     appeared, None)
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -400,6 +400,7 @@ test: build
 	@sh test/updates-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/dictate-linux-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/timezone-auto-test.sh
+	@sh test/location-check.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
 	@sh test/printers-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

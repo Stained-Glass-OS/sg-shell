@@ -1,3 +1,25 @@
+sg-shell (0.1.0-176) unstable; urgency=medium
+
+  * Location (David 2026-10-12: the Linux location service, with a setting to
+    turn it off and a choice at setup): GeoClue (geoclue-2.0, now a
+    dependency) runs only while Settings > Privacy > Location's "Location
+    access for this device" is on. sg-location masks and stops
+    geoclue.service when it is off, for Linux programs too; sg-admind's new
+    "location on|off" runs it, and Settings asks for it before changing the
+    switch. The package applies the first-run setup's choice (the shared
+    prefix's HKLM ConsentStore) on install. GeoClue 2.7 answers a person's
+    programs only once an agent for them registered: sg-geoclue-agent, a
+    systemd user service at each sign-in, registers whenever GeoClue appears
+    (never starting it) and allows what asks; Windows programs ask as "wine"
+    (wine-sg's geolocation checks the per-user switches first). Checked in
+    the QA VM: a location in under a second, none with the switch off
+    ("unit is masked"). A GeoClue already running is restarted on upgrade, so
+    it reads the new configuration. The page says where the location comes
+    from (nearby Wi-Fi, beaconDB). Gates: location-check (mutants NODENY,
+    NOSTOP), admind-check.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 12 Oct 2026 14:39:45 -0700
+
 sg-shell (0.1.0-175) unstable; urgency=medium
 
   * Recovery: the way to the restore points at start is Space or an arrow key,

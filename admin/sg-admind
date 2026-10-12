@@ -41,6 +41,8 @@
 #   user-remove NAME keep|delete
 #   timezone AREA/CITY                 (and "automatically" off)
 #   timezone-auto on|off                Set time zone automatically (sg-timezone-auto)
+#   location on|off                     the device's location switch: GeoClue runs
+#                                       only while on (sg-location)
 #   ntp on|off
 #   time YYYY-MM-DD HH:MM:SS                 (only with synchronisation off)
 #   update-check
@@ -453,6 +455,20 @@ def op_timezone_auto(args):
     write_tz_auto(v)
     if v == "on" and not TEST:
         subprocess.run(["systemctl", "start", "--no-block", "sg-timezone-auto.service"], check=False)
+    return []
+
+
+LOCATION_TOOL = os.environ.get("SG_ADMIN_LOCATION_TOOL", "/usr/libexec/stained-glass/sg-location")
+
+
+def op_location(args):
+    """The device's location switch (Settings > Privacy > Location): GeoClue on or off"""
+    (v,) = args
+    if v not in ("on", "off"):
+        raise Refused("Location access for this device is on or off.")
+    r = run([LOCATION_TOOL, v], timeout=60)
+    if r.returncode != 0:
+        raise Refused("Location access could not be changed.")
     return []
 
 
@@ -1526,6 +1542,7 @@ OPS = {
     "user-remove": (op_user_remove, 2),
     "timezone": (op_timezone, 1),
     "timezone-auto": (op_timezone_auto, 1),
+    "location": (op_location, 1),
     "ntp": (op_ntp, 1),
     "defender": (op_defender, 1),
     "power-buttons": (op_power_buttons, 3),

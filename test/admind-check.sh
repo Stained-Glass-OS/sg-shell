@@ -34,7 +34,7 @@ sudo:x:27:owner
 EOF
 
 # every stand-in records its name, arguments and stdin
-for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join apt-get runuser; do
+for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join apt-get runuser sg-location; do
     cat > "$B/$tool" <<EOF
 #!/bin/sh
 in=\$(cat 2>/dev/null)
@@ -68,7 +68,8 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf"
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf" \
+    SG_ADMIN_LOCATION_TOOL="$B/sg-location"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -183,6 +184,16 @@ grep -q '^timedatectl set-timezone America/Denver ' "$CALLS" && pass "sets the t
 [ "$(cat "$T/tz-auto" 2>/dev/null)" = off ] && pass "...and a zone chosen by hand turns 'automatically' off" || fail "tz-auto after a zone: $(cat "$T/tz-auto" 2>/dev/null)"
 r=$(ask timezone-auto on)
 [ "$(first "$r")" = OK ] && [ "$(cat "$T/tz-auto")" = on ] && pass "turns 'Set time zone automatically' on" || fail "timezone-auto on: $r"
+# the device's location switch (Settings > Privacy > Location): sg-location turns GeoClue on or off
+: > "$CALLS"
+r=$(ask location off)
+[ "$(first "$r")" = OK ] && grep -q '^sg-location off ' "$CALLS" && pass "turns location off for the device (sg-location off)" || fail "location off: $r $(cat "$CALLS")"
+: > "$CALLS"
+r=$(ask location on)
+[ "$(first "$r")" = OK ] && grep -q '^sg-location on ' "$CALLS" && pass "...and on" || fail "location on: $r"
+: > "$CALLS"
+r=$(ask location maybe)
+case "$(first "$r")" in "FAILED "*) ! grep -q sg-location "$CALLS" && pass "...only on or off" || fail "location maybe ran sg-location" ;; *) fail "accepted location maybe" ;; esac
 # what the power button and the lid do (Power & sleep): logind's, a drop-in of our own
 r=$(ask power-buttons ignore suspend hibernate)
 [ "$(first "$r")" = OK ] && grep -qx 'HandleLidSwitch=ignore' "$T/logind.d/60-sg-power.conf" \
