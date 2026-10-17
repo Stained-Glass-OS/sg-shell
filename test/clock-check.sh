@@ -181,9 +181,6 @@ else fail "the alarm did not go off: $(grep '^alarm\|^toast' "$DUMP")"; fi
 wine reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Run' /v 'Stained Glass Clock' 2>/dev/null | grep -q '/background' \
     && pass "with an alarm on, it starts with the session (HKCU Run /background)" || fail "no Run entry"
 set -- $(at 'btn pivot 0'); xdotool mousemove "$1" "$2" click 1; sleep 0.3
-# the title bar too: after the toast's buttons, a click in the page alone does
-# not always make it the active window (field report 2026-10-17 #12)
-xdotool mousemove "$1" $(( $2 - 50 )) click 1; sleep 0.5
 key_close() { xdotool key alt+F4; sleep 1; }
 key_close
 wait_grep '^visible 0' 5 && pass "closing the window hides it; the alarms go on" || fail "visible: $(D visible)"

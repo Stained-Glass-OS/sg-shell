@@ -1,3 +1,11 @@
+sg-shell (0.1.0-179) unstable; urgency=medium
+
+  * Gate clock: Alt+F4 straight after a click in the page again (the
+    title-bar click is gone). The lost Alt+F4 was Wine's: with two programs
+    hooking the keyboard, keys came out of order (wine-sg 5935, 10.0-456).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 17 Oct 2026 15:20:22 -0700
+
 sg-shell (0.1.0-178) unstable; urgency=medium
 
   * Field report 2026-10-17, second part:
