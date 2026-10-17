@@ -1,3 +1,23 @@
+sg-shell (0.1.0-178) unstable; urgency=medium
+
+  * Field report 2026-10-17, second part:
+    - Tray flyouts (Wi-Fi, Battery, Volume): one open at a time; a click
+      elsewhere closes them even when they never became active; the Wi-Fi
+      list keeps its networks while a rescan runs (gate flyout-toggle,
+      mutant FLYOUT_STAYS).
+    - Media Player: every video renderer is the player's (no "ActiveMovie
+      Window" of its own for a film with cover art; the film is the biggest
+      stream); full screen shows the controls over the film while the
+      pointer moves and hides them and the pointer when it rests (gate media,
+      mutants MEDIA_STRAY_RENDERER, MEDIA_CURSOR_STAYS).
+    - Computer Management / Disk Management: the toolbar's verb buttons are
+      rebuilt only when they change, the Actions pane paints without erasing:
+      no flicker on a click (gate diskmgmt, mutant MMC_TOOLBAR_FLICKER).
+    - Control Panel: the Programs icon is our mark (four glass tiles as a
+      diamond, in our colours).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 17 Oct 2026 12:16:37 -0700
+
 sg-shell (0.1.0-177) unstable; urgency=medium
 
   * Field report 2026-10-17:

@@ -207,6 +207,7 @@ static void make_fonts(void);
 
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_flyout_should_hide(hwnd, msg, wp)) { ShowWindow(hwnd, SW_HIDE); return 0; }
     switch (msg)
     {
     case WM_PAINT: fly_paint(hwnd); return 0;
@@ -274,6 +275,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 place_flyout();
                 ShowWindow(g_fly, SW_SHOW);
                 SetForegroundWindow(g_fly);
+                sg_flyout_shown(g_fly);
                 InvalidateRect(g_fly, NULL, FALSE);
             }
         }

@@ -133,10 +133,21 @@ static void refresh(BOOL pumped, BOOL rescan)
     }
     net_reply_free(&r);
 
-    g_nnets = 0;
+    if (!g_has_wifi) g_nnets = 0;
     if (g_has_wifi)
     {
+        /* the list is built aside and replaces the shown one when the answer
+         * is in: while a rescan runs (the window keeps painting) and when it
+         * comes back empty, the networks already listed stay (David,
+         * 2026-10-17: it went blank for a second) */
+        static struct wnet old[MAX_NETS];
+        int nold = g_nnets;
+        memcpy(old, g_nets, sizeof(old));
         pumped ? net_request_pumped(rescan ? 3 : 2, sc, NULL, &r) : net_request_argv(rescan ? 3 : 2, sc, NULL, &r);
+#ifndef SG_MUTANT_WIFI_BLANKS
+        if (!r.ok || !r.nlines) { net_reply_free(&r); goto radio; }
+#endif
+        g_nnets = 0;
         for (i = 0; r.ok && i < r.nlines && g_nnets < MAX_NETS; i++)
         {
             /* WIFI signal \t security \t in-use \t saved \t hex \t name */
@@ -160,6 +171,8 @@ static void refresh(BOOL pumped, BOOL rescan)
         /* the connected network first, as Windows lists it */
         for (i = 1; i < g_nnets; i++)
             if (g_nets[i].inuse) { struct wnet t = g_nets[i]; memmove(&g_nets[1], &g_nets[0], i * sizeof(t)); g_nets[0] = t; break; }
+        if (!g_nnets && nold) { memcpy(g_nets, old, sizeof(old)); g_nnets = nold; }
+radio:
         pumped ? net_request_pumped(3, ra, NULL, &r) : net_request_argv(3, ra, NULL, &r);
         {
             const char *v = net_field(&r, 0, "RADIO", 0);
@@ -790,6 +803,7 @@ static void show_flyout(void)
     place_flyout();
     ShowWindow(g_fly, SW_SHOW);
     SetForegroundWindow(g_fly);
+    sg_flyout_shown(g_fly);
     InvalidateRect(g_fly, NULL, FALSE);
     /* then look again, properly: a rescan takes a few seconds */
     if (g_has_wifi && !g_busy)
@@ -889,6 +903,7 @@ static void make_fonts(void)
 
 static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (sg_flyout_should_hide(hwnd, msg, wp)) { if (!g_busy) { ShowWindow(hwnd, SW_HIDE); g_fly_hidden = GetTickCount(); } return 0; }
     switch (msg)
     {
     case WM_PAINT: on_paint(hwnd); return 0;

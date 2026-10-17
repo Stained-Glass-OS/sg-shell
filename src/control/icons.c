@@ -290,12 +290,17 @@ static void paint_icon(HDC dc, int icon)
         brush_ellipse(dc, RGB(0x1E, 0x6F, 0xD9), 34, 31, 41, 38);
         brush_ellipse(dc, RGB(0xF2, 0xB1, 0x1B), 40, 37, 47, 44);
         break;
-    case IC_PROG:                       /* an app grid */
-        brush_rect(dc, RGB(0x1E, 0x6F, 0xD9), 6, 6, 30, 30, 8);
-        brush_rect(dc, RGB(0x10, 0x9E, 0x5A), 34, 6, 58, 30, 8);
-        brush_rect(dc, RGB(0xF2, 0xA0, 0x1F), 6, 34, 30, 58, 8);
-        brush_rect(dc, RGB(0x9B, 0x3C, 0xC9), 34, 34, 58, 58, 8);
+    case IC_PROG: {                     /* our mark (sg-taskbar.c): four glass tiles set as a diamond */
+        static const COLORREF glass[4] = { RGB(0x7B, 0x2F, 0xBE), RGB(0xC4, 0x2E, 0x8E), RGB(0xE8, 0xA2, 0x00), RGB(0x12, 0xB5, 0xB0) };
+        static const int at[4][2] = { { 32, 14 }, { 50, 32 }, { 32, 50 }, { 14, 32 } };
+        int k;
+        for (k = 0; k < 4; k++) {
+            int x = at[k][0], y = at[k][1], h = 13;
+            int xy[8] = { x, y - h, x + h, y, x, y + h, x - h, y };
+            brush_poly(dc, glass[k], xy, 4);
+        }
         break;
+    }
     case IC_USERS:
         person(dc, RGB(0x8A, 0x9B, 0xB5), 40, 8, 22);
         person(dc, RGB(0x1E, 0x6F, 0xD9), 26, 16, 26);

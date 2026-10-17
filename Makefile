@@ -316,7 +316,12 @@ test-flyout-toggle: build
 	     -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows || exit 1; \
 	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe SG_NOTIFY_EXE=$(BUILD)/sg-notify-mut.exe sh test/flyout-toggle-check.sh >/dev/null 2>&1; rc=$$?; \
 	 [ $$rc -eq 1 ] || { echo "flyout-toggle-check: the mutant FLYOUT_REOPENS was not caught ($$rc)"; exit 1; }; \
-	 echo "flyout-toggle-check: mutant FLYOUT_REOPENS caught"
+	 echo "flyout-toggle-check: mutant FLYOUT_REOPENS caught"; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_FLYOUT_STAYS -o $(BUILD)/sg-volume-mut.exe src/sg-volume.c \
+	     -lshell32 -luser32 -lgdi32 -municode -mwindows || exit 1; \
+	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe sh test/flyout-toggle-check.sh 2>&1 | grep -q 'FAIL  Volume open, another flyout opens' \
+	     || { echo "flyout-toggle-check: the mutant FLYOUT_STAYS was not caught"; exit 1; }; \
+	 echo "flyout-toggle-check: mutant FLYOUT_STAYS caught"
 
 # The touch keyboard (sg-touchkbd): test/touchkbd-check.sh, and each mutant
 # build must fail it.

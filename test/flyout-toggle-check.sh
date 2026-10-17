@@ -75,5 +75,20 @@ clk $VP 0.3; # shellcheck disable=SC2086
 clk $NP 0.3
 [ "$(P vis SgVolumeFlyout)$(P vis SgNotifyPanel)" = 01 ] && pass "with Volume open, a click on Notifications' icon opens Notifications (and Volume closes)" \
     || fail "Volume then Notifications: $(P vis SgVolumeFlyout)/$(P vis SgNotifyPanel) (want 0/1)"
+# a click elsewhere closes it even when it never became the active window
+# (David, 2026-10-17: Wi-Fi stayed open over Notepad); SG_MUTANT_FLYOUT_STAYS
+away
+# shellcheck disable=SC2086
+clk $VP 0.1
+v1=$(P vis SgVolumeFlyout)
+xdotool mousemove 800 300 click 1; sleep 1.5
+v2=$(P vis SgVolumeFlyout)
+[ "$v1$v2" = 10 ] && pass "a click on the desktop closes Volume" || fail "Volume open, click on the desktop: $v1 -> $v2 (want 1 -> 0)"
+# another flyout opening (Wi-Fi, Battery: they say so to the others) closes it
+# shellcheck disable=SC2086
+clk $VP 0.1
+v1=$(P vis SgVolumeFlyout); P opened x; sleep 1
+v2=$(P vis SgVolumeFlyout)
+[ "$v1$v2" = 10 ] && pass "another flyout opening closes Volume" || fail "Volume open, another flyout opens: $v1 -> $v2 (want 1 -> 0)"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

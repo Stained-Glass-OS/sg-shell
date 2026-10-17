@@ -241,6 +241,15 @@ open_console
 d | grep -q '^BANNER Disk 1 reports (SMART) that it is failing' && pass "a banner warns about the failing disk" || fail "banner: $(d | grep '^BANNER')"
 shot smart
 xy=$(d | awk -F'\t' '$1 ~ /^DISK / && $2 == "sdb" { print $4 }')
+# selecting again leaves the toolbar's buttons be: put back on every click,
+# they flickered (David, 2026-10-17); SG_MUTANT_MMC_TOOLBAR_FLICKER
+# shellcheck disable=SC2086
+[ -n "$xy" ] && xdotool mousemove $xy click 1; sleep 1
+r0=$(d | sed -n 's/^TOOLBAR_REBUILDS //p')
+# shellcheck disable=SC2086
+[ -n "$xy" ] && { xdotool mousemove $xy click 1; sleep 0.6; xdotool mousemove $xy click 1; sleep 1; }
+r1=$(d | sed -n 's/^TOOLBAR_REBUILDS //p')
+[ -n "$r0" ] && [ "$r0" = "$r1" ] && pass "clicking the disk again does not rebuild the toolbar ($r0 rebuilds)" || fail "toolbar rebuilt on each click: $r0 -> $r1"
 # shellcheck disable=SC2086
 [ -n "$xy" ] && xdotool mousemove $xy click --repeat 2 1; sleep 2
 if wait_dump '^MSG Disk 1\|.*reports \(SMART\) that it is failing.*.*C\): 51\|Reallocated sectors: 112\|' 5; then pass "the disk's Properties: failing, 51 C, 112 reallocated sectors"

@@ -52,6 +52,9 @@ EOF
 ffmpeg -loglevel error -y -f lavfi -i color=c=0x20A060:size=320x240:rate=25:duration=20 \
     -f lavfi -i sine=frequency=330:duration=20 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$T/clip.mp4" \
     || { echo "SKIP: ffmpeg cannot make an H.264 clip"; exit 77; }
+ffmpeg -loglevel error -y -f lavfi -i color=c=0x20A060:size=320x240:rate=25:duration=10 -f lavfi -i color=c=red:size=96x96:rate=1:duration=10 \
+    -f lavfi -i sine=duration=10 -map 0 -map 1 -map 2 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$T/cover.mkv" \
+    || { echo "SKIP: ffmpeg cannot make a two-stream clip"; exit 77; }
 ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=25:duration=8 -c:v libvpx "$T/second.webm" \
     || { echo "SKIP: ffmpeg cannot make a VP8 clip"; exit 77; }
 # MPEG-4 Part 2 in AVI: Wine's own AVI splitter renders only its sound, so this
@@ -154,8 +157,27 @@ set -- $(D VIDEORECT)
 shot fullscreen
 px=$(pixel fullscreen 512 384)
 near "$px" "32 160 96" 40 && pass "full screen shows the clip ($px)" || fail "full screen centre is '$px'"
+# the controls over the film at first; still for a while, they go and the
+# pointer with them; the pointer moves, they are back (David, 2026-10-17)
+c0=$(D FSCONTROLS); sleep 4.5
+c1=$(D FSCONTROLS); h1=$(D CURSORHIDDEN)
+xdotool mousemove_relative 30 20; sleep 1
+c2=$(D FSCONTROLS); h2=$(D CURSORHIDDEN)
+[ "$c0$c1$h1$c2$h2" = 10110 ] && pass "full screen: controls first, gone with the pointer when it rests, back when it moves" \
+    || fail "full-screen controls/pointer: start $c0, at rest $c1/$h1 (want 0/1), moved $c2/$h2 (want 1/0)"
+shot fullscreen-controls
+set -- $(D PLAYRECT)
+[ -n "$1" ] && [ "$4" -le 768 ] && [ "$2" -ge 600 ] && pass "...over the film, at the bottom of the screen (Play at $1,$2)" || fail "full-screen Play button: $*"
 xdotool key Escape; sleep 1
 [ "$(D FULLSCREEN)" = 0 ] && pass "Escape leaves full screen" || fail "Escape did not leave full screen"
+[ "$(D CURSORHIDDEN)" = 0 ] && pass "...and the pointer shows" || fail "pointer still hidden after full screen"
+
+# --- a film with a second video stream (cover art): no window of its own ------------------
+wine "$winexe" "$(wine winepath -w "$T/cover.mkv" | tr -d '\r')" >/dev/null 2>&1 &
+i=0; while ! D FILE | grep -q 'cover.mkv' && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
+wait_for STATE Playing 20; sleep 2
+[ "$(D STRAYWINDOWS)" = 0 ] && [ "$(D VIDEO)" = "1 320 240" ] && pass "two video streams: the film in the player, no 'ActiveMovie Window' of its own" \
+    || fail "two video streams: $(D STRAYWINDOWS) stray windows, video '$(D VIDEO)' $(D STATE) $(D ERROR)"
 
 # --- a queue of three, and Next -----------------------------------------------------------------
 wine "$winexe" "$(wine winepath -w "$T/tone.wav" | tr -d '\r')" "$(wine winepath -w "$T/second.webm" | tr -d '\r')" \

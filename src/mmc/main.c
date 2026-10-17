@@ -70,6 +70,7 @@ static WCHAR g_console[32] = L"";   /* services, eventvwr, ... */
 static WCHAR g_title[128] = L"Console Root";
 static BOOL g_show_tree = TRUE, g_show_actions = TRUE, g_show_toolbar = TRUE;
 static int g_tree_w = 270, g_actions_w = 210;
+static int g_toolbar_rebuilds;   /* the verbs' buttons put back (the gate: not on every click) */
 static RECT g_center, g_list_rc;
 static WCHAR g_banner_text[512];
 static WCHAR g_last_msg[1024];
@@ -527,13 +528,42 @@ static void build_links(void)
         if (g_cur->ops && g_cur->ops->open) add_link(CMD_PROPS, L"Properties", IC_PROPS, FALSE, TRUE);
         add_link(CMD_HELP, L"Help", IC_HELP, FALSE, TRUE);
     }
-    InvalidateRect(g_actions, NULL, TRUE);
+    InvalidateRect(g_actions, NULL, FALSE);   /* its WM_PAINT fills it all: no erase, no blink */
 }
 
+/* the verbs' buttons are taken off and put back only when they change: done on
+ * every click, it made the toolbar's icons flicker (David, 2026-10-17: Computer
+ * and Disk Management, the icons beside the one clicked) */
 static void rebuild_toolbar(void)
 {
+    static int last_sig[2 * MAX_VERBS + 2], last_n = -1;
+    int sig[2 * MAX_VERBS + 2], sn = 0;
     int n = (int)SendMessageW(g_toolbar, TB_BUTTONCOUNT, 0, 0), i;
     TBBUTTON b;
+    for (i = 0; i < g_node_verbs.n && sn < ARRAY_SIZE(sig); i++)
+        if (g_node_verbs.v[i].icon >= 0) sig[sn++] = (TB_NODEVERB + i) << 12 | g_node_verbs.v[i].icon;
+    for (i = 0; i < g_row_verbs.n && sn < ARRAY_SIZE(sig); i++)
+        if (g_row_verbs.v[i].icon >= 0) sig[sn++] = (TB_VERB + i) << 12 | g_row_verbs.v[i].icon;
+#ifndef SG_MUTANT_MMC_TOOLBAR_FLICKER
+    if (sn == last_n && n == FIXED_BUTTONS + sn && !memcmp(sig, last_sig, sn * sizeof(int)))
+    {
+        /* the same buttons: only what may be clicked changes */
+        SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_BACK, g_hist_pos > 0);
+        SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_FORWARD, g_hist_pos + 1 < g_hist_n);
+        SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_UP, g_cur && g_cur->parent && g_cur->parent != &g_roots);
+        SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_PROPS, g_have_row && g_cur && g_cur->ops && g_cur->ops->open);
+        SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_EXPORT, g_cur && !g_cur->custom);
+        for (i = 0; i < g_node_verbs.n; i++)
+            if (g_node_verbs.v[i].icon >= 0) SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_NODEVERB + i, g_node_verbs.v[i].enabled);
+        for (i = 0; i < g_row_verbs.n; i++)
+            if (g_row_verbs.v[i].icon >= 0) SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_VERB + i, g_row_verbs.v[i].enabled);
+        return;
+    }
+#endif
+    memcpy(last_sig, sig, sn * sizeof(int));
+    last_n = sn;
+    g_toolbar_rebuilds++;
+    SendMessageW(g_toolbar, WM_SETREDRAW, FALSE, 0);
     while (n > FIXED_BUTTONS) SendMessageW(g_toolbar, TB_DELETEBUTTON, --n, 0);
     SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_BACK, g_hist_pos > 0);
     SendMessageW(g_toolbar, TB_ENABLEBUTTON, TB_FORWARD, g_hist_pos + 1 < g_hist_n);
@@ -560,6 +590,8 @@ static void rebuild_toolbar(void)
         b.fsStyle = BTNS_BUTTON;
         SendMessageW(g_toolbar, TB_ADDBUTTONSW, 1, (LPARAM)&b);
     }
+    SendMessageW(g_toolbar, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(g_toolbar, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
 }
 
 void frame_update_verbs(void)
@@ -721,6 +753,7 @@ static LRESULT CALLBACK actions_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
+    case WM_ERASEBKGND: return 1;   /* WM_PAINT fills it */
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -925,6 +958,7 @@ void frame_dump(void)
         ImageList_GetIconSize(g_icons, &cx, &cy);
         fprintf(f, "DPI %d\nICONS %d\n", g_dpi, cx);
     }
+    fprintf(f, "TOOLBAR_REBUILDS %d\n", g_toolbar_rebuilds);
     fprintf(f, "NODE %ls\n", g_cur ? g_cur->title : L"");
     fprintf(f, "CUSTOM %d\n", g_cur ? g_cur->custom : 0);
     dump_tree(f, g_roots.child, 0);

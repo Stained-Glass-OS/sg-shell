@@ -8,6 +8,8 @@ int wmain(int argc, WCHAR **argv)
     HWND h;
     if (argc < 3) return 2;
     h = FindWindowW(argv[2], NULL);
+    /* "another flyout opened" (src/sg-flyout.h), as the Wi-Fi or Battery flyout says it */
+    if (!lstrcmpW(argv[1], L"opened")) { PostMessageW(HWND_BROADCAST, RegisterWindowMessageW(L"SgFlyoutOpened"), 1, 0); return 0; }
     if (!lstrcmpW(argv[1], L"vis")) { printf("%d\n", h && IsWindowVisible(h)); return 0; }
     if (h)
     {

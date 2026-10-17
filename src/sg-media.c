@@ -22,6 +22,7 @@
 #include <shellapi.h>
 #include <commdlg.h>
 #include <dshow.h>
+#include <dvdmedia.h>
 #include <math.h>
 #include <stdio.h>
 #include <wchar.h>
@@ -103,6 +104,14 @@ static LONGLONG g_drag_pos;
 static int g_volume = 80;          /* 0..100 */
 static BOOL g_muted;
 static BOOL g_fullscreen;
+/* full screen: the controls over the film while the pointer moves, gone with
+ * the pointer after a few still seconds (David, 2026-10-17) */
+#define CLASS_FSBAR L"SgMediaFullScreenBar"
+#define FS_HIDE_MS 2500
+static HWND g_fsbar;
+static BOOL g_fs_ui, g_cursor_hidden;
+static POINT g_fs_pt;
+static DWORD g_fs_moved;
 static WINDOWPLACEMENT g_placement = { sizeof(WINDOWPLACEMENT) };
 static LONG g_saved_style;
 static WCHAR g_dump_path[MAX_PATH];
@@ -164,6 +173,24 @@ static void screen_rect(const RECT *r, RECT *out)
     SetRect(out, a.x, a.y, b.x, b.y);
 }
 
+/* a window of ours on its own that is not the player (a video renderer's
+ * "ActiveMovie Window" left unowned): the gate counts them */
+static BOOL CALLBACK stray_proc(HWND w, LPARAM lp)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    if (pid == GetCurrentProcessId() && w != g_main && w != g_fsbar && IsWindowVisible(w) && !GetWindow(w, GW_OWNER))
+        ++*(int *)lp;
+    return TRUE;
+}
+
+static int stray_windows(void)
+{
+    int n = 0;
+    EnumWindows(stray_proc, (LPARAM)&n);
+    return n;
+}
+
 static void write_dump(void)
 {
     WCHAR tmp[MAX_PATH + 8], line[1200], title[512];
@@ -189,6 +216,10 @@ static void write_dump(void)
     put_utf8(f, line);
     screen_rect(&g_hit[H_NEXT], &r);
     _snwprintf(line, ARRAYSIZE(line), L"NEXTRECT %ld %ld %ld %ld\n", r.left, r.top, r.right, r.bottom);
+    put_utf8(f, line);
+    _snwprintf(line, ARRAYSIZE(line), L"STRAYWINDOWS %d\n", stray_windows());
+    put_utf8(f, line);
+    _snwprintf(line, ARRAYSIZE(line), L"FSCONTROLS %d\nCURSORHIDDEN %d\n", g_fs_ui && g_fsbar && IsWindowVisible(g_fsbar), g_cursor_hidden);
     put_utf8(f, line);
     _snwprintf(line, ARRAYSIZE(line), L"FULLSCREEN %d\nQUEUE %d %d\nTITLE %s\nERROR %s\nEND\n", g_fullscreen,
                g_current, g_nqueue, title, g_error);
@@ -358,7 +389,7 @@ static void layout(void)
     RECT c;
     int cx, y, bar_h = S(100), top_h = S(44);
     GetClientRect(g_main, &c);
-    if (g_fullscreen)
+    if (g_fullscreen && !g_fs_ui)
     {
         g_content = c;
         SetRectEmpty(&g_bar); SetRectEmpty(&g_topbar);
@@ -366,10 +397,21 @@ static void layout(void)
     }
     else
     {
-        SetRect(&g_topbar, 0, 0, c.right, top_h);
-        SetRect(&g_bar, 0, max(top_h, c.bottom - bar_h), c.right, c.bottom);
-        SetRect(&g_content, 0, top_h, c.right, g_bar.top);
-        SetRect(&g_hit[H_OPEN], S(8), S(6), S(8) + S(112), top_h - S(6));
+        if (g_fullscreen)
+        {
+            /* the controls float over the film, at the bottom of the screen */
+            memset(g_hit, 0, sizeof(g_hit));
+            SetRectEmpty(&g_topbar);
+            SetRect(&g_bar, 0, c.bottom - bar_h, c.right, c.bottom);
+            g_content = c;
+        }
+        else
+        {
+            SetRect(&g_topbar, 0, 0, c.right, top_h);
+            SetRect(&g_bar, 0, max(top_h, c.bottom - bar_h), c.right, c.bottom);
+            SetRect(&g_content, 0, top_h, c.right, g_bar.top);
+            SetRect(&g_hit[H_OPEN], S(8), S(6), S(8) + S(112), top_h - S(6));
+        }
         y = g_bar.top + S(10);
         SetRect(&g_hit[H_SEEK], S(64), y, c.right - S(64), y + S(24));
         y = g_bar.top + S(44);
@@ -636,6 +678,84 @@ static void place_video(void)
     IVideoWindow_SetWindowPosition(g_vw, x, y, w, h);
 }
 
+/* Every video renderer in the graph is ours: a film can carry more than one
+ * video stream (cover art beside the film, an MP4's "attached picture"), and
+ * a renderer left alone opens its own top-level "ActiveMovie Window" -- a
+ * second taskbar button that does nothing, and closing it stops the film
+ * (David, 2026-10-17). The first connected one shows the film in the player;
+ * any other is kept hidden inside it. The film's size, when IBasicVideo
+ * does not say it, comes from that renderer's connection. */
+static void own_video_renderers(void)
+{
+    IEnumFilters *en;
+    IBaseFilter *f, *best = NULL;
+    long best_area = -1, bw = 0, bh = 0;
+    if (!g_graph || FAILED(IGraphBuilder_EnumFilters(g_graph, &en))) return;
+    /* which renderer has the film: the biggest picture */
+    while (IEnumFilters_Next(en, 1, &f, NULL) == S_OK)
+    {
+        IVideoWindow *vw;
+        long w = 0, h = 0;
+        BOOL connected = FALSE;
+        if (SUCCEEDED(IBaseFilter_QueryInterface(f, &IID_IVideoWindow, (void **)&vw)))
+        {
+            IEnumPins *pins;
+            IPin *pin;
+            if (SUCCEEDED(IBaseFilter_EnumPins(f, &pins)))
+            {
+                while (!connected && IEnumPins_Next(pins, 1, &pin, NULL) == S_OK)
+                {
+                    AM_MEDIA_TYPE mt;
+                    if (SUCCEEDED(IPin_ConnectionMediaType(pin, &mt)))
+                    {
+                        const BITMAPINFOHEADER *bih = NULL;
+                        connected = TRUE;
+                        if (mt.pbFormat && IsEqualGUID(&mt.formattype, &FORMAT_VideoInfo) && mt.cbFormat >= sizeof(VIDEOINFOHEADER))
+                            bih = &((VIDEOINFOHEADER *)mt.pbFormat)->bmiHeader;
+                        else if (mt.pbFormat && IsEqualGUID(&mt.formattype, &FORMAT_VideoInfo2) && mt.cbFormat >= sizeof(VIDEOINFOHEADER2))
+                            bih = &((VIDEOINFOHEADER2 *)mt.pbFormat)->bmiHeader;
+                        if (bih) { w = bih->biWidth; h = abs(bih->biHeight); }
+                        CoTaskMemFree(mt.pbFormat);
+                        if (mt.pUnk) IUnknown_Release(mt.pUnk);
+                    }
+                    IPin_Release(pin);
+                }
+                IEnumPins_Release(pins);
+            }
+            /* every one in the player, none on its own */
+#ifndef SG_MUTANT_MEDIA_STRAY_RENDERER
+            IVideoWindow_put_Owner(vw, (OAHWND)g_video);
+            IVideoWindow_put_WindowStyle(vw, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+            IVideoWindow_put_MessageDrain(vw, (OAHWND)g_main);
+            IVideoWindow_put_AutoShow(vw, OAFALSE);
+            IVideoWindow_put_Visible(vw, OAFALSE);
+#endif
+            if (connected && w * h > best_area)
+            {
+                if (best) IBaseFilter_Release(best);
+                best = f; IBaseFilter_AddRef(best);
+                best_area = w * h; bw = w; bh = h;
+            }
+            IVideoWindow_Release(vw);
+        }
+        IBaseFilter_Release(f);
+    }
+    IEnumFilters_Release(en);
+    if (!best) return;
+    /* the film's renderer, its own interfaces (the graph's speak for the first one only) */
+    if (g_vw) IVideoWindow_Release(g_vw);
+    if (g_bv) IBasicVideo_Release(g_bv);
+    g_vw = NULL; g_bv = NULL;
+    IBaseFilter_QueryInterface(best, &IID_IVideoWindow, (void **)&g_vw);
+    IBaseFilter_QueryInterface(best, &IID_IBasicVideo, (void **)&g_bv);
+    IVideoWindow_put_AutoShow(g_vw, OATRUE);
+    if (!g_bv || FAILED(IBasicVideo_get_SourceWidth(g_bv, &g_vid_w)) || FAILED(IBasicVideo_get_SourceHeight(g_bv, &g_vid_h)))
+    {
+        g_vid_w = bw; g_vid_h = bh;
+    }
+    IBaseFilter_Release(best);
+}
+
 static void close_media(void)
 {
     if (g_control) IMediaControl_Stop(g_control);
@@ -763,7 +883,9 @@ static BOOL open_current(BOOL play)
     IMediaSeeking_SetTimeFormat(g_seek, &TIME_FORMAT_MEDIA_TIME);
     IMediaSeeking_GetDuration(g_seek, &g_duration);
     if (g_events) IMediaEventEx_SetNotifyWindow(g_events, (OAHWND)g_main, WM_GRAPHNOTIFY, 0);
-    if (g_bv && SUCCEEDED(IBasicVideo_get_SourceWidth(g_bv, &g_vid_w)) &&
+    own_video_renderers();
+    if (g_vid_w > 0 && g_vid_h > 0) g_has_video = TRUE;
+    else if (g_bv && SUCCEEDED(IBasicVideo_get_SourceWidth(g_bv, &g_vid_w)) &&
         SUCCEEDED(IBasicVideo_get_SourceHeight(g_bv, &g_vid_h)) && g_vid_w > 0 && g_vid_h > 0)
         g_has_video = TRUE;
     if (g_has_video)
@@ -908,6 +1030,9 @@ static void open_dialog(void)
     while (n--) free(files[n]);
 }
 
+static void set_cursor_hidden(BOOL hide);
+static void place_fsbar(void);
+
 static void set_fullscreen(BOOL on)
 {
     if (on == g_fullscreen) return;
@@ -930,8 +1055,14 @@ static void set_fullscreen(BOOL on)
         SetWindowPlacement(g_main, &g_placement);
         SetWindowPos(g_main, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
+    /* in: the controls show first, then go when the pointer rests; out: gone */
+    GetCursorPos(&g_fs_pt);
+    g_fs_moved = GetTickCount();
+    g_fs_ui = g_fullscreen;
+    if (!g_fullscreen) set_cursor_hidden(FALSE);
     layout();
     place_video();
+    place_fsbar();
     InvalidateRect(g_main, NULL, FALSE);
 }
 
@@ -1031,6 +1162,100 @@ static BOOL key(WPARAM vk)
     return FALSE;
 }
 
+/* ---- full screen: the floating controls and the pointer --------------------------------- */
+
+static void set_cursor_hidden(BOOL hide)
+{
+    POINT pt;
+    if (hide == g_cursor_hidden) return;
+    g_cursor_hidden = hide;
+    if (g_vw) g_vw->lpVtbl->HideCursor(g_vw, hide ? OATRUE : OAFALSE);   /* the film's own window */
+    SetCursor(hide ? NULL : LoadCursorW(NULL, (LPCWSTR)IDC_ARROW));
+    /* the window under the pointer asks again (WM_SETCURSOR) */
+    if (GetCursorPos(&pt)) SetCursorPos(pt.x, pt.y);
+}
+
+static void place_fsbar(void)
+{
+    RECT r;
+    if (!g_fsbar) return;
+    if (!g_fullscreen || !g_fs_ui || IsRectEmpty(&g_bar)) { ShowWindow(g_fsbar, SW_HIDE); return; }
+    screen_rect(&g_bar, &r);
+    SetWindowPos(g_fsbar, HWND_TOPMOST, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    InvalidateRect(g_fsbar, NULL, FALSE);
+}
+
+static void fs_show_ui(BOOL on)
+{
+    g_fs_ui = on;
+    layout();
+    place_fsbar();
+#ifndef SG_MUTANT_MEDIA_CURSOR_STAYS
+    set_cursor_hidden(g_fullscreen && !on);
+#endif
+    write_dump();
+}
+
+/* every tick in full screen: the pointer moved -- the controls; still for a
+ * while, and not over them -- they go, and the pointer with them */
+static void fs_tick(void)
+{
+    POINT pt;
+    RECT r;
+    if (!g_fullscreen || !GetCursorPos(&pt)) return;
+    if (pt.x != g_fs_pt.x || pt.y != g_fs_pt.y)
+    {
+        g_fs_pt = pt;
+        g_fs_moved = GetTickCount();
+        if (!g_fs_ui) fs_show_ui(TRUE);
+        else set_cursor_hidden(FALSE);
+        return;
+    }
+    if (g_fs_ui && GetTickCount() - g_fs_moved > FS_HIDE_MS && !g_dragging_seek && g_pressed == H_NONE)
+    {
+        if (g_fsbar && GetWindowRect(g_fsbar, &r) && PtInRect(&r, pt)) return;
+        fs_show_ui(FALSE);
+    }
+    if (g_fs_ui && g_fsbar) InvalidateRect(g_fsbar, NULL, FALSE);
+}
+
+static LRESULT CALLBACK fsbar_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg)
+    {
+    case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps), mem;
+        RECT c;
+        HBITMAP bmp, ob;
+        GetClientRect(hwnd, &c);
+        mem = CreateCompatibleDC(dc);
+        bmp = CreateCompatibleBitmap(dc, c.right, c.bottom);
+        ob = SelectObject(mem, bmp);
+        SetViewportOrgEx(mem, -g_bar.left, -g_bar.top, NULL);
+        paint_bar(mem);
+        SetViewportOrgEx(mem, 0, 0, NULL);
+        BitBlt(dc, 0, 0, c.right, c.bottom, mem, 0, 0, SRCCOPY);
+        SelectObject(mem, ob);
+        DeleteObject(bmp);
+        DeleteDC(mem);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_LBUTTONDBLCLK: case WM_MOUSEWHEEL:
+        if (msg != WM_MOUSEWHEEL)
+            lp = MAKELPARAM(GET_X_LPARAM(lp) + g_bar.left, GET_Y_LPARAM(lp) + g_bar.top);
+        g_fs_moved = GetTickCount();
+        SendMessageW(g_main, msg, wp, lp);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
 static LRESULT CALLBACK video_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
@@ -1045,6 +1270,9 @@ static LRESULT CALLBACK video_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE: place_video(); return 0;
     case WM_LBUTTONDBLCLK: set_fullscreen(!g_fullscreen); return 0;
     case WM_LBUTTONDOWN: SetFocus(g_main); return 0;
+    case WM_SETCURSOR:
+        if (g_cursor_hidden && LOWORD(lp) == HTCLIENT) { SetCursor(NULL); return TRUE; }
+        break;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -1060,6 +1288,8 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         g_main = hwnd;
         g_video = CreateWindowExW(0, CLASS_VIDEO, NULL, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0,
                                   hwnd, NULL, g_inst, NULL);
+        g_fsbar = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, CLASS_FSBAR, NULL, WS_POPUP,
+                                  0, 0, 0, 0, hwnd, NULL, g_inst, NULL);
         DragAcceptFiles(hwnd, TRUE);
         SetTimer(hwnd, TIMER_TICK, 200, NULL);
         return 0;
@@ -1098,6 +1328,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (!g_duration) IMediaSeeking_GetDuration(g_seek, &g_duration);
             if (!g_fullscreen) InvalidateRect(hwnd, &g_bar, FALSE);
         }
+        fs_tick();
         write_dump();
         return 0;
     case WM_GRAPHNOTIFY: handle_graph_events(); return 0;
@@ -1271,6 +1502,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     wc.lpszClassName = CLASS_VIDEO;
     wc.hIcon = wc.hIconSm = NULL;
     wc.hbrBackground = GetStockObject(BLACK_BRUSH);
+    RegisterClassExW(&wc);
+    wc.lpfnWndProc = fsbar_proc;
+    wc.lpszClassName = CLASS_FSBAR;
+    wc.hbrBackground = NULL;
     RegisterClassExW(&wc);
 
     sgm_dark = sg_apps_dark();
