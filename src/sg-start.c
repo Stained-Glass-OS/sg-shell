@@ -570,7 +570,8 @@ static void build_list(void)
     add_beside(L"SG Office Presentations", L"sg-presentations64.exe");
     add_beside(L"Magnifier", L"sg-magnify64.exe");
     add_beside(L"On-Screen Keyboard", L"sg-osk64.exe");
-    add_beside(L"Get a web browser", L"sg-browser64.exe");
+    /* "Get a web browser" is no longer listed (the Store offers browsers); it
+     * stays only as the web-link handler until a browser is installed */
     add_beside(L"SG Store", L"sg-store64.exe");
     add_beside(L"Linux Terminal", L"sg-rootterm64.exe");
     add_beside(L"Report a problem", L"sg-bugreport64.exe");

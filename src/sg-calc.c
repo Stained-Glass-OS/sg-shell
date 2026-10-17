@@ -184,6 +184,9 @@ static num g_mem[MAX_LIST]; static int g_nmem;
 static BOOL g_side, g_overlay, g_nav, g_show_mem;
 
 static HWND g_hwnd;
+static DWORD g_glow;                 /* clicking the result copies it: when, for the glow */
+#define GLOW_MS 900
+#define ID_GLOW 7
 static int g_dpi = 96;
 static WCHAR g_dump[MAX_PATH];
 
@@ -1378,6 +1381,20 @@ static void paint(HDC out)
     }
     if (px <= 12) { f = font(12, FW_SEMIBOLD); of = SelectObject(dc, f); }
     SetTextColor(dc, C_TEXT);
+    if (g_glow)
+    {
+        /* copied: the result glows in the accent colour and fades back */
+        DWORD t = GetTickCount() - g_glow;
+        int k = t >= GLOW_MS ? 0 : 255 - (int)(t * 255 / GLOW_MS);
+        COLORREF a = C_ACCENT, b = C_BG, tx = C_TEXT;
+        RECT g = L.result;
+#define MIX(x, y, w) RGB((GetRValue(x) * (w) + GetRValue(y) * (255 - (w))) / 255, \
+                         (GetGValue(x) * (w) + GetGValue(y) * (255 - (w))) / 255, \
+                         (GetBValue(x) * (w) + GetBValue(y) * (255 - (w))) / 255)
+        fill(dc, &g, MIX(a, b, k / 4));
+        SetTextColor(dc, MIX(a, tx, k));
+#undef MIX
+    }
     DrawTextW(dc, text, -1, &L.result, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, of); DeleteObject(f);
 
@@ -1460,6 +1477,8 @@ static void dump(void)
     dump_line(f, L"MODE %ls", MODE_NAME[g_mode]);
     display_text(text, 256, FALSE);
     dump_line(f, L"DISPLAY %ls", text);
+    dump_line(f, L"RESULT %d %d %d %d", o.x + L.result.left, o.y + L.result.top, L.result.right - L.result.left, L.result.bottom - L.result.top);
+    dump_line(f, L"GLOW %d", g_glow != 0);
     display_text(text, 256, TRUE);
     dump_line(f, L"SHOWN %ls", text);
     dump_line(f, L"EXPR %ls", g_expr);
@@ -1580,6 +1599,14 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     }
+    case WM_TIMER:
+        if (wp == ID_GLOW)
+        {
+            if (GetTickCount() - g_glow >= GLOW_MS) { g_glow = 0; KillTimer(hwnd, ID_GLOW); }
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+        break;
     case WM_MOUSELEAVE:
         g_hover = -1;
         InvalidateRect(hwnd, NULL, FALSE);
@@ -1594,6 +1621,14 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             /* a click outside an overlay closes it */
             if (g_nav) g_nav = FALSE; else g_overlay = FALSE;
             refresh();
+            return 0;
+        }
+        if (h == -1 && PtInRect(&L.result, pt))
+        {
+            copy_result();
+            g_glow = GetTickCount();
+            SetTimer(hwnd, ID_GLOW, 30, NULL);
+            InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
         g_pressed = h >= 0 && g_btn[h].enabled ? h : -1;

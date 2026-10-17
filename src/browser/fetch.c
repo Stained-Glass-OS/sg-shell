@@ -274,7 +274,7 @@ BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *
 #ifdef SG_MUTANT_NOHASH
     memcpy(digest, p->sha256, 32);
 #endif
-    if (memcmp(digest, p->sha256, 32)) {
+    if (!p->nohash && memcmp(digest, p->sha256, 32)) {
         seterr(err, cch, L"The download is not the file its maker published (its SHA-256 does not match), so it was not run.");
         goto done;
     }

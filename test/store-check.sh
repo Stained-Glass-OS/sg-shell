@@ -942,7 +942,7 @@ if waitfor "$D" '^window 1' 60; then
         pass "a click on Fake App opens its page"
         grep -q "^detail-desc Fake App's first paragraph, the long one,|over two lines.||Its second paragraph: everything it does.$" "$D" \
             && pass "...with its whole description, from the winget repository's locale manifest" || fail "description: $(field detail-desc)"
-        grep -q '^detail-source .*winget community repository lists it (Fake.App).*SHA-256' "$D" && pass "...where it comes from (its maker's site, as winget lists it, checked)" \
+        grep -q '^detail-source .*winget catalog lists it (Fake.App).*checksum' "$D" && pass "...where it comes from (its maker's site, as winget lists it, checked)" \
             || fail "source: $(field detail-source)"
         [ "$(field detail-homepage)" = https://fake.example/app ] && [ "$(field detail-license)" = MIT ] && [ "$(field detail-version)" = 1.10.0 ] \
             && pass "...its site, licence and latest version" || fail "facts: $(field detail-homepage) $(field detail-license) $(field detail-version)"

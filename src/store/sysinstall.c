@@ -1027,6 +1027,40 @@ static void deb_dump(debwin_t *d)
     MoveFileExW(tmp, d->dump, MOVEFILE_REPLACE_EXISTING);
 }
 
+/* A Linux app its maker ships as a .deb of its own (DebUrl, https only, in the
+ * catalog): download it, check it is the package the catalog names, then the
+ * same consent and sg-admind deb-install as a double-clicked .deb. Such a
+ * package (Valve's steam.deb) adds its maker's apt source, so later versions
+ * come with the system's updates. */
+int sys_install_deb_url(const app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
+{
+    static package_t p;
+    static debwin_t d;
+    WCHAR args[2048], q1[MAX_PATH + 4], q2[200], q3[200];
+    int code;
+    memset(&p, 0, sizeof(p)); memset(&d, 0, sizeof(d));
+    lstrcpynW(p.url, a->deb_url, ARRAYSIZE(p.url));
+    lstrcpynW(p.type, L"deb", ARRAYSIZE(p.type));
+    p.nohash = TRUE;
+    if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
+    lstrcpynW(d.file, p.file, MAX_PATH);
+    deb_read_info(&d);
+    if (!d.valid || lstrcmpiW(d.pkg, a->apt_pkg)) {
+        _snwprintf(err, cch, L"The download is not the package %ls, so it was not installed.", a->apt_pkg);
+        pkg_cleanup(&p);
+        return 1;
+    }
+    quote_arg(q1, ARRAYSIZE(q1), d.file);
+    quote_arg(q2, ARRAYSIZE(q2), d.pkg);
+    quote_arg(q3, ARRAYSIZE(q3), d.version);
+    _snwprintf(args, ARRAYSIZE(args), L"--elevated-deb %ls %ls %ls", q1, q2, q3);
+    args[ARRAYSIZE(args) - 1] = 0;
+    code = elevate_wait(args);
+    outcome_text(code, a->name, FALSE, err, cch);
+    pkg_cleanup(&p);
+    return code;
+}
+
 static RECT deb_button(HWND hwnd, int which)     /* 0 primary (Install / Close), 1 Cancel */
 {
     RECT c, b;

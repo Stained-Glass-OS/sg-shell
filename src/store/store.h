@@ -61,6 +61,9 @@ typedef struct {
      * by the Uninstall entries' DisplayName (detect_name), a Linux one by
      * dpkg's state of apt_pkg -- never the other way round */
     WCHAR detect_name[128];       /* "Name|Other|!Not this" -- see name_matches() */
+    BOOL  also_in_category;       /* a Linux app also listed under its Category (Steam in Games) */
+    WCHAR deb_url[512];           /* SRC_LINUX_APT: the maker's own .deb (DebUrl), installed
+                                   * when its package is in no apt source (Valve's steam.deb) */
     WCHAR run[260];               /* what Open starts: SRC_LINUX_APT, a Unix program;
                                    * SRC_OURS_APT, a Windows program (App Paths name) */
     WCHAR icon_url[512];          /* Icon: its picture (https: or a file) -- icons.c */
@@ -113,6 +116,7 @@ void    icons_rescale(int px);
 /* sysinstall.c: system packages (Linux apps, .deb files) through the
  * administrator's consent and sg-admind */
 enum { SYS_OK = 0, SYS_DENIED = 1, SYS_FAILED = 10, SYS_CANCELLED = 11 };
+int  sys_install_deb_url(const app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 int  sys_install_apt(const app_t *a, WCHAR *err, int cch);     /* from the store: elevate, wait */
 int  sys_remove_apt(const app_t *a, WCHAR *err, int cch);      /* Uninstall: elevate, wait */
 int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / -apt-remove / -deb */

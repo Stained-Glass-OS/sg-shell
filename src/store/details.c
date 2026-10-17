@@ -242,14 +242,15 @@ void details_source(const app_t *a, const details_t *d, WCHAR *out, int cch)
     WCHAR host[256] = L"";
     switch (a->method) {
     case SRC_WINGET:
-        swprintf(out, cch, L"A Windows program, downloaded from its maker's own site as the winget community "
-                 L"repository lists it (%ls), and installed only if the file is exactly the one listed there (SHA-256).",
+        swprintf(out, cch, L"A Windows program from its maker's site, as the winget catalog lists it (%ls). "
+                 L"The download must match the catalog's checksum; new versions arrive as the catalog updates.",
                  a->winget_id);
         break;
     case SRC_PIN:
         url_host(a->pin_url, host, ARRAYSIZE(host));
-        swprintf(out, cch, L"A Windows program, downloaded from %ls, and installed only if the file is exactly "
-                 L"the one this store expects (SHA-256).", host[0] ? host : L"its maker's site");
+        swprintf(out, cch, L"A Windows program from %ls. The download must match this store's checksum; "
+                 L"a new version from its maker installs once the store is updated for it.",
+                 host[0] ? host : L"its maker's site");
         break;
     case SRC_OURS_APT:
         swprintf(out, cch, L"Made for Stained Glass OS: the package %ls from the Stained Glass repository%ls%ls%ls, "
@@ -257,6 +258,12 @@ void details_source(const app_t *a, const details_t *d, WCHAR *out, int cch)
                  d && d->origin[0] ? L" (" : L"", d && d->origin[0] ? d->origin : L"", d && d->origin[0] ? L")" : L"");
         break;
     case SRC_LINUX_APT:
+        if (a->deb_url[0] && !(d && d->origin[0])) {
+            url_host(a->deb_url, host, ARRAYSIZE(host));
+            swprintf(out, cch, L"A Linux app: its maker's own package %ls, downloaded from %ls. It adds its maker's "
+                     L"update source, so new versions come with the system's updates.", a->apt_pkg, host);
+            break;
+        }
         if (d && d->origin[0]) url_host(d->origin, host, ARRAYSIZE(host));
         swprintf(out, cch, L"A Linux app: the package %ls%ls%ls%ls, installed with the system's package manager and "
                  L"kept up to date with the system's updates.", a->apt_pkg,

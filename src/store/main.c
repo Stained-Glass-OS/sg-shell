@@ -235,7 +235,7 @@ static void list_view(int *view, int *n)
         if (a->is_alt) continue;      /* its Windows build's card offers it */
         if (linux_tab && a->alt >= 0) { if (!g_query[0] || matches_query(a, g_query)) view[(*n)++] = i; continue; }
         if (g_cat > 0 && lstrcmpiW(app_section(a), g_cats[g_cat]) && lstrcmpiW(a->category, g_cats[g_cat])) continue;
-        if (g_cat > 0 && a->tier == TIER_LINUX && lstrcmpiW(g_cats[g_cat], LINUX_SECTION)) continue;
+        if (g_cat > 0 && a->tier == TIER_LINUX && lstrcmpiW(g_cats[g_cat], LINUX_SECTION) && !a->also_in_category) continue;
         if (g_query[0] && !matches_query(a, g_query)) continue;
         view[(*n)++] = i;
     }

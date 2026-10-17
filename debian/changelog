@@ -1,3 +1,19 @@
+sg-shell (0.1.0-177) unstable; urgency=medium
+
+  * Field report 2026-10-17:
+    - Calculator: clicking the result copies it and it glows (gate calc).
+    - Alarms & Clock: alarm and timer cards stretch to the window's width;
+      the first start's 7:00 alarm is saved (it no longer vanishes); a new
+      alarm's time is picked from Hour/Minute lists; the reset icon's
+      arrowhead is at the arc's end (gate clock).
+    - SG Store: shorter "Where it comes from" that says how new versions
+      arrive; Steam installs from Valve's own steam.deb (DebUrl) and is
+      listed under Games too (AlsoInCategory).
+    - Start: "Get a web browser" is no longer listed (the Store offers
+      browsers; it stays the web-link handler until one is installed).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 17 Oct 2026 09:54:20 -0700
+
 sg-shell (0.1.0-176) unstable; urgency=medium
 
   * Location (David 2026-10-12: the Linux location service, with a setting to

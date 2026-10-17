@@ -3153,6 +3153,9 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00171a21
 "Tier"="linux"
 "Source"="linux:apt:steam-launcher"
+; Valve's own .deb (its package adds Valve's apt source for updates); also under Games
+"DebUrl"="https://cdn.akamai.steamstatic.com/client/installer/steam.deb"
+"AlsoInCategory"="1"
 "Run"="/usr/share/applications/steam.desktop"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.valvesoftware.Steam.png"
 

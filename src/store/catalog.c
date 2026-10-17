@@ -120,6 +120,13 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"Category", a->category, ARRAYSIZE(a->category));
         reg_str(item, L"DetectName", a->detect_name, ARRAYSIZE(a->detect_name));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
+        reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
+        {
+            WCHAR also[8] = L"";
+            reg_str(item, L"AlsoInCategory", also, ARRAYSIZE(also));
+            a->also_in_category = also[0] == L'1';
+        }
+        if (_wcsnicmp(a->deb_url, L"https://", 8)) a->deb_url[0] = 0;
         reg_str(item, L"PinVersion", a->pin_version, ARRAYSIZE(a->pin_version));
         reg_str(item, L"Icon", a->icon_url, ARRAYSIZE(a->icon_url));
         reg_str(item, L"Linux", a->linux_ord, ARRAYSIZE(a->linux_ord));
@@ -623,6 +630,7 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
         /* a system package: apt, as root, through the administrator's
          * consent and sg-admind (sysinstall.c); our own (SG Office's) are
          * registered in the Windows side as they install */
+        if (a->deb_url[0]) return sys_install_deb_url(a, progress, ctx, cancel, err, cch);
         return sys_install_apt(a, err, cch);
     default:
         lstrcpynW(err, L"This app's source is not understood.", cch);

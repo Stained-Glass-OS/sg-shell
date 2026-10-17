@@ -31,6 +31,7 @@ typedef struct {
     BOOL elevate;               /* ElevationRequirement: elevationRequired -- ask for an administrator first */
     BOOL elevated;              /* the installer was started as an administrator (runas) */
     BYTE sha256[32];
+    BOOL nohash;                /* a catalog-fixed https .deb with no published hash (SG Store DebUrl) */
     WCHAR file[MAX_PATH];       /* the download */
     WCHAR command[1024];        /* the installer's arguments, as run */
     ULONGLONG size;

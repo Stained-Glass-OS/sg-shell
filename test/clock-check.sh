@@ -112,7 +112,7 @@ click 'btn add'
 wait_grep '^dialog New timer' 5 && pass "+ opens New timer" || fail "no timer dialog"
 set_field() { set -- $(at "dlgctl $1"); xdotool mousemove "$1" "$2" click --repeat 3 1; sleep 0.2; xdotool key ctrl+a; xdotool type --delay 60 "$2"; sleep 0.3; }
 f() { at "dlgctl $1"; }
-for id in 101 102 103; do set -- $(f $id); xdotool mousemove "$1" "$2" click 1; xdotool key ctrl+a BackSpace; done
+for id in 101 102 103; do set -- $(f $id); xdotool mousemove "$1" "$2" click 1; sleep 0.2; xdotool key ctrl+a BackSpace; sleep 0.1; done
 set -- $(f 101); xdotool mousemove "$1" "$2" click 1; xdotool type 0
 set -- $(f 102); xdotool mousemove "$1" "$2" click 1; xdotool type 0
 set -- $(f 103); xdotool mousemove "$1" "$2" click 1; xdotool type 3
@@ -157,13 +157,17 @@ wait_grep '^page alarm' 5 && pass "the Alarm page" || fail "page: $(D page)"
 next=$(date -d '+1 minute' +'%H %M')
 click 'btn add'
 wait_grep '^dialog New alarm' 5 && pass "+ opens New alarm" || fail "no alarm dialog"
-set -- $(f 101); xdotool mousemove "$1" "$2" click 1; xdotool key ctrl+a BackSpace BackSpace; xdotool type "${next% *}"
-set -- $(f 102); xdotool mousemove "$1" "$2" click 1; xdotool key ctrl+a BackSpace BackSpace; xdotool type "${next#* }"
+# the hour and minute are pick lists (00-23, 00-59): the hour has the focus
+pick() { xdotool key Home; n=$(echo "$1" | sed 's/^0//'); [ "$n" -gt 0 ] && xdotool key --repeat "$n" --delay 20 Down; sleep 0.2; }
+pick "${next% *}"; xdotool key Tab; pick "${next#* }"
 set -- $(f 100); xdotool mousemove "$1" "$2" click 1; xdotool key ctrl+a; xdotool type --delay 50 wake
 sleep 0.3
 click 'dlgctl 140'
 wait_grep "^alarm [0-9]* ${next% *}:${next#* } on=1 .*: wake\$" 5 && pass "the alarm 'wake' at ${next% *}:${next#* } is on" || fail "alarms: $(grep '^alarm' "$DUMP")"
 shot alarms
+set -- $(D cards | sed 's/right=\([0-9]*\) client=\([0-9]*\)/\1 \2/')
+[ -n "$1" ] && [ $(( $2 - $1 )) -le 40 ] && pass "the alarm cards fill the page's width (right edge $1 of $2)" \
+    || fail "the alarm cards stop at $1 of $2"
 if wait_grep '^toast [0-9]* Alarm | wake |' 75; then
     pass "at ${next% *}:${next#* } the alarm goes off"
     sleep 0.5; shot alarm-toast
@@ -177,9 +181,14 @@ else fail "the alarm did not go off: $(grep '^alarm\|^toast' "$DUMP")"; fi
 wine reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Run' /v 'Stained Glass Clock' 2>/dev/null | grep -q '/background' \
     && pass "with an alarm on, it starts with the session (HKCU Run /background)" || fail "no Run entry"
 set -- $(at 'btn pivot 0'); xdotool mousemove "$1" "$2" click 1; sleep 0.3
+# the title bar too: after the toast's buttons, a click in the page alone does
+# not always make it the active window (field report 2026-10-17 #12)
+xdotool mousemove "$1" $(( $2 - 50 )) click 1; sleep 0.5
 key_close() { xdotool key alt+F4; sleep 1; }
 key_close
 wait_grep '^visible 0' 5 && pass "closing the window hides it; the alarms go on" || fail "visible: $(D visible)"
+wine reg query 'HKCU\Software\Stained Glass\Clock' /v Alarms 2>/dev/null | grep -q 'Good morning' \
+    && pass "the first start's 7:00 alarm is saved (it is there when the app starts again)" || fail "the 7:00 alarm is not saved"
 pgrep -f "^[A-Za-z]:.*${T##*/}.sg-clock64.exe" >/dev/null && pass "the program is still running" || fail "the program exited"
 
 # --- after a restart ---------------------------------------------------------------------------------------------

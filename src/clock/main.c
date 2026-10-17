@@ -237,6 +237,7 @@ static void load_all(void)
         g_timers[0].total_ms = g_timers[0].left_ms = 5 * 60 * 1000;
         lstrcpyW(g_timers[0].name, L"Timer (1)");
         g_ntimers = 1;
+        save_all();   /* kept: a later start finds them (not an empty list) */
     }
 }
 
@@ -534,7 +535,9 @@ static void layout(void)
     w = c.right - S(48);
     switch (g_page) {
     case P_ALARM:
-        cw = S(300); cols = w / (cw + S(12)); if (cols < 1) cols = 1;
+        /* cards share the width: as many 300px columns as fit, stretched */
+        cols = (w + S(12)) / (S(300) + S(12)); if (cols < 1) cols = 1;
+        cw = (w - (cols - 1) * S(12)) / cols;
         for (i = 0; i < g_nalarms; i++) {
             int cx = S(24) + (i % cols) * (cw + S(12)), cy = y + (i / cols) * S(148);
             add_btn(B_ALARM_CARD, i, cx, cy, cx + cw, cy + S(136), g_alarms[i].name);
@@ -551,7 +554,9 @@ static void layout(void)
         add_btn(B_ADD, 0, c.right - S(72), c.bottom - S(BAR_H) + S(8), c.right - S(24), c.bottom - S(8), L"Add a city");
         break;
     case P_TIMER:
-        cw = S(300); cols = w / (cw + S(12)); if (cols < 1) cols = 1;
+        /* cards share the width: as many 300px columns as fit, stretched */
+        cols = (w + S(12)) / (S(300) + S(12)); if (cols < 1) cols = 1;
+        cw = (w - (cols - 1) * S(12)) / cols;
         for (i = 0; i < g_ntimers; i++) {
             int cx = S(24) + (i % cols) * (cw + S(12)), cy = y + (i / cols) * S(232);
             col = cx;
@@ -633,8 +638,10 @@ static void glyph(HDC dc, const WCHAR *what, RECT r, COLORREF c)
     else if (!lstrcmpW(what, L"pause")) { RECT a1 = { cx - S(6), cy - S(8), cx - S(2), cy + S(8) }, a2 = { cx + S(2), cy - S(8), cx + S(6), cy + S(8) }; FillRect(dc, &a1, br); FillRect(dc, &a2, br); }
     else if (!lstrcmpW(what, L"reset")) {
         SelectObject(dc, GetStockObject(NULL_BRUSH));
-        sg_arc(dc, cx - S(8), cy - S(8), cx + S(8), cy + S(8), cx - S(8), cy - S(2), cx - S(2), cy - S(8));
-        MoveToEx(dc, cx - S(8), cy - S(8), NULL); LineTo(dc, cx - S(8), cy - S(2)); LineTo(dc, cx - S(2), cy - S(2));
+        /* a counterclockwise arrow: the arc runs from the upper left, round
+         * the bottom, to the top, and the head is at that end, pointing left */
+        sg_arc(dc, cx - S(8), cy - S(8), cx + S(8), cy + S(8), cx - S(7), cy - S(4), cx, cy - S(8));
+        MoveToEx(dc, cx + S(1), cy - S(12), NULL); LineTo(dc, cx - S(3), cy - S(8)); LineTo(dc, cx + S(1), cy - S(4));
     } else if (!lstrcmpW(what, L"lap")) {
         MoveToEx(dc, cx - S(6), cy + S(9), NULL); LineTo(dc, cx - S(6), cy - S(9));
         { POINT p[4] = { { cx - S(6), cy - S(9) }, { cx + S(8), cy - S(6) }, { cx - S(6), cy - S(1) }, { cx - S(6), cy - S(9) } }; sg_polygon(dc, p, 4); }
@@ -1020,10 +1027,18 @@ static void open_dialog(int kind, int index)
         int n = kind == D_TIMER ? 3 : 2;
         const WCHAR *const labels[3] = { L"Hours", L"Minutes", L"Seconds" };
         for (i = 0; i < n; i++) {
-            dctl(L"STATIC", labels[i], 0, x + i * S(120), y, S(100), S(20), -1);
-            if (kind == D_ALARM) _snwprintf(b, ARRAYSIZE(b), L"%02d", a ? (i ? a->minute : a->hour) : (i ? 0 : 7));
-            else lstrcpyW(b, i == 1 ? L"05" : L"00");
-            dctl(L"EDIT", b, WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_CENTER, x + i * S(120), y + S(22), S(100), S(40), ID_H + i);
+            dctl(L"STATIC", kind == D_ALARM ? (i ? L"Minute" : L"Hour") : labels[i], 0, x + i * S(120), y, S(100), S(20), -1);
+            if (kind == D_ALARM) {
+                /* an alarm's time is picked from lists: 00-23, 00-59 */
+                int v = a ? (i ? a->minute : a->hour) : (i ? 0 : 7), k;
+                HWND c = dctl(L"COMBOBOX", L"", WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+                              x + i * S(120), y + S(22), S(100), S(300), ID_H + i);
+                for (k = 0; k < (i ? 60 : 24); k++) { _snwprintf(b, ARRAYSIZE(b), L"%02d", k); SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)b); }
+                SendMessageW(c, CB_SETCURSEL, v, 0);
+            } else {
+                lstrcpyW(b, i == 1 ? L"05" : L"00");
+                dctl(L"EDIT", b, WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_CENTER, x + i * S(120), y + S(22), S(100), S(40), ID_H + i);
+            }
             SendDlgItemMessageW(g_dlg, ID_H + i, WM_SETFONT, (WPARAM)g_f_head, TRUE);
         }
         y += S(76);
@@ -1114,6 +1129,15 @@ static void write_dump(void)
         char what[32];
         snprintf(what, sizeof(what), "btn %s %d", kinds[g_btns[i].kind], g_btns[i].index);
         dump_point(f, what, g_wnd, g_btns[i].r, g_btns[i].label);
+    }
+    {
+        /* the cards share the page's width: their right edge, the client's */
+        RECT c;
+        int right = 0;
+        GetClientRect(g_wnd, &c);
+        for (i = 0; i < g_nbtns; i++)
+            if ((g_btns[i].kind == B_ALARM_CARD || g_btns[i].kind == B_TIMER_CARD) && g_btns[i].r.right > right) right = g_btns[i].r.right;
+        fprintf(f, "cards right=%d client=%d\n", right, (int)c.right);
     }
     for (i = 0; i < g_nalarms; i++) {
         WideCharToMultiByte(CP_UTF8, 0, g_alarms[i].name, -1, a, sizeof(a), NULL, NULL);

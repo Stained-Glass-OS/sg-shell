@@ -125,6 +125,13 @@ want DISPLAY -9 "F9 negates the entry"
 key Escape; typ "3*7="; key ctrl+c; sleep 0.5
 c=$(xclip -o -selection clipboard 2>/dev/null)
 [ "$c" = 21 ] && pass "Ctrl+C copies 21" || fail "Ctrl+C copied '$c'"
+printf 'x' | xclip -i -selection clipboard 2>/dev/null; sleep 0.3
+set -- $(D RESULT)
+xdotool mousemove $(( $1 + $3 / 2 )) $(( $2 + $4 / 2 )) click 1; sleep 0.15
+[ "$(D GLOW)" = 1 ] && pass "clicking the result makes it glow" || fail "no glow after clicking the result"
+c=$(xclip -o -selection clipboard 2>/dev/null)
+[ "$c" = 21 ] && pass "clicking the result copies 21" || fail "clicking the result copied '$c'"
+want GLOW 0 "the glow fades"
 printf '98765.5' | xclip -i -selection clipboard 2>/dev/null; sleep 0.5
 key ctrl+v
 want DISPLAY 98765.5 "Ctrl+V pastes"
