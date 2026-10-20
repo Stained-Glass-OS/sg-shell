@@ -1,3 +1,23 @@
+sg-shell (0.1.0-181) unstable; urgency=medium
+
+  * SG Store, from a walk of the whole catalogue on a fresh machine:
+    - one SG Store: starting it again brings the open one forward (its
+      --search/--page passed on) instead of opening another; each start
+      added a window, and they wrote over each other's state.
+      Mutant MULTI_INSTANCE.
+    - Uninstall waits for what the uninstaller started: Opera's (a
+      launcher) exits at once and leaves its window to a child, and the
+      store said "was not removed" while it was still being answered.
+      Mutant NOTREE.
+    - a zipped installer is the file the manifest's NestedInstallerFiles
+      names: CutePDF Writer's zip holds two programs and could not be
+      installed ("holds more than one installer"). Mutant NONESTEDFILE.
+    - Java 8 (Temurin JRE) and Amazon Corretto 21 are found by the names
+      their installers register (8u504-b01; no version at all): they
+      installed but the store never saw them, so offered no Uninstall.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 20 Oct 2026 12:26:31 -0700
+
 sg-shell (0.1.0-180) unstable; urgency=medium
 
   * CI: the Debian trixie container from ghcr.io/stained-glass-os/debian

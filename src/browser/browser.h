@@ -26,6 +26,7 @@ enum { STAGE_FIND, STAGE_DOWNLOAD, STAGE_INSTALL, STAGE_DONE, STAGE_FAILED };
 typedef struct {
     WCHAR id[128], version[64], url[2048], type[32], scope[16], silent[512], arch[16];
     WCHAR nested[32];           /* a zip's NestedInstallerType (SG Store unpacks those) */
+    WCHAR nested_file[MAX_PATH];/* and which file in it the installer is (NestedInstallerFiles) */
     WCHAR custom[512];          /* the manifest's Custom switches, passed after the silent ones */
     WCHAR deps[512];            /* the packages it needs first (winget Dependencies), space-separated */
     BOOL elevate;               /* ElevationRequirement: elevationRequired -- ask for an administrator first */

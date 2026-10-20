@@ -3256,7 +3256,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00ff1464
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.8.JRE"
-"DetectName"="Eclipse Temurin JRE with Hotspot 8"
+"DetectName"="Eclipse Temurin JRE with Hotspot 8u*"
 "Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\103]
@@ -3289,7 +3289,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00ff9900
 "Tier"="windows"
 "Source"="winget:Amazon.Corretto.21.JDK"
-"DetectName"="Amazon Corretto 21"
+"DetectName"="Amazon Corretto"
 "Icon"="https://a0.awsstatic.com/libra-css/images/site/touch-icon-ipad-144-smile.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\106]

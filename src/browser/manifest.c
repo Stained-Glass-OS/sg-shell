@@ -116,6 +116,8 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
     int sw_root = 0, i;
     int dep_indent = -1;         /* Dependencies' own indentation, while inside it */
     mf_entry *dep_to = NULL;
+    int nf_indent = -1;          /* NestedInstallerFiles' own indentation, while inside it */
+    mf_entry *nf_to = NULL;
     memset(root, 0, sizeof(*root));
     for (line = text; line && *line; line = next) {
         char *colon, key[64], *body;
@@ -133,6 +135,20 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
          * (- PackageIdentifier: Git.Git) -- not Windows features, libraries
          * or MinimumVersion */
         if (dep_indent >= 0 && indent <= dep_indent) dep_indent = -1;
+        /* NestedInstallerFiles: - RelativeFilePath: the installer inside the zip
+         * (CutePDF's zip holds two .exe files; the manifest says which) */
+        if (nf_indent >= 0 && (indent < nf_indent || (indent == nf_indent && !item))) nf_indent = -1;
+        if (nf_indent >= 0) {
+#ifndef SG_MUTANT_NONESTEDFILE
+            char *k = item ? body + 1 : body;
+            while (*k == ' ') k++;
+            if (!strncmp(k, "RelativeFilePath:", 17) && !nf_to->nested_file[0]) {
+                copy(nf_to->nested_file, k + 17, sizeof(nf_to->nested_file));
+                unquote(nf_to->nested_file);
+            }
+#endif
+            continue;
+        }
         if (dep_indent >= 0) {
 #ifndef SG_MUTANT_NODEPS
             char *k = item ? body + 1 : body, v[256];
@@ -179,6 +195,10 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
                 dep_indent = indent;
                 dep_to = indent == 0 ? root : &list[n];
             }
+            else if (!strcmp(key, "NestedInstallerFiles") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
+                nf_indent = indent;
+                nf_to = indent == 0 ? root : &list[n];
+            }
             else if (!strcmp(key, "InstallerSwitches") && (indent == 0 || (in_installers && n >= 0))) {
                 sw_indent = indent;
                 sw_root = indent == 0;
@@ -200,6 +220,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->url[0]) copy(e->url, root->url, sizeof(e->url));
         if (!e->sha[0]) copy(e->sha, root->sha, sizeof(e->sha));
         if (!e->nested[0]) copy(e->nested, root->nested, sizeof(e->nested));
+        if (!e->nested_file[0]) copy(e->nested_file, root->nested_file, sizeof(e->nested_file));
         if (!e->deps[0]) copy(e->deps, root->deps, sizeof(e->deps));
     }
     return n + 1;

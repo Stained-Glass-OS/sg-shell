@@ -171,6 +171,7 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     MultiByteToWideChar(CP_UTF8, 0, best->silent, -1, p->silent, 512);
     MultiByteToWideChar(CP_UTF8, 0, best->arch, -1, p->arch, 16);
     MultiByteToWideChar(CP_UTF8, 0, best->nested, -1, p->nested, 32);
+    MultiByteToWideChar(CP_UTF8, 0, best->nested_file, -1, p->nested_file, MAX_PATH);
     MultiByteToWideChar(CP_UTF8, 0, best->custom, -1, p->custom, 512);
     MultiByteToWideChar(CP_UTF8, 0, best->deps, -1, p->deps, 512);
     p->elevate = !_stricmp(best->elevation, "elevationRequired");

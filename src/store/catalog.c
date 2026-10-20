@@ -15,6 +15,7 @@
 #include "store.h"
 #include <shellapi.h>
 #include <shlobj.h>
+#include <tlhelp32.h>
 #include "zipcore.h"
 
 const WCHAR *tier_name(int tier)
@@ -468,9 +469,21 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
     HANDLE h;
     DWORD put;
     if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); return FALSE; }
+    for (slash = p->nested_file; *slash; slash++) if (*slash == L'/') *slash = L'\\';
     for (i = 0; i < z.n; i++) {
         int n = lstrlenW(z.e[i].name);
-        if (z.e[i].dir || n < 5 || _wcsicmp(z.e[i].name + n - 4, ext)) continue;
+        WCHAR name[MAX_PATH], *c;
+        if (z.e[i].dir) continue;
+        /* the one the manifest names (NestedInstallerFiles), / or \ alike */
+        if (p->nested_file[0]) {
+            lstrcpynW(name, z.e[i].name, MAX_PATH);
+            for (c = name; *c; c++) if (*c == L'/') *c = L'\\';
+            if (!_wcsicmp(name, p->nested_file) ||
+                (!wcspbrk(p->nested_file, L"\\/") && wcsrchr(name, L'\\') && !_wcsicmp(wcsrchr(name, L'\\') + 1, p->nested_file)))
+            { pick = i; break; }
+            continue;
+        }
+        if (n < 5 || _wcsicmp(z.e[i].name + n - 4, ext)) continue;
         if (pick >= 0) { zip_close(&z); swprintf(err, cch, L"%ls holds more than one installer.", p->id); return FALSE; }
         pick = i;
     }
@@ -712,8 +725,43 @@ BOOL app_is_runtime(const app_t *a)
     return a->method == SRC_PIN && !lstrcmpiW(a->pin_type, L"cab-dll");
 }
 
+/* is anything the uninstaller started still running? Opera's (and other
+ * launchers') uninstaller exits at once and leaves its window to a child: the
+ * store gave up after three minutes and said "was not removed" while the
+ * person was still answering it. tree[] holds the process and every
+ * descendant seen so far. */
+static BOOL tree_alive(DWORD *tree, int *n, int max)
+{
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    BOOL alive = FALSE, grew;
+    HANDLE snap;
+    int i;
+#ifdef SG_MUTANT_NOTREE
+    return FALSE;
+#endif
+    if ((snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)) == INVALID_HANDLE_VALUE) return FALSE;
+    do {    /* children first seen now, and theirs */
+        grew = FALSE;
+        if (Process32FirstW(snap, &pe)) do {
+            BOOL known = FALSE, parent = FALSE;
+            for (i = 0; i < *n; i++) {
+                if (tree[i] == pe.th32ProcessID) known = TRUE;
+                if (tree[i] == pe.th32ParentProcessID) parent = TRUE;
+            }
+            if (!known && parent && *n < max) { tree[(*n)++] = pe.th32ProcessID; grew = TRUE; }
+        } while (Process32NextW(snap, &pe));
+    } while (grew);
+    if (Process32FirstW(snap, &pe)) do {
+        for (i = 1; i < *n; i++) if (tree[i] == pe.th32ProcessID) alive = TRUE;
+    } while (!alive && Process32NextW(snap, &pe));
+    CloseHandle(snap);
+    return alive;
+}
+
 int app_uninstall(app_t *a, WCHAR *err, int cch)
 {
+    DWORD tree[64], grace = 180000;
+    int ntree = 0;
     WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     DWORD code = 0, start;
@@ -742,12 +790,20 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
         else swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
         return 1;
     }
-    WaitForSingleObject(sei.hProcess, INFINITE);
+    tree[ntree++] = GetProcessId(sei.hProcess);
+    while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree));
     GetExitCodeProcess(sei.hProcess, &code);
     CloseHandle(sei.hProcess);
-    /* its entry goes when it is gone; a self-copying uninstaller is still at it */
-    for (start = GetTickCount(); find_installed(a->detect_name, ver, ARRAYSIZE(ver)) && GetTickCount() - start < 180000;)
+    /* its entry goes when it is gone; a self-copying uninstaller, or one whose
+     * window is a child's, is still at it. SG_STORE_UNINSTALL_GRACE (ms): the
+     * gate's shorter wait after the last of them */
+    if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GRACE", ver, ARRAYSIZE(ver))) grace = _wtoi(ver);
+    for (start = GetTickCount(); find_installed(a->detect_name, ver, ARRAYSIZE(ver)) &&
+         (tree_alive(tree, &ntree, ARRAYSIZE(tree)) || GetTickCount() - start < grace);)
+    {
+        if (tree_alive(tree, &ntree, ARRAYSIZE(tree))) start = GetTickCount();   /* 3 minutes after the last of them */
         Sleep(1000);
+    }
     if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) {
         swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);
         return 1;

@@ -88,6 +88,7 @@ static const WCHAR *const g_cats[] = {
 #define NCATS ((int)ARRAYSIZE(g_cats))
 
 /* hit rectangles, for the mouse and the gate */
+static int find_app(const WCHAR *key);
 enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON,
        H_CHECK, H_INSTALLSEL, H_BACK, H_HOMEPAGE };
 typedef struct { int verb, idx; RECT rc; } hit_t;
@@ -1300,6 +1301,17 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return (LRESULT)dark_edit;
         }
         break;
+    case WM_COPYDATA:
+    {
+        /* a second start (Start, sg-notify, a link): its --search or --page, here */
+        const COPYDATASTRUCT *cd = (const COPYDATASTRUCT *)lp;
+        WCHAR text[256];
+        if (!cd || !cd->lpData || cd->cbData < sizeof(WCHAR)) return FALSE;
+        lstrcpynW(text, cd->lpData, min(ARRAYSIZE(text), cd->cbData / sizeof(WCHAR)));
+        if (cd->dwData == 1) { SetWindowTextW(g_search, text); SendMessageW(g_search, EM_SETSEL, 0, -1); }
+        else if (cd->dwData == 2 && find_app(text) >= 0) open_details(hwnd, find_app(text));
+        return TRUE;
+    }
     case WM_CREATE:
         g_search = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                    0, 0, 10, 10, hwnd, (HMENU)100, ((CREATESTRUCTW *)lp)->hInstance, NULL);
@@ -1471,11 +1483,32 @@ static void make_fonts(void)
 }
 
 static const WCHAR *g_start_page;           /* --page: the app whose details page opens first */
-static int find_app(const WCHAR *key);
 static int window(HINSTANCE inst, const WCHAR *query)
 {
     WNDCLASSW wc = { 0 };
     MSG m;
+    HWND other;
+#ifndef SG_MUTANT_MULTI_INSTANCE
+    /* one SG Store: starting it again brings the open one forward (its search
+     * or page passed on) rather than opening another -- each start used to add
+     * a window, and they all wrote over each other's state */
+    if ((other = FindWindowW(L"SgStore", NULL))) {
+        COPYDATASTRUCT cd;
+        if (IsIconic(other)) ShowWindow(other, SW_RESTORE);
+        SetForegroundWindow(other);
+        if (query && query[0]) {
+            cd.dwData = 1; cd.cbData = (lstrlenW(query) + 1) * sizeof(WCHAR); cd.lpData = (void *)query;
+            SendMessageW(other, WM_COPYDATA, 0, (LPARAM)&cd);
+        }
+        if (g_start_page && g_start_page[0]) {
+            cd.dwData = 2; cd.cbData = (lstrlenW(g_start_page) + 1) * sizeof(WCHAR); cd.lpData = (void *)g_start_page;
+            SendMessageW(other, WM_COPYDATA, 0, (LPARAM)&cd);
+        }
+        return 0;
+    }
+#else
+    (void)other;
+#endif
     make_fonts();
     load_all(FALSE);
     wc.lpfnWndProc = wndproc;

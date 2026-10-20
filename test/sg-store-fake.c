@@ -21,6 +21,7 @@
  *   <any> /Q /T:"DIR" /C              an IExpress package, unpacking: copies
  *                                   the files of %SG_FAKE_MSIS% into DIR
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
+ * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -99,6 +100,18 @@ int wmain(int argc, WCHAR **argv)
 
     if (!_wcsicmp(base, L"uninst.exe")) {
         const WCHAR *k = wcsstr(args, L"/key=");
+        WCHAR ms[16];
+        /* %SG_FAKE_HANDOFF% (ms): like Opera's, it hands off to a child and exits
+         * at once; the child removes the app that much later */
+        if (!wcsstr(args, L"/child") && GetEnvironmentVariableW(L"SG_FAKE_HANDOFF", ms, ARRAYSIZE(ms))) {
+            WCHAR cl[2048];
+            STARTUPINFOW si = { sizeof(si) };
+            PROCESS_INFORMATION pi;
+            swprintf(cl, ARRAYSIZE(cl), L"\"%ls\" %ls /child", self, args);
+            if (CreateProcessW(self, cl, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) { CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
+            return 0;
+        }
+        if (wcsstr(args, L"/child") && GetEnvironmentVariableW(L"SG_FAKE_HANDOFF", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
         logline(L"C:\\gate\\uninstall.log", args);
         if (k) {
             WCHAR name[128];

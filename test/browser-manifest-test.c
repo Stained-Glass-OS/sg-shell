@@ -183,6 +183,27 @@ static const char ROOTDEPS[] =
     "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
     "ManifestType: installer\n";
 
+/* CutePDF Writer 4.0: a zip holding two programs; NestedInstallerFiles names
+ * the installer (and InstallerSwitches would end the block too) */
+static const char CUTEPDF[] =
+    "PackageIdentifier: AcroSoftware.CutePDFWriter\n"
+    "InstallerType: zip\n"
+    "NestedInstallerType: inno\n"
+    "NestedInstallerFiles:\n"
+    "- RelativeFilePath: CuteWriter.exe\n"
+    "Scope: machine\n"
+    "Installers:\n"
+    "- Architecture: x86\n"
+    "  InstallerUrl: https://www.cutepdf.com/download/CuteWriter.zip\n"
+    "  InstallerSha256: 5E938017FE52A39C550597540A4F0D14B237E794E2A177445E3CF513273F6E5B\n"
+    "- Architecture: x64\n"
+    "  InstallerUrl: https://www.cutepdf.com/download/CuteWriter.zip\n"
+    "  InstallerSha256: 5E938017FE52A39C550597540A4F0D14B237E794E2A177445E3CF513273F6E5B\n"
+    "  NestedInstallerFiles:\n"
+    "  - RelativeFilePath: x64/CuteWriter.exe\n"
+    "    PortableCommandAlias: cw\n"
+    "ManifestType: installer\n";
+
 int main(void)
 {
     static char buf[16384];
@@ -255,6 +276,12 @@ int main(void)
 
     CHECK(!mf_sha256("abc", sha), "a short SHA-256 is refused");
     CHECK(!mf_sha256("ZZ5D9B99F9C5B6AF88BA68E1063D576E889E218723ADCAEC687D147675BDD13", sha), "a SHA-256 with non-hex digits is refused");
+    strcpy(buf, CUTEPDF);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 2, "CutePDF: two installers (%d)", n);
+    CHECK(n == 2 && !strcmp(list[0].nested_file, "CuteWriter.exe"), "the root's NestedInstallerFiles names the installer (%s)", n ? list[0].nested_file : "");
+    CHECK(n == 2 && !strcmp(list[1].nested_file, "x64/CuteWriter.exe"), "an installer's own NestedInstallerFiles wins (%s)", n > 1 ? list[1].nested_file : "");
+    CHECK(!strcmp(root.scope, "machine"), "the root's keys after the block still count (Scope %s)", root.scope);
     printf("browser-manifest-test: %s\n", fails ? "FAILED" : "all passed");
     return fails ? 1 : 0;
 }

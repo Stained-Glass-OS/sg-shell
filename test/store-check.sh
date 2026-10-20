@@ -77,6 +77,9 @@
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
+#   SG_MUTANT_MULTI_INSTANCE each start opens another store (the walk found 20 open)
+#   SG_MUTANT_NOTREE      waits for the uninstaller only, not the child it hands off to (Opera)
+#   SG_MUTANT_NONESTEDFILE ignores NestedInstallerFiles: a zip with two programs cannot be installed (CutePDF)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
 # (77) without them. SG_STORE_EXE tests another build.
@@ -126,7 +129,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -146,6 +149,9 @@ import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z:
     z.write(sys.argv[2], "zipped.5.1.install.x64.exe")
     z.writestr("readme.txt", "the installer is beside me\n")
+    # and another program, as CutePDF's zip holds converter.exe beside its
+    # installer: the manifest's NestedInstallerFiles says which one to run
+    z.writestr("converter.exe", "MZ not the installer\n")
 EOF
 ZSHA=$(sha256sum "$W/files/zipped.zip" | cut -d' ' -f1)
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
@@ -518,6 +524,10 @@ SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zi
 rm -f "$G/setup.log"; ununinstall ZipApp
 SG_MUT="$T/mut-nozip.exe" run --install 09
 [ ! -e "$G/setup.log" ] && pass "MUTANT NOZIP installs nothing (gate catches it)" || fail "NOZIP not detected"
+rm -f "$G/setup.log"; ununinstall ZipApp
+SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' SG_MUT="$T/mut-nonestedfile.exe" run --install 09
+[ ! -e "$G/setup.log" ] && pass "MUTANT NONESTEDFILE cannot pick between two programs (gate catches it)" || fail "NONESTEDFILE not detected"
+rm -f "$G/setup.log"; ununinstall ZipApp
 
 # --- G2. a package's dependencies first (TortoiseGit needs Git) ----------------------------------
 mkdir -p "$W/api/f/Fake" "$W/raw/f/Fake/Dep/1.0" "$W/raw/f/Fake/Needy/1.0"
@@ -852,6 +862,16 @@ if waitfor "$D" '^deb-window 1' 80; then pass "double-clicking a .deb (ShellExec
     click "$D" cancel
 else fail "ShellExecute of a .deb did not open the window: $(cat "$D" 2>/dev/null)"; fi
 sleep 0.5; wine taskkill /f /im sg-store64.exe >/dev/null 2>&1
+# the real catalogue's DetectName against what the makers' installers really
+# register (the store walk 2026-10-20: Java 8 and Corretto 21 installed, but
+# the store never saw them, so offered no Uninstall)
+uninstall GateTemurin8 'Eclipse Temurin JRE with Hotspot 8u504-b01 (x64)' 8.0.504
+uninstall GateCorretto 'Amazon Corretto (x64)' 21.0.9
+run --list
+[ "$(kv "$(appline 102)" state)" = installed ] && [ "$(kv "$(appline 105)" state)" = installed ] \
+    && pass "the catalogue knows Temurin 8 and Corretto by the names their installers register" \
+    || fail "real names: $(appline 102) / $(appline 105)"
+ununinstall GateTemurin8; ununinstall GateCorretto
 wine reg delete "$K" /f >/dev/null 2>&1      # the real catalogue came with the .reg: back to the gate's
 sleep 0.5
 
@@ -1061,6 +1081,16 @@ SG_MUT="$T/mut-noquiet.exe" run --uninstall 01
 grep -q '/ui' "$G/uninstall.log" 2>/dev/null && ! grep -q '/quiet' "$G/uninstall.log" && pass "MUTANT NOQUIET runs the uninstaller's UI (gate catches it)" \
     || fail "NOQUIET not detected: $(cat "$G/uninstall.log" 2>/dev/null)"
 ununinstall FakeApp; sleep 0.5
+# an uninstaller that hands off to a child (Opera's): done when the child is,
+# not "not removed" while its window is still up
+handoff() { # exe -> ok|fail
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    SG_FAKE_HANDOFF=6000 SG_STORE_UNINSTALL_GRACE=1000 SG_MUT="$1" run --uninstall 01
+    sed -n 's/^uninstall 01 \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null | head -1
+    ununinstall FakeApp; sleep 0.5
+}
+[ "$(handoff "$EXE")" = ok ] && pass "an uninstaller that hands off to a child is waited for" || fail "hand-off uninstall: $(cat "$D.result" 2>/dev/null)"
+[ "$(handoff "$T/mut-notree.exe")" = fail ] && pass "MUTANT NOTREE gives up while the child still works (gate catches it)" || fail "NOTREE not detected"
 
 # --- M. several apps, one consent ------------------------------------------------------------------
 "$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"
@@ -1097,7 +1127,7 @@ batch "$T/mut-helper_anyone.exe"
 # (regression walk 2026-10-05: Archive Manager's Open, the last card of a
 # search, did nothing until scrolled into full view)
 cutcard() { # exe -- "Y BOTTOM": the cut button's hit and the client area's bottom, or "none"
-    store_window "$1" || { echo none; wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; return; }
+    store_window "$1" || { echo none; wine taskkill /f /im "$(basename "$1")" >/dev/null 2>&1; return; }
     hl=$(grep -E '^hit (install|open) ' "$D" | head -1)
     v=$(echo "$hl" | awk '{ print $2 " " $3 }'); y=$(echo "$hl" | awk '{ print $NF }')
     if [ -n "$y" ]; then
@@ -1106,7 +1136,7 @@ cutcard() { # exe -- "Y BOTTOM": the cut button's hit and the client area's bott
         y2=$(grep "^hit $v " "$D" | tail -1 | awk '{ print $NF }')
         echo "${y2:-none} ${b:-?} $v"
     else echo none; fi
-    wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+    wine taskkill /f /im "$(basename "$1")" >/dev/null 2>&1; sleep 0.5
 }
 set -- $(cutcard "$EXE")
 [ "$1" != none ] && [ -n "${2:-}" ] && [ "$1" -lt "$2" ] 2>/dev/null \
@@ -1129,6 +1159,24 @@ if store_window "$EXE"; then
 else fail "the window (check boxes) did not open"; fi
 wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 ununinstall FakeApp; ununinstall PickApp
+
+# one SG Store: a second start brings the open one forward with its search, and goes
+second_start() { # exe -> "exited|stayed instances search"
+    store_window "$1" || { echo none; return; }
+    first=$!
+    wine "$1" --search second-start >/dev/null 2>&1 &
+    p=$!; i=0; while kill -0 $p 2>/dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+    kill -0 $p 2>/dev/null && st=stayed || st=exited
+    n=0; kill -0 "$first" 2>/dev/null && n=1             # the first store is still the one
+    [ "$st" = stayed ] && n=$((n + 1))
+    sleep 1; echo "$st $n $(field search)"
+    wine taskkill /f /im "$(basename "$1")" >/dev/null 2>&1; sleep 0.5
+}
+set -- $(second_start "$EXE")
+[ "$1 $2 $3" = "exited 1 second-start" ] && pass "starting SG Store again brings the open one forward with its search" \
+    || fail "second start: $*"
+set -- $(second_start "$T/mut-multi_instance.exe")
+[ "$1" != exited ] || [ "$2" != 1 ] && pass "MUTANT MULTI_INSTANCE opens a second store (gate catches it)" || fail "MULTI_INSTANCE not detected: $*"
 
 [ $RC = 0 ] && echo "store-check: all passed" || echo "store-check: FAILED"
 exit $RC
