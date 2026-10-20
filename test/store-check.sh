@@ -79,6 +79,7 @@
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
 #   SG_MUTANT_MULTI_INSTANCE each start opens another store (the walk found 20 open)
 #   SG_MUTANT_NOTREE      waits for the uninstaller only, not the child it hands off to (Opera)
+#   SG_MUTANT_SYSTEMUNINSTALL offers Uninstall for a part of the system (SG PDF), then fails
 #   SG_MUTANT_NONESTEDFILE ignores NestedInstallerFiles: a zip with two programs cannot be installed (CutePDF)
 #
 # Needs wine-sg, mingw, Xvfb, xdotool, ImageMagick, python3, dpkg-deb; skips
@@ -129,7 +130,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -802,6 +803,22 @@ rm -f "$D.result"; : > "$T/apt.log"
 wine "$T/mut-nouninstall.exe" --uninstall L2 >/dev/null 2>&1
 grep -q '^uninstall L2 fail' "$D.result" 2>/dev/null && ! grep -q ' remove ' "$T/apt.log" \
     && pass "MUTANT NOUNINSTALL cannot uninstall (gate catches it)" || fail "NOUNINSTALL not detected: $(cat "$D.result" 2>/dev/null)"
+# a part of the system (SG PDF): no Uninstall, and no administrator asked for
+# a removal sg-admind refuses anyway (the walk 2026-10-20)
+app O6 'Gate PDF' Productivity ours 'ours:apt:sg-gate-pdf'
+printf 'Package: sg-gate-pdf\nStatus: install ok installed\nVersion: 1.0\n\n' >> "$T/dpkg-status"
+sysuninstall() { # exe -> "result elevated"
+    rm -f "$D" "$D.result" "$D.sys"; : > "$T/apt.log"
+    wine "$1" --uninstall O6 >/dev/null 2>&1 & IP=$!
+    i=0; while kill -0 $IP 2>/dev/null && [ $i -lt 60 ]; do sleep 0.25; i=$((i + 1)); done
+    kill $IP 2>/dev/null; wait $IP 2>/dev/null
+    echo "$(sed -n 's/^uninstall O6 \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null) $([ -e "$D.sys" ] && echo elevated || echo none)"
+}
+[ "$(sysuninstall "$EXE")" = "fail none" ] && grep -q 'a part of Stained Glass OS' "$D.result" \
+    && pass "a part of the system has no Uninstall (and asks no administrator)" || fail "O6: $(cat "$D.result" 2>/dev/null) / $([ -e "$D.sys" ] && echo asked)"
+[ "$(sysuninstall "$T/mut-systemuninstall.exe")" != "fail none" ] && pass "MUTANT SYSTEMUNINSTALL goes for it (gate catches it)" \
+    || fail "SYSTEMUNINSTALL not detected"
+wine reg delete "$K\\O6" /f >/dev/null 2>&1
 wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
 wine reg delete "$K\\O5" /f >/dev/null 2>&1
 

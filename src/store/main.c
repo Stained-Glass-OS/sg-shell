@@ -153,12 +153,27 @@ static BOOL has_it(const app_t *a)
 /* Uninstall is offered for an installed app: a system package (SG Office,
  * a Linux app) through sg-admind's apt-remove, a Windows program through
  * its own uninstaller (catalog.c app_uninstall) */
+/* a part of the system: sg-admind refuses to remove our own packages but SG
+ * Office (admin/sg-admind PROTECTED_PREFIXES, REMOVABLE_OURS) -- the card
+ * offered Uninstall for SG PDF, asked for an administrator, then failed */
+static BOOL system_package(const app_t *a)
+{
+#ifdef SG_MUTANT_SYSTEMUNINSTALL
+    return FALSE;
+#endif
+    if (a->method != SRC_OURS_APT && a->method != SRC_LINUX_APT) return FALSE;
+    if (!_wcsicmp(a->apt_pkg, L"sg-office") || !_wcsicmp(a->apt_pkg, L"sg-office-editors")) return FALSE;
+    return !_wcsnicmp(a->apt_pkg, L"sg-", 3) || !_wcsnicmp(a->apt_pkg, L"stained-glass", 13) ||
+           !_wcsnicmp(a->apt_pkg, L"wine-sg", 7);
+}
+
 static BOOL can_uninstall(const app_t *a)
 {
 #ifdef SG_MUTANT_NOUNINSTALL
     return FALSE;
 #endif
     if ((a->method == SRC_OURS_APT || a->method == SRC_LINUX_APT) && !a->apt_pkg[0]) return FALSE;
+    if (system_package(a)) return FALSE;
     return has_it(a);
 }
 
@@ -1613,7 +1628,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             k = find_app(argv[i + 1]);
             if (k < 0) { LocalFree(argv); return 2; }
             app_detect(&g_apps[k]);
-            if (!can_uninstall(&g_apps[k])) { rc = SYS_FAILED; lstrcpynW(err, L"It cannot be uninstalled here.", ARRAYSIZE(err)); }
+            if (system_package(&g_apps[k])) { rc = SYS_FAILED; swprintf(err, ARRAYSIZE(err), L"%ls is a part of Stained Glass OS and cannot be uninstalled.", g_apps[k].name); }
+            else if (!can_uninstall(&g_apps[k])) { rc = SYS_FAILED; lstrcpynW(err, L"It cannot be uninstalled here.", ARRAYSIZE(err)); }
             else rc = app_uninstall(&g_apps[k], err, ARRAYSIZE(err));
             app_detect(&g_apps[k]);
             if (!rc && has_it(&g_apps[k])) { rc = 1; lstrcpynW(err, L"It is still installed.", ARRAYSIZE(err)); }

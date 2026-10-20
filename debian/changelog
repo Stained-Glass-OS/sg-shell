@@ -15,6 +15,9 @@ sg-shell (0.1.0-181) unstable; urgency=medium
     - Java 8 (Temurin JRE) and Amazon Corretto 21 are found by the names
       their installers register (8u504-b01; no version at all): they
       installed but the store never saw them, so offered no Uninstall.
+    - a part of the system (SG PDF, SG Mail) has no Uninstall: the card
+      offered it, asked for an administrator, then sg-admind refused.
+      Mutant SYSTEMUNINSTALL.
 
  -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 20 Oct 2026 12:26:31 -0700
 
