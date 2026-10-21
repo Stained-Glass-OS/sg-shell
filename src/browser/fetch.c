@@ -565,6 +565,17 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
         lstrcatW(args, p->custom);
     }
 #endif
+#ifndef SG_MUTANT_NOINNOSCOPE
+    /* winget tells an Inno Setup installer the scope of the manifest's entry: /ALLUSERS for a machine
+     * one, /CURRENTUSER for a user one. Without it RawTherapee's and GIMP's (which can install
+     * either way) chose a per-user install, ran as the user, and still wrote to Program Files:
+     * "Setup was unable to create the directory", code 4 or 5. A machine install asks for an
+     * administrator first, as Inno's own elevation would. */
+    if (!_wcsicmp(t, L"inno") && lstrlenW(args) + 14 < 1024) {
+        if (!_wcsicmp(p->scope, L"machine")) { lstrcatW(args, L" /ALLUSERS"); p->elevate = TRUE; }
+        else if (!_wcsicmp(p->scope, L"user")) lstrcatW(args, L" /CURRENTUSER");
+    }
+#endif
     lstrcpynW(p->command, args, 1024);
     /* An MSI for all users (Edge's, Chrome's) needs an administrator: on
      * Windows the Installer service elevates it itself, here there is no such

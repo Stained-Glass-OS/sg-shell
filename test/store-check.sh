@@ -64,6 +64,7 @@
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
+#   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
@@ -130,7 +131,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -141,7 +142,8 @@ done
 # --- the source: winget-pkgs' layout on this machine ---------------------------------------------
 W="$T/www"
 mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad/Hash/2.0" "$W/files" \
-         "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0"
+         "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0" \
+         "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
 SHA=$(sha256sum "$W/files/store-fake.exe" | cut -d' ' -f1)
 # a zip that holds the installer (and a readme), as Paint.NET's does
@@ -161,6 +163,22 @@ printf '[{"name": "2.0", "type": "dir"}]' > "$W/api/b/Bad/Hash"
 printf '[{"name": "2.0", "type": "dir"}]' > "$W/api/f/Fake/Pick"
 printf '[{"name": "5.1", "type": "dir"}]' > "$W/api/f/Fake/Zip"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Plus++"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoM"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoU"
+# Inno Setup installers of one scope each, as RawTherapee's (machine) and a per-user one
+for sc in M:machine U:user; do
+cat > "$W/raw/f/Fake/Inno${sc%%:*}/1.0/Fake.Inno${sc%%:*}.installer.yaml" <<EOF
+PackageIdentifier: Fake.Inno${sc%%:*}
+PackageVersion: 1.0
+InstallerType: inno
+Installers:
+- Architecture: x64
+  Scope: ${sc#*:}
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+ManifestType: installer
+EOF
+done
 # an id with + in it, as Notepad++.Notepad++
 cat > "$W/raw/f/Fake/Plus++/1.0/Fake.Plus++.installer.yaml" <<EOF
 PackageIdentifier: Fake.Plus++
@@ -344,6 +362,8 @@ app 06 'Git' Development windows 'winget:Fake.Git' 'Git'
 app 07 'XnView' Graphics windows 'winget:Fake.XnView' 'XnView|!XnView MP'
 app 08 'Pick App' Utilities windows 'winget:Fake.Pick' 'Pick App'
 app 09 'Zip App' Graphics windows 'winget:Fake.Zip' 'Zip App'
+app 0A 'Inno Machine' Graphics windows 'winget:Fake.InnoM' 'Inno Machine'
+app 0B 'Inno User' Graphics windows 'winget:Fake.InnoU' 'Inno User'
 app L1 'GIMP' Graphics linux 'linux:apt:gimp' 'GIMP'
 app L2 'Gate Tool' Utilities linux 'linux:apt:sg-gate-tool'
 wineserver -w
@@ -364,7 +384,7 @@ ununinstall() { wine reg delete "HKLM\\Software\\Microsoft\\Windows\\CurrentVers
 
 # --- A. the Linux apps: listed last, in their own section ---------------------------------------
 run --list
-[ "$(field catalog)" = 10 ] && pass "the catalogue loads (10 apps)" || fail "catalog '$(field catalog)'"
+[ "$(field catalog)" = 12 ] && pass "the catalogue loads (12 apps)" || fail "catalog '$(field catalog)'"
 [ "$(kv "$(appline L1)" section)" = Linux ] && pass "a Linux app is in the Linux apps section" || fail "L1: $(appline L1)"
 [ "$(kv "$(appline 05)" section)" = Graphics ] && pass "a Windows program is in its category" || fail "05: $(appline 05)"
 [ -n "$(pos L1)" ] && [ "$(pos L1)" -gt "$(pos 09)" ] && [ "$(pos L1)" -gt "$(pos 02)" ] && [ "$(pos L2)" -gt "$(pos 02)" ] \
@@ -470,6 +490,23 @@ SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='
 grep -q '/picked-nullsoft' "$G/setup.log" 2>/dev/null && ! grep -q 'gate-custom' "$G/setup.log" \
     && pass "MUTANT NOCUSTOM drops the Custom switches (gate catches it)" || fail "NOCUSTOM not detected: $(cat "$G/setup.log" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall PickApp
+# --- an Inno Setup installer is told the scope of its manifest entry, as winget does ----------------
+rm -f "$G/setup.log"
+SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno Machine' \
+    wine "$EXE" --install 0A >/dev/null 2>&1
+grep -q '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS' "$G/setup.log" 2>/dev/null && grep -q '^elevated 0A 1' "$D.result" 2>/dev/null \
+    && pass "Inno, machine scope: /ALLUSERS, as an administrator (RawTherapee, GIMP)" || fail "Inno machine: $(cat "$G/setup.log" "$D.result" 2>/dev/null)"
+rm -f "$G/setup.log"; ununinstall InnoM
+SG_FAKE_KEY=InnoU SG_FAKE_DISPLAY='Inno User' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno User' \
+    wine "$EXE" --install 0B >/dev/null 2>&1
+grep -q '/SP- /CURRENTUSER' "$G/setup.log" 2>/dev/null && grep -q '^elevated 0B 0' "$D.result" 2>/dev/null \
+    && pass "Inno, user scope: /CURRENTUSER, as the user" || fail "Inno user: $(cat "$G/setup.log" "$D.result" 2>/dev/null)"
+rm -f "$G/setup.log"; ununinstall InnoU
+SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno Machine' \
+    wine "$T/mut-noinnoscope.exe" --install 0A >/dev/null 2>&1
+grep -q '/SP-' "$G/setup.log" 2>/dev/null && ! grep -q 'ALLUSERS' "$G/setup.log" \
+    && pass "MUTANT NOINNOSCOPE runs it without its scope (gate catches it)" || fail "NOINNOSCOPE not detected: $(cat "$G/setup.log" 2>/dev/null)"
+rm -f "$G/setup.log"; ununinstall InnoM
 SG_MUT="$T/mut-anytype.exe" run --install 08
 [ ! -e "$G/setup.log" ] && pass "MUTANT ANYTYPE picks the portable zip and installs nothing (gate catches it)" || fail "ANYTYPE not detected"
 
