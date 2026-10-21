@@ -209,6 +209,7 @@ struct entry {
     FILETIME created;
     HICON icon;             /* 32 px, cached by path */
     BOOL recent;
+    char doc;               /* 0 not yet known, 1 a program, 2 a document (a shortcut's target) */
 };
 
 static struct entry *g_apps;
@@ -719,11 +720,57 @@ static int score(const struct entry *e, const WCHAR *q)
     return 0;
 }
 
+/* whether an entry opens a document rather than starting a program: a
+ * shortcut's target (or the file itself) is not a program. An installer's
+ * "HWiNFO Manual" (a PDF) came before HWiNFO itself, the names alike. */
+static BOOL is_document(struct entry *e)
+{
+    static const WCHAR *programs[] = { L".exe", L".com", L".bat", L".cmd", L".msc", L".cpl", L".scr", L".appref-ms" };
+    WCHAR target[MAX_PATH], *ext, *slash;
+    unsigned int i;
+
+    if (e->doc) return e->doc == 2;
+    lstrcpynW(target, e->path, MAX_PATH);
+    if ((ext = wcsrchr(e->path, '.')) && !lstrcmpiW(ext, L".lnk"))
+    {
+        IShellLinkW *link;
+        IPersistFile *file;
+        target[0] = 0;
+        if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link)))
+        {
+            if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+            {
+                if (SUCCEEDED(IPersistFile_Load(file, e->path, STGM_READ))
+                    && FAILED(IShellLinkW_GetPath(link, target, MAX_PATH, NULL, SLGP_RAWPATH))) target[0] = 0;
+                IPersistFile_Release(file);
+            }
+            IShellLinkW_Release(link);
+        }
+    }
+    e->doc = 1;
+    slash = wcsrchr(target, '\\');
+    ext = wcsrchr(slash ? slash : target, '.');
+    if (target[0] && ext)
+    {
+        e->doc = 2;
+        for (i = 0; i < ARRAYSIZE(programs); i++) if (!lstrcmpiW(ext, programs[i])) e->doc = 1;
+    }
+#ifdef SG_MUTANT_START_DOCS_EQUAL
+    e->doc = 1;
+#endif
+    return e->doc == 2;
+}
+
 struct hit { int id, score; };
 static int hit_cmp(const void *a, const void *b)
 {
     const struct hit *x = a, *y = b;
+    BOOL dx, dy;
     if (x->score != y->score) return y->score - x->score;
+    /* as well matched: a program before a document */
+    dx = is_document((struct entry *)entry_of(x->id));
+    dy = is_document((struct entry *)entry_of(y->id));
+    if (dx != dy) return dx - dy;
     return lstrcmpiW(entry_of(x->id)->name, entry_of(y->id)->name);
 }
 

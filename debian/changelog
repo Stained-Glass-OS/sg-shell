@@ -1,3 +1,13 @@
+sg-shell (0.1.0-188) unstable; urgency=medium
+
+  * Start search: as well matched, a program comes before a document. HWiNFO's
+    "HWiNFO Manual" (a shortcut to a PDF) was the best match for "HWiNFO",
+    ahead of the program, by name alone (SG Store walk on qa5). A shortcut's
+    target decides; the name stays the last word. Gate start-check (Quill64
+    and Quill Manual); mutant SG_MUTANT_START_DOCS_EQUAL.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 11:00:46 -0700
+
 sg-shell (0.1.0-187) unstable; urgency=medium
 
   * sg-admind: finishing an installation cut short (-186) now also runs

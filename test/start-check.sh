@@ -53,6 +53,10 @@ COMMONPROG='C:\ProgramData\Microsoft\Windows\Start Menu\Programs'
 "$WINE" "$T/mklnk.exe" "$COMMONPROG\\Filler" "Filler" 'C:\windows\system32\winver.exe' 200 >/dev/null 2>&1
 # a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)
 "$WINE" "$T/mklnk.exe" "${USERPROG%\\Programs}" "Root Level App" 'C:\windows\notepad.exe' >/dev/null 2>&1
+# a program and its manual, the manual first by name (HWiNFO's "HWiNFO Manual", a PDF)
+mkdir -p "$WINEPREFIX/drive_c/users/Public/Documents"; echo manual > "$WINEPREFIX/drive_c/users/Public/Documents/quill-manual.txt"
+"$WINE" "$T/mklnk.exe" "$USERPROG\\Quill" "Quill Manual" 'C:\users\Public\Documents\quill-manual.txt' >/dev/null 2>&1
+"$WINE" "$T/mklnk.exe" "$USERPROG\\Quill" "Quill64" 'C:\windows\notepad.exe' >/dev/null 2>&1
 "$WINESERVER" -w
 nlnk=$(find "$WINEPREFIX/drive_c" -path '*Start Menu/Programs*' -name '*.lnk' | wc -l)
 [ "$nlnk" -ge 201 ] || { fail "the test's shortcuts were not made ($nlnk)"; echo "RESULT: FAIL"; exit 1; }
@@ -244,6 +248,11 @@ d | sed -n 's/^best //p' | grep -q '^Edit .*environment variables' \
 xdotool key Escape; sleep 1
 xdotool type --delay 80 txt; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = Notepad ] && pass "apps are found by what they open: 'txt' -> Notepad" || fail "keyword search: $(d | grep '^best')"
+xdotool key Escape; sleep 1
+xdotool type --delay 80 quill; sleep 1.5
+{ [ "$(d | sed -n 's/^best //p')" = Quill64 ] && has "item Quill Manual"; } \
+    && pass "as well matched, a program comes before a document: 'quill' -> Quill64, then Quill Manual (a document)" \
+    || fail "program before document: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_DOCS_EQUAL: SG_START_EXE=<built with -DSG_MUTANT_START_DOCS_EQUAL>)"
 xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
 [ "$(val visible)" = 0 ] && pass "a second Escape closes Start" || fail "still open"
 
