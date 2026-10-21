@@ -750,8 +750,31 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
  * copies itself to %TEMP% and returns at once: the entry is watched until it
  * goes, a few minutes at most. */
 
+static void split_command(const WCHAR *cmd, WCHAR *file, WCHAR *args, int cch);
+
+/* whether FILE is an NSIS installer or uninstaller: its data carries NSIS's
+ * header, "NullsoftInst" (after the program, a few hundred KB in) */
+static BOOL is_nsis(const WCHAR *file)
+{
+    static const char sig[] = "NullsoftInst";
+    HANDLE h = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    char *buf;
+    DWORD got = 0, i;
+    BOOL found = FALSE;
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    if ((buf = HeapAlloc(GetProcessHeap(), 0, 4 << 20))) {
+        if (ReadFile(h, buf, 4 << 20, &got, NULL) && got >= sizeof(sig))
+            for (i = 0; i + sizeof(sig) - 1 <= got && !found; i++)
+                found = buf[i] == 'N' && !memcmp(buf + i, sig, sizeof(sig) - 1);
+        HeapFree(GetProcessHeap(), 0, buf);
+    }
+    CloseHandle(h);
+    return found;
+}
+
 static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
 {
+    BOOL quiet = FALSE;
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
         { HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
         { HKEY_LOCAL_MACHINE, L"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" },
@@ -773,6 +796,7 @@ static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
 #ifndef SG_MUTANT_NOQUIET
                 reg_str(item, L"QuietUninstallString", cmd, cch);
 #endif
+                quiet = cmd[0] != 0;
                 if (!cmd[0]) reg_str(item, L"UninstallString", cmd, cch);
             }
             RegCloseKey(item);
@@ -782,6 +806,21 @@ static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
     if (cmd[0]) {   /* MsiExec /I{GUID} repairs; /X{GUID} removes */
         WCHAR *p = StrStrIW(cmd, L"msiexec");
         if (p && (p = StrStrIW(p, L" /I")) && (p[3] == L'{' || p[3] == L' ')) p[2] = L'X';
+    }
+    /* an NSIS uninstaller with no quiet command of its own (Scribus 1.6.6):
+     * its window and its "All files ... will be deleted" question waited for
+     * a click, and the store said "not removed". /S is NSIS's silent switch,
+     * as winget gives it. */
+    if (cmd[0] && !quiet) {
+        WCHAR file[MAX_PATH], args[MAX_PATH];
+        split_command(cmd, file, args, MAX_PATH);
+#ifndef SG_MUTANT_NONSISSILENT
+        const WCHAR *w = args;
+        BOOL has_s = FALSE;
+        for (; (w = wcsstr(w, L"/S")); w += 2)   /* the word /S, NSIS's: case counts */
+            if ((w == args || w[-1] == L' ') && (!w[2] || w[2] == L' ')) has_s = TRUE;
+        if (!has_s && is_nsis(file) && lstrlenW(cmd) + 4 < cch) lstrcatW(cmd, L" /S");
+#endif
     }
     return cmd[0] != 0;
 }

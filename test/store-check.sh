@@ -81,6 +81,7 @@
 #   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
+#   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
@@ -137,7 +138,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1287,6 +1288,23 @@ case "$r" in *wrongpart*) fail "a hidden part was uninstalled for the app: $r" ;
 r=$(parts_case "$T/mut-showparts.exe")
 case "$r" in *wrongpart*) pass "MUTANT SHOWPARTS uninstalls the hidden part instead (gate catches it)" ;;
              *) fail "SHOWPARTS not detected: $r" ;; esac
+# an NSIS uninstaller with no quiet command (Scribus 1.6.6): its window and
+# question waited for a click; the store runs it with NSIS's /S
+nsis_case() { # EXE NSIS(1|0) -- what the uninstaller was asked
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString /f >/dev/null 2>&1
+    [ "$2" = 1 ] && printf '\357\276\255\336NullsoftInst' >> "$WINEPREFIX/drive_c/Program Files/Fake App/uninst.exe"
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null
+    ununinstall FakeApp; sleep 0.5
+}
+r=$(nsis_case "$EXE" 1)
+case "$r" in *"/ui /S"*) pass "an NSIS uninstaller with no quiet command runs with /S (Scribus)" ;; *) fail "NSIS uninstall: $r" ;; esac
+r=$(nsis_case "$EXE" 0)
+case "$r" in *"/ui"*" /S"*|*"/ui /S"*) fail "/S given to an uninstaller that is not NSIS's: $r" ;; *"/ui"*) pass "...and not to one that is not NSIS's" ;; *) fail "non-NSIS uninstall: $r" ;; esac
+r=$(nsis_case "$T/mut-nonsissilent.exe" 1)
+case "$r" in *"/S"*) fail "NONSISSILENT not detected: $r" ;; *) pass "MUTANT NONSISSILENT leaves the NSIS uninstaller waiting for a click (gate catches it)" ;; esac
 # an uninstaller that hands off to a child (Opera's): done when the child is,
 # not "not removed" while its window is still up
 handoff() { # exe -> ok|fail

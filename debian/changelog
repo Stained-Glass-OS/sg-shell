@@ -1,3 +1,14 @@
+sg-shell (0.1.0-190) unstable; urgency=medium
+
+  * SG Store: an NSIS uninstaller whose entry has no quiet command (Scribus
+    1.6.6) is run with NSIS's /S, as winget runs it: its window and its
+    "All files ... will be deleted. Do you want to continue?" waited for a
+    click, and the store said "Scribus was not removed". Known by NSIS's
+    header in the uninstaller ("NullsoftInst"). Gate store-check; mutant
+    SG_MUTANT_NONSISSILENT.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 13:58:57 -0700
+
 sg-shell (0.1.0-189) unstable; urgency=medium
 
   * SG Store: an Uninstall entry Apps & features does not list (a part of
