@@ -1,3 +1,19 @@
+sg-shell (0.1.0-183) unstable; urgency=medium
+
+  * SG Store: at its start it takes away what a Store or browser ended
+    mid-download left in %TEMP% (StainedGlass-Browser-*, more than an hour
+    since last written; a file still open stays). A walk of the catalogue
+    left 1.5 GB of part downloads. Gate store-check; mutant
+    SG_MUTANT_NOSWEEP.
+  * SG Store: a catalogue entry can name packages it needs beside its
+    manifest's dependencies (Depends); DYMO Connect gets .NET Desktop
+    Runtime 8 first. Its setup skips its own .NET 8 prerequisite when
+    silent, and the install then stopped with code 91 while its service
+    waited on "you must install .NET". Gate store-check; mutant
+    SG_MUTANT_NODEPENDS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 20 Oct 2026 20:50:00 -0700
+
 sg-shell (0.1.0-182) unstable; urgency=medium
 
   * SG Store: an Inno Setup installer is told its manifest entry's scope,

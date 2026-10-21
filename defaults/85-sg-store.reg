@@ -3497,6 +3497,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00d71920
 "Tier"="windows"
 "Source"="winget:DYMO.DYMOConnect"
+"Depends"="Microsoft.DotNet.DesktopRuntime.8"
 "DetectName"="DYMO Connect"
 "Icon"="https://www.dymo.com/favicon.ico"
 

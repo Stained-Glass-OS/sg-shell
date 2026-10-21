@@ -290,6 +290,47 @@ done:
     return ok;
 }
 
+/* Downloads a Store or browser that was ended mid-way left behind (a Store
+ * closed during a 164 MB Chrome download kept the part): the folders more than
+ * an hour old under %TEMP%, emptied of what can be deleted. A file still open
+ * -- a download going on, an installer running from it -- cannot be, and its
+ * folder stays. Returns how many folders went. */
+int pkg_sweep_downloads(void)
+{
+    WCHAR tmp[MAX_PATH], pat[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAW fd, ff;
+    HANDLE find, files;
+    FILETIME now;
+    ULARGE_INTEGER n, c;
+    int gone = 0;
+#ifdef SG_MUTANT_NOSWEEP
+    return 0;
+#endif
+    if (!GetTempPathW(MAX_PATH, tmp)) return 0;
+    GetSystemTimeAsFileTime(&now);
+    n.LowPart = now.dwLowDateTime; n.HighPart = now.dwHighDateTime;
+    swprintf(pat, MAX_PATH, L"%lsStainedGlass-Browser-*", tmp);
+    if ((find = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+        c.LowPart = fd.ftLastWriteTime.dwLowDateTime; c.HighPart = fd.ftLastWriteTime.dwHighDateTime;
+        if (n.QuadPart < c.QuadPart + 36000000000ULL) continue;   /* written to within the hour: maybe in use */
+        swprintf(dir, MAX_PATH, L"%ls%ls", tmp, fd.cFileName);
+        swprintf(pat, MAX_PATH, L"%ls\\*", dir);
+        if ((files = FindFirstFileW(pat, &ff)) != INVALID_HANDLE_VALUE) {
+            do {
+                if (ff.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                swprintf(path, MAX_PATH, L"%ls\\%ls", dir, ff.cFileName);
+                DeleteFileW(path);
+            } while (FindNextFileW(files, &ff));
+            FindClose(files);
+        }
+        if (RemoveDirectoryW(dir)) gone++;
+    } while (FindNextFileW(find, &fd));
+    FindClose(find);
+    return gone;
+}
+
 void pkg_cleanup(package_t *p)
 {
     WCHAR dir[MAX_PATH], *slash;

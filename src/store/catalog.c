@@ -120,6 +120,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"Description", a->desc, ARRAYSIZE(a->desc));
         reg_str(item, L"Category", a->category, ARRAYSIZE(a->category));
         reg_str(item, L"DetectName", a->detect_name, ARRAYSIZE(a->detect_name));
+        reg_str(item, L"Depends", a->depends, ARRAYSIZE(a->depends));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
         {
@@ -597,6 +598,15 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     if (a) lstrcpynW(a->available_version, p.version, ARRAYSIZE(a->available_version));
     if (winget_path(winget, MAX_PATH))   /* winget installs the dependencies itself */
         return winget_install(winget, &p, err, cch) ? 0 : 1;
+#ifndef SG_MUTANT_NODEPENDS
+    /* and what the catalogue says it needs beside: DYMO Connect's setup skips
+     * its .NET 8 prerequisite when silent, and its service then stopped the
+     * install waiting on "you must install .NET" (code 91) */
+    if (a && a->depends[0] && lstrlenW(p.deps) + 1 + lstrlenW(a->depends) < ARRAYSIZE(p.deps)) {
+        if (p.deps[0]) lstrcatW(p.deps, L" ");
+        lstrcatW(p.deps, a->depends);
+    }
+#endif
     if (install_deps(&p, depth, progress, ctx, cancel, err, cch)) return 1;
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
 #ifndef SG_MUTANT_NOZIP

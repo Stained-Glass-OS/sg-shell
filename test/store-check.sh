@@ -65,6 +65,8 @@
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
+#   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
+#   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
@@ -131,7 +133,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -383,6 +385,21 @@ uninstall() { reg "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall
 ununinstall() { wine reg delete "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$1" /f >/dev/null 2>&1; }
 
 # --- A. the Linux apps: listed last, in their own section ---------------------------------------
+# what an ended Store left of its downloads: an old folder (and its part file) goes at the start, one
+# written to within the hour stays (a download may be going on in it)
+TMPD="$WINEPREFIX/drive_c/users/$USER/AppData/Local/Temp"; mkdir -p "$TMPD/StainedGlass-Browser-0old" "$TMPD/StainedGlass-Browser-0new"
+echo part > "$TMPD/StainedGlass-Browser-0old/chrome.msi"; echo part > "$TMPD/StainedGlass-Browser-0new/chrome.msi"
+touch -d '3 hours ago' "$TMPD/StainedGlass-Browser-0old"
+sweep_check() { # label
+    if [ ! -e "$TMPD/StainedGlass-Browser-0old" ] && [ -e "$TMPD/StainedGlass-Browser-0new/chrome.msi" ]; then echo gone; else echo kept; fi
+}
+run --list
+[ "$(sweep_check)" = gone ] && pass "the Store takes away an old download folder, not one written to within the hour" \
+    || fail "download sweep: $(ls "$TMPD" | grep StainedGlass-Browser | tr '\n' ' ')"
+mkdir -p "$TMPD/StainedGlass-Browser-0old"; echo part > "$TMPD/StainedGlass-Browser-0old/chrome.msi"; touch -d '3 hours ago' "$TMPD/StainedGlass-Browser-0old"
+SG_MUT="$T/mut-nosweep.exe" run --list
+[ "$(sweep_check)" = kept ] && pass "MUTANT NOSWEEP leaves it (gate catches it)" || fail "NOSWEEP not detected"
+rm -rf "$TMPD/StainedGlass-Browser-0old" "$TMPD/StainedGlass-Browser-0new"
 run --list
 [ "$(field catalog)" = 12 ] && pass "the catalogue loads (12 apps)" || fail "catalog '$(field catalog)'"
 [ "$(kv "$(appline L1)" section)" = Linux ] && pass "a Linux app is in the Linux apps section" || fail "L1: $(appline L1)"
@@ -619,6 +636,38 @@ SG_MUT="$T/mut-nodepinstall.exe" needy
 ! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && pass "MUTANT NODEPINSTALL skips the dependency (gate catches it)" \
     || fail "NODEPINSTALL not detected"
 wine reg delete "$K\\10" /f >/dev/null 2>&1; ununinstall NeedyApp; rm -f "$G/setup.log"; wineserver -w
+# what the catalogue says a package needs beside its manifest (Depends): DYMO Connect's setup skips its
+# .NET 8 prerequisite when silent
+mkdir -p "$W/raw/f/Fake/Lonely/1.0"; printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Lonely"
+cat > "$W/raw/f/Fake/Lonely/1.0/Fake.Lonely.installer.yaml" <<EOF
+PackageIdentifier: Fake.Lonely
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /lonely
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
+app 11 'Lonely App' Development windows 'winget:Fake.Lonely' 'Lonely App'
+reg "$K\\11" /v Depends /d 'Fake.Dep'
+wineserver -w
+lonely() { SG_FAKE_KEY=LonelyApp SG_FAKE_DISPLAY='Lonely App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Lonely App' \
+               wine "${SG_MUT:-$EXE}" --install 11 >/dev/null 2>&1; }
+rm -f "$G/setup.log"
+lonely
+[ "$(grep -n -- '/dep-installed' "$G/setup.log" 2>/dev/null | head -1 | cut -d: -f1)" = 1 ] && grep -q -- '/lonely' "$G/setup.log" \
+    && pass "a catalogue entry's Depends is installed first (DYMO Connect: .NET 8)" || fail "Depends: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+rm -f "$G/setup.log"; ununinstall LonelyApp
+SG_MUT="$T/mut-nodepends.exe" lonely
+! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && grep -q -- '/lonely' "$G/setup.log" 2>/dev/null \
+    && pass "MUTANT NODEPENDS skips it (gate catches it)" || fail "NODEPENDS not detected: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+wine reg delete "$K\\11" /f >/dev/null 2>&1; ununinstall LonelyApp; ununinstall DepApp; rm -f "$G/setup.log"; wineserver -w
+wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
 
 # --- H. a pinned install --------------------------------------------------------------------------
 rm -f "$G/setup.log"

@@ -1575,6 +1575,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     (void)prev; (void)cmdline; (void)show;
     GetEnvironmentVariableW(L"SG_STORE_DUMP", g_dump, MAX_PATH);
     InitializeCriticalSection(&g_qlock);
+    /* what an ended Store or browser left of its downloads */
+    pkg_sweep_downloads();
     /* drawn at the display scale (its sizes go by g_dpi), a new one too
      * (WM_DPICHANGED) -- unaware, Wine scaled its picture, soft at 175% */
 #ifndef SG_MUTANT_DPI_UNAWARE

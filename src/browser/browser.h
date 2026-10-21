@@ -49,6 +49,7 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch);
  * "runas" (its exit code to *code); FALSE: it could not be run */
 extern BOOL (*g_runas_hook)(const WCHAR *file, const WCHAR *args, DWORD *code);
 void pkg_cleanup(package_t *p);
+int pkg_sweep_downloads(void);
 BOOL winget_path(WCHAR *out, int cch);
 char *winget_locale_manifest(const WCHAR *id, WCHAR *version, int vcch, WCHAR *err, int cch);
 BOOL winget_install(const WCHAR *winget, package_t *p, WCHAR *err, int cch);
