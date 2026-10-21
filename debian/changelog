@@ -1,3 +1,25 @@
+sg-shell (0.1.0-192) unstable; urgency=high
+
+  * sg-admind: uninstalling an app could remove much of the system. Its
+    "parts" (dependencies it alone brought, left for autoremove) were
+    matched by bare name, so Steam's i386 libraries, left for autoremove,
+    stood for the system's own libcairo2, libgdk-pixbuf, libx11-6...; and
+    apt-get -y remove of them took everything that needs them (qa5: 763
+    packages -- Mesa, GTK, Qt, SG Mail -- removing Shotwell). Now:
+    - a dependency is the installed package of the depending package's
+      architecture (or "all"), else a Multi-Arch: foreign one, or the
+      architecture it names, compared as apt names it (libx11-6:i386);
+    - the parts go only when apt's own simulation of removing them takes
+      nothing but leftovers and none of the system's packages; otherwise
+      they stay;
+    - autoremove is simulated once, not once per dependency (Shotwell's
+      removal spent eight minutes in it).
+    Gate: admind-check (Firefox keeps libx11-6; Steam takes
+    steam-libs-i386:i386; parts whose removal takes more stay; mutants
+    ARCHBLIND, PARTSUNCHECKED).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 16:21:45 -0700
+
 sg-shell (0.1.0-191) unstable; urgency=medium
 
   * SG Store: a catalogue entry can name its uninstaller's quiet switch

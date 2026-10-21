@@ -717,6 +717,9 @@ cat > "$B/dpkg-query" <<EOF
 eval "pkg=\\\${\$#}"
 case "\$*" in
   *Essential*) case \$pkg in base-files) echo "yes required" ;; *) echo "no optional" ;; esac; exit 0 ;;
+  *Multi-Arch*) awk -v p="\$pkg" '\$1 == p || index(\$1, p ":") == 1' "$T/installed" 2>/dev/null | while read -r n v; do
+        case \$n in *:*) a=\${n#*:} ;; *) a=amd64 ;; esac
+        echo "\$a|\$(sed -n "s/^\$pkg //p" "$T/ma" 2>/dev/null)|installed"; done; exit 0 ;;
   *Depends*) sed -n "s/^\$pkg //p" "$T/deps" 2>/dev/null; exit 0 ;;
 esac
 v=\$(sed -n "s/^\$pkg //p" "$T/installed" 2>/dev/null | tail -1)
@@ -759,6 +762,48 @@ remove_cases() { # ADMIND -- one word per case
       && grep -qF '[-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-documents.exe]' "$T/unreg.reg" \
       && grep -qF '"SG Office"=-' "$T/unreg.reg" && grep -qF '"SGOffice.Document.12"=-' "$T/unreg.reg" \
       && ! grep -qF '[-HKEY_LOCAL_MACHINE\Software\Classes\.docx]' "$T/unreg.reg"; } && echo unregistered || echo not-unregistered
+    # another architecture's leftovers (Steam's i386 libraries, for
+    # autoremove) are not this app's: Firefox goes, libx11-6 stays; and an
+    # i386 dependency an app did bring (Multi-Arch: foreign) goes with it
+    printf 'firefox 150
+libx11-6 1.8
+libx11-6:i386 1.8
+libstdc++6 14
+libstdc++6:i386 14
+steam-installer 1.0
+steam-libs-i386:i386 1.0
+' > "$T/installed"
+    printf 'firefox libx11-6, libstdc++6
+steam-installer steam-libs-i386 (= 1.0), libstdc++6
+' > "$T/deps"
+    printf 'libx11-6:i386
+libstdc++6:i386
+steam-libs-i386:i386
+' > "$T/auto"; printf 'steam-libs-i386 foreign
+' > "$T/ma"; : > "$T/rdeps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\nfirefox\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    id=$(next_id); printf 'apt-remove\nsteam-installer\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r2=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && [ "$(first "$r2")" = OK ] && grep -q '^apt-get .* remove firefox$' "$CALLS" \
+      && ! grep -qE '^apt-get [^-]*-y.* remove .*lib(x11-6|stdc)' "$CALLS" && grep -q '^apt-get .* remove steam-libs-i386:i386$' "$CALLS"; } \
+      && echo archsafe || echo archblind
+    rm -f "$T/ma"
+    # a part whose removal would take more than leftovers (what still needs
+    # it, here a program the person installed): the parts stay, apt removes
+    # only the app
+    printf 'shotwell 0.32
+libgexiv2 0.14
+libgexiv2-tool 1.0
+' > "$T/installed"
+    printf 'shotwell libgexiv2
+' > "$T/deps"; printf 'libgexiv2
+' > "$T/auto"; printf 'libgexiv2 libgexiv2-tool
+' > "$T/rdeps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\nshotwell\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* remove shotwell$' "$CALLS" && ! grep -qE '^apt-get [^-]*-y.* remove .*libgexiv2' "$CALLS" \
+      && grep -q '^libgexiv2-tool ' "$T/installed"; } && echo contained || echo cascaded
 }
 # shellcheck disable=SC2046
 set -- $(remove_cases "$ADMIND")
@@ -766,6 +811,10 @@ set -- $(remove_cases "$ADMIND")
     || fail "apt-remove gimp: ${1:-} $(tr '\n' '|' < "$CALLS")"
 [ "${2:-}" = guarded ] && pass "apt-remove refuses what would remove the system's own packages (sg-shell); apt removes nothing" \
     || fail "apt-remove guard: ${2:-} $(tr '\n' '|' < "$CALLS")"
+[ "${5:-}" = contained ] && pass "apt-remove leaves the app's parts when removing them would take more than leftovers (no cascade)" \
+    || fail "apt-remove cascade: ${5:-} $(tr '\n' '|' < "$CALLS")"
+[ "${4:-}" = archsafe ] && pass "apt-remove takes no other architecture's leftovers for the app's (Firefox: libx11-6 stays; Steam's steam-libs-i386:i386 goes)" \
+    || fail "apt-remove multiarch: ${4:-} $(tr '\n' '|' < "$CALLS")"
 [ "${3:-}" = unregistered ] && pass "apt-remove of SG Office takes its ProgIDs, App Paths and values out of the Windows side (not .docx itself), then it and its editors go" \
     || fail "apt-remove sg-office: ${3:-} $(tr '\n' '|' < "$CALLS") $(head -c 600 "$T/unreg.reg" 2>/dev/null)"
 : > "$CALLS"; printf 'base-files 13\nsg-shell 0.1.0-86\nwine-sg 10.0-133\n' > "$T/installed"; : > "$T/rdeps"
@@ -784,6 +833,16 @@ grep -q '^        unregister_defaults(pkg)$' "$T/mut-nounreg" && fail "the NOUNR
 # shellcheck disable=SC2046
 set -- $(remove_cases "$T/mut-nounreg")
 [ "${3:-}" != unregistered ] && pass "MUTANT NOUNREG leaves SG Office's file types behind (gate catches it)" || fail "NOUNREG not detected"
+sed 's/^    return name if arch in ("", "all", native_arch()) else "%s:%s" % (name, arch)$/    return name/' "$ADMIND" > "$T/mut-archblind"
+grep -q '^    return name$' "$T/mut-archblind" || fail "the ARCHBLIND mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$T/mut-archblind")
+[ "${4:-}" = archblind ] && pass "MUTANT ARCHBLIND asks apt to remove libx11-6 with Firefox (gate catches it)" || fail "ARCHBLIND not detected"
+sed 's/^        if cascade is None or any(.*):$/        if False:/' "$ADMIND" > "$T/mut-partsunchecked"
+grep -q '^        if False:$' "$T/mut-partsunchecked" || fail "the PARTSUNCHECKED mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$T/mut-partsunchecked")
+[ "${5:-}" = cascaded ] && pass "MUTANT PARTSUNCHECKED removes a part and what still needs it (gate catches it)" || fail "PARTSUNCHECKED not detected"
 unset SG_ADMIN_DEFAULTS
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"; cp "$T/runuser.others" "$B/runuser"
 

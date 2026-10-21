@@ -1228,14 +1228,63 @@ def simulated_removals(args):
     if r.returncode != 0:
         errors = [l[3:].strip() for l in (r.stdout + r.stderr).splitlines() if l.startswith("E: ")]
         raise Refused("It cannot be uninstalled%s" % ((": " + errors[0]) if errors else "."))
-    return [l.split()[1].split(":")[0] for l in r.stdout.splitlines() if l.startswith("Remv ") and len(l.split()) > 1]
+    return [qualified(*l.split()[1].partition(":")[::2]) for l in r.stdout.splitlines()
+            if l.startswith("Remv ") and len(l.split()) > 1]
+
+
+_native = []
+
+
+def native_arch():
+    if not _native:
+        r = run(["dpkg", "--print-architecture"])
+        _native.append(r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "amd64")
+    return _native[0]
+
+
+def qualified(name, arch):
+    """a package as apt-get names it: NAME, or NAME:ARCH for another
+    architecture's. Steam's i386 libraries, left for autoremove, are
+    libx11-6:i386 -- not Firefox's libx11-6 (qa5 2026-10-21: removing Firefox
+    asked apt to remove libstdc++6, libx11-6 and the rest of the system's
+    own, and only apt's refusal kept them)"""
+    return name if arch in ("", "all", native_arch()) else "%s:%s" % (name, arch)
+
+
+def instances(name):
+    """[(arch, multi_arch)] of the installed packages called NAME"""
+    r = run(["dpkg-query", "-W", "-f", "${Architecture}|${Multi-Arch}|${db:Status-Status}\n", name])
+    out = []
+    for line in r.stdout.splitlines() if r.returncode == 0 else []:
+        f = line.split("|")
+        if len(f) == 3 and f[2] == "installed":
+            out.append((f[0], f[1]))
+    return out
 
 
 def installed_depends(pkg):
-    """the installed packages pkg depends on (each alternative), by name"""
+    """the installed packages pkg depends on (each alternative), as apt-get
+    names them: a dependency is pkg's own architecture's (or "all"), else a
+    Multi-Arch: foreign one's (steam-installer's steam-libs-i386:i386), or
+    the architecture it names"""
     r = run(["dpkg-query", "-W", "-f", "${Pre-Depends}, ${Depends}", pkg])
     rel = parse_relations("Depends: " + r.stdout) if r.returncode == 0 else {}
-    return {name for alts in rel.get("Depends", []) for name, _ in alts}
+    mine = instances(pkg)
+    arch = mine[0][0] if mine else native_arch()
+    out = set()
+    for alts in rel.get("Depends", []):
+        for name, want in alts:
+            have = instances(name)
+            if want == "any":
+                archs = [a for a, _ in have]
+            elif want == "native":
+                archs = [a for a, _ in have if a in ("all", native_arch())]
+            elif want:
+                archs = [a for a, _ in have if a == want]
+            else:
+                archs = [a for a, _ in have if a in ("all", arch)] or [a for a, m in have if m == "foreign"]
+            out |= {qualified(name, a) for a in archs}
+    return out
 
 
 OUR_PROGIDS = re.compile(r"^HKEY_LOCAL_MACHINE\\Software\\Classes\\(?:[^\\]+\\)?SGOffice\.[^\\]+", re.I)
@@ -1332,7 +1381,22 @@ def op_apt_remove(args):
     apt_get(["remove", pkg], "%s could not be uninstalled" % pkg, 10, 60)
     if installed_version(pkg):
         raise Refused("%s was not uninstalled." % pkg)
-    extra = [d for d in deps if d in simulated_removals(["autoremove"]) and not protected(d)]
+    leftover = set(simulated_removals(["autoremove"]))
+    extra = [d for d in deps if d in leftover and not protected(d)]
+    # and only if removing them takes nothing else: what apt-get remove of
+    # the parts would take must all be leftovers, none of them the system's.
+    # (qa5 2026-10-21: the parts named the system's libcairo2 and
+    # libgdk-pixbuf, and apt -y took 763 packages with them -- Mesa, GTK,
+    # Qt, SG Mail -- until it was stopped)
+    if extra:
+        try:
+            cascade = simulated_removals(["remove"] + sorted(extra))
+        except Refused:
+            cascade = None
+        if cascade is None or any(c not in leftover or protected(c) for c in cascade):
+            log("apt-remove %s: its parts stay, removing them would take %s" % (
+                pkg, "more" if cascade is None else " ".join(sorted(c for c in cascade if c not in leftover or protected(c))[:8])))
+            extra = []
     if extra:
         progress(75, "Removing what it brought with it...")
         for d in extra:
