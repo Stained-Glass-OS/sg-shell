@@ -1,3 +1,15 @@
+sg-shell (0.1.0-186) unstable; urgency=medium
+
+  * sg-admind (SG Store's Linux apps): apt no longer keeps the packages it
+    downloads once they are installed -- one walk of the store left 3 GB of
+    them on qa5 and filled its disk. And an installation cut short (that
+    full disk, a power cut) left dpkg "interrupted": apt then refused every
+    later install and uninstall until someone ran dpkg --configure -a by
+    hand. sg-admind now finishes it and asks apt again, once. Gate
+    admind-check; mutants KEEPDEBS, NOFINISH.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 10:05:20 -0700
+
 sg-shell (0.1.0-185) unstable; urgency=medium
 
   * SG Store: an installer that writes no Uninstall entry (DOSBox 0.74-3:

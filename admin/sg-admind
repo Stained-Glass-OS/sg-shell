@@ -1040,10 +1040,35 @@ def apt_get(args, what, base=0, span=100):
     """apt-get with its status on a pipe: dlstatus (downloading) and pmstatus
     (dpkg) lines become the progress file, base..base+span percent. Every use
     is the SG Store's: its restore point (the APT hook, sg-snapshot) is kept
-    apart from the updates', SG_SNAP_SOURCE=store."""
+    apart from the updates', SG_SNAP_SOURCE=store.
+
+    An installation cut short before (a full disk, a power cut) leaves dpkg
+    "interrupted", and apt then refuses every install and uninstall until
+    someone runs dpkg --configure -a: the SG Store failed every Linux app
+    after one (qa5 2026-10-21). Finish it, then ask apt again, once."""
+    rc, out = apt_get_once(args, what, base, span)
+    if rc != 0 and "dpkg was interrupted" in out:
+        log("apt-get %s: an earlier installation was cut short; dpkg --configure -a" % " ".join(args))
+        progress(base, "Finishing an installation that was cut short...")
+        r = run(["dpkg", "--force-confdef", "--force-confold", "--configure", "-a"], timeout=1800, extra_env=apt_env())
+        if r.returncode != 0:
+            log("dpkg --configure -a failed (%d): %s" % (r.returncode, (r.stderr or r.stdout).strip()[-300:]))
+        rc, out = apt_get_once(args, what, base, span)
+    if rc != 0:
+        errors = [l[3:].strip() for l in out.splitlines() if l.startswith("E: ")]
+        log("apt-get %s failed (%d): %s" % (" ".join(args), rc, errors[-1] if errors else out.strip()[-300:]))
+        raise Refused("%s%s" % (what, (": " + errors[0]) if errors else "."))
+    return out
+
+
+def apt_get_once(args, what, base, span):
+    """(apt-get's exit code, its output). The packages it downloads go once
+    they are installed: kept, they filled qa5's disk (3 GB) in one walk of
+    the SG Store, and a full disk is what cut an installation short."""
     rfd, wfd = os.pipe()
     log_fd, log_path = tempfile.mkstemp(prefix="sg-apt-", dir=WORK_DIR)
     argv = ["apt-get", "-y", "-q", "-o", "APT::Status-Fd=%d" % wfd, "-o", "DPkg::Lock::Timeout=600",
+            "-o", "APT::Keep-Downloaded-Packages=false",
             "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"] + args
     try:
         try:
@@ -1076,11 +1101,7 @@ def apt_get(args, what, base=0, span=100):
     finally:
         os.close(log_fd)
         os.unlink(log_path)
-    if rc != 0:
-        errors = [l[3:].strip() for l in out.splitlines() if l.startswith("E: ")]
-        log("apt-get %s failed (%d): %s" % (" ".join(args), rc, errors[-1] if errors else out.strip()[-300:]))
-        raise Refused("%s%s" % (what, (": " + errors[0]) if errors else "."))
-    return out
+    return rc, out
 
 
 def refresh_lists():

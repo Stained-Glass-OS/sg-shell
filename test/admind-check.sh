@@ -405,6 +405,36 @@ grep -q 'SG_SNAP_SOURCE="store"' "$T/mut-nosource" && fail "the NOSOURCE mutant 
 grep -q '^PROGRESS [0-9]' "$T/progress-seen" 2>/dev/null && grep -q 'Unpacking the thing' "$T/progress-seen" \
     && pass "and publishes apt's progress while it runs" || fail "progress: $(cat "$T/progress-seen" 2>/dev/null)"
 [ -z "$(ls "$S"/replies/*.progress 2>/dev/null)" ] && pass "the progress file goes with the answer" || fail "progress left behind"
+grep -q '^apt-get .*APT::Keep-Downloaded-Packages=false.* install gimp$' "$CALLS" \
+    && pass "and does not keep the packages it downloaded (they filled qa5's disk)" || fail "downloads kept: $(cat "$CALLS")"
+sed '/"APT::Keep-Downloaded-Packages=false",$/d' "$ADMIND" > "$T/mut-keepdebs"
+grep -q 'Keep-Downloaded-Packages=false' "$T/mut-keepdebs" && fail "the KEEPDEBS mutant did not apply"
+: > "$CALLS"
+id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+python3 "$T/mut-keepdebs" 2>>"$T/log"
+grep 'install gimp$' "$CALLS" | grep -q 'Keep-Downloaded-Packages=false' && fail "KEEPDEBS not detected" \
+    || pass "MUTANT KEEPDEBS (downloads kept) is caught"
+# an installation cut short before: apt refuses ("dpkg was interrupted")
+# until dpkg --configure -a has run; sg-admind runs it and asks apt again
+cp "$B/apt-get" "$T/apt-get.plain"
+{ printf '#!/bin/sh\n'
+  printf '[ -f "%s" ] && case " $* " in *" install "*) echo "E: dpkg was interrupted, you must manually run '"'"'dpkg --configure -a'"'"' to correct the problem."; exit 100 ;; esac\n' "$T/interrupted"
+  printf 'exec "%s" "$@"\n' "$T/apt-get.plain"; } > "$B/apt-get"
+printf '#!/bin/sh\nprintf "dpkg %%s\\n" "$*" >> "%s"\n[ "$*" = "--force-confdef --force-confold --configure -a" ] && rm -f "%s"\nexit 0\n' "$CALLS" "$T/interrupted" > "$B/dpkg"
+chmod +x "$B/apt-get" "$B/dpkg"
+interrupted_case() { # ADMIND -- the reply's first line
+    : > "$CALLS"; : > "$T/installed"; : > "$T/interrupted"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; first "$(cat "$S/replies/$id.rep" 2>/dev/null)"
+}
+r=$(interrupted_case "$ADMIND")
+{ [ "$r" = OK ] && grep -q '^dpkg --force-confdef --force-confold --configure -a$' "$CALLS" && [ ! -e "$T/interrupted" ]; } \
+    && pass "after an installation cut short, it finishes it (dpkg --configure -a) and installs" || fail "interrupted dpkg: $r / $(tr '\n' '|' < "$CALLS")"
+sed 's/ and "dpkg was interrupted" in out:/ and False:/' "$ADMIND" > "$T/mut-nofinish"
+grep -q '"dpkg was interrupted" in out' "$T/mut-nofinish" && fail "the NOFINISH mutant did not apply"
+r=$(interrupted_case "$T/mut-nofinish")
+[ "$r" != OK ] && pass "MUTANT NOFINISH (every install refused after one cut short) is caught" || fail "NOFINISH not detected"
+cp "$T/apt-get.plain" "$B/apt-get"; rm -f "$B/dpkg" "$T/interrupted"
 : > "$CALLS"
 for bad in 'gimp; reboot' '-oAPT::X=1' '../gimp' 'Gimp' ''; do
     r=$(ask apt-install "$bad"); case "$(first "$r")" in "FAILED "*) ;; *) fail "apt-install '$bad': $r" ;; esac
