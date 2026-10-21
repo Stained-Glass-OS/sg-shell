@@ -419,8 +419,10 @@ grep 'install gimp$' "$CALLS" | grep -q 'Keep-Downloaded-Packages=false' && fail
 cp "$B/apt-get" "$T/apt-get.plain"
 { printf '#!/bin/sh\n'
   printf '[ -f "%s" ] && case " $* " in *" install "*) echo "E: dpkg was interrupted, you must manually run '"'"'dpkg --configure -a'"'"' to correct the problem."; exit 100 ;; esac\n' "$T/interrupted"
+  printf 'case " $* " in *" -f install "*) printf "apt-get -f install\\n" >> "%s"; rm -f "%s"; exit 0 ;; esac\n' "$CALLS" "$T/broken"
+  printf '[ -f "%s" ] && case " $* " in *" install "*) echo "E: Unmet dependencies. Try '"'"'apt --fix-broken install'"'"' with no packages (or specify a solution)."; exit 100 ;; esac\n' "$T/broken"
   printf 'exec "%s" "$@"\n' "$T/apt-get.plain"; } > "$B/apt-get"
-printf '#!/bin/sh\nprintf "dpkg %%s\\n" "$*" >> "%s"\n[ "$*" = "--force-confdef --force-confold --configure -a" ] && rm -f "%s"\nexit 0\n' "$CALLS" "$T/interrupted" > "$B/dpkg"
+printf '#!/bin/sh\nprintf "dpkg %%s\\n" "$*" >> "%s"\n[ "$*" = "--force-confdef --force-confold --configure -a" ] && rm -f "%s"\n[ -f "%s" ] && exit 1\nexit 0\n' "$CALLS" "$T/interrupted" "$T/broken" > "$B/dpkg"
 chmod +x "$B/apt-get" "$B/dpkg"
 interrupted_case() { # ADMIND -- the reply's first line
     : > "$CALLS"; : > "$T/installed"; : > "$T/interrupted"
@@ -430,11 +432,28 @@ interrupted_case() { # ADMIND -- the reply's first line
 r=$(interrupted_case "$ADMIND")
 { [ "$r" = OK ] && grep -q '^dpkg --force-confdef --force-confold --configure -a$' "$CALLS" && [ ! -e "$T/interrupted" ]; } \
     && pass "after an installation cut short, it finishes it (dpkg --configure -a) and installs" || fail "interrupted dpkg: $r / $(tr '\n' '|' < "$CALLS")"
-sed 's/ and "dpkg was interrupted" in out:/ and False:/' "$ADMIND" > "$T/mut-nofinish"
-grep -q '"dpkg was interrupted" in out' "$T/mut-nofinish" && fail "the NOFINISH mutant did not apply"
+sed 's/    if rc != 0 and ("dpkg was interrupted" in out or /    if False and ("dpkg was interrupted" in out or /' "$ADMIND" > "$T/mut-nofinish"
+grep -q 'if rc != 0 and ("dpkg was interrupted"' "$T/mut-nofinish" && fail "the NOFINISH mutant did not apply"
 r=$(interrupted_case "$T/mut-nofinish")
 [ "$r" != OK ] && pass "MUTANT NOFINISH (every install refused after one cut short) is caught" || fail "NOFINISH not detected"
-cp "$T/apt-get.plain" "$B/apt-get"; rm -f "$B/dpkg" "$T/interrupted"
+# a package cut off mid-unpack: dpkg --configure -a leaves what needs it
+# unconfigured, until apt-get -f install fetches it again
+broken_case() { : > "$T/broken"; interrupted_case "$1"; }
+r=$(broken_case "$ADMIND")
+{ [ "$r" = OK ] && grep -q '^apt-get -f install$' "$CALLS" && [ ! -e "$T/broken" ]; } \
+    && pass "and when a package was cut off mid-unpack, apt-get -f install fetches it again, then installs" || fail "broken after interrupt: $r / $(tr '\n' '|' < "$CALLS")"
+sed '/frc, fout = apt_get_once(\["-f", "install"\]/s/\["-f", "install"\]/["check"]/' "$ADMIND" > "$T/mut-nofixbroken"
+grep -q '"-f", "install"' "$T/mut-nofixbroken" && fail "the NOFIXBROKEN mutant did not apply"
+r=$(broken_case "$T/mut-nofixbroken")
+[ "$r" != OK ] && pass "MUTANT NOFIXBROKEN (left with unmet dependencies) is caught" || fail "NOFIXBROKEN not detected"
+# after a first try, dpkg's mark is gone but the packages are not finished:
+# apt says only "Unmet dependencies ... apt --fix-broken install"
+r=$(: > "$T/broken"; : > "$CALLS"; : > "$T/installed"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$ADMIND" 2>>"$T/log"; first "$(cat "$S/replies/$id.rep" 2>/dev/null)")
+{ [ "$r" = OK ] && grep -q '^apt-get -f install$' "$CALLS"; } \
+    && pass "...also when apt only says to fix what is broken (dpkg's mark already gone)" || fail "unmet dependencies left: $r / $(tr '\n' '|' < "$CALLS")"
+cp "$T/apt-get.plain" "$B/apt-get"; rm -f "$B/dpkg" "$T/interrupted" "$T/broken"
 : > "$CALLS"
 for bad in 'gimp; reboot' '-oAPT::X=1' '../gimp' 'Gimp' ''; do
     r=$(ask apt-install "$bad"); case "$(first "$r")" in "FAILED "*) ;; *) fail "apt-install '$bad': $r" ;; esac

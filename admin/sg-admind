@@ -1045,14 +1045,22 @@ def apt_get(args, what, base=0, span=100):
     An installation cut short before (a full disk, a power cut) leaves dpkg
     "interrupted", and apt then refuses every install and uninstall until
     someone runs dpkg --configure -a: the SG Store failed every Linux app
-    after one (qa5 2026-10-21). Finish it, then ask apt again, once."""
+    after one (qa5 2026-10-21). Finish it -- and a package whose unpacking
+    was cut off (clang-19 there) leaves the others it holds back
+    unconfigured until apt-get -f install fetches it again -- then ask apt
+    again, once."""
     rc, out = apt_get_once(args, what, base, span)
-    if rc != 0 and "dpkg was interrupted" in out:
+    # (and once dpkg's own mark is gone, apt says only "Unmet dependencies.
+    # Try 'apt --fix-broken install'": the same half-done packages)
+    if rc != 0 and ("dpkg was interrupted" in out or "apt --fix-broken install" in out):
         log("apt-get %s: an earlier installation was cut short; dpkg --configure -a" % " ".join(args))
         progress(base, "Finishing an installation that was cut short...")
         r = run(["dpkg", "--force-confdef", "--force-confold", "--configure", "-a"], timeout=1800, extra_env=apt_env())
         if r.returncode != 0:
             log("dpkg --configure -a failed (%d): %s" % (r.returncode, (r.stderr or r.stdout).strip()[-300:]))
+            frc, fout = apt_get_once(["-f", "install"], what, base, 0)
+            if frc != 0:
+                log("apt-get -f install failed (%d): %s" % (frc, fout.strip()[-300:]))
         rc, out = apt_get_once(args, what, base, span)
     if rc != 0:
         errors = [l[3:].strip() for l in out.splitlines() if l.startswith("E: ")]

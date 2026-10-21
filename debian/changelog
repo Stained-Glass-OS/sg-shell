@@ -1,3 +1,15 @@
+sg-shell (0.1.0-187) unstable; urgency=medium
+
+  * sg-admind: finishing an installation cut short (-186) now also runs
+    apt-get -f install when dpkg --configure -a cannot finish -- a package
+    whose unpacking was cut off (clang-19 on qa5) holds the others back
+    until apt fetches it again -- and does so too when apt says only "Unmet
+    dependencies. Try 'apt --fix-broken install'" (dpkg's own mark already
+    gone after a first try). Proven on qa5: SuperTux installed through the
+    SG Store after the repair. Gate admind-check; mutant NOFIXBROKEN.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 10:39:13 -0700
+
 sg-shell (0.1.0-186) unstable; urgency=medium
 
   * sg-admind (SG Store's Linux apps): apt no longer keeps the packages it
