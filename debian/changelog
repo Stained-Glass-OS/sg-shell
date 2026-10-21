@@ -1,3 +1,16 @@
+sg-shell (0.1.0-185) unstable; urgency=medium
+
+  * SG Store: an installer that writes no Uninstall entry (DOSBox 0.74-3:
+    files and an uninstaller in Program Files, nothing in Apps & features)
+    left the store saying "done", never "installed", with no Uninstall. A
+    catalogue entry can now say where such a program goes (RegisterDir,
+    RegisterProgram, RegisterUninstall); after the install the store writes
+    the entry itself, the person's own, and takes it away again once the
+    program is gone. DOSBox gets them. Gate store-check (the stand-in
+    installer's SG_FAKE_NOKEY); mutant SG_MUTANT_NOREGISTER.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 03:46:15 -0700
+
 sg-shell (0.1.0-184) unstable; urgency=medium
 
   * SG Store: a download or manifest answered 429 (too many requests) or

@@ -22,6 +22,7 @@
  *                                   the files of %SG_FAKE_MSIS% into DIR
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
+ * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -113,6 +114,12 @@ int wmain(int argc, WCHAR **argv)
         }
         if (wcsstr(args, L"/child") && GetEnvironmentVariableW(L"SG_FAKE_HANDOFF", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
         logline(L"C:\\gate\\uninstall.log", args);
+        if (wcsstr(args, L"/rmfiles")) {    /* DOSBox's: it removes its files, and has no entry to remove */
+            WCHAR app[MAX_PATH], *slash;
+            lstrcpynW(app, self, MAX_PATH);
+            if ((slash = wcsrchr(app, L'\\'))) lstrcpyW(slash + 1, L"app.exe");
+            DeleteFileW(app);
+        }
         if (k) {
             WCHAR name[128];
             int n = 0;
@@ -162,6 +169,12 @@ int wmain(int argc, WCHAR **argv)
     swprintf(exe, MAX_PATH, L"%ls\\app.exe", dest);
     CopyFileW(self, exe, FALSE);
 
+    if (GetEnvironmentVariableW(L"SG_FAKE_NOKEY", NULL, 0)) {   /* DOSBox 0.74-3's: files and an uninstaller, no entry */
+        WCHAR un[MAX_PATH];
+        swprintf(un, MAX_PATH, L"%ls\\uninst.exe", dest);
+        CopyFileW(self, un, FALSE);
+        return 0;
+    }
     swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", key);
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayName", display);
     sz(HKEY_LOCAL_MACHINE, sub, L"DisplayVersion", version);

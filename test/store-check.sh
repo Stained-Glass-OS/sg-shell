@@ -69,6 +69,7 @@
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
 #   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
 #   SG_MUTANT_NOBESTMATCH a search's exact name match keeps its section's place
+#   SG_MUTANT_NOREGISTER  an installer's missing Uninstall entry is not written for it
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
@@ -135,7 +136,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -701,6 +702,44 @@ echo 1 > "$W/throttle"; rm -f "$G/setup.log"
 SG_MUT="$T/mut-no429retry.exe" throttled
 ! grep -q -- '/throttled' "$G/setup.log" 2>/dev/null && pass "MUTANT NO429RETRY fails on one 429 (gate catches it)" || fail "NO429RETRY not detected"
 rm -f "$W/throttle"; wine reg delete "$K\\11" /f >/dev/null 2>&1; ununinstall ThrottledApp; rm -f "$G/setup.log"; wineserver -w
+
+# an installer that writes no Uninstall entry (DOSBox 0.74-3's): the catalogue says where its program
+# goes and its uninstaller; the store writes the entry (the person's own) and takes it away once the
+# program is gone
+mkdir -p "$W/raw/f/Fake/Bare/1.0"; printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Bare"
+cat > "$W/raw/f/Fake/Bare/1.0/Fake.Bare.installer.yaml" <<EOF
+PackageIdentifier: Fake.Bare
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /bare
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
+app 11 'Bare App' Games windows 'winget:Fake.Bare' 'Bare App'
+reg "$K\\11" /v RegisterDir /d '%ProgramFiles%\Bare App'
+reg "$K\\11" /v RegisterProgram /d 'app.exe'
+reg "$K\\11" /v RegisterUninstall /d 'uninst.exe /rmfiles /S'
+wineserver -w
+BK='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\SgStore-11'
+bare() { rm -f "$D.result"; SG_FAKE_NOKEY=1 SG_FAKE_DIR='Bare App' wine "${SG_MUT:-$EXE}" --install 11 >/dev/null 2>&1; }
+bare; ec=$?
+run --list
+[ "$ec" = 0 ] && [ "$(kv "$(appline 11)" state)" = installed ] && wine reg query "$BK" /v UninstallString 2>/dev/null | grep -q 'uninst.exe" /rmfiles /S' \
+    && pass "a program its installer did not register is registered by the store and detected (DOSBox)" \
+    || fail "unregistered install: exit $ec, $(appline 11); $(wine reg query "$BK" 2>&1 | tr -d '\r' | tr '\n' '|')"
+rm -f "$D.result"; wine "$EXE" --uninstall 11 >/dev/null 2>&1; ec=$?
+run --list
+[ "$ec" = 0 ] && [ ! -e "$WINEPREFIX/drive_c/Program Files/Bare App/app.exe" ] && ! wine reg query "$BK" >/dev/null 2>&1 \
+    && [ "$(kv "$(appline 11)" state)" = not-installed ] \
+    && pass "...Uninstall runs its uninstaller, and the store's entry goes with the program" \
+    || fail "unregistered uninstall: exit $ec, $(cat "$D.result" 2>/dev/null); $(appline 11)"
+SG_MUT="$T/mut-noregister.exe" bare
+run --list
+[ "$(kv "$(appline 11)" state)" != installed ] && pass "MUTANT NOREGISTER leaves it undetected (gate catches it)" || fail "NOREGISTER not detected"
+wine reg delete "$BK" /f >/dev/null 2>&1; rm -rf "$WINEPREFIX/drive_c/Program Files/Bare App"; wine reg delete "$K\\11" /f >/dev/null 2>&1; wineserver -w
 
 # --- H. a pinned install --------------------------------------------------------------------------
 rm -f "$G/setup.log"

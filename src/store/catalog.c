@@ -121,6 +121,9 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"Category", a->category, ARRAYSIZE(a->category));
         reg_str(item, L"DetectName", a->detect_name, ARRAYSIZE(a->detect_name));
         reg_str(item, L"Depends", a->depends, ARRAYSIZE(a->depends));
+        reg_str(item, L"RegisterDir", a->reg_dir, ARRAYSIZE(a->reg_dir));
+        reg_str(item, L"RegisterProgram", a->reg_program, ARRAYSIZE(a->reg_program));
+        reg_str(item, L"RegisterUninstall", a->reg_uninstall, ARRAYSIZE(a->reg_uninstall));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
         {
@@ -242,6 +245,64 @@ static BOOL find_installed_entry(const WCHAR *needle, WCHAR *version, int cch, W
 static BOOL find_installed(const WCHAR *needle, WCHAR *version, int cch)
 {
     return find_installed_entry(needle, version, cch, NULL, 0);
+}
+
+/* ---- an installer that writes no Uninstall entry ----------------------------------------------------
+ *
+ * DOSBox 0.74-3's puts its files and an uninstaller in Program Files and no entry in Apps & features:
+ * the store said "done" and never "installed", and offered no Uninstall. Where the catalogue says where
+ * such a program goes (RegisterDir, RegisterProgram, RegisterUninstall), the store writes the entry
+ * itself, the person's own (HKCU), once the program is there; its uninstaller knows nothing of it, so
+ * the store takes it away again once the program is gone. */
+
+static void entry_key(const app_t *a, WCHAR *sub, int cch)
+{
+    swprintf(sub, cch, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SgStore-%ls", a->ord);
+}
+
+static void set_sz(HKEY key, const WCHAR *name, const WCHAR *value)
+{
+    RegSetValueExW(key, name, 0, REG_SZ, (const BYTE *)value, (lstrlenW(value) + 1) * sizeof(WCHAR));
+}
+
+static void register_installed(const app_t *a, const WCHAR *version)
+{
+    WCHAR dir[MAX_PATH], prog[MAX_PATH], un[256], cmd[MAX_PATH + 300], sub[160], v[64], *args;
+    DWORD one = 1;
+    HKEY key;
+#ifdef SG_MUTANT_NOREGISTER
+    return;
+#endif
+    if (!a->reg_dir[0] || !a->reg_program[0] || find_installed(a->detect_name, v, ARRAYSIZE(v))) return;
+    ExpandEnvironmentStringsW(a->reg_dir, dir, MAX_PATH);
+    swprintf(prog, MAX_PATH, L"%ls\\%ls", dir, a->reg_program);
+    if (GetFileAttributesW(prog) == INVALID_FILE_ATTRIBUTES) return;
+    entry_key(a, sub, ARRAYSIZE(sub));
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_WRITE, NULL, &key, NULL)) return;
+    set_sz(key, L"DisplayName", a->name);
+    if (version && version[0]) set_sz(key, L"DisplayVersion", version);
+    set_sz(key, L"Publisher", a->publisher);
+    set_sz(key, L"InstallLocation", dir);
+    set_sz(key, L"DisplayIcon", prog);
+    if (a->reg_uninstall[0]) {
+        lstrcpynW(un, a->reg_uninstall, ARRAYSIZE(un));
+        if ((args = wcschr(un, L' '))) *args++ = 0;
+        swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\%ls\"%ls%ls", dir, un, args ? L" " : L"", args ? args : L"");
+        set_sz(key, L"UninstallString", cmd);
+    }
+    RegSetValueExW(key, L"SgStoreEntry", 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
+    RegCloseKey(key);
+}
+
+static void unregister_gone(const app_t *a)
+{
+    WCHAR sub[160], prog[MAX_PATH] = L"";
+    HKEY key;
+    entry_key(a, sub, ARRAYSIZE(sub));
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_READ, &key)) return;
+    reg_str(key, L"DisplayIcon", prog, ARRAYSIZE(prog));
+    RegCloseKey(key);
+    if (prog[0] && GetFileAttributesW(prog) == INVALID_FILE_ATTRIBUTES) RegDeleteKeyW(HKEY_CURRENT_USER, sub);
 }
 
 /* Is a Debian package installed (dpkg's status file: a stanza with
@@ -614,6 +675,7 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
 #endif
     ok = pkg_install(&p, err, cch);
     if (a) a->ran_elevated = p.elevated;
+    if (ok && a) register_installed(a, p.version);
     if (ok && depth) dep_record(id, p.version);
     pkg_cleanup(&p);
     return ok ? 0 : 1;
@@ -638,6 +700,7 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
     ok = pkg_install(&p, err, cch);
     a->ran_elevated = p.elevated;
+    if (ok) register_installed(a, a->pin_version);
     pkg_cleanup(&p);
     return ok ? 0 : 1;
 }
@@ -808,7 +871,7 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
      * window is a child's, is still at it. SG_STORE_UNINSTALL_GRACE (ms): the
      * gate's shorter wait after the last of them */
     if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GRACE", ver, ARRAYSIZE(ver))) grace = _wtoi(ver);
-    for (start = GetTickCount(); find_installed(a->detect_name, ver, ARRAYSIZE(ver)) &&
+    for (start = GetTickCount(); (unregister_gone(a), find_installed(a->detect_name, ver, ARRAYSIZE(ver))) &&
          (tree_alive(tree, &ntree, ARRAYSIZE(tree)) || GetTickCount() - start < grace);)
     {
         if (tree_alive(tree, &ntree, ARRAYSIZE(tree))) start = GetTickCount();   /* 3 minutes after the last of them */

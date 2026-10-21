@@ -62,6 +62,11 @@ typedef struct {
      * dpkg's state of apt_pkg -- never the other way round */
     WCHAR detect_name[128];       /* "Name|Other|!Not this" -- see name_matches() */
     WCHAR depends[256];           /* Depends: winget ids it needs first that its manifest does not say (DYMO Connect: .NET 8) */
+    /* an installer that writes no Uninstall entry (DOSBox 0.74-3's): where it puts the program, and its
+     * uninstaller's command there; the store writes the entry itself (catalog.c register_installed) */
+    WCHAR reg_dir[MAX_PATH];      /* RegisterDir: "%ProgramFiles(x86)%\DOSBox-0.74-3" */
+    WCHAR reg_program[128];       /* RegisterProgram: "DOSBox.exe" */
+    WCHAR reg_uninstall[256];     /* RegisterUninstall: "uninstall.exe /S" */
     BOOL  also_in_category;       /* a Linux app also listed under its Category (Steam in Games) */
     WCHAR deb_url[512];           /* SRC_LINUX_APT: the maker's own .deb (DebUrl), installed
                                    * when its package is in no apt source (Valve's steam.deb) */
