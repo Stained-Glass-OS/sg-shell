@@ -1,3 +1,19 @@
+sg-shell (0.1.0-184) unstable; urgency=medium
+
+  * SG Store: a download or manifest answered 429 (too many requests) or
+    503 is asked again after the Retry-After it names (else 2, 4 s; at most
+    20 s), up to three times; after that the message says in words that the
+    site is getting too many requests. Python 3.13's manifest failed with a
+    bare "answered 429" in a walk of the whole Store. Gate store-check
+    (its web server can now answer 429, test/store-httpd.py); mutant
+    SG_MUTANT_NO429RETRY.
+  * SG Store: the app a search names exactly comes first, its section
+    before the others: "Go" listed Google Chrome, SG Mail, calibre... with
+    Go itself far down in Development. Gate store-check; mutant
+    SG_MUTANT_NOBESTMATCH.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 01:44:28 -0700
+
 sg-shell (0.1.0-183) unstable; urgency=medium
 
   * SG Store: at its start it takes away what a Store or browser ended

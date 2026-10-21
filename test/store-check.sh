@@ -67,6 +67,8 @@
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
+#   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
+#   SG_MUTANT_NOBESTMATCH a search's exact name match keeps its section's place
 #   SG_MUTANT_NOWOWCU     misses per-user entries under HKCU\Software\WOW6432Node
 #   SG_MUTANT_NOPLUS      refuses a winget id with + (Notepad++.Notepad++)
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
@@ -133,7 +135,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -274,7 +276,7 @@ Description: |-
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
 EOF
-(cd "$W" && exec python3 -m http.server "$PORT" --bind 127.0.0.1 > "$T/http.log" 2>&1) & HP=$!
+(cd "$W" && exec python3 "$HERE/test/store-httpd.py" "$PORT" > "$T/http.log" 2>&1) & HP=$!
 
 Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display" >/dev/null 2>&1 & XP=$!
 i=0; while [ ! -s "$T/display" ] && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
@@ -669,6 +671,37 @@ wine reg delete "$K\\11" /f >/dev/null 2>&1; ununinstall LonelyApp; ununinstall 
 wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
 wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
 
+# GitHub answers 429 to a busy address (Python 3.13's manifest in a walk of the whole Store): asked again
+# after its Retry-After; after three 429s the message says so in words
+mkdir -p "$W/raw/f/Fake/Throttled/1.0" "$W/api/f/Fake"; printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Throttled"
+cat > "$W/raw/f/Fake/Throttled/1.0/Fake.Throttled.installer.yaml" <<EOF
+PackageIdentifier: Fake.Throttled
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /S /throttled
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
+app 11 'Throttled App' Development windows 'winget:Fake.Throttled' 'Throttled App'
+wineserver -w
+throttled() { rm -f "$D.result"; SG_FAKE_KEY=ThrottledApp SG_FAKE_DISPLAY='Throttled App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Throttled App' \
+                  wine "${SG_MUT:-$EXE}" --install 11 >/dev/null 2>&1; }
+echo 2 > "$W/throttle"; rm -f "$G/setup.log"
+throttled; ec=$?
+[ "$ec" = 0 ] && grep -q -- '/throttled' "$G/setup.log" 2>/dev/null && [ "$(cat "$W/throttle")" = 0 ] \
+    && pass "a manifest answered 429 twice is asked again and installs" || fail "429 retry: exit $ec, throttle $(cat "$W/throttle"): $(cat "$D.result" 2>/dev/null)"
+ununinstall ThrottledApp; echo 5 > "$W/throttle"; rm -f "$G/setup.log"
+throttled; ec=$?
+[ "$ec" != 0 ] && grep -q 'too many requests' "$D.result" 2>/dev/null && [ "$(cat "$W/throttle")" = 2 ] \
+    && pass "after three 429s it stops and says so in words" || fail "429 x3: exit $ec, throttle $(cat "$W/throttle"): $(cat "$D.result" 2>/dev/null)"
+echo 1 > "$W/throttle"; rm -f "$G/setup.log"
+SG_MUT="$T/mut-no429retry.exe" throttled
+! grep -q -- '/throttled' "$G/setup.log" 2>/dev/null && pass "MUTANT NO429RETRY fails on one 429 (gate catches it)" || fail "NO429RETRY not detected"
+rm -f "$W/throttle"; wine reg delete "$K\\11" /f >/dev/null 2>&1; ununinstall ThrottledApp; rm -f "$G/setup.log"; wineserver -w
+
 # --- H. a pinned install --------------------------------------------------------------------------
 rm -f "$G/setup.log"
 SG_FAKE_KEY=PinnedApp SG_FAKE_DISPLAY='Pinned App' SG_FAKE_VERSION=3.0 SG_FAKE_DIR='Pinned App' \
@@ -986,6 +1019,7 @@ app 07 'XnView' Graphics windows 'winget:Fake.XnView' 'XnView|!XnView MP'
 app L1 'GIMP' Graphics linux 'linux:apt:gimp' 'GIMP'
 app L2 'Gate Tool' Utilities linux 'linux:apt:sg-gate-tool'
 reg "$K\\06" /v Description /d 'Distributed version control for source code.'
+reg "$K\\05" /v Description /d 'Image editor; its own source is kept in git.'
 : > "$T/dpkg-status"
 sleep 0.5
 window_checks() { # exe label -- returns the view after typing "gimp"
@@ -1005,6 +1039,9 @@ if [ "$v" != NOWINDOW ]; then
     [ "$v" = "2 05 L1" ] && pass "searching \"gimp\" lists both GIMPs, the Windows one first ($v)" || fail "view after 'gimp': '$v'"
     xdotool key Escape; sleep 0.3; xdotool type --delay 60 'source code'; sleep 1
     [ "$(field view)" = "1 06" ] && pass "search looks in descriptions too (\"source code\" -> Git)" || fail "view '$(field view)'"
+    xdotool key Escape; sleep 0.3; xdotool type --delay 60 'git'; sleep 1
+    [ "$(field view)" = "2 06 05" ] && pass "the app the search names exactly comes first, its section before the others (\"git\" -> Git, then GIMP)" \
+        || fail "view after 'git': '$(field view)'"
     xdotool key Escape; sleep 0.6
     [ "$(field view | cut -d' ' -f1)" = 6 ] && pass "Esc clears the search" || fail "after Esc: '$(field view)' search '$(field search)'"
     click "$D" "category Linux" && sleep 0.8
@@ -1029,6 +1066,12 @@ wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")
 [ "$v" != NOWINDOW ] && [ "$v" != "2 05 L1" ] && pass "MUTANT NOSEARCH lists everything after \"gimp\" (gate catches it)" || fail "NOSEARCH not detected ('$v')"
 wine taskkill /f /im mut-nosearch.exe >/dev/null 2>&1
+rm -f "$D"; wine "$T/mut-nobestmatch.exe" >/dev/null 2>&1 &
+if waitfor "$D" '^window 1' 60; then
+    sleep 0.8; click "$D" "search -"; sleep 0.4; xdotool type --delay 60 git; sleep 1
+    [ "$(field view)" = "2 05 06" ] && pass "MUTANT NOBESTMATCH lists GIMP's section first (gate catches it)" || fail "NOBESTMATCH not detected ('$(field view)')"
+else fail "NOBESTMATCH: no window"; fi
+wine taskkill /f /im mut-nobestmatch.exe >/dev/null 2>&1
 
 # --- K3. dark mode: what it draws is dark too, not only its search box -------------------------
 dark_check() { # exe -- "MODE LUMA": the dump's mode and the window's background's brightness

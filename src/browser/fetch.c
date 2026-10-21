@@ -79,7 +79,7 @@ static HINTERNET net(void)
     return g_net;
 }
 
-static HINTERNET open_url(const WCHAR *url, const WCHAR *headers, DWORD *status, WCHAR *err, int cch)
+static HINTERNET open_url_once(const WCHAR *url, const WCHAR *headers, DWORD *status, WCHAR *err, int cch)
 {
     HINTERNET h;
     DWORD st = 0, len = sizeof(st);
@@ -97,6 +97,34 @@ static HINTERNET open_url(const WCHAR *url, const WCHAR *headers, DWORD *status,
     return h;
 }
 
+/* GitHub answers 429 (too many requests) to a busy address -- Python 3.13's manifest in a walk of the
+ * whole Store -- and a mirror 503 while it is busy: asked again after the Retry-After it names (else
+ * 2, 4 s; never more than 20 s), up to three times in all, as winget does */
+static HINTERNET open_url(const WCHAR *url, const WCHAR *headers, DWORD *status, WCHAR *err, int cch)
+{
+    HINTERNET h;
+    int attempt;
+    for (attempt = 0;; attempt++) {
+        DWORD wait = 0, len = sizeof(wait);
+        if (!(h = open_url_once(url, headers, status, err, cch))) return NULL;
+#ifndef SG_MUTANT_NO429RETRY
+        if ((*status != 429 && *status != 503) || attempt == 2) return h;
+#else
+        return h;
+#endif
+        if (!HttpQueryInfoW(h, HTTP_QUERY_RETRY_AFTER | HTTP_QUERY_FLAG_NUMBER, &wait, &len, NULL) || !wait) wait = 2u << attempt;
+        if (wait > 20) wait = 20;
+        InternetCloseHandle(h);
+        Sleep(wait * 1000);
+    }
+}
+
+static void status_err(WCHAR *err, int cch, const WCHAR *what, DWORD status)
+{
+    if (status == 429) seterr(err, cch, L"%ls is getting too many requests just now (429). Try again in a few minutes.", what);
+    else seterr(err, cch, L"%ls answered %lu.", what, status);
+}
+
 /* the whole answer, NUL-terminated; NULL on failure. 404 is reported in *status. */
 static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
 {
@@ -104,7 +132,7 @@ static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
     char *buf = NULL;
     DWORD n = 0, cap = 0, got;
     if (!h) return NULL;
-    if (*status != 200) { InternetCloseHandle(h); seterr(err, cch, L"%ls answered %lu.", url, *status); return NULL; }
+    if (*status != 200) { InternetCloseHandle(h); status_err(err, cch, url, *status); return NULL; }
     for (;;) {
         if (n + 8192 + 1 > cap) {
             char *t;
@@ -254,7 +282,7 @@ BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *
     file_name_from_url(p->url, p->type, name, MAX_PATH);
     swprintf(p->file, MAX_PATH, L"%ls\\%ls", dir, name);
     if (!(h = open_url(p->url, NULL, &status, err, cch))) return FALSE;
-    if (status != 200) { InternetCloseHandle(h); seterr(err, cch, L"The download answered %lu.", status); return FALSE; }
+    if (status != 200) { InternetCloseHandle(h); status_err(err, cch, L"The download", status); return FALSE; }
     if (!HttpQueryInfoW(h, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &total, &len, NULL)) total = 0;
     f = CreateFileW(p->file, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) { InternetCloseHandle(h); seterr(err, cch, L"Can't write %ls.", p->file); return FALSE; }

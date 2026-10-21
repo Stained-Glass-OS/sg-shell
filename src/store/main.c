@@ -227,10 +227,29 @@ static BOOL matches_query(const app_t *a, const WCHAR *q)
     return TRUE;
 }
 
+/* the app the search names exactly ("Go" among Google Chrome, MongoDB Compass...), else -1: its section
+ * comes first and it leads it, as a search's best match does */
+static __thread int g_best = -1;
+
+static BOOL names_exactly(const app_t *a, const WCHAR *q)
+{
+    int n;
+    while (*q == L' ') q++;
+    n = lstrlenW(q);
+    while (n && q[n - 1] == L' ') n--;
+    return n && n == lstrlenW(a->name) && !_wcsnicmp(a->name, q, n);
+}
+
 static int cmp_view(const void *x, const void *y)
 {
     const app_t *a = &g_apps[*(const int *)x], *b = &g_apps[*(const int *)y];
     int ra = section_rank(a), rb = section_rank(b), c;
+    if (g_best >= 0) {
+        const WCHAR *bs = app_section(&g_apps[g_best]);
+        BOOL ia = !lstrcmpiW(app_section(a), bs), ib = !lstrcmpiW(app_section(b), bs);
+        if (ia != ib) return ia ? -1 : 1;
+        if (ia && (a == &g_apps[g_best]) != (b == &g_apps[g_best])) return a == &g_apps[g_best] ? -1 : 1;
+    }
     if (ra != rb) return ra - rb;
     if ((c = lstrcmpiW(app_section(a), app_section(b)))) return c;
     /* our own suites lead their category; then by name */
@@ -255,6 +274,10 @@ static void list_view(int *view, int *n)
         if (g_query[0] && !matches_query(a, g_query)) continue;
         view[(*n)++] = i;
     }
+    g_best = -1;
+#ifndef SG_MUTANT_NOBESTMATCH
+    for (i = 0; g_query[0] && i < *n && g_best < 0; i++) if (names_exactly(&g_apps[view[i]], g_query)) g_best = view[i];
+#endif
     qsort(view, *n, sizeof(view[0]), cmp_view);
 }
 
