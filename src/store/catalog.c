@@ -124,6 +124,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"RegisterDir", a->reg_dir, ARRAYSIZE(a->reg_dir));
         reg_str(item, L"RegisterProgram", a->reg_program, ARRAYSIZE(a->reg_program));
         reg_str(item, L"RegisterUninstall", a->reg_uninstall, ARRAYSIZE(a->reg_uninstall));
+        reg_str(item, L"UninstallArgs", a->uninstall_args, ARRAYSIZE(a->uninstall_args));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
         {
@@ -772,7 +773,7 @@ static BOOL is_nsis(const WCHAR *file)
     return found;
 }
 
-static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
+static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHAR *cmd, int cch)
 {
     BOOL quiet = FALSE;
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
@@ -811,6 +812,16 @@ static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
      * its window and its "All files ... will be deleted" question waited for
      * a click, and the store said "not removed". /S is NSIS's silent switch,
      * as winget gives it. */
+    /* the catalogue's own quiet switch for an uninstaller that has none in
+     * its entry and is not NSIS's: Total Commander's tcunin64.exe asked
+     * Uninstall/Repair/Cancel and waited; /7 removes it without a word */
+#ifndef SG_MUTANT_NOUNINSTARGS
+    if (cmd[0] && !quiet && quiet_args && quiet_args[0] && lstrlenW(cmd) + lstrlenW(quiet_args) + 2 < cch) {
+        lstrcatW(cmd, L" ");
+        lstrcatW(cmd, quiet_args);
+        quiet = TRUE;
+    }
+#endif
     if (cmd[0] && !quiet) {
         WCHAR file[MAX_PATH], args[MAX_PATH];
         split_command(cmd, file, args, MAX_PATH);
@@ -895,7 +906,7 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
     int attempt;
     err[0] = 0;
     if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
-    if (!uninstall_command(a->detect_name, cmd, ARRAYSIZE(cmd))) {
+    if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd))) {
         swprintf(err, cch, L"%ls has no uninstaller. Remove it in Settings > Apps.", a->name);
         return 1;
     }

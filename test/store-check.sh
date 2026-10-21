@@ -82,6 +82,7 @@
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
 #   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
+#   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
@@ -138,7 +139,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1305,6 +1306,16 @@ r=$(nsis_case "$EXE" 0)
 case "$r" in *"/ui"*" /S"*|*"/ui /S"*) fail "/S given to an uninstaller that is not NSIS's: $r" ;; *"/ui"*) pass "...and not to one that is not NSIS's" ;; *) fail "non-NSIS uninstall: $r" ;; esac
 r=$(nsis_case "$T/mut-nonsissilent.exe" 1)
 case "$r" in *"/S"*) fail "NONSISSILENT not detected: $r" ;; *) pass "MUTANT NONSISSILENT leaves the NSIS uninstaller waiting for a click (gate catches it)" ;; esac
+# the catalogue's quiet switch for an uninstaller with none in its entry
+# (Total Commander's tcunin64.exe /7: its Uninstall/Repair/Cancel waited)
+reg "$K\\01" /v UninstallArgs /d '/7'
+r=$(nsis_case "$EXE" 0)
+case "$r" in *"/ui /7"*) pass "an uninstaller with no quiet command runs with the catalogue's UninstallArgs (Total Commander)" ;; *) fail "UninstallArgs: $r" ;; esac
+r=$(nsis_case "$EXE" 1)
+case "$r" in *"/ui /7"*" /S"*|*"/ui /S"*) fail "UninstallArgs and /S both given: $r" ;; *"/ui /7"*) pass "...in place of NSIS's /S" ;; *) fail "UninstallArgs on NSIS: $r" ;; esac
+r=$(nsis_case "$T/mut-nouninstargs.exe" 0)
+case "$r" in *"/7"*) fail "NOUNINSTARGS not detected: $r" ;; *) pass "MUTANT NOUNINSTARGS leaves Total Commander's uninstaller asking (gate catches it)" ;; esac
+wine reg delete "$K\\01" /v UninstallArgs /f >/dev/null 2>&1
 # an uninstaller that hands off to a child (Opera's): done when the child is,
 # not "not removed" while its window is still up
 handoff() { # exe -> ok|fail

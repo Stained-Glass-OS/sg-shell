@@ -971,6 +971,7 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Ghisler.TotalCommander"
 "DetectName"="Total Commander"
 "Icon"="https://www.ghisler.com/favicon.ico"
+"UninstallArgs"="/7"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\77]
 "Name"="Thunderbird"

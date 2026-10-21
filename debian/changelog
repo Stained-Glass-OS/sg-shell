@@ -1,3 +1,14 @@
+sg-shell (0.1.0-191) unstable; urgency=medium
+
+  * SG Store: a catalogue entry can name its uninstaller's quiet switch
+    (UninstallArgs), used when the program's Uninstall entry has no quiet
+    command of its own. Total Commander's tcunin64.exe asked
+    Uninstall/Repair/Cancel and the store said "was not removed"; with /7
+    it removes itself without a word. Gate: store-check (UninstallArgs
+    given, given in place of NSIS's /S; mutant NOUNINSTARGS).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 16:02:17 -0700
+
 sg-shell (0.1.0-190) unstable; urgency=medium
 
   * SG Store: an NSIS uninstaller whose entry has no quiet command (Scribus
