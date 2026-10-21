@@ -181,6 +181,21 @@ static BOOL starts_word(const WCHAR *name, const WCHAR *pat, int n)
     return n > 0 && glob_word(name, pat, n, 0);
 }
 
+/* an entry Apps & features does not list: a part of something else
+ * (SystemComponent 1, or a ParentKeyName). Python 3.13's bundle installs a
+ * dozen MSIs, each with its own hidden entry -- "Python 3.13.9 Executables
+ * (64-bit)", "MsiExec.exe /I{...}" -- and the store, taking the first entry
+ * named like the app, removed one part and left Python installed. */
+static BOOL hidden_entry(HKEY item)
+{
+    DWORD v = 0, cb = sizeof(v);
+#ifdef SG_MUTANT_SHOWPARTS
+    return FALSE;
+#endif
+    if (!RegQueryValueExW(item, L"SystemComponent", NULL, NULL, (BYTE *)&v, &cb) && v) return TRUE;
+    return !RegQueryValueExW(item, L"ParentKeyName", NULL, NULL, NULL, NULL);
+}
+
 BOOL name_matches(const WCHAR *display, const WCHAR *patterns)
 {
     const WCHAR *p = patterns;
@@ -228,7 +243,7 @@ static BOOL find_installed_entry(const WCHAR *needle, WCHAR *version, int cch, W
         for (i = 0; n = ARRAYSIZE(sub), !RegEnumKeyExW(key, i, sub, &n, NULL, NULL, NULL, NULL); i++) {
             if (RegOpenKeyExW(key, sub, 0, KEY_READ, &item)) continue;
             reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
-            if (name_matches(name, needle)) {
+            if (name_matches(name, needle) && !hidden_entry(item)) {
                 reg_str(item, L"DisplayVersion", version, cch);
                 if (icon) reg_str(item, L"DisplayIcon", icon, icch);
                 RegCloseKey(item);
@@ -754,7 +769,7 @@ static BOOL uninstall_command(const WCHAR *needle, WCHAR *cmd, int cch)
         for (i = 0; !cmd[0] && (n = ARRAYSIZE(sub), !RegEnumKeyExW(key, i, sub, &n, NULL, NULL, NULL, NULL)); i++) {
             if (RegOpenKeyExW(key, sub, 0, KEY_READ, &item)) continue;
             reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
-            if (name_matches(name, needle)) {
+            if (name_matches(name, needle) && !hidden_entry(item)) {
 #ifndef SG_MUTANT_NOQUIET
                 reg_str(item, L"QuietUninstallString", cmd, cch);
 #endif

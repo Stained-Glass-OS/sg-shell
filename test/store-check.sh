@@ -80,6 +80,7 @@
 #   SG_MUTANT_NOICON      keeps the letter badges
 #   SG_MUTANT_NOQUEUE     ignores an Install while another runs (the old store)
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
+#   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
@@ -136,7 +137,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1266,6 +1267,26 @@ SG_MUT="$T/mut-noquiet.exe" run --uninstall 01
 grep -q '/ui' "$G/uninstall.log" 2>/dev/null && ! grep -q '/quiet' "$G/uninstall.log" && pass "MUTANT NOQUIET runs the uninstaller's UI (gate catches it)" \
     || fail "NOQUIET not detected: $(cat "$G/uninstall.log" 2>/dev/null)"
 ununinstall FakeApp; sleep 0.5
+# a hidden part named like the app (SystemComponent 1: Python 3.13's bundle has
+# a dozen MSIs, "Python 3.13.9 Executables (64-bit)"), listed before the app's
+# own entry: the app's entry is the one uninstalled, the part is not the app
+parts_case() { # EXE -- what the uninstaller was asked, and the state after
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    q=$(wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p' | sed 's|/quiet.*|/wrongpart|')
+    P='HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\AFakeAppPart'
+    reg "$P" /v DisplayName /d 'Fake App Core (64-bit)'; reg "$P" /v SystemComponent /t REG_DWORD /d 1; reg "$P" /v QuietUninstallString /d "$q"
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    printf '%s|%s' "$(tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null)" "$(wine reg query "$P" >/dev/null 2>&1 && echo part-left)"
+    ununinstall FakeApp; ununinstall AFakeAppPart; sleep 0.5
+}
+r=$(parts_case "$EXE")
+case "$r" in *wrongpart*) fail "a hidden part was uninstalled for the app: $r" ;;
+             *quiet*) pass "a hidden part named like the app (SystemComponent) is passed over: the app's own entry is uninstalled" ;;
+             *) fail "parts: $r" ;; esac
+r=$(parts_case "$T/mut-showparts.exe")
+case "$r" in *wrongpart*) pass "MUTANT SHOWPARTS uninstalls the hidden part instead (gate catches it)" ;;
+             *) fail "SHOWPARTS not detected: $r" ;; esac
 # an uninstaller that hands off to a child (Opera's): done when the child is,
 # not "not removed" while its window is still up
 handoff() { # exe -> ok|fail

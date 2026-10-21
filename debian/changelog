@@ -1,3 +1,14 @@
+sg-shell (0.1.0-189) unstable; urgency=medium
+
+  * SG Store: an Uninstall entry Apps & features does not list (a part of
+    something else: SystemComponent 1, or a ParentKeyName) is not taken for
+    the app. Python 3.13's bundle installs a dozen MSIs, each with a hidden
+    entry named like it ("Python 3.13.9 Executables (64-bit)", MsiExec /I):
+    the store's Uninstall removed that one part and said "Python 3.13 was
+    not removed". Gate store-check; mutant SG_MUTANT_SHOWPARTS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 13:23:31 -0700
+
 sg-shell (0.1.0-188) unstable; urgency=medium
 
   * Start search: as well matched, a program comes before a document. HWiNFO's
