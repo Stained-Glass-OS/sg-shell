@@ -83,6 +83,7 @@
 #   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
 #   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
 #   SG_MUTANT_NSISTAIL puts /S after NSIS's _?=DIR (read as part of the folder)
+#   SG_MUTANT_NODISKHINT  a failed install on a nearly full drive does not say so (Edge: "code 91")
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
@@ -144,7 +145,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -483,6 +484,18 @@ grep -qi 'SHA-256' "$D.result" 2>/dev/null && pass "and the reason names the SHA
 rm -f "$G/setup.log"
 SG_MUT="$T/mut-nohash.exe" run --install 04
 [ -e "$G/setup.log" ] && pass "MUTANT NOHASH runs the unverified installer (gate catches it)" || fail "NOHASH not detected by the gate"
+ununinstall FakeApp; rm -f "$G/setup.log"; wineserver -w
+# a failed install on a nearly full system drive says so; with room, it does not
+ununinstall FakeApp; rm -f "$G/setup.log"; wineserver -w
+run --install 04
+grep -qi 'nearly full' "$D.result" 2>/dev/null && fail "a failed install with room speaks of a full drive: $(cat "$D.result")" \
+    || pass "a failed install with room says nothing of the drive"
+rm -f "$D.result"; SG_STORE_FREE_MB=1300 run --install 04
+grep -q 'nearly full (1.3 GB free)' "$D.result" 2>/dev/null && pass "a failed install on a nearly full drive says so (1.3 GB free)" \
+    || fail "full drive: $(cat "$D.result" 2>/dev/null)"
+rm -f "$D.result"; SG_STORE_FREE_MB=1300 SG_MUT="$T/mut-nodiskhint.exe" run --install 04
+grep -q 'nearly full' "$D.result" 2>/dev/null && fail "NODISKHINT not detected by the gate" \
+    || pass "MUTANT NODISKHINT leaves the person with the installer's code (gate catches it)"
 ununinstall FakeApp; rm -f "$G/setup.log"; wineserver -w
 
 # --- E. a winget manifest install -----------------------------------------------------------------

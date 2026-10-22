@@ -1,3 +1,13 @@
+sg-shell (0.1.0-200) unstable; urgency=medium
+
+  * SG Store: a Windows install that fails on a nearly full system drive
+    (under 2 GB free) says so. Edge's setup needs over 2 GB for a 170 MB
+    download, crashed when it could not unpack, and the person was told
+    only "The installer stopped with code 91" (qa5 2026-10-22, 1.3 GB
+    free). test/store-check.sh, mutant SG_MUTANT_NODISKHINT.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 13:55:00 -0700
+
 sg-shell (0.1.0-199) unstable; urgency=medium
 
   * SG Store: the silent switch of an uninstall (NSIS's /S, a catalogue

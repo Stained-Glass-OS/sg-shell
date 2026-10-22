@@ -721,12 +721,44 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     return ok ? 0 : 1;
 }
 
+/* a Windows install that failed on a nearly full system drive says so: Edge's
+ * setup needs over 2 GB for a 170 MB download, crashed when it could not
+ * unpack, and the person was told only "The installer stopped with code 91"
+ * (qa5 2026-10-22, 1.3 GB free). SG_STORE_FREE_MB: the gate's free space. */
+#define NEARLY_FULL_MB 2048
+static void disk_hint(WCHAR *err, int cch)
+{
+    WCHAR dir[MAX_PATH], v[32];
+    ULARGE_INTEGER avail;
+    ULONGLONG mb;
+    int n;
+#ifdef SG_MUTANT_NODISKHINT
+    return;
+#endif
+    if (GetEnvironmentVariableW(L"SG_STORE_FREE_MB", v, ARRAYSIZE(v))) mb = _wtoi(v);
+    else {
+        if (!GetWindowsDirectoryW(dir, ARRAYSIZE(dir)) || lstrlenW(dir) < 3) return;
+        dir[3] = 0;                                   /* "C:\" */
+        if (!GetDiskFreeSpaceExW(dir, &avail, NULL, NULL)) return;
+        mb = avail.QuadPart >> 20;
+    }
+    if (mb >= NEARLY_FULL_MB) return;
+    n = lstrlenW(err);
+    swprintf(err + n, cch - n, L"%lsThe system drive is nearly full (%.1f GB free): free some space and try again.",
+             n ? L" " : L"", mb / 1024.0);
+}
+
 int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
 {
+    int rc;
     err[0] = 0;
     switch (a->method) {
-    case SRC_WINGET:     return install_winget(a, progress, ctx, cancel, err, cch);
-    case SRC_PIN:        return install_pin(a, progress, ctx, cancel, err, cch);
+    case SRC_WINGET:
+    case SRC_PIN:
+        rc = a->method == SRC_WINGET ? install_winget(a, progress, ctx, cancel, err, cch)
+                                     : install_pin(a, progress, ctx, cancel, err, cch);
+        if (rc && !(cancel && *cancel)) disk_hint(err, cch);
+        return rc;
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
         /* a system package: apt, as root, through the administrator's
