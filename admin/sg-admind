@@ -92,6 +92,7 @@
 #
 # Copyright (C) 2026 Stained Glass OS contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import filecmp
 import os
 import re
 import shutil
@@ -1166,10 +1167,16 @@ def add_vendor_source(pkg):
         dst = os.path.join({"sources": APT_SOURCES, "keyrings": KEYRINGS, "preferences": PREFERENCES}[where], name)
         if where == "sources" and adopt_source(pkg, os.path.join(VENDOR_DIR, name)):
             continue
-        if not os.path.exists(dst):
-            shutil.copyfile(os.path.join(VENDOR_DIR, name), dst)
+        src = os.path.join(VENDOR_DIR, name)
+        # a key the maker has signed anew since (Microsoft's: its SHA-1
+        # binding is refused by Debian 13's apt, "not signed"; Edge never
+        # installed) is replaced by ours, which is the maker's current one;
+        # one left from an earlier try would refuse every later one
+        stale = where == "keyrings" and os.path.exists(dst) and not filecmp.cmp(src, dst, shallow=False)
+        if not os.path.exists(dst) or stale:
+            shutil.copyfile(src, dst)
             os.chmod(dst, 0o644)
-            log("%s: %s put in place for it" % (pkg, dst))
+            log("%s: %s put in place for it%s" % (pkg, dst, " (the one there was out of date)" if stale else ""))
     return True
 
 

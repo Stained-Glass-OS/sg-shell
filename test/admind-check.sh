@@ -686,6 +686,30 @@ r=$(browser "$ADMIND" google-chrome-stable "google-chrome.sources:$A" "google-ch
 [ "$r" = ok ] && pass "Chrome for Linux: Google's source and key, as Chrome writes them" || fail "chrome: $r"
 r=$(browser "$ADMIND" microsoft-edge-stable "microsoft-edge.list:$A" "microsoft-edge.gpg:$T/keyrings")
 [ "$r" = ok ] && pass "Edge for Linux: Microsoft's source and key" || fail "edge: $r"
+# a keyring left from an earlier try, the maker's old key (Microsoft's with a
+# SHA-1 binding, which Debian 13's apt refuses: "not signed", Edge never
+# installed on qa5 2026-10-22), is replaced by ours; kept, every later try
+# failed the same way
+edge_stale() { # ADMIND -- "fresh" when the stale keyring was replaced
+    rm -f "$A"/microsoft-edge.list "$T"/keyrings/*
+    printf 'an old key\n' > "$T/keyrings/microsoft-edge.gpg"
+    id=$(next_id); printf 'apt-install\n%s\n' microsoft-edge-stable > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"
+    cmp -s "$T/keyrings/microsoft-edge.gpg" "$HERE/admin/apt-vendors/microsoft-edge.gpg" && echo fresh || echo stale
+}
+[ "$(edge_stale "$ADMIND")" = fresh ] && pass "an out-of-date key from an earlier try is replaced by the maker's current one" || fail "a stale Edge keyring was kept"
+sed 's/^        stale = where == "keyrings" and .*/        stale = False/' "$ADMIND" > "$T/mut-nokeyrefresh"
+grep -q '^        stale = False$' "$T/mut-nokeyrefresh" || fail "the NOKEYREFRESH mutant did not apply"
+[ "$(edge_stale "$T/mut-nokeyrefresh")" = stale ] && pass "MUTANT NOKEYREFRESH keeps the stale key (gate catches it)" || fail "NOKEYREFRESH not detected"
+# the makers' keys we ship are bound with SHA-256 or better: Debian 13's apt
+# (sqv) refuses a SHA-1 binding signature
+if command -v gpg >/dev/null; then
+    weak=""
+    for k in "$HERE"/admin/apt-vendors/*.gpg "$HERE"/admin/apt-vendors/*.asc; do
+        gpg --list-packets "$k" 2>/dev/null | awk '/^:signature packet/ {sig=1} sig && /sigclass 0x1[0-3]|sigclass 0x18/ {self=1} sig && /digest algo/ { if (self && $3 == "2,") bad=1; sig=0; self=0 } END {exit !bad}' && weak="$weak $(basename "$k")"
+    done
+    [ -z "$weak" ] && pass "every maker's key we ship is bound with SHA-256 or better (Debian 13 refuses SHA-1)" || fail "SHA-1-bound keys:$weak"
+fi
 r=$(browser "$ADMIND" firefox "mozilla.list:$A" "packages.mozilla.org.asc:$T/keyrings" "mozilla.pref:$T/prefs")
 [ "$r" = ok ] && pass "Firefox for Linux: Mozilla's source, key and pin" || fail "firefox: $r"
 grep -q '^Package: firefox firefox-l10n-\*$' "$HERE/admin/apt-vendors/mozilla.pref" && grep -q '^Pin-Priority: 100$' "$HERE/admin/apt-vendors/mozilla.pref" \

@@ -1,3 +1,18 @@
+sg-shell (0.1.0-196) unstable; urgency=medium
+
+  * SG Store, Microsoft Edge for Linux: Microsoft's current signing key.
+    The one shipped (BC528686..., 2015) had a SHA-1 binding signature, which
+    Debian 13's apt (sqv) refuses since 2026-02: "The repository
+    packages.microsoft.com/repos/edge ... is not signed", and Edge never
+    installed (qa5 2026-10-22). Microsoft re-signed the key (SHA-256), as
+    Edge's own package installs it. And sg-admind replaces a maker's
+    keyring that differs from ours (one left from an earlier try kept every
+    later one failing). admind-check: a stale keyring is replaced (mutant
+    NOKEYREFRESH); every maker's key we ship is bound with SHA-256 or
+    better. qa5: Edge for Linux installs, runs and uninstalls.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 00:50:00 -0700
+
 sg-shell (0.1.0-195) unstable; urgency=medium
 
   * SG Store: an MSI's uninstall runs quietly (msiexec /X{GUID} /qn), as
