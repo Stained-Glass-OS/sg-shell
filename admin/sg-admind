@@ -1180,6 +1180,37 @@ def add_vendor_source(pkg):
     return True
 
 
+def remove_vendor_source(pkg):
+    """the maker's files put in place for pkg, taken away once it is
+    uninstalled, as a Windows uninstaller takes what it added: Edge's purge
+    deletes its key but leaves microsoft-edge.list, and every apt-get update
+    after warned "Failed to parse keyring" (qa5 2026-10-22). Only our own
+    files, or a source whose key is gone; one the person changed stays"""
+    files = VENDOR_SOURCES.get(pkg, [])
+    dirs = {"sources": APT_SOURCES, "keyrings": KEYRINGS, "preferences": PREFERENCES}
+    keys = [os.path.join(KEYRINGS, n) for n, w in files if w == "keyrings"]
+    kept = False
+    for name, where in files:
+        dst = os.path.join(dirs[where], name)
+        if where == "keyrings" or not os.path.isfile(dst):
+            continue
+        try:
+            text = open(dst, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        ours = filecmp.cmp(os.path.join(VENDOR_DIR, name), dst, shallow=False)
+        keyless = where == "sources" and any(k in text and not os.path.exists(k) for k in keys)
+        if ours or keyless:
+            os.remove(dst)
+            log("%s: %s taken away with it" % (pkg, dst))
+        elif where == "sources":
+            kept = True
+    for dst in keys:
+        if not kept and os.path.isfile(dst) and filecmp.cmp(os.path.join(VENDOR_DIR, os.path.basename(dst)), dst, shallow=False):
+            os.remove(dst)
+            log("%s: %s taken away with it" % (pkg, dst))
+
+
 def apt_relations(pkg):
     """what apt's candidate for pkg depends on and recommends"""
     r = run(["apt-cache", "show", "--no-all-versions", pkg])
@@ -1444,6 +1475,7 @@ def op_apt_remove(args):
     apt_get(["--purge", "remove", pkg], "%s could not be uninstalled" % pkg, 10, 60)
     if installed_version(pkg):
         raise Refused("%s was not uninstalled." % pkg)
+    remove_vendor_source(pkg)
     leftover = set(simulated_removals(["autoremove"]))
     extra = [d for d in deps if d in leftover and not protected(d)]
     # and only if removing them takes nothing else: what apt-get remove of

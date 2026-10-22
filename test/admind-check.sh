@@ -900,6 +900,37 @@ grep -q '^        if False:$' "$T/mut-partsunchecked" || fail "the PARTSUNCHECKE
 # shellcheck disable=SC2046
 set -- $(remove_cases "$T/mut-partsunchecked")
 [ "${5:-}" = cascaded ] && pass "MUTANT PARTSUNCHECKED removes a part and what still needs it (gate catches it)" || fail "PARTSUNCHECKED not detected"
+# the maker's files go with the app: Edge's purge deletes its key and leaves
+# microsoft-edge.list, and every apt-get update after warned "Failed to parse
+# keyring" (qa5 2026-10-22); Steam's are taken whole; a source the person
+# changed stays, and so does its key
+vendor_remove() { # ADMIND -- one word per case
+    printf 'microsoft-edge-stable 155\nsteam-launcher 1.0\n' > "$T/installed"; : > "$T/deps"; : > "$T/auto"; : > "$T/rdeps"
+    cp "$HERE/admin/apt-vendors/microsoft-edge.list" "$A/"; rm -f "$T/keyrings/microsoft-edge.gpg"
+    cp "$HERE/admin/apt-vendors/steam-stable.list" "$A/"; cp "$HERE/admin/apt-vendors/steam.gpg" "$T/keyrings/"
+    id=$(next_id); printf 'apt-remove\nmicrosoft-edge-stable\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && [ ! -e "$A/microsoft-edge.list" ]; } && echo edge-gone || echo edge-left
+    id=$(next_id); printf 'apt-remove\nsteam-launcher\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && [ ! -e "$A/steam-stable.list" ] && [ ! -e "$T/keyrings/steam.gpg" ]; } && echo steam-gone || echo steam-left
+    printf 'steam-launcher 1.0\n' > "$T/installed"
+    { cat "$HERE/admin/apt-vendors/steam-stable.list"; echo '# mine'; } > "$A/steam-stable.list"; cp "$HERE/admin/apt-vendors/steam.gpg" "$T/keyrings/"
+    id=$(next_id); printf 'apt-remove\nsteam-launcher\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && [ -e "$A/steam-stable.list" ] && [ -e "$T/keyrings/steam.gpg" ]; } && echo changed-kept || echo changed-taken
+    rm -f "$A/steam-stable.list" "$T/keyrings/steam.gpg"
+}
+# shellcheck disable=SC2046
+set -- $(vendor_remove "$ADMIND")
+[ "${1:-}" = edge-gone ] && pass "Edge uninstalled: its source goes too once its key is gone (no \"Failed to parse keyring\" at every update)" || fail "edge source: ${1:-}"
+[ "${2:-}" = steam-gone ] && pass "Steam uninstalled: Valve's source and key go with it" || fail "steam source: ${2:-}"
+[ "${3:-}" = changed-kept ] && pass "a maker's source the person changed stays, with its key" || fail "changed source: ${3:-}"
+sed 's/^    remove_vendor_source(pkg)$/    pass/' "$ADMIND" > "$T/mut-novendorremove"
+grep -q '^    remove_vendor_source(pkg)$' "$T/mut-novendorremove" && fail "the NOVENDORREMOVE mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(vendor_remove "$T/mut-novendorremove")
+[ "${1:-}" = edge-left ] && [ "${2:-}" = steam-left ] && pass "MUTANT NOVENDORREMOVE leaves the makers' sources behind (gate catches it)" || fail "NOVENDORREMOVE not detected"
 unset SG_ADMIN_DEFAULTS
 cp "$T/apt-get.others" "$B/apt-get"; cp "$T/dpkg-query.others" "$B/dpkg-query"; cp "$T/runuser.others" "$B/runuser"
 
