@@ -488,11 +488,27 @@ static const WCHAR *busy_text(int i, WCHAR *buf, int cch)
     return buf;
 }
 
+/* its uninstaller is gone (app_uninstall's UNINSTALL_GONE): as Programs
+ * and Features asks, "take it off the list?" -- yes takes its entry away
+ * (app_forget). SG_STORE_YES=1: the gate's answer; without a window and
+ * without it (--uninstall), no. */
+static int forget_gone(HWND owner, app_t *a, WCHAR *err, int cch)
+{
+    WCHAR q[700], yes[4] = L"";
+    GetEnvironmentVariableW(L"SG_STORE_YES", yes, ARRAYSIZE(yes));
+    _snwprintf(q, ARRAYSIZE(q), L"%ls\n\nDo you want to take %ls off the list of installed apps?", err, a->name);
+    q[ARRAYSIZE(q) - 1] = 0;
+    if (yes[0] == L'1' || (owner && MessageBoxW(owner, q, L"SG Store", MB_YESNO | MB_ICONQUESTION) == IDYES))
+        return app_forget(a, err, cch);
+    return 1;
+}
+
 /* one turn: install (or update) a, or remove it */
 static void run_one(int i, BOOL remove)
 {
     app_t *a = &g_apps[i];
     WCHAR err[512];
+    BOOL forgot;
     int rc;
     a->state = remove ? AST_REMOVING : AST_INSTALLING;
     InterlockedExchange(&g_prog_stage, -1);
@@ -501,11 +517,12 @@ static void run_one(int i, BOOL remove)
     a->msg_error = FALSE;
     if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
     rc = remove ? app_uninstall(a, err, ARRAYSIZE(err)) : app_install(a, progress_cb, NULL, &g_cancel, err, ARRAYSIZE(err));
+    if ((forgot = remove && rc == UNINSTALL_GONE)) rc = forget_gone(g_wnd, a, err, ARRAYSIZE(err));
     if (remove) {
         app_detect(a);
         if (has_it(a) && !rc) rc = 1, lstrcpynW(err, L"It is still installed.", ARRAYSIZE(err));
         if (rc) { lstrcpynW(a->msg, err[0] ? err : L"It was not removed.", ARRAYSIZE(a->msg)); a->msg_error = TRUE; }
-        else lstrcpynW(a->msg, L"Uninstalled.", ARRAYSIZE(a->msg));
+        else lstrcpynW(a->msg, forgot ? L"Taken off the list." : L"Uninstalled.", ARRAYSIZE(a->msg));
     } else if (rc == 0) {
         a->state = AST_DONE;
         app_detect(a);              /* pick up the new installed version */
@@ -1656,6 +1673,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             if (system_package(&g_apps[k])) { rc = SYS_FAILED; swprintf(err, ARRAYSIZE(err), L"%ls is a part of Stained Glass OS and cannot be uninstalled.", g_apps[k].name); }
             else if (!can_uninstall(&g_apps[k])) { rc = SYS_FAILED; lstrcpynW(err, L"It cannot be uninstalled here.", ARRAYSIZE(err)); }
             else rc = app_uninstall(&g_apps[k], err, ARRAYSIZE(err));
+            if (rc == UNINSTALL_GONE) rc = forget_gone(NULL, &g_apps[k], err, ARRAYSIZE(err));
             app_detect(&g_apps[k]);
             if (!rc && has_it(&g_apps[k])) { rc = 1; lstrcpynW(err, L"It is still installed.", ARRAYSIZE(err)); }
             if (g_dump[0]) {

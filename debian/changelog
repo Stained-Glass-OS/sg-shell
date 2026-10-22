@@ -1,3 +1,33 @@
+sg-shell (0.1.0-197) unstable; urgency=medium
+
+  * SG Store, Uninstall: an app listed twice -- DYMO Connect 1.6's NSIS
+    wrapper entry (Uninstall.exe) and its MSI's, both "DYMO Connect". The
+    wrapper's uninstaller took only itself away, and the store waited three
+    minutes and said "was not removed" (qa4 2026-10-22). Once an
+    uninstaller is done and the app is still listed under another part's
+    uninstaller, that one runs too (up to three). store-check: both parts
+    run and it is removed (mutant NOPARTS).
+  * SG Store, Uninstall: the app is closed first. Dropbox running in the
+    person's session when its uninstaller ran (its /KillEveryone did not
+    end it): its files were in use and 510 MB stayed in Program Files
+    (x86)\Dropbox, and the store said "Uninstalled". The store now closes
+    the person's programs that run from the app's own folder
+    (InstallLocation, else DisplayIcon's or the uninstaller's) -- WM_CLOSE,
+    then ended after 5 s -- never a system or shared folder (Windows,
+    Program Files, Common Files, a profile, AppData) or one that holds
+    them. store-check: the running app is closed and a program elsewhere
+    keeps running (mutant NOCLOSEAPP).
+  * SG Store, Uninstall: an app whose uninstaller is gone (Scribus 1.6.6 on
+    qa5, after an interrupted uninstall) said "could not be started
+    (error 2)" and stayed listed for good. As Programs and Features does,
+    the store says it may have been uninstalled already and asks whether to
+    take it off the list; yes removes its Uninstall entry (the person's at
+    once, the machine's as an administrator through reg.exe), nothing
+    else. store-check: unasked it stays; yes removes the machine's and a
+    person's entry (mutant NOFORGET).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 03:34:45 -0700
+
 sg-shell (0.1.0-196) unstable; urgency=medium
 
   * SG Store, Microsoft Edge for Linux: Microsoft's current signing key.

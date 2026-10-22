@@ -26,6 +26,10 @@
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
+ * <any> /stay                       a program left running (60 s): the store
+ *                                   closes the app's own before its uninstaller;
+ *                                   uninst.exe logs "app-running" when an
+ *                                   app.exe still runs
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -35,6 +39,7 @@
 #include <objbase.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <tlhelp32.h>
 
 static void logline(const WCHAR *file, const WCHAR *text)
 {
@@ -82,6 +87,11 @@ int wmain(int argc, WCHAR **argv)
     (void)argc; (void)argv;
     GetModuleFileNameW(NULL, self, MAX_PATH);
     base = wcsrchr(self, '\\') ? wcsrchr(self, '\\') + 1 : self;
+
+    if (wcsstr(args, L" /stay")) {   /* a running program (Dropbox in the person's session) */
+        Sleep(60000);
+        return 0;
+    }
 
     if (!_wcsicmp(base, L"winget.exe")) {
         WCHAR setup[MAX_PATH], cmd[MAX_PATH + 16];
@@ -135,6 +145,14 @@ int wmain(int argc, WCHAR **argv)
         }
         if (wcsstr(args, L"/child") && GetEnvironmentVariableW(L"SG_FAKE_HANDOFF", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
         logline(L"C:\\gate\\uninstall.log", args);
+        {   /* is the app still running (its files in use)? */
+            PROCESSENTRY32W pe = { sizeof(pe) };
+            HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (snap != INVALID_HANDLE_VALUE && Process32FirstW(snap, &pe)) do
+                if (!_wcsicmp(pe.szExeFile, L"app.exe")) { logline(L"C:\\gate\\uninstall.log", L"app-running"); break; }
+            while (Process32NextW(snap, &pe));
+            if (snap != INVALID_HANDLE_VALUE) CloseHandle(snap);
+        }
         if (wcsstr(args, L"/rmfiles")) {    /* DOSBox's: it removes its files, and has no entry to remove */
             WCHAR app[MAX_PATH], *slash;
             lstrcpynW(app, self, MAX_PATH);

@@ -111,6 +111,8 @@ BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 int  app_uninstall(app_t *a, WCHAR *err, int cch);  /* 0: removed (as its uninstaller or apt says) */
+#define UNINSTALL_GONE 3                              /* app_uninstall: its uninstaller is not there */
+int  app_forget(app_t *a, WCHAR *err, int cch);     /* 0: its entry is off the list */
 BOOL app_is_runtime(const app_t *a);                  /* a cab-dll runtime: nothing to open, removed as an administrator */
 const WCHAR *tier_name(int tier);
 

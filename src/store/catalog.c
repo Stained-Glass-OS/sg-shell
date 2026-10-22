@@ -773,7 +773,9 @@ static BOOL is_nsis(const WCHAR *file)
     return found;
 }
 
-static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHAR *cmd, int cch)
+/* where (root and key) the entry it found lives, when root is given */
+static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHAR *cmd, int cch,
+                              HKEY *root, WCHAR *entry, int ecch)
 {
     BOOL quiet = FALSE;
     static const struct { HKEY root; const WCHAR *path; } roots[] = {
@@ -794,6 +796,7 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
             if (RegOpenKeyExW(key, sub, 0, KEY_READ, &item)) continue;
             reg_str(item, L"DisplayName", name, ARRAYSIZE(name));
             if (name_matches(name, needle) && !hidden_entry(item)) {
+                if (root) { *root = roots[r].root; swprintf(entry, ecch, L"%ls\\%ls", roots[r].path, sub); }
 #ifndef SG_MUTANT_NOQUIET
                 reg_str(item, L"QuietUninstallString", cmd, cch);
 #endif
@@ -906,21 +909,222 @@ static BOOL tree_alive(DWORD *tree, int *n, int max)
     return alive;
 }
 
-int app_uninstall(app_t *a, WCHAR *err, int cch)
+/* the entry's uninstaller is not there at all (Scribus 1.6.6 on qa5: an
+ * earlier uninstall stopped half way and took uninst.exe with it): the store
+ * said "could not be started (error 2)" and the app stayed installed for
+ * good. As Programs and Features does, the person is asked whether to take
+ * it off the list (app_forget). */
+static BOOL uninstaller_gone(const WCHAR *file)
 {
-    DWORD tree[64], grace = 180000;
-    int ntree = 0;
-    WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64];
+    DWORD e = GetLastError();
+#ifdef SG_MUTANT_NOFORGET
+    return FALSE;
+#endif
+    return (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND) && wcschr(file, L'\\') &&
+           GetFileAttributesW(file) == INVALID_FILE_ATTRIBUTES;
+}
+
+/* take an app whose uninstaller is gone off the list: its Uninstall entry
+ * goes (the person's own at once; the machine's as an administrator, by
+ * reg.exe). Nothing else is touched. */
+int app_forget(app_t *a, WCHAR *err, int cch)
+{
+    WCHAR cmd[2048], file[MAX_PATH], args[2048], entry[512], params[600];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
-    DWORD code = 0, start;
-    int attempt;
+    HKEY root = NULL;
+    LSTATUS st;
     err[0] = 0;
-    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
-    if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd))) {
-        swprintf(err, cch, L"%ls has no uninstaller. Remove it in Settings > Apps.", a->name);
+    if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd), &root, entry, ARRAYSIZE(entry)) || !root) {
+        lstrcpynW(err, L"It is not on the list.", cch);
         return 1;
     }
     split_command(cmd, file, args, MAX_PATH);
+    if (GetFileAttributesW(file) != INVALID_FILE_ATTRIBUTES) {   /* its uninstaller is there after all */
+        lstrcpynW(err, L"Its uninstaller is on this computer: uninstall it instead.", cch);
+        return 1;
+    }
+    st = RegDeleteTreeW(root, entry);
+    if (st == ERROR_SUCCESS) RegDeleteKeyW(root, entry);
+    if (st != ERROR_SUCCESS && root == HKEY_LOCAL_MACHINE) {
+        DWORD code = 1;
+        swprintf(params, ARRAYSIZE(params), L"delete \"HKLM\\%ls\" /f /reg:64", entry);
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        sei.lpVerb = L"runas";
+        sei.lpFile = L"reg.exe";
+        sei.lpParameters = params;
+        sei.nShow = SW_HIDE;
+        if (!ShellExecuteExW(&sei) || !sei.hProcess) {
+            lstrcpynW(err, GetLastError() == ERROR_CANCELLED ? L"It was not taken off the list: an administrator's consent was not given."
+                                                             : L"It could not be taken off the list.", cch);
+            return 1;
+        }
+        WaitForSingleObject(sei.hProcess, 60000);
+        GetExitCodeProcess(sei.hProcess, &code);
+        CloseHandle(sei.hProcess);
+    }
+    app_detect(a);
+    if (find_installed(a->detect_name, cmd, ARRAYSIZE(cmd))) {
+        lstrcpynW(err, L"It could not be taken off the list.", cch);
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- the app is still running ------------------------------------------------------------------
+ *
+ * Dropbox, running in the person's session when its uninstaller (as an
+ * administrator) ran: its "/KillEveryone" did not close it, its files were in
+ * use, and 510 MB stayed in Program Files (x86)\Dropbox until a restart --
+ * the store said "Uninstalled". Before an uninstaller runs, the store closes
+ * the person's own programs that run from the app's folder: asked first
+ * (WM_CLOSE), ended after five seconds. The folder is the entry's
+ * InstallLocation, else its DisplayIcon's or its uninstaller's; never a
+ * system or shared folder, nor one holding them. */
+
+/* a folder of the app's own: not the system's, not a shared one (Program
+ * Files, Common Files, a profile, AppData) nor one of their parents */
+static BOOL own_folder(const WCHAR *dir)
+{
+    static const KNOWNFOLDERID *const shared[] = {
+        &FOLDERID_Windows, &FOLDERID_ProgramFiles, &FOLDERID_ProgramFilesX86, &FOLDERID_ProgramFilesCommon,
+        &FOLDERID_ProgramFilesCommonX86, &FOLDERID_ProgramData, &FOLDERID_Profile, &FOLDERID_LocalAppData,
+        &FOLDERID_RoamingAppData, &FOLDERID_UserProgramFiles, &FOLDERID_Desktop, &FOLDERID_Documents,
+        &FOLDERID_Downloads, &FOLDERID_UserProfiles, &FOLDERID_Public,
+    };
+    const WCHAR *last;
+    unsigned i;
+    int n = lstrlenW(dir), depth = 0;
+    if (n < 4 || dir[1] != L':' || dir[2] != L'\\') return FALSE;
+    for (i = 3; i < (unsigned)n; i++) if (dir[i] == L'\\' && dir[i - 1] != L'\\') depth++;
+    if (depth < 1) return FALSE;                     /* C:\X: too wide */
+    last = wcsrchr(dir, L'\\') + 1;
+    if (!lstrcmpiW(last, L"Microsoft") || !lstrcmpiW(last, L"Common Files")) return FALSE;
+    for (i = 0; i < ARRAYSIZE(shared); i++) {
+        WCHAR *k = NULL;
+        int kn;
+        if (FAILED(SHGetKnownFolderPath(shared[i], 0, NULL, &k)) || !k) continue;
+        kn = lstrlenW(k);
+        /* it is that folder, holds it, or (the system's) lies in it */
+        if ((kn >= n && !_wcsnicmp(k, dir, n) && (k[n] == 0 || k[n] == L'\\')) ||
+            (shared[i] == &FOLDERID_Windows && !_wcsnicmp(dir, k, kn) && (dir[kn] == 0 || dir[kn] == L'\\'))) {
+            CoTaskMemFree(k);
+            return FALSE;
+        }
+        CoTaskMemFree(k);
+    }
+    return TRUE;
+}
+
+static BOOL CALLBACK close_one(HWND w, LPARAM lp)
+{
+    const DWORD *pids = (const DWORD *)lp;
+    DWORD pid = 0;
+    int i;
+    GetWindowThreadProcessId(w, &pid);
+    for (i = 1; i <= (int)pids[0]; i++)
+        if (pids[i] == pid && IsWindowVisible(w) && !GetWindow(w, GW_OWNER)) PostMessageW(w, WM_CLOSE, 0, 0);
+    return TRUE;
+}
+
+/* close what runs from dir (the person's own: what the store may open) */
+static void close_running(const WCHAR *dir)
+{
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    HANDLE snap, procs[64];
+    DWORD pids[65], self = GetCurrentProcessId(), start;
+    int n = 0, i, dn = lstrlenW(dir);
+#ifdef SG_MUTANT_NOCLOSEAPP
+    return;
+#endif
+    if (!own_folder(dir)) return;
+    if ((snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)) == INVALID_HANDLE_VALUE) return;
+    if (Process32FirstW(snap, &pe)) do {
+        WCHAR img[MAX_PATH];
+        DWORD cch = MAX_PATH;
+        HANDLE h;
+        if (pe.th32ProcessID == self || n >= (int)ARRAYSIZE(procs)) continue;
+        if (!(h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID))) continue;
+        if (QueryFullProcessImageNameW(h, 0, img, &cch) && cch > (DWORD)dn && !_wcsnicmp(img, dir, dn) && img[dn] == L'\\') {
+            procs[n] = h;
+            pids[++n] = pe.th32ProcessID;
+        } else CloseHandle(h);
+    } while (Process32NextW(snap, &pe));
+    CloseHandle(snap);
+    if (!n) return;
+    pids[0] = n;
+    EnumWindows(close_one, (LPARAM)pids);
+    for (start = GetTickCount(), i = 0; i < n; i++) {
+        DWORD left = GetTickCount() - start < 5000 ? 5000 - (GetTickCount() - start) : 0;
+        if (WaitForSingleObject(procs[i], left) == WAIT_TIMEOUT) TerminateProcess(procs[i], 1);
+    }
+    for (i = 0; i < n; i++) { WaitForSingleObject(procs[i], 3000); CloseHandle(procs[i]); }
+}
+
+/* the app's folder, from its entry (root\entry): InstallLocation, else the
+ * folder of DisplayIcon, else of its uninstaller (file) */
+static void app_folder(HKEY root, const WCHAR *entry, const WCHAR *file, WCHAR *dir, int cch)
+{
+    WCHAR v[MAX_PATH], *p;
+    HKEY key;
+    dir[0] = 0;
+    if (!RegOpenKeyExW(root, entry, 0, KEY_READ, &key)) {
+        DWORD cb = sizeof(v);
+        if (!RegGetValueW(key, NULL, L"InstallLocation", RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, NULL, v, &cb) && v[0])
+            lstrcpynW(dir, v, cch);
+        cb = sizeof(v);
+        if (!dir[0] && !RegGetValueW(key, NULL, L"DisplayIcon", RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, NULL, v, &cb) && v[0]) {
+            if ((p = wcsrchr(v, L','))) *p = 0;                    /* "x.exe,0" */
+            p = v + (v[0] == L'"');
+            if (p[lstrlenW(p) - 1] == L'"') p[lstrlenW(p) - 1] = 0;
+            lstrcpynW(dir, p, cch);
+            if ((p = wcsrchr(dir, L'\\'))) *p = 0;
+        }
+        RegCloseKey(key);
+    }
+    if (!dir[0] && file[0]) {
+        lstrcpynW(dir, file, cch);
+        if ((p = wcsrchr(dir, L'\\'))) *p = 0; else dir[0] = 0;
+    }
+    while ((p = dir + lstrlenW(dir) - 1) >= dir + 3 && *p == L'\\') *p = 0;   /* "C:\X\" */
+}
+
+/* still listed, under another part's uninstaller (not cmd's)? DYMO Connect
+ * 1.6: an NSIS wrapper's entry (Uninstall.exe) and its MSI's, both "DYMO
+ * Connect"; the wrapper's uninstaller took itself away and left the MSI, and
+ * the store said "not removed" after three minutes. */
+static BOOL another_part(const app_t *a, const WCHAR *cmd)
+{
+    WCHAR now[2048];
+#ifdef SG_MUTANT_NOPARTS
+    return FALSE;
+#endif
+    return uninstall_command(a->detect_name, a->uninstall_args, now, ARRAYSIZE(now), NULL, NULL, 0) && lstrcmpiW(now, cmd);
+}
+
+#define UNINSTALL_NEXT 4   /* uninstall_once: removed one part; another is left */
+
+/* one uninstaller (the first entry named like the app): ran is the
+ * command it ran */
+static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
+{
+    DWORD tree[64], grace = 180000;
+    int ntree = 0;
+    WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH];
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    HKEY root = NULL;
+    DWORD code = 0, start;
+    int attempt;
+    err[0] = 0;
+    if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd), &root, entry, ARRAYSIZE(entry))) {
+        swprintf(err, cch, L"%ls has no uninstaller. Remove it in Settings > Apps.", a->name);
+        return 1;
+    }
+    lstrcpynW(ran, cmd, rcch);
+    split_command(cmd, file, args, MAX_PATH);
+    if (root) {
+        app_folder(root, entry, file, dir, ARRAYSIZE(dir));
+        if (dir[0]) close_running(dir);
+    }
     /* a runtime the store put in the system folder: only an administrator
      * can take it out (its uninstaller is cmd, which never asks) */
     for (attempt = app_is_runtime(a) ? 1 : 0; attempt < 2; attempt++) {
@@ -935,6 +1139,10 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
     if (!sei.hProcess) {
         if (GetLastError() == ERROR_CANCELLED)   /* the consent prompt said no, or went unanswered */
             swprintf(err, cch, L"%ls was not removed: an administrator's consent was not given.", a->name);
+        else if (uninstaller_gone(file)) {
+            swprintf(err, cch, L"%ls's uninstaller is not on this computer: it may have been uninstalled already.", a->name);
+            return UNINSTALL_GONE;
+        }
         else swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
         return 1;
     }
@@ -946,15 +1154,30 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
      * window is a child's, is still at it. SG_STORE_UNINSTALL_GRACE (ms): the
      * gate's shorter wait after the last of them */
     if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GRACE", ver, ARRAYSIZE(ver))) grace = _wtoi(ver);
-    for (start = GetTickCount(); (unregister_gone(a), find_installed(a->detect_name, ver, ARRAYSIZE(ver))) &&
-         (tree_alive(tree, &ntree, ARRAYSIZE(tree)) || GetTickCount() - start < grace);)
-    {
-        if (tree_alive(tree, &ntree, ARRAYSIZE(tree))) start = GetTickCount();   /* 3 minutes after the last of them */
+    for (start = GetTickCount(); (unregister_gone(a), find_installed(a->detect_name, ver, ARRAYSIZE(ver)));) {
+        BOOL alive = tree_alive(tree, &ntree, ARRAYSIZE(tree));
+        if (alive) start = GetTickCount();                  /* 3 minutes after the last of them */
+        else if (another_part(a, cmd) || GetTickCount() - start >= grace) break;   /* its part is gone */
         Sleep(1000);
     }
     if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) {
+        if (another_part(a, cmd)) return UNINSTALL_NEXT;
         swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);
         return 1;
     }
     return 0;
+}
+
+/* the app's uninstaller -- and, where it leaves another part listed under
+ * the app's name (an MSI under its wrapper), that part's, up to three */
+int app_uninstall(app_t *a, WCHAR *err, int cch)
+{
+    WCHAR ran[2048];
+    int round, rc = 1;
+    err[0] = 0;
+    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
+    for (round = 0; round < 3; round++)
+        if ((rc = uninstall_once(a, err, cch, ran, ARRAYSIZE(ran))) != UNINSTALL_NEXT) return rc;
+    swprintf(err, cch, L"%ls was not removed.", a->name);
+    return 1;
 }

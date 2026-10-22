@@ -84,6 +84,9 @@
 #   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
+#   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
+#   SG_MUTANT_NOCLOSEAPP runs the uninstaller while the app still runs
+#   SG_MUTANT_NOPARTS    stops after the first of an app's listed parts (DYMO Connect's MSI stayed)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
@@ -140,7 +143,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1336,6 +1339,64 @@ r=$(msi_case "$EXE")
 case "$r" in *"/X$GUID /qn"*"state=not-installed"*) pass "an MSI is removed with /X, quietly (/qn: DYMO Connect's removed nothing with its UI)" ;; *) fail "MSI uninstall: $r" ;; esac
 r=$(msi_case "$T/mut-nomsiquiet.exe")
 case "$r" in *"/qn"*) fail "NOMSIQUIET not detected: $r" ;; *"/X$GUID"*) pass "MUTANT NOMSIQUIET runs the MSI's full UI and it stays (gate catches it)" ;; *) fail "NOMSIQUIET case: $r" ;; esac
+# an entry whose uninstaller is gone (Scribus 1.6.6 on qa5: an earlier
+# uninstall stopped half way): "could not be started (error 2)" for good. As
+# Programs and Features does, the store asks to take it off the list; yes
+# removes the entry (the machine's or the person's), nothing else.
+gone_case() { # EXE ROOT YES -- the result line, then whether the entry is left
+    reg "$2\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GoneApp" /v DisplayName /d 'Fake App'
+    reg "$2\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GoneApp" /v UninstallString /d "\"C:\\gate\\gone\\uninst.exe\""
+    SG_STORE_YES="$3" SG_MUT="$1" run --uninstall 01
+    head -1 "$D.result" 2>/dev/null
+    wine reg query "$2\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GoneApp" >/dev/null 2>&1 && echo LEFT || echo GONE
+    wine reg delete "$2\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GoneApp" /f >/dev/null 2>&1; sleep 0.5
+}
+r=$(gone_case "$EXE" HKLM '' | tr '\n' ' ')
+case "$r" in *"uninstall 01 fail"*"may have been uninstalled already"*LEFT*) pass "an app whose uninstaller is gone: the store says it may be uninstalled already, and the entry stays unasked" ;; *) fail "gone, no answer: $r" ;; esac
+r=$(gone_case "$EXE" HKLM 1 | tr '\n' ' ')
+case "$r" in *"uninstall 01 ok"*GONE*) pass "...yes takes the machine's entry off the list (Scribus)" ;; *) fail "gone, HKLM yes: $r" ;; esac
+r=$(gone_case "$EXE" HKCU 1 | tr '\n' ' ')
+case "$r" in *"uninstall 01 ok"*GONE*) pass "...and a person's own entry" ;; *) fail "gone, HKCU yes: $r" ;; esac
+r=$(gone_case "$T/mut-noforget.exe" HKLM 1 | tr '\n' ' ')
+case "$r" in *"could not be started (error"*LEFT*) pass "MUTANT NOFORGET leaves it listed for good (gate catches it)" ;; *) fail "NOFORGET not detected: $r" ;; esac
+# the app still running when it is uninstalled (Dropbox in the person's
+# session: its files in use, 510 MB left behind): the store closes what runs
+# from the app's folder first -- and nothing from elsewhere
+mkdir -p "$G/keep"; cp "$T/store-fake.exe" "$G/keep/keep.exe"
+running_case() { # EXE -- the uninstaller's log, then whether the outside program still runs
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine 'C:\Program Files\Fake App\app.exe' /stay >/dev/null 2>&1 &
+    wine 'C:\gate\keep\keep.exe' /stay >/dev/null 2>&1 &
+    sleep 3
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null
+    pgrep -f '[k]eep.exe' >/dev/null && echo KEPT || echo KILLED
+    pkill -f '[k]eep.exe'; pkill -f '[a]pp.exe /stay'; ununinstall FakeApp; sleep 0.5
+}
+r=$(running_case "$EXE" | tr '\n' ' ')
+case "$r" in *app-running*) fail "the app still ran when its uninstaller did: $r" ;;
+             *"/quiet"*KEPT*) pass "the app, still running, is closed before its uninstaller runs (Dropbox), and nothing else" ;;
+             *) fail "running app: $r" ;; esac
+r=$(running_case "$T/mut-nocloseapp.exe" | tr '\n' ' ')
+case "$r" in *app-running*) pass "MUTANT NOCLOSEAPP uninstalls it while it runs (gate catches it)" ;; *) fail "NOCLOSEAPP not detected: $r" ;; esac
+# two parts listed under the app's name (DYMO Connect 1.6: an NSIS wrapper's
+# entry and its MSI's): the wrapper's uninstaller took only itself away and
+# the store said "not removed"; the store goes on to the part that is left
+parts2_case() { # EXE -- what was run, and the result
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    reg "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$GUID" /v DisplayName /d 'Fake App'
+    reg "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$GUID" /v UninstallString /t REG_EXPAND_SZ /d "C:\\gate\\msi\\MsiExec.exe /I$GUID"
+    rm -f "$G/uninstall.log"
+    SG_STORE_UNINSTALL_GRACE=1000 SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null; head -1 "$D.result" 2>/dev/null
+    ununinstall FakeApp; ununinstall "$GUID"; sleep 0.5
+}
+r=$(parts2_case "$EXE" | tr '\n' ' ')
+case "$r" in *"/quiet"*"/X$GUID /qn"*"uninstall 01 ok"*) pass "an app listed twice (a wrapper and its MSI): both parts' uninstallers run, and it is removed (DYMO Connect)" ;;
+             *) fail "two parts: $r" ;; esac
+r=$(parts2_case "$T/mut-noparts.exe" | tr '\n' ' ')
+case "$r" in *"/X$GUID"*) fail "NOPARTS not detected: $r" ;; *"uninstall 01 fail"*) pass "MUTANT NOPARTS leaves the MSI installed (gate catches it)" ;; *) fail "NOPARTS case: $r" ;; esac
 # an uninstaller that hands off to a child (Opera's): done when the child is,
 # not "not removed" while its window is still up
 handoff() { # exe -> ok|fail
