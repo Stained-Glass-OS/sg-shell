@@ -807,6 +807,16 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
     if (cmd[0]) {   /* MsiExec /I{GUID} repairs; /X{GUID} removes */
         WCHAR *p = StrStrIW(cmd, L"msiexec");
         if (p && (p = StrStrIW(p, L" /I")) && (p[3] == L'{' || p[3] == L' ')) p[2] = L'X';
+        /* and quietly, as winget removes an MSI: DYMO Connect's (an
+         * InstallShield-built MSI) ended in 4 s with its full UI and removed
+         * nothing; /qn takes it out. A UI level the entry gives is kept. */
+#ifndef SG_MUTANT_NOMSIQUIET
+        if (!quiet && StrStrIW(cmd, L"msiexec") && StrStrIW(cmd, L" /X") && !StrStrIW(cmd, L" /q") &&
+            !StrStrIW(cmd, L" /passive") && lstrlenW(cmd) + 5 < cch) {
+            lstrcatW(cmd, L" /qn");
+            quiet = TRUE;
+        }
+#endif
     }
     /* an NSIS uninstaller with no quiet command of its own (Scribus 1.6.6):
      * its window and its "All files ... will be deleted" question waited for

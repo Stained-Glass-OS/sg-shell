@@ -18,6 +18,9 @@
  *                                   /ui, QuietUninstallString /quiet): logs its
  *                                   arguments to C:\gate\uninstall.log and
  *                                   deletes the Uninstall entry K
+ *   msiexec.exe /X{GUID} ARGS       a Windows Installer: logs its arguments to
+ *                                   C:\gate\uninstall.log; with /qn deletes the
+ *                                   Uninstall entry {GUID}
  *   <any> /Q /T:"DIR" /C              an IExpress package, unpacking: copies
  *                                   the files of %SG_FAKE_MSIS% into DIR
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
@@ -96,6 +99,24 @@ int wmain(int argc, WCHAR **argv)
 
     if (!_wcsicmp(base, L"app.exe")) {
         logline(L"C:\\gate\\launch.log", args);
+        return 0;
+    }
+
+    /* msiexec.exe /X{GUID} ...: a stand-in Windows Installer (found in the store's own folder before
+     * the system's): logs its arguments to C:\gate\uninstall.log and deletes the Uninstall entry
+     * {GUID}, as a removal would -- only when told /qn (DYMO Connect's MSI removed nothing with its
+     * full UI) */
+    if (!_wcsicmp(base, L"msiexec.exe")) {
+        const WCHAR *x = wcsstr(args, L"/X{");
+        logline(L"C:\\gate\\uninstall.log", args);
+        if (x && wcsstr(args, L" /qn")) {
+            WCHAR sub[256], guid[64];
+            int n = 0;
+            for (x += 2; *x && *x != L' ' && n < 63; x++) guid[n++] = *x;
+            guid[n] = 0;
+            swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", guid);
+            RegDeleteKeyW(HKEY_LOCAL_MACHINE, sub);
+        }
         return 0;
     }
 

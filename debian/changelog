@@ -1,3 +1,14 @@
+sg-shell (0.1.0-195) unstable; urgency=medium
+
+  * SG Store: an MSI's uninstall runs quietly (msiexec /X{GUID} /qn), as
+    winget removes one: DYMO Connect's InstallShield-built MSI ended in 4 s
+    with its full UI and removed nothing, and the store said "not removed";
+    with /qn it goes (qa4 2026-10-22). A UI level the entry gives (/q...,
+    /passive) is kept. store-check: a stand-in Windows Installer logs what
+    it is given (/X{GUID} /qn) and removes the entry; mutant NOMSIQUIET.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 00:40:00 -0700
+
 sg-shell (0.1.0-194) unstable; urgency=medium
 
   * sg-admind: the SG Store does not start installing a Linux app the
