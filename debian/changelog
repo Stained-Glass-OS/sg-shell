@@ -1,3 +1,19 @@
+sg-shell (0.1.0-201) unstable; urgency=medium
+
+  * SG Store: an installer that hands its work to another process and
+    exits is waited for. InstallShield's setup.exe starts a copy of itself
+    from %TEMP% and exits at once: the store said "Installed." minutes
+    before DYMO Label 8 had its entry or shortcuts, and took its download
+    away. The store follows the installer's descendants -- through the
+    administrator's helper (which now names the installer's process), and
+    through the consent prompt, where the elevated installer has no
+    parent (a parentless process that appears while it runs is one of its
+    roots) -- until the app is installed or they are gone, half an hour
+    at most. test/store-check.sh (SG_FAKE_RELAUNCH, SG_FAKE_ORPHAN), mutants
+    SG_MUTANT_NOINSTALLTREE, SG_MUTANT_NOELEVATEDTREE.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 16:40:00 -0700
+
 sg-shell (0.1.0-200) unstable; urgency=medium
 
   * SG Store: a Windows install that fails on a nearly full system drive

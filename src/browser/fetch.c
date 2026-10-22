@@ -24,6 +24,7 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <setupapi.h>
+#include <tlhelp32.h>
 
 #define DEFAULT_LIST L"https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/"
 #define DEFAULT_RAW  L"https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/"
@@ -373,12 +374,89 @@ void pkg_cleanup(package_t *p)
 
 BOOL (*g_runas_hook)(const WCHAR *file, const WCHAR *args, DWORD *code);
 
+/* the processes the last run_wait's installer started, and theirs, while it
+ * ran: an installer that hands its work to another process and exits is still
+ * at it (pkg_install gives them to the package) */
+static DWORD g_run_tree[64];
+static int g_run_ntree;
+/* run as an administrator through the consent prompt (runas, or its manifest
+ * asking for one), the installer is the elevation broker's child, not ours (its parent id is 0; ours is the relay,
+ * rundll32 SgElevate, which ends with it): a process of no parent that
+ * appears while it runs is one of its roots. g_run_pre: what ran before. */
+static BOOL g_run_orphans;
+static DWORD g_run_pre[2048];
+static int g_run_npre;
+
+static void run_pre_snapshot(void)
+{
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    HANDLE snap;
+    g_run_npre = 0;
+    if ((snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)) == INVALID_HANDLE_VALUE) return;
+    if (Process32FirstW(snap, &pe)) do
+        if (g_run_npre < (int)ARRAYSIZE(g_run_pre)) g_run_pre[g_run_npre++] = pe.th32ProcessID;
+    while (Process32NextW(snap, &pe));
+    CloseHandle(snap);
+}
+
+static BOOL run_orphan_root(const PROCESSENTRY32W *pe)
+{
+    int i;
+#ifdef SG_MUTANT_NOELEVATEDTREE
+    return FALSE;
+#endif
+    if (!g_run_orphans || pe->th32ParentProcessID) return FALSE;
+    if (!lstrcmpiW(pe->szExeFile, L"sg-consent64.exe") || !lstrcmpiW(pe->szExeFile, L"sg-store64.exe")) return FALSE;
+    for (i = 0; i < g_run_npre; i++) if (g_run_pre[i] == pe->th32ProcessID) return FALSE;
+    return TRUE;
+}
+
+static void run_tree_grow(void)
+{
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    HANDLE snap;
+    BOOL grew;
+    int i;
+    if ((snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)) == INVALID_HANDLE_VALUE) return;
+    do {
+        grew = FALSE;
+        if (Process32FirstW(snap, &pe)) do {
+            BOOL known = FALSE, parent = FALSE;
+            for (i = 0; i < g_run_ntree; i++) {
+                if (g_run_tree[i] == pe.th32ProcessID) known = TRUE;
+                if (g_run_tree[i] == pe.th32ParentProcessID) parent = TRUE;
+            }
+            if (!known && (parent || run_orphan_root(&pe)) && g_run_ntree < (int)ARRAYSIZE(g_run_tree)) { g_run_tree[g_run_ntree++] = pe.th32ProcessID; grew = TRUE; }
+        } while (Process32NextW(snap, &pe));
+    } while (grew);
+    CloseHandle(snap);
+}
+
+/* the installer an administrator's helper ran for run_wait (SG Store's
+ * batch): its process, for its descendants to be found */
+void pkg_note_installer(DWORD pid)
+{
+    g_run_ntree = 0;
+    g_run_tree[g_run_ntree++] = pid;
+}
+
+/* the last installer's process tree, for the caller to wait on (SG Store) */
+void pkg_take_tree(package_t *p)
+{
+    if (g_run_ntree) run_tree_grow();   /* what it started at its end too; a parent's id stays its creator's */
+    memcpy(p->tree, g_run_tree, g_run_ntree * sizeof(DWORD));
+    p->ntree = g_run_ntree;
+}
+
 static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, BOOL *elevated, WCHAR *err, int cch)
 {
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     int attempt;
+    g_run_orphans = FALSE;
+    run_pre_snapshot();
     for (attempt = admin ? 1 : 0; attempt < 2; attempt++) {
         if (attempt && g_runas_hook) {   /* the store's batch: its one administrator's helper */
+            g_run_ntree = 0;             /* the helper names the installer's process (pkg_note_installer) */
             if (!g_runas_hook(file, args, code)) {
                 seterr(err, cch, L"The installer was not run: an administrator did not allow it.");
                 return FALSE;
@@ -391,7 +469,9 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
         sei.lpFile = file;
         sei.lpParameters = args;
         sei.nShow = SW_SHOWNORMAL;
-        if (ShellExecuteExW(&sei)) { if (elevated) *elevated = attempt != 0; break; }
+        /* a program whose manifest asks for an administrator is elevated by
+         * the consent prompt without runas too (DYMO Label's setup.exe) */
+        if (ShellExecuteExW(&sei)) { if (elevated) *elevated = attempt != 0; g_run_orphans = TRUE; break; }
         /* an installer that must run as an administrator: ask (the consent prompt) */
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) attempt = 2;
     }
@@ -406,7 +486,9 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
         seterr(err, cch, L"The installer could not be started (error %lu).", e);
         return FALSE;
     }
-    WaitForSingleObject(sei.hProcess, INFINITE);
+    g_run_ntree = 0;
+    g_run_tree[g_run_ntree++] = GetProcessId(sei.hProcess);
+    while (WaitForSingleObject(sei.hProcess, 250) == WAIT_TIMEOUT) run_tree_grow();
     GetExitCodeProcess(sei.hProcess, code);
     CloseHandle(sei.hProcess);
     return TRUE;

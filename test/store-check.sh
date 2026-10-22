@@ -83,6 +83,8 @@
 #   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
 #   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
 #   SG_MUTANT_NSISTAIL puts /S after NSIS's _?=DIR (read as part of the folder)
+#   SG_MUTANT_NOINSTALLTREE says Installed when an installer that relaunched itself exits (DYMO Label)
+#   SG_MUTANT_NOELEVATEDTREE does not follow a consent-run installer's parentless copy
 #   SG_MUTANT_NODISKHINT  a failed install on a nearly full drive does not say so (Edge: "code 91")
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
@@ -145,7 +147,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -508,6 +510,56 @@ grep -q '^elevated 01 0' "$D.result" 2>/dev/null && pass "as the user: its manif
 run --list
 [ "$(kv "$(appline 01)" state)" = installed ] && [ "$(kv "$(appline 01)" installed)" = 1.10.0 ] \
     && pass "and is then detected as installed (1.10.0)" || fail "after install: $(appline 01)"
+
+# an installer that starts a copy of itself and exits at once (InstallShield's
+# setup.exe from %TEMP%: DYMO Label 8): the store waits for the copy -- the app
+# is installed when --install returns
+ununinstall FakeApp; wineserver -w
+relaunched() {   # EXE -> the entry right after the store returns: 0 there
+    SG_FAKE_RELAUNCH=4000 SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' \
+        wine "$1" --install 01 >/dev/null 2>&1
+    wine reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FakeApp" >/dev/null 2>&1; r=$?
+    wineserver -w; ununinstall FakeApp; wineserver -w
+    return $r
+}
+relaunched "$EXE" && pass "an installer that hands its work to a copy of itself and exits: installed when the store says so" \
+    || fail "the store returned before the relaunched installer's copy had installed"
+relaunched "$T/mut-noinstalltree.exe" && fail "NOINSTALLTREE not detected by the gate" \
+    || pass "MUTANT NOINSTALLTREE says Installed before it is (gate catches it)"
+# the same through the administrator's helper (a batch; app 08's manifest asks
+# for an administrator): the helper names the installer's process, the store
+# waits for its copy (DYMO Label 8 on qa4, elevated)
+ununinstall PickApp; wineserver -w
+relaunched_batch() {
+    SG_FAKE_RELAUNCH=4000 SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
+        timeout 300 wine "$1" --install-batch 08 >/dev/null 2>&1
+    wine reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PickApp" >/dev/null 2>&1; r=$?
+    wineserver -w; ununinstall PickApp; wineserver -w
+    return $r
+}
+relaunched_batch "$EXE" && pass "...and when an administrator's helper ran it (a batch, elevationRequired)" \
+    || fail "batch: the store returned before the relaunched installer's copy had installed"
+relaunched_batch "$T/mut-noinstalltree.exe" && fail "NOINSTALLTREE (batch) not detected by the gate" \
+    || pass "MUTANT NOINSTALLTREE in a batch too (gate catches it)"
+
+# and when the consent prompt ran it: the installer is then the elevation
+# broker's child, of no parent here, and its copy too (SG_FAKE_ORPHAN starts
+# the copy from Unix): a process of no parent that appears while it runs is
+# one of its roots
+relaunched_orphan() {
+    SG_FAKE_ORPHAN=1 SG_FAKE_WINE="$WINE_DIR/bin/wine" SG_FAKE_RELAUNCH=4000 SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' \
+        SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' timeout 300 wine "$1" --install 08 >/dev/null 2>&1
+    wine reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PickApp" >/dev/null 2>&1; r=$?
+    wineserver -w; ununinstall PickApp; wineserver -w
+    return $r
+}
+relaunched_orphan "$EXE" && pass "...and when its copy has no parent (the consent prompt's broker started it)" \
+    || fail "consent path: the store returned before the parentless copy had installed"
+relaunched_orphan "$T/mut-noelevatedtree.exe" && fail "NOELEVATEDTREE not detected by the gate" \
+    || pass "MUTANT NOELEVATEDTREE says Installed before it is (gate catches it)"
+
+SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' \
+    wine "$EXE" --install 01 >/dev/null 2>&1   # as E left it, for what follows
 
 # --- F. an installer we can run beats a portable zip ---------------------------------------------
 rm -f "$G/setup.log"

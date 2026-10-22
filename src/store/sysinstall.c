@@ -238,8 +238,9 @@ static BOOL helper_start(void)
     return g_helper_up;
 }
 
-/* one request to the helper: RUN FILE ARGS (its exit code back), or QUIT */
-static BOOL helper_call(const WCHAR *verb, const WCHAR *file, const WCHAR *args, DWORD *code)
+/* one request to the helper: RUN FILE ARGS (its exit code back, and the
+ * installer's process id), or QUIT */
+static BOOL helper_call2(const WCHAR *verb, const WCHAR *file, const WCHAR *args, DWORD *code, DWORD *pid)
 {
     WCHAR req[4096], reply[32] = L"";
     DWORD got = 0;
@@ -258,13 +259,22 @@ static BOOL helper_call(const WCHAR *verb, const WCHAR *file, const WCHAR *args,
     CloseHandle(p);
     reply[got / sizeof(WCHAR)] = 0;
     if (code) *code = (DWORD)_wtoi(reply);
+    if (pid && wcschr(reply, L' ')) *pid = (DWORD)_wtoi(wcschr(reply, L' ') + 1);
     return reply[0] != L'!';
+}
+
+static BOOL helper_call(const WCHAR *verb, const WCHAR *file, const WCHAR *args, DWORD *code)
+{
+    return helper_call2(verb, file, args, code, NULL);
 }
 
 /* fetch.c's hook: an installer that must run elevated, by the helper */
 static BOOL helper_runas(const WCHAR *file, const WCHAR *args, DWORD *code)
 {
-    return helper_start() && helper_call(L"RUN", file, args, code);
+    DWORD pid = 0;
+    if (!helper_start() || !helper_call2(L"RUN", file, args, code, &pid)) return FALSE;
+    if (pid) pkg_note_installer(pid);
+    return TRUE;
 }
 
 void sys_batch_begin(void)
@@ -322,10 +332,12 @@ static DWORD WINAPI helper_client(void *arg)
         sei.lpParameters = a[0] ? a : NULL;
         sei.nShow = SW_SHOWNORMAL;
         if (ShellExecuteExW(&sei) && sei.hProcess) {
+            DWORD ran = GetProcessId(sei.hProcess);
             WaitForSingleObject(sei.hProcess, INFINITE);
             GetExitCodeProcess(sei.hProcess, &code);
             CloseHandle(sei.hProcess);
-            _snwprintf(reply, ARRAYSIZE(reply), L"%lu", code);
+            /* and which process it was: the store waits for what it started (DYMO Label) */
+            _snwprintf(reply, ARRAYSIZE(reply), L"%lu %lu", code, ran);
         } else _snwprintf(reply, ARRAYSIZE(reply), L"!%lu", GetLastError());
     } else lstrcpyW(reply, L"!bad");
     WriteFile(p, reply, (DWORD)(lstrlenW(reply) + 1) * sizeof(WCHAR), &got, NULL);

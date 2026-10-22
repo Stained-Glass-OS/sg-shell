@@ -665,6 +665,29 @@ static int install_deps(const package_t *p, int depth, progress_fn progress, voi
     return 0;
 }
 
+static BOOL tree_alive(DWORD *tree, int *n, int max);
+
+/* An installer whose work goes on in a process it started: InstallShield's
+ * setup.exe starts a copy of itself from %TEMP% and exits at once, and the
+ * store said "Installed." two minutes before DYMO Label 8 had its entry or
+ * its shortcuts (qa4 2026-10-22) -- and took its download away. Wait while
+ * any of them still runs and the app is not yet installed, half an hour at
+ * most (SG_STORE_INSTALL_WAIT, ms: the gate's); one it launches when done
+ * (its "Run now") does not hold the store, the app being installed by then. */
+static void settle_install(app_t *a, package_t *p)
+{
+    WCHAR ver[64], v[16];
+    DWORD start = GetTickCount(), limit = 30 * 60 * 1000;
+#ifdef SG_MUTANT_NOINSTALLTREE
+    return;
+#endif
+    pkg_take_tree(p);
+    if (GetEnvironmentVariableW(L"SG_STORE_INSTALL_WAIT", v, ARRAYSIZE(v))) limit = _wtoi(v);
+    while (GetTickCount() - start < limit && !find_installed(a->detect_name, ver, ARRAYSIZE(ver)) &&
+           tree_alive(p->tree, &p->ntree, ARRAYSIZE(p->tree)))
+        Sleep(1000);
+}
+
 static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel,
                       WCHAR *err, int cch)
 {
@@ -690,6 +713,7 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     if (!_wcsicmp(p.type, L"zip") && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
 #endif
     ok = pkg_install(&p, err, cch);
+    if (ok && a) settle_install(a, &p);
     if (a) a->ran_elevated = p.elevated;
     if (ok && a) register_installed(a, p.version);
     if (ok && depth) dep_record(id, p.version);
@@ -715,6 +739,7 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     memcpy(p.sha256, a->pin_sha, 32);
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
     ok = pkg_install(&p, err, cch);
+    if (ok) settle_install(a, &p);
     a->ran_elevated = p.elevated;
     if (ok) register_installed(a, a->pin_version);
     pkg_cleanup(&p);

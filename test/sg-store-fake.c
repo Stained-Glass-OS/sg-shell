@@ -196,6 +196,42 @@ int wmain(int argc, WCHAR **argv)
     {
         WCHAR ms[16];
         if (GetEnvironmentVariableW(L"SG_FAKE_SLEEP", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
+        /* %SG_FAKE_RELAUNCH% (ms): like InstallShield's setup.exe (DYMO Label 8), it
+         * starts a copy of itself from %TEMP% and exits at once; the copy installs
+         * that much later */
+        if (GetEnvironmentVariableW(L"SG_FAKE_RELAUNCH", ms, ARRAYSIZE(ms))) {
+            WCHAR wine[MAX_PATH];
+            /* %SG_FAKE_ORPHAN%: the copy is started from Unix (%SG_FAKE_WINE%), so it
+             * has no parent -- as the elevation broker's children have none */
+            if (!wcsstr(args, L" /relaunched") && GetEnvironmentVariableW(L"SG_FAKE_ORPHAN", wine, MAX_PATH) &&
+                GetEnvironmentVariableW(L"SG_FAKE_WINE", wine, MAX_PATH)) {
+                WCHAR tmp[MAX_PATH], copy[MAX_PATH], cl[2048];
+                STARTUPINFOW si = { sizeof(si) };
+                PROCESS_INFORMATION pi;
+                GetTempPathW(MAX_PATH, tmp);
+                swprintf(copy, MAX_PATH, L"%lsfake-orphan-setup.exe", tmp);
+                CopyFileW(self, copy, FALSE);
+                swprintf(cl, ARRAYSIZE(cl), L"sh -c \"'%ls' '%ls' /relaunched >/dev/null 2>&1 &\"", wine, copy);
+                if (!CreateProcessW(L"\\\\?\\unix\\bin\\sh", cl, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return 6;
+                WaitForSingleObject(pi.hProcess, 10000);
+                CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+                Sleep(1500);   /* the copy is up before this one ends */
+                return 0;
+            }
+            if (!wcsstr(args, L" /relaunched")) {
+                WCHAR tmp[MAX_PATH], copy[MAX_PATH], cl[2048];
+                STARTUPINFOW si = { sizeof(si) };
+                PROCESS_INFORMATION pi;
+                GetTempPathW(MAX_PATH, tmp);
+                swprintf(copy, MAX_PATH, L"%lsfake-relaunch-setup.exe", tmp);
+                CopyFileW(self, copy, FALSE);
+                swprintf(cl, ARRAYSIZE(cl), L"\"%ls\" /relaunched", copy);
+                if (!CreateProcessW(copy, cl, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return 5;
+                CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+                return 0;
+            }
+            Sleep(_wtoi(ms));
+        }
     }
     env(L"SG_FAKE_KEY", L"FakeApp", key, ARRAYSIZE(key));
     env(L"SG_FAKE_DISPLAY", L"Fake App", display, ARRAYSIZE(display));
