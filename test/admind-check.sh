@@ -366,6 +366,11 @@ cat > "$B/apt-get" <<EOF
 #!/bin/sh
 fd=; last=
 for a in "\$@"; do case \$a in APT::Status-Fd=*) fd=\${a#APT::Status-Fd=} ;; esac; last=\$a; done
+# what an install would download (\$T/dlsize bytes, when set) and its simulation: not installs
+case " \$* " in
+  *" --print-uris "*) [ -f "$T/dlsize" ] && printf "'http://deb.example/%s.deb' %s_9.9_amd64.deb %s SHA256:0\n" "\$last" "\$last" "\$(cat "$T/dlsize")"; exit 0 ;;
+  *" -s "*) exit 0 ;;
+esac
 printf 'apt-get %s\n' "\$*" >> "$CALLS"
 printf '%s\n' "\${SG_SNAP_SOURCE:-none}" >> "$T/apt-source"
 case " \$* " in *" update "*) exit 0 ;; esac
@@ -636,6 +641,29 @@ set -- $(store_steam "$ADMIND")
 r=$(ask apt-install gimp)
 { [ "$(first "$r")" = OK ] && [ ! -e "$A/steam-stable.list" ] && ! grep -q add-architecture "$CALLS"; } \
     && pass "another package brings no source and no i386" || fail "gimp: $(tr '\n' '|' < "$CALLS")"
+# the drive cannot hold it: refused before apt starts, saying how much it needs (qa5: apt stopped
+# half-way, "No space left on device"); with room, it installs
+space_cases() { # ADMIND -- one word per case
+    : > "$CALLS"; : > "$T/installed"; echo 2147483648 > "$T/dlsize"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    SG_ADMIN_FREE_BYTES=1073741824 python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { case "$(first "$r")" in "FAILED "*"needs 2.2 GB of free space"*"1.0 GB free"*) true ;; *) false ;; esac; } && ! grep -q ' install gimp$' "$CALLS" \
+        && echo refused || echo "installed:$(first "$r")"
+    : > "$CALLS"; echo 10485760 > "$T/dlsize"
+    id=$(next_id); printf 'apt-install\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    SG_ADMIN_FREE_BYTES=1073741824 python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
+    { [ "$(first "$r")" = OK ] && grep -q ' install gimp$' "$CALLS"; } && echo room || echo "no-room:$(first "$r")"
+    rm -f "$T/dlsize"
+}
+# shellcheck disable=SC2046
+set -- $(space_cases "$ADMIND")
+[ "${1:-}" = refused ] && pass "an install the drive cannot hold is refused before apt starts, saying what it needs and what is free" || fail "space: ${1:-}"
+[ "${2:-}" = room ] && pass "...and one it can hold goes ahead" || fail "space with room: ${2:-}"
+sed 's/^    if need + SPACE_MARGIN > free:$/    if False:/' "$ADMIND" > "$T/mut-nospace"
+grep -q '^    if False:$' "$T/mut-nospace" || fail "the NOSPACECHECK mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(space_cases "$T/mut-nospace")
+[ "${1:-}" != refused ] && pass "MUTANT NOSPACECHECK starts apt on a full drive (gate catches it)" || fail "NOSPACECHECK not detected"
 sed 's/^    vendor = add_vendor_source(pkg)$/    vendor = False/' "$ADMIND" > "$T/mut-novendor"
 grep -q 'vendor = False' "$T/mut-novendor" || fail "the NOVENDOR mutant did not apply"
 # shellcheck disable=SC2046

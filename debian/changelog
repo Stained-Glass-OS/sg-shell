@@ -1,3 +1,14 @@
+sg-shell (0.1.0-194) unstable; urgency=medium
+
+  * sg-admind: the SG Store does not start installing a Linux app the
+    system drive cannot hold. It adds up what apt would download and what
+    the packages take installed, keeps 256 MB spare, and otherwise says
+    how much the app needs and how much is free. apt stopped half-way
+    with "No space left on device" before (qa5: GParted and Disk Usage
+    Analyzer on a full drive). Gate: admind-check (mutant NOSPACECHECK).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 20:50:19 -0700
+
 sg-shell (0.1.0-193) unstable; urgency=medium
 
   * sg-admind: the SG Store's Uninstall of a Linux app purges it (and its

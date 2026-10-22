@@ -1179,10 +1179,60 @@ def apt_relations(pkg):
     return parse_relations(r.stdout) if r.returncode == 0 else {}
 
 
+SPACE_MARGIN = 256 << 20     # what is left free after an install, at least
+
+
+def free_space(path="/"):
+    """bytes free for a program on the system drive"""
+    if TEST and os.environ.get("SG_ADMIN_FREE_BYTES"):
+        return int(os.environ["SG_ADMIN_FREE_BYTES"])
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize
+
+
+def size_text(n):
+    for unit, shift in (("GB", 30), ("MB", 20)):
+        if n >= 1 << shift:
+            return "%.1f %s" % (n / float(1 << shift), unit)
+    return "%d KB" % max(1, n >> 10)
+
+
+def install_space_needed(pkg):
+    """bytes installing pkg takes: what apt downloads (kept until it is
+    installed) and what the packages it installs take on the drive"""
+    need = 0
+    r = run(["apt-get", "-qq", "--print-uris", "install", pkg], timeout=300)
+    for line in r.stdout.splitlines() if r.returncode == 0 else []:
+        f = line.split()
+        if len(f) >= 3 and f[0].startswith("'") and f[2].isdigit():
+            need += int(f[2])
+    r = run(["apt-get", "-s", "-q", "install", pkg], timeout=300)
+    names = [l.split()[1] for l in r.stdout.splitlines() if l.startswith("Inst ") and len(l.split()) > 1] \
+        if r.returncode == 0 else []
+    if names:
+        r = run(["apt-cache", "show", "--no-all-versions"] + names, timeout=300)
+        for line in r.stdout.splitlines() if r.returncode == 0 else []:
+            if line.startswith("Installed-Size:") and line.split()[1:2] and line.split()[1].isdigit():
+                need += int(line.split()[1]) << 10
+    return need
+
+
+def check_space(pkg, need=0):
+    """refused, before apt starts, when the drive cannot hold the install:
+    apt then stops half-way with "No space left on device" (qa5 2026-10-21,
+    GParted and Disk Usage Analyzer on a full drive)"""
+    free = free_space()
+    if need + SPACE_MARGIN > free:
+        log("apt-install %s: needs %d bytes (+%d), %d free" % (pkg, need, SPACE_MARGIN, free))
+        raise Refused("%s needs %s of free space and the system drive has %s free. "
+                      "Free some space on the drive and try again." % (pkg, size_text(need + SPACE_MARGIN), size_text(free)))
+
+
 def op_apt_install(args):
     (pkg,) = args
     if not PKG_RE.fullmatch(pkg):
         raise Refused("'%s' is not a package name." % pkg)
+    check_space(pkg)
     vendor = add_vendor_source(pkg)
     refresh_lists()
     rel = apt_relations(pkg)
@@ -1192,6 +1242,8 @@ def op_apt_install(args):
         must(["dpkg", "--add-architecture", "i386"], "Support for 32-bit programs could not be turned on")
         log("%s asks for 32-bit libraries: i386 packages turned on" % pkg)
         refresh_lists()
+    progress(4, "Checking the space it needs...")
+    check_space(pkg, install_space_needed(pkg))
     apt_get(["install", pkg], "%s could not be installed" % pkg, 5, 55 if vendor else 95)
     ver = installed_version(pkg)
     if not ver:
