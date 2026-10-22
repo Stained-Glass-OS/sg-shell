@@ -1,3 +1,14 @@
+sg-shell (0.1.0-193) unstable; urgency=medium
+
+  * sg-admind: the SG Store's Uninstall of a Linux app purges it (and its
+    parts), as an uninstaller takes its machine-wide settings. Removed,
+    a package's conffiles stayed behind: Steam's left its apt source,
+    whose keyring had gone with it, and every apt-get update warned
+    (qa5). A person's own files are untouched. Gate: admind-check (the
+    purge, mutant NOPURGE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 21 Oct 2026 18:09:58 -0700
+
 sg-shell (0.1.0-192) unstable; urgency=high
 
   * sg-admind: uninstalling an app could remove much of the system. Its

@@ -740,7 +740,7 @@ remove_cases() { # ADMIND -- one word per case
     printf 'gimp libgimp, libc6\n' > "$T/deps"; printf 'libgimp\n' > "$T/auto"; : > "$T/rdeps"; : > "$CALLS"
     id=$(next_id); printf 'apt-remove\ngimp\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
     python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
-    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* remove gimp$' "$CALLS" && grep -q '^apt-get .* remove libgimp$' "$CALLS" \
+    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* --purge remove gimp$' "$CALLS" && grep -q '^apt-get .* --purge remove libgimp$' "$CALLS" \
       && ! grep -q 'libc6$' "$CALLS" && ! grep -q '^gimp ' "$T/installed"; } && echo removed || echo not-removed
     # what would take the system with it: refused, apt never removes
     printf 'tool 1.0\nsg-shell 0.1.0-86\n' > "$T/installed"; printf 'tool sg-shell\n' > "$T/rdeps"; : > "$T/deps"; : > "$CALLS"
@@ -807,7 +807,7 @@ libgexiv2-tool 1.0
 }
 # shellcheck disable=SC2046
 set -- $(remove_cases "$ADMIND")
-[ "${1:-}" = removed ] && pass "apt-remove uninstalls a Linux app, with the dependency it alone brought (not shared libraries)" \
+[ "${1:-}" = removed ] && pass "apt-remove uninstalls (purges) a Linux app, with the dependency it alone brought (not shared libraries)" \
     || fail "apt-remove gimp: ${1:-} $(tr '\n' '|' < "$CALLS")"
 [ "${2:-}" = guarded ] && pass "apt-remove refuses what would remove the system's own packages (sg-shell); apt removes nothing" \
     || fail "apt-remove guard: ${2:-} $(tr '\n' '|' < "$CALLS")"
@@ -833,6 +833,11 @@ grep -q '^        unregister_defaults(pkg)$' "$T/mut-nounreg" && fail "the NOUNR
 # shellcheck disable=SC2046
 set -- $(remove_cases "$T/mut-nounreg")
 [ "${3:-}" != unregistered ] && pass "MUTANT NOUNREG leaves SG Office's file types behind (gate catches it)" || fail "NOUNREG not detected"
+sed 's/\["--purge", "remove"/["remove"/' "$ADMIND" > "$T/mut-nopurge"
+grep -q '"--purge"' "$T/mut-nopurge" && fail "the NOPURGE mutant did not apply"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$T/mut-nopurge")
+[ "${1:-}" != removed ] && pass "MUTANT NOPURGE leaves the app's conffiles (its apt source) behind (gate catches it)" || fail "NOPURGE not detected"
 sed 's/^    return name if arch in ("", "all", native_arch()) else "%s:%s" % (name, arch)$/    return name/' "$ADMIND" > "$T/mut-archblind"
 grep -q '^    return name$' "$T/mut-archblind" || fail "the ARCHBLIND mutant did not apply"
 # shellcheck disable=SC2046

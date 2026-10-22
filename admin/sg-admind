@@ -1378,7 +1378,11 @@ def op_apt_remove(args):
     if pkg in OUR_PACKAGES:
         progress(5, "Removing %s from the file types and the Start menu..." % pkg)
         unregister_defaults(pkg)
-    apt_get(["remove", pkg], "%s could not be uninstalled" % pkg, 10, 60)
+    # purged, as an uninstaller takes its machine-wide settings: kept, a
+    # removed package's conffiles stay behind ("rc") -- Steam's left its apt
+    # source, whose keyring went with it, and every apt-get update after
+    # warned of it (qa5 2026-10-21). A person's own files are not apt's
+    apt_get(["--purge", "remove", pkg], "%s could not be uninstalled" % pkg, 10, 60)
     if installed_version(pkg):
         raise Refused("%s was not uninstalled." % pkg)
     leftover = set(simulated_removals(["autoremove"]))
@@ -1402,7 +1406,7 @@ def op_apt_remove(args):
         for d in extra:
             if d in OUR_PACKAGES:
                 unregister_defaults(d)
-        apt_get(["remove"] + sorted(extra), "%s's parts could not be uninstalled" % pkg, 75, 24)
+        apt_get(["--purge", "remove"] + sorted(extra), "%s's parts could not be uninstalled" % pkg, 75, 24)
     progress(100, "Done")
     return ["%s" % pkg] + (["Also removed: %s" % " ".join(sorted(extra))] if extra else [])
 
