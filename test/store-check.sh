@@ -82,6 +82,7 @@
 #   SG_MUTANT_NOQUIET     runs the uninstaller's UI, not its QuietUninstallString
 #   SG_MUTANT_SHOWPARTS   takes a hidden part's entry (SystemComponent) for the app's
 #   SG_MUTANT_NONSISSILENT runs an NSIS uninstaller without a quiet command as it is (no /S)
+#   SG_MUTANT_NSISTAIL puts /S after NSIS's _?=DIR (read as part of the folder)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
@@ -143,7 +144,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1310,6 +1311,25 @@ r=$(nsis_case "$EXE" 0)
 case "$r" in *"/ui"*" /S"*|*"/ui /S"*) fail "/S given to an uninstaller that is not NSIS's: $r" ;; *"/ui"*) pass "...and not to one that is not NSIS's" ;; *) fail "non-NSIS uninstall: $r" ;; esac
 r=$(nsis_case "$T/mut-nonsissilent.exe" 1)
 case "$r" in *"/S"*) fail "NONSISSILENT not detected: $r" ;; *) pass "MUTANT NONSISSILENT leaves the NSIS uninstaller waiting for a click (gate catches it)" ;; esac
+# an entry that names its folder with NSIS's _?= (foobar2000: "uninstall.exe
+# _?=C:\Program Files\foobar2000"): NSIS reads the rest of the line as the
+# folder, so /S goes before it -- after it, the uninstaller looked in
+# "...foobar2000 /S", took the entry off the list and removed no file
+nsis_tail_case() { # EXE -- what the uninstaller was asked
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString /f >/dev/null 2>&1
+    printf '\357\276\255\336NullsoftInst' >> "$WINEPREFIX/drive_c/Program Files/Fake App/uninst.exe"
+    u=$(wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')
+    wine reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString /d "$u _?=C:\Program Files\Fake App" /f >/dev/null 2>&1
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null
+    ununinstall FakeApp; sleep 0.5
+}
+r=$(nsis_tail_case "$EXE")
+case "$r" in *"/ui /S _?=C:\Program Files\Fake App"*) pass "/S goes before NSIS's _?=DIR, which stays last (foobar2000)" ;; *) fail "NSIS _?= uninstall: $r" ;; esac
+r=$(nsis_tail_case "$T/mut-nsistail.exe")
+case "$r" in *"_?=C:\Program Files\Fake App /S"*) pass "MUTANT NSISTAIL puts /S inside the folder (gate catches it)" ;; *) fail "NSISTAIL not detected: $r" ;; esac
 # the catalogue's quiet switch for an uninstaller with none in its entry
 # (Total Commander's tcunin64.exe /7: its Uninstall/Repair/Cancel waited)
 reg "$K\\01" /v UninstallArgs /d '/7'

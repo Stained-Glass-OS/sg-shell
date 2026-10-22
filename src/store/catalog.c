@@ -753,6 +753,30 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
 
 static void split_command(const WCHAR *cmd, WCHAR *file, WCHAR *args, int cch);
 
+/* adds SW to the uninstall command CMD -- before NSIS's "_?=DIR", which must
+ * come last: NSIS reads the rest of the line as the folder. foobar2000's
+ * entry is "uninstall.exe _?=C:\Program Files\foobar2000"; with /S after
+ * it the uninstaller looked in "...\foobar2000 /S", took the entry off the
+ * list and removed no file, and its elevated copy was not silent. */
+static void add_switch(WCHAR *cmd, int cch, const WCHAR *sw)
+{
+    WCHAR *tail = NULL, *w = cmd;
+#ifndef SG_MUTANT_NSISTAIL
+    for (; (w = wcsstr(w, L" _?=")); w++) tail = w;
+#endif
+    if (!tail) {
+        lstrcatW(cmd, L" ");
+        lstrcatW(cmd, sw);
+        return;
+    }
+    WCHAR rest[2048];
+    lstrcpynW(rest, tail, sizeof(rest) / sizeof(rest[0]));
+    *tail = 0;
+    lstrcatW(cmd, L" ");
+    lstrcatW(cmd, sw);
+    if (lstrlenW(cmd) + lstrlenW(rest) < cch) lstrcatW(cmd, rest);
+}
+
 /* whether FILE is an NSIS installer or uninstaller: its data carries NSIS's
  * header, "NullsoftInst" (after the program, a few hundred KB in) */
 static BOOL is_nsis(const WCHAR *file)
@@ -830,8 +854,7 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
      * Uninstall/Repair/Cancel and waited; /7 removes it without a word */
 #ifndef SG_MUTANT_NOUNINSTARGS
     if (cmd[0] && !quiet && quiet_args && quiet_args[0] && lstrlenW(cmd) + lstrlenW(quiet_args) + 2 < cch) {
-        lstrcatW(cmd, L" ");
-        lstrcatW(cmd, quiet_args);
+        add_switch(cmd, cch, quiet_args);
         quiet = TRUE;
     }
 #endif
@@ -843,7 +866,7 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
         BOOL has_s = FALSE;
         for (; (w = wcsstr(w, L"/S")); w += 2)   /* the word /S, NSIS's: case counts */
             if ((w == args || w[-1] == L' ') && (!w[2] || w[2] == L' ')) has_s = TRUE;
-        if (!has_s && is_nsis(file) && lstrlenW(cmd) + 4 < cch) lstrcatW(cmd, L" /S");
+        if (!has_s && is_nsis(file) && lstrlenW(cmd) + 4 < cch) add_switch(cmd, cch, L"/S");
 #endif
     }
     return cmd[0] != 0;

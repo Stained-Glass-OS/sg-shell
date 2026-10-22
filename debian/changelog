@@ -1,3 +1,15 @@
+sg-shell (0.1.0-199) unstable; urgency=medium
+
+  * SG Store: the silent switch of an uninstall (NSIS's /S, a catalogue
+    UninstallArgs) goes before NSIS's "_?=DIR", which must stay last --
+    NSIS reads the rest of the line as the folder. foobar2000's entry is
+    "uninstall.exe _?=C:\Program Files\foobar2000"; with /S after it the
+    uninstaller looked in "...foobar2000 /S", took the entry off the list,
+    removed no file, and the store said "Uninstalled" (qa5, 2026-10-22).
+    Gate test/store-check.sh (an entry ending in _?=), mutant NSISTAIL.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 22 Oct 2026 09:57:47 -0700
+
 sg-shell (0.1.0-198) unstable; urgency=medium
 
   * SG Store: uninstalling a Linux app from a maker's repository (Edge,
