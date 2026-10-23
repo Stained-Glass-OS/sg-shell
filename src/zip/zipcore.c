@@ -742,6 +742,32 @@ int zip_extract(zarchive *z, int i, zsink sink, void *ctx)
     return ZE_OK;
 }
 
+/* an entry gathered into memory, for the parts of a document or a small
+ * installer (WordPad's .docx/.odt, SG Store) */
+typedef struct { BYTE *buf; size_t len, cap; } msink;
+
+static int mem_sink(void *ctx, const BYTE *p, size_t n)
+{
+    msink *m = ctx;
+    if (n > m->cap - m->len) return ZE_DATA;
+    memcpy(m->buf + m->len, p, n);
+    m->len += n;
+    return ZE_OK;
+}
+
+int zip_read(zarchive *z, int i, BYTE **out, size_t *len)
+{
+    msink m = { NULL, 0, 0 };
+    int r;
+    *out = NULL; *len = 0;
+    if (z->e[i].usize > (ULONGLONG)((size_t)-1 >> 1)) return ZE_NOMEM;
+    m.cap = (size_t)z->e[i].usize;
+    if (!(m.buf = malloc(m.cap ? m.cap : 1))) return ZE_NOMEM;
+    if ((r = zip_extract(z, i, mem_sink, &m))) { free(m.buf); return r; }
+    *out = m.buf; *len = m.len;
+    return ZE_OK;
+}
+
 BOOL zip_safe_path(const WCHAR *name, WCHAR *out, int cch)
 {
     const WCHAR *p = name;

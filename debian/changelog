@@ -1,3 +1,13 @@
+sg-shell (0.1.0-204) unstable; urgency=medium
+
+  * Build fix for -203: WordPad (.docx, .odt) and SG Store (installers in
+    a zip) still read zip entries into memory with zip_read, which -203
+    removed, so the package did not build. zip_read is back, on top of the
+    streaming zip_extract (same checks: size, CRC). Gates:
+    test/wordpad-check.sh, test/store-check.sh, test/zip-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 23 Oct 2026 16:18:11 -0700
+
 sg-shell (0.1.0-203) unstable; urgency=medium
 
   * Compressed (zipped) Folders: a large zip (a Raspberry Pi disk image)

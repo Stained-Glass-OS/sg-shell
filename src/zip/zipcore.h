@@ -52,6 +52,9 @@ typedef int (*zsink)(void *ctx, const BYTE *p, size_t n);
  * pieces, in bounded memory, then checked against its size and CRC. On
  * failure the sink has had part of it: the caller discards what it wrote. */
 int  zip_extract(zarchive *z, int i, zsink sink, void *ctx);
+/* the entry's contents in memory, checked the same way; free() the result.
+ * For small entries only: extraction to a file streams (zip_extract). */
+int  zip_read(zarchive *z, int i, BYTE **out, size_t *len);
 /* a stored name as a relative Windows path under the destination, or FALSE
  * when it is absolute, has a drive, climbs with "..", or names a stream */
 BOOL zip_safe_path(const WCHAR *name, WCHAR *out, int cch);
