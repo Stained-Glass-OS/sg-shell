@@ -164,6 +164,11 @@ typedef struct {
     HWND notify;
     volatile LONG cancel;
     int done, total, written, errors, refused, skipped;
+    /* the files' sizes, and how much of them is on disk: one large file (a
+     * disk image) is the whole job, so progress is counted in bytes */
+    volatile ULONGLONG bytes_done;
+    ULONGLONG bytes_total;
+    DWORD last_post;
     WCHAR first_error[512];
 } xjob;
 
@@ -180,17 +185,55 @@ static BOOL make_dirs(const WCHAR *path)
     return r == ERROR_SUCCESS || r == ERROR_ALREADY_EXISTS || r == ERROR_FILE_EXISTS;
 }
 
+/* an entry's contents into its file, as they come: progress and Cancel while
+ * one large file is written, not only between files */
+typedef struct { HANDLE f; xjob *j; int i; } fsink;
+
+static int file_sink(void *ctx, const BYTE *p, size_t n)
+{
+    fsink *s = ctx;
+    xjob *j = s->j;
+    DWORD done;
+    if (j && j->cancel) return ZE_CANCELLED;
+    while (n)
+    {
+        DWORD chunk = n > 0x10000000 ? 0x10000000 : (DWORD)n;
+        if (!WriteFile(s->f, p, chunk, &done, NULL) || done != chunk)
+        {
+            DWORD err = GetLastError();
+#ifndef SG_MUTANT_ZIP_DISKFULL
+            return err == ERROR_DISK_FULL || err == ERROR_HANDLE_DISK_FULL ? ZE_DISKFULL : ZE_WRITE;
+#else
+            (void)err;
+            return ZE_WRITE;
+#endif
+        }
+        p += chunk; n -= chunk;
+        if (j) j->bytes_done += chunk;
+    }
+#ifndef SG_MUTANT_ZIP_FILE_PROGRESS
+    if (j && j->notify && GetTickCount() - j->last_post >= 100)
+    {
+        j->last_post = GetTickCount();
+        PostMessageW(j->notify, WM_APP_PROGRESS, s->i, (LPARAM)j->z->n);
+    }
+#endif
+    return ZE_OK;
+}
+
 static int extract_run(xjob *j)
 {
     int i;
     j->total = j->z->n;
+    j->bytes_done = j->bytes_total = 0;
+    for (i = 0; i < j->z->n; i++) if (!j->z->e[i].dir) j->bytes_total += j->z->e[i].usize;
     if (!make_dirs(j->dest)) { note_error(j, j->dest, ZE_WRITE); return ZE_WRITE; }
     for (i = 0; i < j->z->n; i++)
     {
         zentry *e = &j->z->e[i];
         WCHAR rel[MAX_PATH], full[MAX_PATH], parent[MAX_PATH], *slash;
-        BYTE *data;
-        size_t len;
+        ULONGLONG before = j->bytes_done;
+        fsink fs;
         int r;
 
         if (j->cancel) return ZE_CANCELLED;
@@ -218,27 +261,33 @@ static int extract_run(xjob *j)
             if (answer == ASK_SKIP) { j->skipped++; zlog(L"SKIPPED\t%ls", e->name); continue; }
             SetFileAttributesW(full, FILE_ATTRIBUTE_NORMAL);
         }
-        if ((r = zip_read(j->z, i, &data, &len))) { note_error(j, e->name, r); continue; }
+        fs.f = CreateFileW(full, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        fs.j = j; fs.i = i;
+        if (fs.f == INVALID_HANDLE_VALUE)
         {
-            HANDLE f = CreateFileW(full, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            DWORD n = 0;
-            BOOL ok = f != INVALID_HANDLE_VALUE;
-            size_t off = 0;
-            while (ok && off < len)
-            {
-                DWORD chunk = len - off > 0x10000000 ? 0x10000000 : (DWORD)(len - off);
-                ok = WriteFile(f, data + off, chunk, &n, NULL) && n == chunk;
-                off += chunk;
-            }
-            if (ok)
-            {
-                FILETIME lft, ft;
-                if (DosDateTimeToFileTime(e->dosdate, e->dostime, &lft) && LocalFileTimeToFileTime(&lft, &ft))
-                    SetFileTime(f, NULL, NULL, &ft);
-            }
-            if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
-            free(data);
-            if (!ok) { DeleteFileW(full); note_error(j, e->name, ZE_WRITE); continue; }
+            r = GetLastError() == ERROR_DISK_FULL ? ZE_DISKFULL : ZE_WRITE;
+            note_error(j, e->name, r);
+            j->bytes_done = before + e->usize;
+            continue;
+        }
+        r = zip_extract(j->z, i, file_sink, &fs);
+        if (!r)
+        {
+            FILETIME lft, ft;
+            if (DosDateTimeToFileTime(e->dosdate, e->dostime, &lft) && LocalFileTimeToFileTime(&lft, &ft))
+                SetFileTime(fs.f, NULL, NULL, &ft);
+        }
+        CloseHandle(fs.f);
+        if (r)
+        {
+            /* a file cut short, or one that failed its checksum, is not left behind */
+            DeleteFileW(full);
+            if (r == ZE_CANCELLED) return ZE_CANCELLED;
+            note_error(j, e->name, r);
+            j->bytes_done = before + e->usize;
+            /* a full disk fails every file after it the same way */
+            if (r == ZE_DISKFULL) return ZE_DISKFULL;
+            continue;
         }
         j->written++;
         zlog(L"OK\t%ls", e->name);
@@ -491,6 +540,7 @@ typedef struct {
     xjob job;
     HANDLE thread;
     BOOL running, finished;
+    BOOL asking;             /* the Replace-or-Skip prompt is up: the dump is its */
     int ask_all;             /* 0 ask; else the remembered answer */
 } wizard;
 
@@ -505,6 +555,7 @@ static void wizard_dump(wizard *w, const WCHAR *state)
     dumpf(FALSE, L"SHOW %d", Button_GetCheck(w->show) == BST_CHECKED);
     dumpf(FALSE, L"DONE %d/%d written=%d errors=%d refused=%d skipped=%d", w->job.done, w->job.total,
           w->job.written, w->job.errors, w->job.refused, w->job.skipped);
+    dumpf(FALSE, L"BYTES %I64u/%I64u", w->job.bytes_done, w->job.bytes_total);
 }
 
 static void wizard_layout(wizard *w)
@@ -550,7 +601,7 @@ static void wizard_start(wizard *w)
     EnableWindow(w->dest, FALSE); EnableWindow(w->browse, FALSE);
     EnableWindow(w->show, FALSE); EnableWindow(w->go, FALSE);
     ShowWindow(w->progress, SW_SHOW); ShowWindow(w->status, SW_SHOW);
-    SendMessageW(w->progress, PBM_SETRANGE32, 0, w->z.n ? w->z.n : 1);
+    SendMessageW(w->progress, PBM_SETRANGE32, 0, 1000);
     SetWindowTextW(w->status, L"Extracting...");
     wizard_dump(w, L"extracting");
     w->thread = CreateThread(NULL, 0, wizard_thread, w, 0, NULL);
@@ -582,11 +633,13 @@ static int wizard_ask(wizard *w, const WCHAR *full)
     tc.pszVerificationText = L"Do this for all conflicts";
     dumpf(TRUE, L"WINDOW ask");
     dumpf(FALSE, L"FILE %ls", full);
+    w->asking = TRUE;
     if (FAILED(TaskDialogIndirect(&tc, &button, NULL, &all)))
     {
         int r = MessageBoxW(w->hwnd, main_text, L"Replace or Skip Files", MB_YESNOCANCEL | MB_ICONQUESTION);
         button = r == IDYES ? ASK_REPLACE + 1000 : r == IDNO ? ASK_SKIP + 1000 : IDCANCEL;
     }
+    w->asking = FALSE;
     if (button == IDCANCEL) return ASK_CANCEL;
     if (all) w->ask_all = button - 1000;
     wizard_dump(w, L"extracting");
@@ -703,12 +756,17 @@ static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         break;
     case WM_APP_PROGRESS:
     {
-        WCHAR s[512];
+        WCHAR s[512], done[32], total[32];
         const WCHAR *name = (int)wp < w->z.n ? w->z.e[wp].name : L"";
-        SendMessageW(w->progress, PBM_SETPOS, wp, 0);
-        _snwprintf(s, 511, L"Extracting %d of %d: %ls", (int)wp + 1, (int)lp, name);
+        ULONGLONG bd = w->job.bytes_done, bt = w->job.bytes_total;
+        if (bt) SendMessageW(w->progress, PBM_SETPOS, (WPARAM)(bd >= bt ? 1000 : bd * 1000 / bt), 0);
+        else SendMessageW(w->progress, PBM_SETPOS, wp * 1000 / (w->z.n ? w->z.n : 1), 0);
+        StrFormatByteSizeW((LONGLONG)bd, done, 32);
+        StrFormatByteSizeW((LONGLONG)bt, total, 32);
+        _snwprintf(s, 511, L"Extracting %d of %d: %ls (%ls of %ls)", (int)wp + 1, (int)lp, name, done, total);
         s[511] = 0;
         SetWindowTextW(w->status, s);
+        if (!w->asking) wizard_dump(w, L"extracting");
         return 0;
     }
     case WM_APP_ASK:
@@ -720,7 +778,7 @@ static LRESULT CALLBACK wizard_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         CloseHandle(w->thread);
         w->running = FALSE;
         w->finished = TRUE;
-        SendMessageW(w->progress, PBM_SETPOS, w->z.n, 0);
+        SendMessageW(w->progress, PBM_SETPOS, 1000, 0);
         wizard_dump(w, wp == ZE_CANCELLED ? L"cancelled" : L"done");
         if (w->job.errors || w->job.refused)
         {
@@ -958,12 +1016,8 @@ static void browser_up(browser *b)
 static void browser_open_file(browser *b, int i)
 {
     WCHAR tmp[MAX_PATH], dir[MAX_PATH], full[MAX_PATH];
-    BYTE *data;
-    size_t len;
+    fsink fs = { NULL, NULL, i };
     int r;
-    HANDLE f;
-    DWORD n;
-    if ((r = zip_read(&b->z, i, &data, &len))) { error_box(b->hwnd, zip_strerror(r), b->z.e[i].name); return; }
     GetTempPathW(MAX_PATH, tmp);
     _snwprintf(dir, MAX_PATH, L"%lsTemp1_%ls", tmp, base_name(b->zip));
     dir[MAX_PATH - 1] = 0;
@@ -971,11 +1025,17 @@ static void browser_open_file(browser *b, int i)
     _snwprintf(full, MAX_PATH, L"%ls\\%ls", dir, base_name(b->z.e[i].name));
     full[MAX_PATH - 1] = 0;
     SetFileAttributesW(full, FILE_ATTRIBUTE_NORMAL);
-    f = CreateFileW(full, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
-    if (f == INVALID_HANDLE_VALUE || !WriteFile(f, data, (DWORD)len, &n, NULL))
-    { if (f != INVALID_HANDLE_VALUE) CloseHandle(f); free(data); error_box(b->hwnd, zip_strerror(ZE_WRITE), full); return; }
-    CloseHandle(f);
-    free(data);
+    fs.f = CreateFileW(full, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_READONLY, NULL);
+    if (fs.f == INVALID_HANDLE_VALUE) { error_box(b->hwnd, zip_strerror(ZE_WRITE), full); return; }
+    r = zip_extract(&b->z, i, file_sink, &fs);
+    CloseHandle(fs.f);
+    if (r)
+    {
+        SetFileAttributesW(full, FILE_ATTRIBUTE_NORMAL);
+        DeleteFileW(full);
+        error_box(b->hwnd, zip_strerror(r), b->z.e[i].name);
+        return;
+    }
     dumpf(FALSE, L"OPENED %ls", full);
     ShellExecuteW(b->hwnd, NULL, full, NULL, dir, SW_SHOWNORMAL);
 }

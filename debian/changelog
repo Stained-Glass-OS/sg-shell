@@ -1,3 +1,21 @@
+sg-shell (0.1.0-203) unstable; urgency=medium
+
+  * Compressed (zipped) Folders: a large zip (a Raspberry Pi disk image)
+    extracts as it inflates. Each file was inflated whole in memory before
+    any of it was written, so the destination folder stayed empty for
+    minutes and a 3 GB image needed 3.4 GB of memory; and progress counted
+    files, so one large file sat at "1 of 1" with an empty bar. Extraction
+    now streams through a 256 KB window (a 1 GB file in about 30 MB), the
+    wizard shows progress in bytes ("1.17 GB of 2.92 GB") and Cancel works
+    inside a file. Deflate64 (method 9, what Windows and 7-Zip write for
+    large files) is read; a full disk says "There is not enough space on
+    the disk" and leaves no part-file. Opening a file from the browse
+    window streams too (it truncated files over 4 GB). Gate:
+    test/zip-check.sh (Deflate64, 1 GB under 300 MB, full disk, byte
+    progress; mutants ZIP_D64_NEAR, ZIP_FILE_PROGRESS, ZIP_DISKFULL).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 23 Oct 2026 15:33:05 -0700
+
 sg-shell (0.1.0-202) unstable; urgency=medium
 
   * SG Store: a Linux app that a part of Stained Glass OS needs has no

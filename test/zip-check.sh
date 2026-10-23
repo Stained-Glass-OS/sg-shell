@@ -2,12 +2,17 @@
 . "$(dirname "$0")/scratch-home.sh"
 # Gate for Compressed (zipped) Folders (sg-zip): our own inflate, deflate and
 # ZIP container against Python's zipfile (and Info-ZIP's unzip when present),
-# the zip-slip refusals, a damaged entry caught by its CRC, and the windows --
+# the zip-slip refusals, a damaged entry caught by its CRC, Deflate64 (7-Zip's,
+# when 7z is present), a large file extracted in bounded memory, a full disk
+# reported as one (unshare), and the windows --
 # the browse window opened through the .zip association, navigated with the
 # keyboard, and the Extract wizard driven with xdotool, including its
-# Replace-or-Skip prompt.
+# Replace-or-Skip prompt and its progress through one large file (David
+# 2026-10-23: a Raspberry Pi image zip "created an empty folder and did not
+# give progress" -- the whole file was inflated in memory before any of it
+# was written, and progress counted files).
 #
-# Screenshots: build/zip-{browse,browse-sub,wizard,ask}.png. Needs wine-sg,
+# Screenshots: build/zip-{browse,browse-sub,wizard,ask,progress}.png. Needs wine-sg,
 # Xvfb, xdotool, ImageMagick and python3; skips (77) without them.
 # SG_ZIP_EXE runs another build (the mutation test does).
 set -u
@@ -151,7 +156,69 @@ rm -f "$C/fx/src/text.zip" "$C/fx/src/text (2).zip"
 Z /extract 'C:\fx\src.zip' 'C:\fx\rt' /quiet && diff -r "$C/fx/src" "$C/fx/rt/src" >/dev/null 2>&1 \
     && pass "our zip round-trips through our extractor" || fail "round trip differs"
 
-# --- 5. the windows ------------------------------------------------------------------------------
+# --- 5. large files and other methods ------------------------------------------------------------
+# Deflate64 (method 9: 64 KB window, distance codes 30-31, length code 285 with
+# 16 extra bits), as 7-Zip writes it -- and as Windows writes large files
+if command -v 7z >/dev/null; then
+    mkdir -p "$C/d64"
+    ( cd "$C/d64" && python3 - <<'EOF2'
+import random
+random.seed(9)
+blk = random.randbytes(40000)               # repeats 40000 apart: only codes 30/31 reach them
+open("far.bin", "wb").write(blk * 40)
+open("long.bin", "wb").write(random.randbytes(5000) + b"\0" * 300000 + random.randbytes(5000))
+EOF2
+      7z a -tzip -mm=Deflate64 -mx=9 d64.zip far.bin long.bin >/dev/null )
+    Z /extract 'C:\d64\d64.zip' 'C:\d64\out' /quiet /log 'C:\d64\x.log'; x=$?
+    if [ $x = 0 ] && cmp -s "$C/d64/far.bin" "$C/d64/out/far.bin" && cmp -s "$C/d64/long.bin" "$C/d64/out/long.bin"; then
+        pass "Deflate64 (7-Zip): far distances and long matches extracted identically"
+    else fail "Deflate64: exit $x, $(tr '\n' ' ' < "$C/d64/x.log" 2>/dev/null)"; fi
+else
+    echo "SKIP  Deflate64: no 7z to write one"
+fi
+
+# one large file (a disk image): extracted as it is inflated, never whole in memory
+mkdir -p "$C/big"
+python3 - "$C/big/big.zip" <<'EOF2'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z, z.open("disk.img", "w", force_zip64=True) as f:
+    for i in range(1024):
+        f.write((b"%08d" % i) + bytes((1 << 20) - 8))       # 1 GB, a little different each MB
+EOF2
+peak=0
+Z /extract 'C:\big\big.zip' 'C:\big\out' /quiet /log 'C:\big\x.log' & zp=$!
+while kill -0 $zp 2>/dev/null; do
+    for p in $(pgrep -f 'sg-zip64.exe' 2>/dev/null); do
+        v=$(awk '/VmHWM/{print $2}' "/proc/$p/status" 2>/dev/null)
+        [ -n "$v" ] && [ "$v" -gt "$peak" ] && peak=$v
+    done
+    sleep 0.2
+done
+wait $zp; x=$?
+size=$(stat -c %s "$C/big/out/disk.img" 2>/dev/null || echo 0)
+if [ $x = 0 ] && [ "$size" = 1073741824 ] && [ "$peak" -gt 0 ] && [ "$peak" -lt 307200 ]; then
+    pass "a 1 GB file extracted whole in $((peak / 1024)) MB of memory"
+else fail "1 GB file: exit $x, size $size, peak $((peak / 1024)) MB (must stay under 300)"; fi
+rm -rf "$C/big/out"
+
+# a full disk: said so, and the part written is not left behind (a 4 MB tmpfs,
+# mounted in a user namespace; the same user inside, so the same wineserver)
+mkdir -p "$C/full"
+if unshare -rm true 2>/dev/null; then
+    head -c 16777216 /dev/urandom > "$C/fx/rand16.bin"
+    ( cd "$C/fx" && python3 -c "import zipfile; zipfile.ZipFile('full.zip','w').write('rand16.bin')" )
+    unshare -rm sh -c 'mount -t tmpfs -o size=4m none "$1" && exec unshare --user --map-user="$2" --map-group="$3" \
+        "$4/bin/wine" "C:\\sg-zip64.exe" /extract "C:\\fx\\full.zip" "C:\\full\\o" /quiet /log "C:\\fx\\f.log"' \
+        sh "$C/full" "$(id -u)" "$(id -g)" "$WINE_DIR" >/dev/null 2>&1; x=$?
+    if [ $x = 1 ] && grep -q "ERROR	rand16.bin	There is not enough space on the disk." "$C/fx/f.log" \
+       && [ -z "$(ls -A "$C/full/o" 2>/dev/null)" ]; then
+        pass "a full disk: 'not enough space', exit 1, no part-file left"
+    else fail "full disk: exit $x, $(tr '\n' ' ' < "$C/fx/f.log" 2>/dev/null), left: $(ls "$C/full/o" 2>/dev/null)"; fi
+else
+    echo "SKIP  full disk: user namespaces not allowed here"
+fi
+
+# --- 6. the windows ------------------------------------------------------------------------------
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 reg 'HKCU\Software\Wine\Explorer' /v Desktop /d shell
 reg 'HKCU\Software\Wine\Explorer\Desktops' /v shell /d 1024x768
@@ -225,6 +292,34 @@ if waitdump "STATE ready"; then
             || fail "after Replace: $(cat "$C/dump.txt" | tr '\n' '|'), empty.dat: $(cat "$C/wiz/empty.dat")"
     else fail "no Replace-or-Skip prompt: $(cat "$C/dump.txt" | tr '\n' '|')"; fi
 else fail "the wizard did not open the second time"; fi
+
+# the wizard on one large file: progress in bytes while it is written, and the
+# file growing on disk before the end
+python3 - "$C/big/big.zip" <<'EOF2'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z, z.open("disk.img", "w", force_zip64=True) as f:
+    for i in range(1024):
+        f.write((b"%08d" % i) + bytes((1 << 20) - 8))
+EOF2
+: > "$C/dump.txt"
+wine 'C:\sg-zip64.exe' /extractall 'C:\big\big.zip' >/dev/null 2>&1 &
+if waitdump "STATE ready"; then
+    xdotool key ctrl+a; xdotool type --delay 60 'c:\bigwiz'; sleep 0.3; xdotool key Return
+    mid=""; grew=""; shot=""; i=0
+    while [ $i -lt 600 ] && ! grep -q "STATE done" "$C/dump.txt" 2>/dev/null; do
+        b=$(sed -n 's/^BYTES \([0-9]*\)\/\([0-9]*\)$/\1 \2/p' "$C/dump.txt" 2>/dev/null)
+        set -- $b
+        [ $# = 2 ] && [ "$1" -gt 0 ] && [ "$1" -lt "$2" ] && mid="$1/$2"
+        s=$(stat -c %s "$C/bigwiz/disk.img" 2>/dev/null || echo 0)
+        [ "$s" -gt 0 ] && [ "$s" -lt 1073741824 ] && grew=$s
+        [ -n "$mid" ] && [ -z "$shot" ] && { import -window root "$OUT/zip-progress.png"; shot=1; }
+        sleep 0.1; i=$((i + 1))
+    done
+    [ -n "$mid" ] && [ -n "$grew" ] && waitdump "STATE done" \
+        && [ "$(stat -c %s "$C/bigwiz/disk.img" 2>/dev/null)" = 1073741824 ] \
+        && pass "wizard: one 1 GB file shows progress in bytes ($mid) and grows on disk ($grew) as it goes" \
+        || fail "wizard progress through one file: mid '$mid', grew '$grew', $(tr '\n' '|' < "$C/dump.txt")"
+else fail "the wizard did not open for the large file"; fi
 
 echo; [ $RC = 0 ] && echo "zip-check: PASS" || echo "zip-check: FAIL"
 exit $RC

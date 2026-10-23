@@ -20,6 +20,7 @@ enum {
     ZE_WRITE,       /* the destination cannot be written */
     ZE_TOOBIG,      /* past what this writer supports (4 GB, 65535 entries) */
     ZE_CANCELLED,
+    ZE_DISKFULL,    /* the destination's disk is full */
 };
 
 typedef struct {
@@ -40,14 +41,17 @@ typedef struct {
 
 DWORD crc32_update(DWORD crc, const BYTE *p, size_t n);
 
-/* raw DEFLATE (RFC 1951). inflate_buf fills exactly outn bytes or fails. */
-int inflate_buf(const BYTE *in, size_t inn, BYTE *out, size_t outn);
 int deflate_buf(const BYTE *in, size_t inn, BYTE **out, size_t *outn);
 
 int  zip_open(zarchive *z, const WCHAR *path);
 void zip_close(zarchive *z);
-/* the entry's contents, checked against its CRC; free() the result */
-int  zip_read(zarchive *z, int i, BYTE **out, size_t *len);
+/* where an entry's contents go, a piece at a time; nonzero stops the
+ * extraction with that code */
+typedef int (*zsink)(void *ctx, const BYTE *p, size_t n);
+/* the entry's contents (stored, DEFLATE or Deflate64) handed to sink in
+ * pieces, in bounded memory, then checked against its size and CRC. On
+ * failure the sink has had part of it: the caller discards what it wrote. */
+int  zip_extract(zarchive *z, int i, zsink sink, void *ctx);
 /* a stored name as a relative Windows path under the destination, or FALSE
  * when it is absolute, has a drive, climbs with "..", or names a stream */
 BOOL zip_safe_path(const WCHAR *name, WCHAR *out, int cch);

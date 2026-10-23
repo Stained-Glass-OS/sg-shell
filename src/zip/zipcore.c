@@ -36,21 +36,33 @@ static const WORD len_base[29] = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 
                                    35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
 static const BYTE len_extra[29] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
                                     3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 };
-static const WORD dist_base[30] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
+/* distance codes 30 and 31 exist only in Deflate64 (PKWARE's APPNOTE, method 9) */
+static const WORD dist_base[32] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
                                     257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
-                                    8193, 12289, 16385, 24577 };
-static const BYTE dist_extra[30] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
-                                     7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
+                                    8193, 12289, 16385, 24577, 32769, 49153 };
+static const BYTE dist_extra[32] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
+                                     7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14 };
 static const BYTE clen_order[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
 /* ---- inflate ------------------------------------------------------------------------------ */
+/* The output goes through a ring of the last RING bytes, handed to the sink as
+ * it fills: an entry of any size is extracted in this much memory, and
+ * back-references (32 KB in DEFLATE, 64 KB in Deflate64) always find their
+ * bytes in it. */
+#define RING (1u << 18)
+#define RING_MASK (RING - 1)
+
 typedef struct {
     const BYTE *in;
     size_t inn, pos;
     DWORD bits;
     int nbits;
-    BYTE *out;
-    size_t outn, outpos;
+    BYTE *ring;
+    ULONGLONG total, flushed, limit;    /* bytes made, handed on, the entry's size */
+    BOOL d64;
+    zsink sink;
+    void *ctx;
+    DWORD crc;
 } istate;
 
 typedef struct { short count[16]; short symbol[288]; } huff;
@@ -68,6 +80,30 @@ static int need_bits(istate *s, int n, unsigned *v)
     s->bits = b >> n;
     s->nbits -= n;
     return 0;
+}
+
+/* hand what the ring holds beyond what was handed on to the sink */
+static int flush_ring(istate *s)
+{
+    while (s->flushed < s->total)
+    {
+        size_t at = (size_t)(s->flushed & RING_MASK), n = (size_t)(s->total - s->flushed);
+        int r;
+        if (n > RING - at) n = RING - at;
+        s->crc = crc32_update(s->crc, s->ring + at, n);
+        if ((r = s->sink(s->ctx, s->ring + at, n))) return r;
+        s->flushed += n;
+    }
+    return ZE_OK;
+}
+
+static inline int put_byte(istate *s, BYTE b)
+{
+    int r;
+    if (s->total >= s->limit) return ZE_DATA;
+    if (s->total - s->flushed == RING && (r = flush_ring(s))) return r;
+    s->ring[s->total++ & RING_MASK] = b;
+    return ZE_OK;
 }
 
 /* canonical code from lengths; <0 when over-subscribed */
@@ -111,6 +147,7 @@ static int huff_decode(istate *s, const huff *h)
 
 static int inflate_codes(istate *s, const huff *lit, const huff *dist)
 {
+    int r;
     for (;;)
     {
         int sym = huff_decode(s, lit);
@@ -118,8 +155,7 @@ static int inflate_codes(istate *s, const huff *lit, const huff *dist)
         if (sym < 0) return ZE_DATA;
         if (sym < 256)
         {
-            if (s->outpos >= s->outn) return ZE_DATA;
-            s->out[s->outpos++] = (BYTE)sym;
+            if ((r = put_byte(s, (BYTE)sym))) return r;
         }
         else if (sym == 256) return ZE_OK;
         else
@@ -127,14 +163,24 @@ static int inflate_codes(istate *s, const huff *lit, const huff *dist)
             size_t len, d;
             sym -= 257;
             if (sym >= 29) return ZE_DATA;
-            if (need_bits(s, len_extra[sym], &extra)) return ZE_DATA;
-            len = len_base[sym] + extra;
+            /* Deflate64: length code 285 is 3 plus 16 extra bits, not 258 */
+            if (s->d64 && sym == 28) { if (need_bits(s, 16, &extra)) return ZE_DATA; len = 3 + extra; }
+            else
+            {
+                if (need_bits(s, len_extra[sym], &extra)) return ZE_DATA;
+                len = len_base[sym] + extra;
+            }
             sym = huff_decode(s, dist);
+#ifndef SG_MUTANT_ZIP_D64_NEAR
+            if (sym < 0 || sym >= (s->d64 ? 32 : 30)) return ZE_DATA;
+#else
             if (sym < 0 || sym >= 30) return ZE_DATA;
+#endif
             if (need_bits(s, dist_extra[sym], &extra)) return ZE_DATA;
             d = dist_base[sym] + extra;
-            if (d > s->outpos || len > s->outn - s->outpos) return ZE_DATA;
-            while (len--) { s->out[s->outpos] = s->out[s->outpos - d]; s->outpos++; }
+            if (d > s->total || d > (s->d64 ? 65536u : 32768u)) return ZE_DATA;
+            while (len--)
+                if ((r = put_byte(s, s->ring[(s->total - d) & RING_MASK]))) return r;
         }
     }
 }
@@ -142,15 +188,15 @@ static int inflate_codes(istate *s, const huff *lit, const huff *dist)
 static int inflate_stored(istate *s)
 {
     unsigned len, nlen;
+    int r;
     s->bits = 0; s->nbits = 0;              /* to the byte boundary */
     if (s->pos + 4 > s->inn) return ZE_DATA;
     len = s->in[s->pos] | s->in[s->pos + 1] << 8;
     nlen = s->in[s->pos + 2] | s->in[s->pos + 3] << 8;
     s->pos += 4;
     if (len != (~nlen & 0xFFFF)) return ZE_DATA;
-    if (len > s->inn - s->pos || len > s->outn - s->outpos) return ZE_DATA;
-    memcpy(s->out + s->outpos, s->in + s->pos, len);
-    s->pos += len; s->outpos += len;
+    if (len > s->inn - s->pos) return ZE_DATA;
+    while (len--) if ((r = put_byte(s, s->in[s->pos++]))) return r;
     return ZE_OK;
 }
 
@@ -161,7 +207,7 @@ static void fixed_lengths(BYTE *lens)
     for (; i < 256; i++) lens[i] = 9;
     for (; i < 280; i++) lens[i] = 7;
     for (; i < 288; i++) lens[i] = 8;
-    for (i = 0; i < 30; i++) lens[288 + i] = 5;
+    for (i = 0; i < 32; i++) lens[288 + i] = 5;
 }
 
 static int inflate_dynamic(istate *s)
@@ -172,7 +218,7 @@ static int inflate_dynamic(istate *s)
     huff lit, dist, clh;
     if (need_bits(s, 5, &nlen) || need_bits(s, 5, &ndist) || need_bits(s, 4, &ncode)) return ZE_DATA;
     nlen += 257; ndist += 1; ncode += 4;
-    if (nlen > 286 || ndist > 30) return ZE_DATA;
+    if (nlen > 286 || ndist > (s->d64 ? 32u : 30u)) return ZE_DATA;
     memset(cl, 0, sizeof(cl));
     for (i = 0; i < ncode; i++) { if (need_bits(s, 3, &v)) return ZE_DATA; cl[clen_order[i]] = (BYTE)v; }
     if (huff_build(&clh, cl, 19) != 0) return ZE_DATA;       /* must be complete */
@@ -206,15 +252,14 @@ static int inflate_dynamic(istate *s)
     return inflate_codes(s, &lit, &dist);
 }
 
-int inflate_buf(const BYTE *in, size_t inn, BYTE *out, size_t outn)
+static int inflate_stream(istate *s)
 {
-    istate s = { in, inn, 0, 0, 0, out, outn, 0 };
     unsigned last, type;
     int r;
     do
     {
-        if (need_bits(&s, 1, &last) || need_bits(&s, 2, &type)) return ZE_DATA;
-        if (type == 0) r = inflate_stored(&s);
+        if (need_bits(s, 1, &last) || need_bits(s, 2, &type)) return ZE_DATA;
+        if (type == 0) r = inflate_stored(s);
         else if (type == 1)
         {
             static huff flit, fdist;
@@ -224,16 +269,16 @@ int inflate_buf(const BYTE *in, size_t inn, BYTE *out, size_t outn)
                 BYTE lens[320];
                 fixed_lengths(lens);
                 huff_build(&flit, lens, 288);
-                huff_build(&fdist, lens + 288, 30);
+                huff_build(&fdist, lens + 288, 32);
                 built = TRUE;
             }
-            r = inflate_codes(&s, &flit, &fdist);
+            r = inflate_codes(s, &flit, &fdist);
         }
-        else if (type == 2) r = inflate_dynamic(&s);
+        else if (type == 2) r = inflate_dynamic(s);
         else r = ZE_DATA;
         if (r) return r;
     } while (!last);
-    return s.outpos == outn ? ZE_OK : ZE_DATA;
+    return flush_ring(s);
 }
 
 /* ---- deflate ------------------------------------------------------------------------------ */
@@ -650,34 +695,50 @@ int zip_open(zarchive *z, const WCHAR *path)
     return ZE_OK;
 }
 
-int zip_read(zarchive *z, int i, BYTE **out, size_t *len)
+int zip_extract(zarchive *z, int i, zsink sink, void *ctx)
 {
     zentry *e = &z->e[i];
     const BYTE *h, *data;
-    BYTE *buf;
+    istate s;
     int r;
 
-    *out = NULL; *len = 0;
     if (e->flags & 1) return ZE_ENCRYPTED;
-    if (e->method != 0 && e->method != 8) return ZE_METHOD;
+    if (e->method != 0 && e->method != 8 && e->method != 9) return ZE_METHOD;
     if (e->lho + 30 > z->size) return ZE_FORMAT;
     h = z->base + e->lho;
     if (rd32(h) != 0x04034b50) return ZE_FORMAT;
     if (e->lho + 30 + rd16(h + 26) + rd16(h + 28) > z->size) return ZE_FORMAT;
     data = h + 30 + rd16(h + 26) + rd16(h + 28);
     if (e->csize > z->size - (ULONGLONG)(data - z->base)) return ZE_FORMAT;
-    if (e->usize > (ULONGLONG)((size_t)-1 >> 1)) return ZE_NOMEM;
-    if (!(buf = malloc(e->usize ? (size_t)e->usize : 1))) return ZE_NOMEM;
+    memset(&s, 0, sizeof(s));
+    s.in = data; s.inn = (size_t)e->csize;
+    s.limit = e->usize; s.d64 = e->method == 9;
+    s.sink = sink; s.ctx = ctx;
     if (e->method == 0)
     {
-        if (e->csize != e->usize) { free(buf); return ZE_DATA; }
-        memcpy(buf, data, (size_t)e->usize);
+        /* stored: straight from the mapped archive, a slice at a time */
+        ULONGLONG off = 0;
+        if (e->csize != e->usize) return ZE_DATA;
+        while (off < e->usize)
+        {
+            size_t n = e->usize - off > RING ? RING : (size_t)(e->usize - off);
+            s.crc = crc32_update(s.crc, data + off, n);
+            if ((r = sink(ctx, data + off, n))) return r;
+            off += n;
+        }
+        s.total = e->usize;
     }
-    else if ((r = inflate_buf(data, (size_t)e->csize, buf, (size_t)e->usize))) { free(buf); return r; }
+    else
+    {
+        if (!(s.ring = malloc(RING))) return ZE_NOMEM;
+        r = inflate_stream(&s);
+        free(s.ring);
+        if (r) return r;
+        if (s.total != e->usize) return ZE_DATA;
+    }
 #ifndef SG_MUTANT_NOCRC
-    if (crc32_update(0, buf, (size_t)e->usize) != e->crc) { free(buf); return ZE_CRC; }
+    if (s.crc != e->crc) return ZE_CRC;
 #endif
-    *out = buf; *len = (size_t)e->usize;
     return ZE_OK;
 }
 
@@ -894,6 +955,7 @@ const WCHAR *zip_strerror(int e)
     case ZE_OPEN:      return L"The file cannot be opened.";
     case ZE_FORMAT:    return L"The Compressed (zipped) Folder is invalid.";
     case ZE_METHOD:    return L"The file was compressed with a method that is not supported.";
+    case ZE_DISKFULL:  return L"There is not enough space on the disk.";
     case ZE_ENCRYPTED: return L"The file is password protected.";
     case ZE_DATA:      return L"The compressed data is damaged.";
     case ZE_CRC:       return L"The file is damaged: its contents do not match its checksum.";

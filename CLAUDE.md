@@ -930,7 +930,8 @@ call `EnableThemeDialogTexture`, or every label paints a grey box on the tab.
 ## Compressed folders (sg-zip)
 
 `src/zip/`: `zipcore.c` is the format, written from RFC 1951 and PKWARE's
-APPNOTE -- inflate (stored, fixed and dynamic blocks), deflate (LZ77 over hash
+APPNOTE -- inflate (stored, fixed and dynamic blocks; DEFLATE and Deflate64,
+method 9, which Windows and 7-Zip write for large files), deflate (LZ77 over hash
 chains, each block the cheapest of dynamic Huffman, fixed or stored; about
 zlib's size on text), CRC-32, the reader (ZIP64 sizes and offsets, UTF-8 or
 CP437 names) and the writer (UTF-8 flag only when needed; a `.part` file
@@ -940,9 +941,17 @@ bundled.** `main.c` is the command line, the browse window and the wizard.
 - **Archives are hostile input.** `zip_safe_path` refuses a name that is
   absolute, has a `:` (a drive or an NTFS stream), or has a component made
   only of dots and spaces (`..`, and `...`, which Windows trims to it); the
-  entry is logged `REFUSED` and never written. Every entry is checked against
-  its CRC before the file is created, and inflate never writes past the
-  declared size (an entry that lies about its size fails, it does not overrun).
+  entry is logged `REFUSED` and never written. Inflate never writes past the
+  declared size (an entry that lies about its size fails, it does not
+  overrun); an entry that fails its CRC, or is cut short, is deleted.
+- **Extraction streams** (`zip_extract` hands an entry to a sink a piece at a
+  time through a 256 KB ring; the archive itself is mapped): a disk image of
+  any size is written as it is inflated, in about 30 MB. It used to be
+  inflated whole into memory first (David 2026-10-23, a Raspberry Pi image:
+  an empty folder for minutes and no progress; 3.4 GB peak for a 3 GB file).
+  The wizard's progress is in bytes ("1.17 GB of 2.92 GB"), posted every
+  100 ms from inside a file; Cancel takes effect inside a file too. A full
+  disk says so (`ZE_DISKFULL`) and stops the rest.
 - **Headless**: `/extract <zip> <dir> [/overwrite|/skip] [/quiet] [/log f]`,
   `/create <items...> [/out zip]`, `/list <zip> /log f`; exit 1 when anything
   failed or was refused. `SG_ZIP_DUMP=<file>` writes what the windows show;
@@ -951,8 +960,9 @@ bundled.** `main.c` is the command line, the browse window and the wizard.
   "EXT File". The Replace-or-Skip prompt is a `TaskDialogIndirect` (hence
   the common-controls 6 manifest, `src/zip/sg-zip.manifest`).
 - **Not yet:** password-protected (ZipCrypto/AES) entries are listed but not
-  extracted; no drag-out or copy from the browse window; entries over 4 GB are
-  not written (ZIP64 is read only). A multi-selection "Compress to ZIP file"
+  extracted; bzip2/LZMA/PPMd entries (7-Zip's other methods) are refused as
+  an unsupported method; no drag-out or copy from the browse window; the
+  writer makes no entry over 4 GB (ZIP64 is read only). A multi-selection "Compress to ZIP file"
   gets one zip per item (a static verb) -- Send to makes one zip of them all.
 - **Send to > Compressed (zipped) Folder**: sg-session plants an empty
   `Compressed (zipped) Folder.ZFSendToTarget` in each profile's SendTo, as
@@ -967,8 +977,14 @@ bundled.** `main.c` is the command line, the browse window and the wizard.
   its CRC; our zips pass Python's `testzip`, content equality and `unzip -t`
   and round-trip; `<name>.zip`, then `(2)`; the browse window through the
   `.zip` association, keyboard navigation, the wizard typed into and its
-  Replace prompt. Screenshots `build/zip-*.png`. Mutants built with
-  `-DSG_MUTANT_NOCRC` or `-DSG_MUTANT_TRAVERSAL` (`SG_ZIP_EXE=`) turn it red.
+  Replace prompt; Deflate64 from 7-Zip (when `7z` is present); a 1 GB file
+  extracted under 300 MB peak (VmHWM sampled); a full disk (a 4 MB tmpfs in a
+  user namespace) said so with no part-file left; the wizard's byte progress
+  and the file growing during one 1 GB file. Screenshots `build/zip-*.png`.
+  Mutants built with `-DSG_MUTANT_NOCRC`, `-DSG_MUTANT_TRAVERSAL`,
+  `-DSG_MUTANT_ZIP_D64_NEAR`, `-DSG_MUTANT_ZIP_FILE_PROGRESS` or
+  `-DSG_MUTANT_ZIP_DISKFULL` (`SG_ZIP_EXE=`) turn it red; so does
+  sg-shell 0.1.0-202's build (memory, Deflate64, disk full, progress).
 
 ## Media Player (sg-media)
 
