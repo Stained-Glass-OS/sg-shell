@@ -328,6 +328,7 @@ static void unregister_gone(const app_t *a)
  * every Linux app's state each time it comes forward). The text is held
  * under g_dpkg_lock: dpkg_text() takes it, dpkg_done() gives it back. */
 static CRITICAL_SECTION g_dpkg_lock;
+static LONG g_dpkg_gen;     /* bumped each time the status file is read again */
 static INIT_ONCE g_dpkg_once = INIT_ONCE_STATIC_INIT;
 
 static BOOL CALLBACK dpkg_init(INIT_ONCE *once, void *param, void **ctx)
@@ -361,6 +362,7 @@ static char *dpkg_text(const WCHAR *path)
             cached[0] = '\n';       /* every stanza line now follows a '\n' */
             cached[got + 1] = 0;
             stamp = fa.ftLastWriteTime;
+            g_dpkg_gen++;
             size_seen = fa.nFileSizeLow;
             lstrcpynW(cached_path, path, MAX_PATH);
         }
@@ -402,6 +404,87 @@ BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch)
         if (end) *end = save;
         if (found) break;
     }
+    dpkg_done();
+    return found;
+}
+
+/* Does an installed part of the system (sg-*, stained-glass*, wine-sg*; not
+ * SG Office, which can be removed) need this package -- its sole choice in a
+ * Depends or Pre-Depends? apt would take the part away with it, and sg-admind
+ * refuses that: the walk 2026-10-21 found the Store offering Uninstall for
+ * Thunderbird, which SG Mail depends on. Only direct dependencies are seen.
+ * The part's name goes to by. */
+static BOOL system_name(const char *n, size_t len)
+{
+    if (len >= 9 && !strncmp(n, "sg-office", 9) && (len == 9 || n[9] == '-')) return FALSE;
+    return (len > 3 && !strncmp(n, "sg-", 3)) || (len >= 13 && !strncmp(n, "stained-glass", 13)) ||
+           (len >= 7 && !strncmp(n, "wine-sg", 7));
+}
+
+static BOOL field_needs(const char *f, const char *end, const char *pkg)
+{
+    size_t want = strlen(pkg);
+    while (f < end) {
+        const char *g = f, *ge = memchr(f, ',', end - f), *n;
+        size_t len = 0;
+        if (!ge) ge = end;
+        f = ge + 1;
+        if (memchr(g, '|', ge - g)) continue;           /* one of alternatives: another can stay */
+        while (g < ge && (*g == ' ' || *g == '\t')) g++;
+        for (n = g; n < ge && *n != ' ' && *n != '(' && *n != ':' && *n != '\t'; n++) len++;
+        if (len == want && !strncmp(g, pkg, len)) return TRUE;
+    }
+    return FALSE;
+}
+
+BOOL dpkg_needed_by_system(const WCHAR *pkgw, WCHAR *by, int cch)
+{
+    WCHAR path[MAX_PATH] = L"Z:\\var\\lib\\dpkg\\status";
+    static const char *const fields[] = { "\nDepends: ", "\nPre-Depends: " };
+    static struct { char pkg[128]; LONG gen; BOOL found; WCHAR by[128]; } memo[256];   /* under g_dpkg_lock */
+    static unsigned memo_next;
+    char pkg[128], *text, *p, *next;
+    BOOL found = FALSE;
+    unsigned i;
+    by[0] = 0;
+#ifdef SG_MUTANT_NEEDEDBYSYSTEM
+    return FALSE;
+#endif
+    if (!pkgw[0] || !WideCharToMultiByte(CP_UTF8, 0, pkgw, -1, pkg, sizeof(pkg), NULL, NULL)) return FALSE;
+    GetEnvironmentVariableW(L"SG_DPKG_STATUS", path, MAX_PATH);
+    if (!(text = dpkg_text(path))) return FALSE;
+    /* the cards ask on every repaint: the answer is kept until dpkg's file changes */
+    for (i = 0; i < ARRAYSIZE(memo) && memo[i].pkg[0]; i++)
+        if (memo[i].gen == g_dpkg_gen && !strcmp(memo[i].pkg, pkg)) {
+            found = memo[i].found;
+            lstrcpynW(by, memo[i].by, cch);
+            dpkg_done();
+            return found;
+        }
+    for (p = strstr(text, "\nPackage: "); p && !found; p = next) {
+        char *end = strstr(p + 1, "\n\n"), *name = p + 10, save = 0;
+        size_t nlen = strcspn(name, "\n");
+        unsigned j;
+        next = end ? strstr(end, "\nPackage: ") : NULL;
+        if (end) { save = end[1]; end[1] = 0; }        /* the stanza, its last line's '\n' kept */
+        if (system_name(name, nlen) && strstr(p, "\nStatus: install ok installed\n")) {
+            for (j = 0; j < ARRAYSIZE(fields) && !found; j++) {
+                char *f = strstr(p, fields[j]);
+                if (f) { f += strlen(fields[j]); found = field_needs(f, f + strcspn(f, "\n"), pkg); }
+            }
+            if (found) {
+                char n[128];
+                snprintf(n, sizeof(n), "%.*s", (int)nlen, name);
+                MultiByteToWideChar(CP_UTF8, 0, n, -1, by, cch);
+            }
+        }
+        if (end) end[1] = save;
+    }
+    i = memo_next++ % ARRAYSIZE(memo);
+    lstrcpynA(memo[i].pkg, pkg, sizeof(memo[i].pkg));
+    memo[i].gen = g_dpkg_gen;
+    memo[i].found = found;
+    lstrcpynW(memo[i].by, by, ARRAYSIZE(memo[i].by));
     dpkg_done();
     return found;
 }

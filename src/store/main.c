@@ -163,8 +163,12 @@ static BOOL system_package(const app_t *a)
 #endif
     if (a->method != SRC_OURS_APT && a->method != SRC_LINUX_APT) return FALSE;
     if (!_wcsicmp(a->apt_pkg, L"sg-office") || !_wcsicmp(a->apt_pkg, L"sg-office-editors")) return FALSE;
-    return !_wcsnicmp(a->apt_pkg, L"sg-", 3) || !_wcsnicmp(a->apt_pkg, L"stained-glass", 13) ||
-           !_wcsnicmp(a->apt_pkg, L"wine-sg", 7);
+    if (!_wcsnicmp(a->apt_pkg, L"sg-", 3) || !_wcsnicmp(a->apt_pkg, L"stained-glass", 13) ||
+        !_wcsnicmp(a->apt_pkg, L"wine-sg", 7)) return TRUE;
+    {   /* or a part of the system needs it (Thunderbird: SG Mail) */
+        WCHAR by[128];
+        return dpkg_needed_by_system(a->apt_pkg, by, ARRAYSIZE(by));
+    }
 }
 
 static BOOL can_uninstall(const app_t *a)
@@ -173,8 +177,8 @@ static BOOL can_uninstall(const app_t *a)
     return FALSE;
 #endif
     if ((a->method == SRC_OURS_APT || a->method == SRC_LINUX_APT) && !a->apt_pkg[0]) return FALSE;
-    if (system_package(a)) return FALSE;
-    return has_it(a);
+    if (!has_it(a)) return FALSE;
+    return !system_package(a);      /* after: it reads dpkg's file */
 }
 
 static BOOL in_hand(int i)      /* being installed or removed, or waiting to be */
@@ -1670,7 +1674,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             k = find_app(argv[i + 1]);
             if (k < 0) { LocalFree(argv); return 2; }
             app_detect(&g_apps[k]);
-            if (system_package(&g_apps[k])) { rc = SYS_FAILED; swprintf(err, ARRAYSIZE(err), L"%ls is a part of Stained Glass OS and cannot be uninstalled.", g_apps[k].name); }
+            if (system_package(&g_apps[k])) {
+                WCHAR by[128];
+                rc = SYS_FAILED;
+                if (dpkg_needed_by_system(g_apps[k].apt_pkg, by, ARRAYSIZE(by)))
+                    swprintf(err, ARRAYSIZE(err), L"%ls is needed by %ls, a part of Stained Glass OS, and cannot be uninstalled.", g_apps[k].name, by);
+                else
+                    swprintf(err, ARRAYSIZE(err), L"%ls is a part of Stained Glass OS and cannot be uninstalled.", g_apps[k].name);
+            }
             else if (!can_uninstall(&g_apps[k])) { rc = SYS_FAILED; lstrcpynW(err, L"It cannot be uninstalled here.", ARRAYSIZE(err)); }
             else rc = app_uninstall(&g_apps[k], err, ARRAYSIZE(err));
             if (rc == UNINSTALL_GONE) rc = forget_gone(NULL, &g_apps[k], err, ARRAYSIZE(err));

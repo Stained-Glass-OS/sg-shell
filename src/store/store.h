@@ -104,6 +104,7 @@ typedef struct {
 /* catalog.c */
 BOOL name_matches(const WCHAR *display, const WCHAR *patterns);
 BOOL dpkg_installed(const WCHAR *pkg, WCHAR *version, int cch);
+BOOL dpkg_needed_by_system(const WCHAR *pkg, WCHAR *by, int cch);
 int  catalog_load(app_t *apps, int max);         /* reads HKLM Store\Apps\NN; returns count */
 void app_detect(app_t *a);                        /* installed? + installed_version; sets state */
 BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or its Start shortcut) Open starts */
