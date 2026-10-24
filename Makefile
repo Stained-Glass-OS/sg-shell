@@ -27,7 +27,7 @@ ZIP_SRC  = $(wildcard src/zip/*.c)
 ZIP_LIBS = -lcomctl32 -lshell32 -lshlwapi -lgdi32 -luser32 -lole32 -lcomdlg32
 # Media Player (sg-media): DirectShow (quartz, winegstreamer) and its own icon,
 # drawn by src/sg-media-icon.py at build time.
-MEDIA_LIBS = -lole32 -luuid -lstrmiids -lgdi32 -luser32 -lshell32 -lcomdlg32 -ladvapi32 -lmsimg32
+MEDIA_LIBS = -lole32 -luuid -lstrmiids -lgdi32 -luser32 -lshell32 -lcomdlg32 -ladvapi32 -lmsimg32 -lruntimeobject
 # Calculator (sg-calc): calc.exe. Its icon is drawn at build time (src/sg-calc-icon.py).
 CALC_LIBS = -lgdi32 -luser32 -ladvapi32 -lm
 # Photos (sg-photos): WIC, and its own icon drawn by src/sg-photos-icon.py at build time.
@@ -461,6 +461,18 @@ test-volume: build
 	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe sh test/volume-check.sh 2>&1 | grep -q 'FAIL  media keys' \
 	     || { echo "volume-check: the mutant MEDIA_PLAY_ONLY was not caught"; exit 1; }; \
 	 echo "volume-check: mutant MEDIA_PLAY_ONLY caught"
+
+# Media Player's transport controls (sg-media): the desktop's media controls
+# and the media keys, on a session bus of its own; two mutants.
+.PHONY: test-media-smtc
+test-media-smtc: build
+	@sh test/media-smtc-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 for m in MEDIA_NO_SMTC MEDIA_TOGGLE_ONLY; do \
+	     $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_$$m -o $(BUILD)/sg-media-mut.exe src/sg-media.c \
+	         $(BUILD)/sg-media-res64.o $(MEDIA_LIBS) || exit 1; \
+	     ! EXE=$(BUILD)/sg-media-mut.exe sh test/media-smtc-check.sh >/dev/null 2>&1 \
+	         || { echo "media-smtc-check: the mutant $$m was not caught"; exit 1; }; \
+	     echo "media-smtc-check: mutant $$m caught"; done
 
 # The notification centre (sg-notify): its icon and panel, under Xvfb with the shell.
 .PHONY: test-notify

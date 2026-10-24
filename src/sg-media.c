@@ -11,6 +11,12 @@
  * and other switches are ignored). One instance: a second hands its files to
  * the first (WM_COPYDATA) and exits, as Media Player does.
  *
+ * The transport controls (Windows.Media.SystemMediaTransportControls), as
+ * Media Player has them: what plays, and Play, Pause, Stop, Next and Previous
+ * from the keyboard's media keys and the desktop's media controls (wine-sg
+ * publishes them as an MPRIS player) while another window is in front. In
+ * front, the media keys come as WM_APPCOMMAND, as before.
+ *
  * SG_MEDIA_DUMP=<file> writes the player's state after every tick, for gates.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -27,6 +33,12 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <initguid.h>
+#define WIDL_using_Windows_Foundation
+#define WIDL_using_Windows_Media
+#include <roapi.h>
+#include <winstring.h>
+#include <windows.media.h>
+#include <systemmediatransportcontrolsinterop.h>
 #include "sg-mode.h"
 #include "sg-smooth.h"
 #include "sg-dpi.h"
@@ -115,6 +127,159 @@ static DWORD g_fs_moved;
 static WINDOWPLACEMENT g_placement = { sizeof(WINDOWPLACEMENT) };
 static LONG g_saved_style;
 static WCHAR g_dump_path[MAX_PATH];
+
+/* The transport controls. A button press comes on Wine's own thread (the
+ * handler is agile): posted to the window, where the player acts on it. Each
+ * tick publishes what changed. Without them (an older Wine), nothing changes. */
+#define WM_SMTC_BUTTON (WM_APP + 2)
+static const WCHAR *base_name(const WCHAR *path);
+static ISystemMediaTransportControls *g_smtc;
+static ISystemMediaTransportControlsDisplayUpdater *g_smtc_updater;
+static int g_smtc_state = -1, g_smtc_track = -2, g_smtc_queue = -1;
+static int g_smtc_presses;     /* (for the dump) */
+
+static HRESULT WINAPI smtc_handler_QueryInterface(ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs *iface,
+                                                  REFIID iid, void **out)
+{
+    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IAgileObject) ||
+        IsEqualGUID(iid, &IID_ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs))
+    {
+        *out = iface;
+        return S_OK;
+    }
+    *out = NULL;
+    return E_NOINTERFACE;
+}
+static ULONG WINAPI smtc_handler_AddRef(ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs *iface)
+{
+    (void)iface;
+    return 2;
+}
+static ULONG WINAPI smtc_handler_Release(ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs *iface)
+{
+    (void)iface;
+    return 1;
+}
+static HRESULT WINAPI smtc_handler_Invoke(ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs *iface,
+                                          ISystemMediaTransportControls *sender, ISystemMediaTransportControlsButtonPressedEventArgs *args)
+{
+    SystemMediaTransportControlsButton button;
+    (void)iface; (void)sender;
+    if (SUCCEEDED(ISystemMediaTransportControlsButtonPressedEventArgs_get_Button(args, &button)))
+        PostMessageW(g_main, WM_SMTC_BUTTON, (WPARAM)button, 0);
+    return S_OK;
+}
+static ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgsVtbl smtc_handler_vtbl =
+{
+    smtc_handler_QueryInterface, smtc_handler_AddRef, smtc_handler_Release, smtc_handler_Invoke,
+};
+static ITypedEventHandler_SystemMediaTransportControls_SystemMediaTransportControlsButtonPressedEventArgs smtc_handler = { &smtc_handler_vtbl };
+
+static HSTRING hstr(const WCHAR *s)
+{
+    HSTRING h = NULL;
+    WindowsCreateString(s, (UINT32)lstrlenW(s), &h);
+    return h;
+}
+
+static void smtc_init(HWND hwnd)
+{
+    ISystemMediaTransportControlsInterop *interop;
+    EventRegistrationToken token;
+    HSTRING name;
+    HRESULT hr;
+
+#ifdef SG_MUTANT_MEDIA_NO_SMTC
+    return;
+#endif
+    name = hstr(L"Windows.Media.SystemMediaTransportControls");
+    hr = RoGetActivationFactory(name, &IID_ISystemMediaTransportControlsInterop, (void **)&interop);
+    WindowsDeleteString(name);
+    if (FAILED(hr)) return;
+    hr = ISystemMediaTransportControlsInterop_GetForWindow(interop, hwnd, &IID_ISystemMediaTransportControls, (void **)&g_smtc);
+    ISystemMediaTransportControlsInterop_Release(interop);
+    if (FAILED(hr)) { g_smtc = NULL; return; }
+    if (FAILED(ISystemMediaTransportControls_get_DisplayUpdater(g_smtc, &g_smtc_updater))) g_smtc_updater = NULL;
+    ISystemMediaTransportControls_add_ButtonPressed(g_smtc, &smtc_handler, &token);
+    ISystemMediaTransportControls_put_IsPlayEnabled(g_smtc, TRUE);
+    ISystemMediaTransportControls_put_IsPauseEnabled(g_smtc, TRUE);
+    ISystemMediaTransportControls_put_IsStopEnabled(g_smtc, TRUE);
+}
+
+/* the title (the file's name without its extension), as music or video.
+ * mingw only declares IVideoDisplayProperties: its put_Title is the 8th slot
+ * (IInspectable's 6, then get_Title) */
+typedef HRESULT (WINAPI *put_title_fn)(void *, HSTRING);
+typedef ULONG (WINAPI *release_fn)(void *);
+#define SLOT(obj, n, type) ((type)((*(void ***)(obj))[n]))
+static void smtc_track(void)
+{
+    WCHAR title[MAX_PATH], *dot;
+    HSTRING str;
+
+    if (!g_smtc_updater) return;
+    ISystemMediaTransportControlsDisplayUpdater_ClearAll(g_smtc_updater);
+    if (g_current >= 0 && g_current < g_nqueue)
+    {
+        IMusicDisplayProperties *music;
+        __x_ABI_CWindows_CMedia_CIVideoDisplayProperties *video;
+
+        lstrcpynW(title, base_name(g_queue[g_current]), MAX_PATH);
+        if ((dot = wcsrchr(title, L'.')) && dot != title) *dot = 0;
+        str = hstr(title);
+        ISystemMediaTransportControlsDisplayUpdater_put_Type(g_smtc_updater,
+                                                             g_has_video ? MediaPlaybackType_Video : MediaPlaybackType_Music);
+        if (!g_has_video && SUCCEEDED(ISystemMediaTransportControlsDisplayUpdater_get_MusicProperties(g_smtc_updater, &music)))
+        {
+            IMusicDisplayProperties_put_Title(music, str);
+            IMusicDisplayProperties_Release(music);
+        }
+        if (g_has_video && SUCCEEDED(ISystemMediaTransportControlsDisplayUpdater_get_VideoProperties(g_smtc_updater, &video)))
+        {
+            SLOT(video, 7, put_title_fn)(video, str);
+            SLOT(video, 2, release_fn)(video);
+        }
+        WindowsDeleteString(str);
+    }
+    ISystemMediaTransportControlsDisplayUpdater_Update(g_smtc_updater);
+}
+
+/* every tick: what changed since the last one */
+static void smtc_sync(void)
+{
+    static const MediaPlaybackStatus status[] = { MediaPlaybackStatus_Closed, MediaPlaybackStatus_Stopped,
+                                                  MediaPlaybackStatus_Playing, MediaPlaybackStatus_Paused };
+    int queue = (g_current >= 0 ? 1 : 0) | (g_current >= 0 && g_current + 1 < g_nqueue ? 2 : 0);
+
+    if (!g_smtc) return;
+    if (g_current != g_smtc_track || (g_smtc_state == ST_CLOSED) != (g_state == ST_CLOSED))
+    {
+        g_smtc_track = g_current;
+        smtc_track();
+    }
+    if (queue != g_smtc_queue)
+    {
+        g_smtc_queue = queue;
+        /* Previous restarts the track too, so it is there whenever one is */
+        ISystemMediaTransportControls_put_IsPreviousEnabled(g_smtc, (queue & 1) != 0);
+        ISystemMediaTransportControls_put_IsNextEnabled(g_smtc, (queue & 2) != 0);
+    }
+    if (g_state != g_smtc_state)
+    {
+        ISystemMediaTransportControls_put_PlaybackStatus(g_smtc, status[g_state]);
+        ISystemMediaTransportControls_put_IsEnabled(g_smtc, g_state != ST_CLOSED);
+        g_smtc_state = g_state;
+    }
+}
+
+static void smtc_done(void)
+{
+    if (!g_smtc) return;
+    ISystemMediaTransportControls_put_IsEnabled(g_smtc, FALSE);
+    if (g_smtc_updater) ISystemMediaTransportControlsDisplayUpdater_Release(g_smtc_updater);
+    ISystemMediaTransportControls_Release(g_smtc);
+    g_smtc = NULL; g_smtc_updater = NULL;
+}
 
 static int S(int v) { return MulDiv(v, g_dpi, 96); }
 
@@ -216,6 +381,8 @@ static void write_dump(void)
     put_utf8(f, line);
     screen_rect(&g_hit[H_NEXT], &r);
     _snwprintf(line, ARRAYSIZE(line), L"NEXTRECT %ld %ld %ld %ld\n", r.left, r.top, r.right, r.bottom);
+    put_utf8(f, line);
+    _snwprintf(line, ARRAYSIZE(line), L"SMTC %d %d\n", g_smtc != NULL, g_smtc_presses);
     put_utf8(f, line);
     _snwprintf(line, ARRAYSIZE(line), L"STRAYWINDOWS %d\n", stray_windows());
     put_utf8(f, line);
@@ -1292,6 +1459,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                                   0, 0, 0, 0, hwnd, NULL, g_inst, NULL);
         DragAcceptFiles(hwnd, TRUE);
         SetTimer(hwnd, TIMER_TICK, 200, NULL);
+        smtc_init(hwnd);
         return 0;
     case WM_SIZE:
         layout();
@@ -1329,6 +1497,7 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (!g_fullscreen) InvalidateRect(hwnd, &g_bar, FALSE);
         }
         fs_tick();
+        smtc_sync();
         write_dump();
         return 0;
     case WM_GRAPHNOTIFY: handle_graph_events(); return 0;
@@ -1387,6 +1556,10 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         switch (GET_APPCOMMAND_LPARAM(lp))
         {
         case APPCOMMAND_MEDIA_PLAY_PAUSE: play_pause(); return TRUE;
+#ifndef SG_MUTANT_MEDIA_TOGGLE_ONLY
+        case APPCOMMAND_MEDIA_PLAY: if (g_state != ST_PLAYING) play_pause(); return TRUE;
+        case APPCOMMAND_MEDIA_PAUSE: if (g_state == ST_PLAYING) play_pause(); return TRUE;
+#endif
         case APPCOMMAND_MEDIA_STOP: stop(); return TRUE;
         case APPCOMMAND_MEDIA_NEXTTRACK: go(1); return TRUE;
         case APPCOMMAND_MEDIA_PREVIOUSTRACK: go(-1); return TRUE;
@@ -1426,7 +1599,21 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return FALSE;
     }
+    case WM_SMTC_BUTTON:
+        g_smtc_presses++;
+        switch ((SystemMediaTransportControlsButton)wp)
+        {
+        case SystemMediaTransportControlsButton_Play:     if (g_state != ST_PLAYING) play_pause(); break;
+        case SystemMediaTransportControlsButton_Pause:    if (g_state == ST_PLAYING) play_pause(); break;
+        case SystemMediaTransportControlsButton_Stop:     stop(); break;
+        case SystemMediaTransportControlsButton_Next:     go(1); break;
+        case SystemMediaTransportControlsButton_Previous: go(-1); break;
+        default: break;
+        }
+        smtc_sync();
+        return 0;
     case WM_DESTROY:
+        smtc_done();
         close_media();
         KillTimer(hwnd, TIMER_TICK);
         PostQuitMessage(0);

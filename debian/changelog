@@ -1,3 +1,17 @@
+sg-shell (0.1.0-206) unstable; urgency=medium
+
+  * Media Player has the transport controls (SystemMediaTransportControls):
+    what plays (the file's name, as music or video) and Play, Pause, Stop,
+    Next and Previous reach it while another window is in front -- the
+    keyboard's media keys (sg-volume) and the desktop's media controls, as
+    wine-sg (10.0-563 and later) publishes them as an MPRIS player. In front,
+    the Play and Pause keys now play or pause it (they did nothing), besides
+    Play/Pause, Stop, Next and Previous. Gate test-media-smtc (its own session
+    bus; new helper test/sg-appcommand.c); mutants SG_MUTANT_MEDIA_NO_SMTC
+    and SG_MUTANT_MEDIA_TOGGLE_ONLY caught; media-check passes.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 24 Oct 2026 09:36:52 -0700
+
 sg-shell (0.1.0-205) unstable; urgency=medium
 
   * The media keys: sg-volume is a shell hook window
