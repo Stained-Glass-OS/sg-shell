@@ -1001,6 +1001,21 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
     if (cmd[0] && !quiet) {
         WCHAR file[MAX_PATH], args[MAX_PATH];
         split_command(cmd, file, args, MAX_PATH);
+        /* a Chromium-family uninstaller ("setup.exe --uninstall": Vivaldi,
+         * Brave, Chromium): its "Are you sure you want to uninstall?" waited
+         * for a click and the store said "not removed"; its own
+         * --force-uninstall removes it without asking */
+#ifndef SG_MUTANT_NOCHROMIUMFORCE
+        if (StrStrIW(args, L"--uninstall") && !StrStrIW(args, L"--force-uninstall") &&
+            lstrlenW(cmd) + 20 < cch) {
+            lstrcatW(cmd, L" --force-uninstall");
+            quiet = TRUE;
+        }
+#endif
+    }
+    if (cmd[0] && !quiet) {
+        WCHAR file[MAX_PATH], args[MAX_PATH];
+        split_command(cmd, file, args, MAX_PATH);
 #ifndef SG_MUTANT_NONSISSILENT
         const WCHAR *w = args;
         BOOL has_s = FALSE;
