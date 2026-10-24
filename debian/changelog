@@ -1,3 +1,17 @@
+sg-shell (0.1.0-205) unstable; urgency=medium
+
+  * The media keys: sg-volume is a shell hook window
+    (RegisterShellHookWindow) and sends the media app commands no program
+    took -- Play/Pause, Next, Previous, Stop, Play, Pause -- to the
+    session's media player through sg-session's "sg-settingsctl media"
+    (MPRIS), Linux or Windows (wine-sg's transport-controls bridge), as
+    Windows' shell gives them to the media session. Depends on sg-session
+    0.1.0-215. Gate test/volume-check.sh (DefWindowProc's WM_APPCOMMAND
+    reaching the hook, with a stand-in sg-settingsctl), mutant
+    SG_MUTANT_MEDIA_PLAY_ONLY.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 23 Oct 2026 23:00:04 -0700
+
 sg-shell (0.1.0-204) unstable; urgency=medium
 
   * Build fix for -203: WordPad (.docx, .odt) and SG Store (installers in

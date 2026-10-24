@@ -7,6 +7,12 @@
  * another), a mute button and a volume slider. The right button offers
  * "Open Sound settings" (Settings > System > Sound).
  *
+ * The media keys: a shell hook window (RegisterShellHookWindow) hears the
+ * app commands no program took -- Play/Pause, Next, Previous, Stop -- and
+ * sends them to the session's media player, a Linux one or a Windows one
+ * through wine-sg's transport-controls bridge ("sg-settingsctl media", MPRIS),
+ * as Windows' shell gives them to the media session.
+ *
  * The sound server is PipeWire; sg-settingsctl (sg-session) speaks to it, as
  * for Settings' Sound page: "sound" lists the outputs, "sound volume|mute|
  * default sink NAME [VALUE]" changes them. Those calls run on a worker
@@ -50,7 +56,7 @@ static HFONT g_font, g_font_small, g_font_icon;
  * its sizes are 100%'s, S() at the DPI it is drawn at */
 static int g_dpi = 96;
 #define S(x) MulDiv((x), g_dpi, 96)
-static UINT g_taskbar_created;
+static UINT g_taskbar_created, g_shellhook;
 static BOOL g_dragging, g_mute_hot, g_dev_hot;
 static int g_drag_vol = -1;
 
@@ -156,6 +162,33 @@ static void queue_change(const WCHAR *verb, const WCHAR *name, const WCHAR *valu
                    verb, name, value ? L" " : L"", value ? value : L"");
     LeaveCriticalSection(&g_cs);
     SetEvent(g_wake);
+}
+
+/* a media key, for the session's player (sg-settingsctl media VERB) */
+static void queue_media(const WCHAR *verb)
+{
+    EnterCriticalSection(&g_cs);
+    if (g_npending < (int)ARRAYSIZE(g_pending))
+        _snwprintf(g_pending[g_npending++].args, ARRAYSIZE(g_pending[0].args), L"media %ls", verb);
+    LeaveCriticalSection(&g_cs);
+    SetEvent(g_wake);
+}
+
+/* the "media" verb for an app command, or NULL when it is none of the media keys */
+static const WCHAR *media_verb(int cmd)
+{
+    switch (cmd)
+    {
+    case APPCOMMAND_MEDIA_PLAY_PAUSE:    return L"play-pause";
+    case APPCOMMAND_MEDIA_NEXTTRACK:     return L"next";
+    case APPCOMMAND_MEDIA_PREVIOUSTRACK: return L"previous";
+    case APPCOMMAND_MEDIA_STOP:          return L"stop";
+#ifndef SG_MUTANT_MEDIA_PLAY_ONLY
+    case APPCOMMAND_MEDIA_PLAY:          return L"play";
+    case APPCOMMAND_MEDIA_PAUSE:         return L"pause";
+#endif
+    }
+    return NULL;
 }
 
 struct state { struct sink sinks[MAX_SINKS]; int count; BOOL ok; };
@@ -536,6 +569,12 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == g_taskbar_created && g_taskbar_created) { tray_update(TRUE); return 0; }
+    if (msg == g_shellhook && g_shellhook && wp == HSHELL_APPCOMMAND)
+    {
+        const WCHAR *verb = media_verb(GET_APPCOMMAND_LPARAM(lp));
+        if (verb) { queue_media(verb); return TRUE; }
+        return 0;
+    }
     if (sg_mode_changed(msg, lp))
     {
         tray_update(FALSE);
@@ -659,6 +698,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
                             0, 0, S(FLY_W), S(FLY_H), g_tray, NULL, inst, NULL);
     sg_round_corners(g_fly);
     tray_update(TRUE);
+    /* the media keys no program took (the shell's, as on Windows) */
+    g_shellhook = RegisterWindowMessageW(L"SHELLHOOK");
+    RegisterShellHookWindow(g_tray);
     CloseHandle(CreateThread(NULL, 0, worker, NULL, 0, NULL));
     while (GetMessageW(&msg, NULL, 0, 0))
     {

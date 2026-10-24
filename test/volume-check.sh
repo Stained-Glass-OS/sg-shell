@@ -82,8 +82,22 @@ if command -v Xvfb >/dev/null && command -v "$MINGW" >/dev/null; then
     c=$(grep -n '^sound chime' "$T/calls" | head -1 | cut -d: -f1)
     [ -n "$v" ] && [ -n "$c" ] && [ "$c" -gt "$v" ] && pass "a volume change from the flyout chimes, after the change" \
         || fail "no chime after the change: $(tr '\n' '|' < "$T/calls")"
+    # --- the media keys no program took reach the session's player (sg-settingsctl
+    # media, MPRIS) through sg-volume's shell hook; Browser Back is not one of them
+    # (mutant MEDIA_PLAY_ONLY: Pause is dropped)
+    "$MINGW" -O2 -municode -o "$T/media-key.exe" "$HERE/test/sg-media-key.c" 2>/dev/null
+    Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display3" >/dev/null 2>&1 & XP=$!
+    i=0; while [ ! -s "$T/display3" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    : > "$T/calls"
+    DISPLAY=":$(cat "$T/display3")" SG_SETTINGSCTL="$T/settingsctl" "$WINE_DIR/bin/wine" "$T/sg-volume64.exe" >"$T/vol.log" 2>&1 & VP=$!
+    WINEPREFIX="$T/pfx" DISPLAY=":$(cat "$T/display3")" "$WINE_DIR/bin/wine" "$T/media-key.exe" >/dev/null 2>&1
+    kill "$VP" "$XP" 2>/dev/null
+    m=$(grep '^media ' "$T/calls" | sed 's/ --out.*//' | tr '\n' '|')
+    [ "$m" = "media play-pause|media next|media pause|" ] \
+        && pass "the media keys no program took go to the session's player (Play/Pause, Next, Pause; not Browser Back)" \
+        || fail "media keys: '$m' (want media play-pause|media next|media pause|)"
 else
-    echo "SKIP  flyout second-click and chime (no Xvfb or mingw)"
+    echo "SKIP  flyout second-click, chime and media keys (no Xvfb or mingw)"
 fi
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

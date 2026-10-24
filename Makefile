@@ -455,7 +455,12 @@ test-icons-font:
 
 .PHONY: test-volume
 test-volume: build
-	@sh test/volume-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+	@sh test/volume-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_MEDIA_PLAY_ONLY -o $(BUILD)/sg-volume-mut.exe src/sg-volume.c \
+	     -lshell32 -luser32 -lgdi32 -municode -mwindows || exit 1; \
+	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe sh test/volume-check.sh 2>&1 | grep -q 'FAIL  media keys' \
+	     || { echo "volume-check: the mutant MEDIA_PLAY_ONLY was not caught"; exit 1; }; \
+	 echo "volume-check: mutant MEDIA_PLAY_ONLY caught"
 
 # The notification centre (sg-notify): its icon and panel, under Xvfb with the shell.
 .PHONY: test-notify
