@@ -869,6 +869,13 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     lstrcpynW(p.type, a->pin_type[0] ? a->pin_type : L"exe", ARRAYSIZE(p.type));
     lstrcpynW(p.silent, a->pin_silent, ARRAYSIZE(p.silent));
     memcpy(p.sha256, a->pin_sha, 32);
+#ifndef SG_MUTANT_NOPINDEPENDS
+    /* what the catalogue says it needs first, as for a winget entry: CCleaner
+     * 7's installer only checks for the WebView2 runtime, and ended with
+     * 111111 without it */
+    lstrcpynW(p.deps, a->depends, ARRAYSIZE(p.deps));
+    if (install_deps(&p, 0, progress, ctx, cancel, err, cch)) return 1;
+#endif
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
     ok = pkg_install(&p, err, cch);
     if (ok) settle_install(a, &p);
@@ -1423,6 +1430,16 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
         else if (another_part(a, cmd) || GetTickCount() - start >= grace) break;   /* its part is gone */
         Sleep(1000);
     }
+#ifndef SG_MUTANT_NOAFTERWAIT
+    /* its entry is gone, but an NSIS uninstaller deletes that before its
+     * Start-menu shortcuts: its copy in %TEMP% (Au_.exe) still works. The
+     * store stopped watching and the elevated session's end took Au_ with it:
+     * Wireshark.lnk and the IrfanView, Mp3tag, Zoom and DYMO folders stayed
+     * in the all-users Start menu (qa4). Wait for the rest of it too. */
+    if (!find_installed(a->detect_name, ver, ARRAYSIZE(ver)))
+        for (start = GetTickCount(); tree_alive(tree, &ntree, ARRAYSIZE(tree), &since) &&
+                                     GetTickCount() - start < grace;) Sleep(500);
+#endif
     if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) {
         if (another_part(a, cmd)) return UNINSTALL_NEXT;
         swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);

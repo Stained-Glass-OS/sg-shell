@@ -388,7 +388,11 @@ xdotool key Escape; sleep 0.5
 [ "$(val visible)" = 1 ] && { poke; }
 START_REG='HKCU\Software\Stained Glass\Start'
 setreg() { "$WINE" reg add "$1" /v "$2" /t REG_DWORD /d "$3" /f >/dev/null 2>&1; }
+setreg "$START_REG\\Usage" Quasar 50   # the leftover, started often before its program was uninstalled
 poke
+d | sed -n '/^header Most used$/,/^header [^M]/p' | grep -qxF "item Quasar" \
+    && fail "Most used offers a shortcut whose program is gone (Dropbox's, Wireshark's leftovers)" \
+    || pass "Most used leaves out a shortcut whose program is gone"
 d | sed -n '/^header Most used$/{n;p;}' | grep -qxF "item Notepad" && pass "Most used: Notepad, started from Start earlier" || fail "Most used: $(d | grep -A1 '^header Most used' | tr '\n' '|')"
 has "header Suggested" && pass "a suggestion: an app that came with the system, never started" || fail "no Suggested group"
 poke

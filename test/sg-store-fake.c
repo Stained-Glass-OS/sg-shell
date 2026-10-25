@@ -181,6 +181,12 @@ int wmain(int argc, WCHAR **argv)
             RegDeleteKeyW(HKEY_LOCAL_MACHINE, sub);
             RegDeleteKeyW(HKEY_CURRENT_USER, sub);
         }
+        /* %SG_FAKE_AFTER% (ms): like an NSIS uninstaller, the entry goes first
+         * and its Start-menu shortcuts that much later (Wireshark, Mp3tag) */
+        if (GetEnvironmentVariableW(L"SG_FAKE_AFTER", ms, ARRAYSIZE(ms))) {
+            Sleep(_wtoi(ms));
+            logline(L"C:\\gate\\after.log", L"shortcuts removed");
+        }
         return 0;
     }
 

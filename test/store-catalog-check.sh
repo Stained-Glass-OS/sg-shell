@@ -23,6 +23,15 @@ norun=$(awk '/^\[/ {if (lx && !run) print key; key=$0; lx=0; run=0} /"Tier"="lin
 [ -z "$norun" ] && pass "every Linux app says what Open runs" || fail "no Run: $norun"
 dup=$(grep -o '^\[HKEY_LOCAL_MACHINE\\Software\\Stained Glass\\Store\\Apps\\[^]]*\]' "$CAT" | sort | uniq -d)
 [ -z "$dup" ] && pass "no app key is used twice" || fail "used twice: $dup"
+# a pinned Windows download (winget's hash no longer matches what the maker
+# serves: CCleaner, GOM; or the build is gone: AIMP) is https, carries its
+# SHA-256 -- the Store refuses one without -- and the version it installs
+badpin=$(awk 'function chk() {if (pin && !(ok && ver)) {sub(/.*\\/, "", key); sub(/]$/, "", key); print key}}
+    /^\[/ {chk(); key=$0; pin=0; ok=0; ver=0}
+    /^"Source"="pin:/ {pin=1; ok = ($0 ~ /^"Source"="pin:https:\/\/[^|]+\|[0-9a-f]{64}\|/)}
+    /^"PinVersion"="[0-9]/ {ver=1}
+    END {chk()}' "$CAT")
+[ -z "$badpin" ] && pass "every pinned download is https with a SHA-256 and a version" || fail "bad pin: $badpin"
 grep -q '"Source"="linux:apt:secrets"' "$CAT" && pass "GNOME Secrets is listed (David 2026-10-03)" || fail "GNOME Secrets is not listed"
 # SG Mail: ours, from our apt repository; Open runs the desktop entry the
 # package installs, as the Store's Linux apps do (0.1.0-124: an sg-mail.exe

@@ -206,5 +206,19 @@ else fail "Right in the anim folder: '$(field file "$D2")'"; fi
 SG_PHOTOS_DUMP="$(wd "$D3")" wine start 'ms-photos:viewer?fileName=C:%5Cpics%5Cimg10.png' >/dev/null 2>&1 &
 wait_field file 'C:\pics\img10.png' 20 "$D3" && pass "ms-photos: URI opened img10.png" || fail "ms-photos: '$(field file "$D3")'"
 
+# a phone's photo (.heic) and an .avif open in Photos too: wine-sg's WIC
+# decodes them (6539/6540), and without the association a double-click said
+# "There is no program configured to open this type of file" (qa4)
+if convert -size 320x240 xc:'#c81e1e' "$WINEPREFIX/drive_c/heic.heic" 2>/dev/null; then
+    D4="$T/dump4"
+    SG_PHOTOS_DUMP="$(wd "$D4")" wine start 'C:\heic.heic' >/dev/null 2>&1 &
+    wait_field file 'C:\heic.heic' 30 "$D4" && [ "$(field image "$D4")" = "320 240" ] \
+        && pass "a .heic opens in Photos through its association (320x240)" \
+        || fail ".heic: file '$(field file "$D4")' image '$(field image "$D4")'"
+    wine taskkill /f /im sg-photos64.exe >/dev/null 2>&1; sleep 1
+else
+    echo "SKIP  .heic: ImageMagick cannot write HEIC here"
+fi
+
 [ $RC = 0 ] && echo "photos-check: all passed" || echo "photos-check: FAILED"
 exit $RC

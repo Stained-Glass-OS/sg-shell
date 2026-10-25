@@ -47,6 +47,9 @@ Windows Registry Editor Version 5.00
 ".tif"=""
 ".tiff"=""
 ".ico"=""
+".heic"=""
+".heif"=""
+".avif"=""
 
 [HKEY_LOCAL_MACHINE\Software\Classes\ms-photos]
 @="URL:ms-photos"
@@ -141,4 +144,28 @@ Windows Registry Editor Version 5.00
 "PerceivedType"="image"
 
 [HKEY_LOCAL_MACHINE\Software\Classes\.ico\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.heic]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/heic"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.heic\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.heif]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/heif"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.heif\OpenWithProgids]
+"StainedGlass.Photos.Image"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.avif]
+@="StainedGlass.Photos.Image"
+"Content Type"="image/avif"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.avif\OpenWithProgids]
 "StainedGlass.Photos.Image"=""

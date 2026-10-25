@@ -580,7 +580,8 @@ Windows Registry Editor Version 5.00
 "Category"="Media"
 "Colour"=dword:00f9a825
 "Tier"="windows"
-"Source"="winget:AIMP.AIMP"
+"Source"="pin:https://aimp.ru/files/desktop/builds/aimp_5.40.2727_w64.exe|cc6babde28777edcdf608d09d5abadb188c13a5fcbfe63740b53e76ea026c4cd|exe|/AUTO /SILENT"
+"PinVersion"="5.40.2727"
 "DetectName"="AIMP"
 "Icon"="https://www.aimp.ru/v2/theme/images/tile180.png"
 
@@ -3206,7 +3207,8 @@ Windows Registry Editor Version 5.00
 "Category"="Media"
 "Colour"=dword:00ffb300
 "Tier"="windows"
-"Source"="winget:GOMLab.GOMPlayer"
+"Source"="pin:https://cdn2.gomlab.com/gretech/player/edge/GOMPLAYERGLOBALSETUP_NEW.EXE|194a7c6a76bbb88973d9bb4b187153ebbc42aba79053d4c1be354aeea6df2696|nullsoft|/S"
+"PinVersion"="2.3.123.5393"
 "DetectName"="GOM Player"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\98]
@@ -3469,7 +3471,9 @@ Windows Registry Editor Version 5.00
 "Category"="Utilities"
 "Colour"=dword:00009688
 "Tier"="windows"
-"Source"="winget:Piriform.CCleaner"
+"Source"="pin:https://bits.avcdn.net/productfamily_CCLEANER7/insttype_FREE/platform_WIN/installertype_FULL/build_RELEASE|d21aa015695bd5a2cd35dfe15c789697161ef4fea0f3bf5b83aaac200f7ee01c|exe|/SILENT"
+"PinVersion"="7.13.1573.2020"
+"Depends"="Microsoft.EdgeWebView2Runtime"
 "DetectName"="CCleaner"
 "Icon"="https://s1.pir.fm/pf/favicons--AwgCBwYOBQc/apple-touch-icon.png"
 

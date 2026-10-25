@@ -1,3 +1,37 @@
+sg-shell (0.1.0-218) unstable; urgency=medium
+
+  * SG Store: CCleaner, GOM Player and AIMP install from pinned downloads.
+    CCleaner's and GOM's makers replaced the file behind an unchanging
+    address, so winget's SHA-256 no longer matched; AIMP's build in winget
+    is gone (404). Each pin is the maker's current, Authenticode-signed
+    installer: CCleaner 7.13.1573.2020 (the full one, not the downloader),
+    GOM Player 2.3.123.5393, AIMP 5.40.2727. AIMP and GOM install and
+    uninstall on qa4. CCleaner's installer needed wine-sg 6107/6108 (its
+    ncalrpc calls, its service's status) and the WebView2 runtime, which
+    it only checks for: a pinned entry's Depends is now installed first,
+    as a winget entry's is (gate store-check, mutant NOPINDEPENDS). Gate
+    store-catalog-check: every pinned download is https with a SHA-256 and
+    a PinVersion (mutants: no version, short hash).
+  * SG Store: an uninstall is done when the uninstaller is, not when its
+    Uninstall entry goes. NSIS deletes the entry before the Start-menu
+    shortcuts; the store stopped watching there and the elevated session's
+    end took the uninstaller's %TEMP% copy (Au_.exe) with it, so
+    Wireshark.lnk and the IrfanView, Mp3tag, Zoom and DYMO folders stayed
+    in the all-users Start menu (qa4; traced by the Wine gaps agent).
+    Gate store-check: an uninstaller still at work after its entry goes,
+    mutant NOAFTERWAIT.
+  * Start: Most used, Recently added and Recommended leave out a shortcut
+    whose program is gone from a local disk, as search does (217): the
+    leftovers of uninstalled Dropbox, Wireshark and Discord were the first
+    three "Most used", with blank icons (qa4). Gate start-check, mutant
+    START_DEADLINKS.
+  * Photos opens .heic, .heif and .avif pictures: wine-sg decodes them
+    (WIC, 6539/6540) and File Explorer showed their thumbnails, but a
+    double-click said "There is no program configured to open this type of
+    file" (qa4). Gate photos-check: a .heic opens through its association.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 13:25:59 -0700
+
 sg-shell (0.1.0-217) unstable; urgency=medium
 
   * Start: a shortcut whose program is gone from a local disk is not

@@ -67,6 +67,7 @@
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
+#   SG_MUTANT_NOPINDEPENDS ignores a pinned entry's Depends (CCleaner: WebView2)
 #   SG_MUTANT_PIDREUSE    takes a program older than the uninstaller, whose parent's id it got, for its child
 #   SG_MUTANT_DEPRECORD   trusts its record of a dependency it installed once, though it was uninstalled (DYMO: .NET 8)
 #   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
@@ -103,6 +104,7 @@
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
 #   SG_MUTANT_MULTI_INSTANCE each start opens another store (the walk found 20 open)
 #   SG_MUTANT_NOTREE      waits for the uninstaller only, not the child it hands off to (Opera)
+#   SG_MUTANT_NOAFTERWAIT  done when the entry goes, while the uninstaller still removes shortcuts (Wireshark)
 #   SG_MUTANT_SYSTEMUNINSTALL offers Uninstall for a part of the system (SG PDF), then fails
 #   SG_MUTANT_NONESTEDFILE ignores NestedInstallerFiles: a zip with two programs cannot be installed (CutePDF)
 #
@@ -154,7 +156,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -774,6 +776,24 @@ rm -f "$G/setup.log"; ununinstall LonelyApp
 SG_MUT="$T/mut-nodepends.exe" lonely
 ! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && grep -q -- '/lonely' "$G/setup.log" 2>/dev/null \
     && pass "MUTANT NODEPENDS skips it (gate catches it)" || fail "NODEPENDS not detected: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+# a pinned download's Depends too (CCleaner 7 needs the WebView2 runtime)
+app 13 'Pinned Lonely' Development windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S /pinlonely" 'Pinned Lonely'
+reg "$K\\13" /v PinVersion /d '1.0'
+reg "$K\\13" /v Depends /d 'Fake.Dep'
+wineserver -w
+pinlonely() { # EXE -> setup.log on one line
+    wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+    wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+    rm -f "$G/setup.log"; ununinstall PinnedLonely
+    SG_FAKE_KEY=PinnedLonely SG_FAKE_DISPLAY='Pinned Lonely' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Pinned Lonely' \
+        wine "$1" --install 13 >/dev/null 2>&1
+    tr '\n' '|' < "$G/setup.log" 2>/dev/null; ununinstall PinnedLonely
+}
+case "$(pinlonely "$EXE")" in *dep-installed*pinlonely*) pass "a pinned entry's Depends is installed first (CCleaner: WebView2)" ;;
+                              *) fail "pinned Depends: $(pinlonely "$EXE")" ;; esac
+case "$(pinlonely "$T/mut-nopindepends.exe")" in *dep-installed*) fail "NOPINDEPENDS not detected" ;;
+                              *pinlonely*) pass "MUTANT NOPINDEPENDS skips it (gate catches it)" ;; *) fail "NOPINDEPENDS case broken" ;; esac
+wine reg delete "$K\\13" /f >/dev/null 2>&1; wineserver -w
 # a dependency the store installed once (recorded) and that was uninstalled since -- the catalogue lists it
 # and does not find it -- is installed again: DYMO Connect stopped with code 91 after .NET 8 was uninstalled
 app 12 'Dep App' Development windows 'winget:Fake.Dep' 'Never Installed Dep'
@@ -1657,6 +1677,18 @@ handoff() { # exe -> ok|fail
 }
 [ "$(handoff "$EXE")" = ok ] && pass "an uninstaller that hands off to a child is waited for" || fail "hand-off uninstall: $(cat "$D.result" 2>/dev/null)"
 [ "$(handoff "$T/mut-notree.exe")" = fail ] && pass "MUTANT NOTREE gives up while the child still works (gate catches it)" || fail "NOTREE not detected"
+# an NSIS uninstaller takes its entry away first and its Start-menu
+# shortcuts after: the store stopped watching when the entry went, and the
+# all-users shortcuts stayed (Wireshark, Mp3tag on qa4)
+afterwait() { # exe -> done|early
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    rm -f "$G/after.log"
+    SG_FAKE_HANDOFF=1 SG_FAKE_AFTER=5000 SG_STORE_UNINSTALL_GRACE=20000 SG_MUT="$1" run --uninstall 01
+    [ -s "$G/after.log" ] && echo done || echo early
+    sleep 6; ununinstall FakeApp; sleep 0.5
+}
+[ "$(afterwait "$EXE")" = done ] && pass "an uninstaller still at work after its entry goes is waited for (NSIS shortcuts)" || fail "uninstall done before the shortcuts went"
+[ "$(afterwait "$T/mut-noafterwait.exe")" = early ] && pass "MUTANT NOAFTERWAIT is done while its shortcuts are still there (gate catches it)" || fail "NOAFTERWAIT not detected"
 
 # --- M. several apps, one consent ------------------------------------------------------------------
 "$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"

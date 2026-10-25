@@ -899,7 +899,7 @@ static void build_rows(void)
         for (i = 0; i < g_napps; i++)
         {
             DWORD c = usage_of(g_apps[i].name);
-            if (!c) continue;
+            if (!c || is_dead(&g_apps[i])) continue;   /* an uninstalled program's leftover shortcut */
             for (j = n; j > 0 && counts[j - 1] < (int)c; j--)
                 if (j < 5) { most[j] = most[j - 1]; counts[j] = counts[j - 1]; }
             if (j < 5) { most[j] = i; counts[j] = c; if (n < 5) n++; }
@@ -911,7 +911,7 @@ static void build_rows(void)
     if (g_nrecent && reg_show_recent())
     {
         add_row(R_HEADER, -1, L"Recently added");
-        for (i = 0; i < g_nrecent; i++) add_row(R_ITEM, recents[i], NULL);
+        for (i = 0; i < g_nrecent; i++) if (!is_dead(&g_apps[recents[i]])) add_row(R_ITEM, recents[i], NULL);
     }
     /* "Show suggestions occasionally in Start": one of the apps that came
      * with the system and this user has never started -- another each day.
@@ -1956,7 +1956,7 @@ static void c_recommend(void)
     for (i = 0; i < g_napps; i++)
     {
         DWORD u = usage_of(g_apps[i].name);
-        if (!u || pin_index(g_apps[i].name) >= 0) continue;
+        if (!u || pin_index(g_apps[i].name) >= 0 || is_dead(&g_apps[i])) continue;
         for (j = 0; j < g_nrec && best[j] >= u; j++);
         if (j >= 6) continue;
         for (k = min(g_nrec, 5); k > j; k--) { best[k] = best[k - 1]; g_rec[k] = g_rec[k - 1]; }
@@ -2283,7 +2283,7 @@ static void x_most_used(void)
     for (i = 0; i < g_napps; i++)
     {
         DWORD u = track_progs() ? usage_of(g_apps[i].name) : 0;
-        if (!u || pin_index(g_apps[i].name) >= 0) continue;
+        if (!u || pin_index(g_apps[i].name) >= 0 || is_dead(&g_apps[i])) continue;
         for (j = 0; j < g_nmfu && best[j] >= u; j++);
         if (j >= X_NMFU) continue;
         for (k = min(g_nmfu, X_NMFU - 1); k > j; k--) { best[k] = best[k - 1]; g_mfu[k] = g_mfu[k - 1]; }
