@@ -154,7 +154,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1102,11 +1102,16 @@ wine reg delete "$K\\O6" /f >/dev/null 2>&1
 wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
 # a Linux app a part of the system needs (Thunderbird, which SG Mail depends
 # on): no Uninstall either -- apt would take the part with it and sg-admind
-# refuses (the walk 2026-10-21). One that is only an alternative can go.
+# refuses (the walk 2026-10-21). One that is only an alternative can go when
+# another of the alternatives is installed; when none is (firefox-esr |
+# firefox, firefox not there: qa4 2026-10-25), it cannot.
 app L7 'Gate Mail Engine' Internet linux 'linux:apt:gate-tb'
 app L8 'Gate Alt Engine' Internet linux 'linux:apt:gate-alt'
+app L9 'Gate Browser ESR' Internet linux 'linux:apt:gate-esr'
 printf 'Package: gate-tb\nStatus: install ok installed\nVersion: 1:158\n\nPackage: gate-alt\nStatus: install ok installed\nVersion: 2\n\n' >> "$T/dpkg-status"
-printf 'Package: sg-gate-mail\nStatus: install ok installed\nVersion: 1.0\nDepends: libc6 (>= 2.3), gate-tb (>= 1:128), gate-other | gate-alt\n\n' >> "$T/dpkg-status"
+printf 'Package: gate-other\nStatus: install ok installed\nVersion: 3\n\nPackage: gate-esr\nStatus: install ok installed\nVersion: 153\n\n' >> "$T/dpkg-status"
+printf 'Package: gate-rel\nStatus: deinstall ok config-files\nVersion: 140\n\n' >> "$T/dpkg-status"
+printf 'Package: sg-gate-mail\nStatus: install ok installed\nVersion: 1.0\nDepends: libc6 (>= 2.3), gate-tb (>= 1:128), gate-other | gate-alt, gate-esr | gate-rel\n\n' >> "$T/dpkg-status"
 needuninstall() { # exe ord -> "result elevated"
     rm -f "$D" "$D.result" "$D.sys"; : > "$T/apt.log"
     wine "$1" --uninstall "$2" >/dev/null 2>&1 & IP=$!
@@ -1118,6 +1123,11 @@ needuninstall() { # exe ord -> "result elevated"
     && pass "a Linux app a part of the system depends on has no Uninstall (and says which part)" || fail "L7: $(cat "$D.result" 2>/dev/null) / $([ -e "$D.sys" ] && echo asked)"
 [ "$(needuninstall "$EXE" L8)" != "fail none" ] && pass "one that is only an alternative of a part's dependency can be uninstalled" \
     || fail "L8 refused: $(cat "$D.result" 2>/dev/null)"
+[ "$(needuninstall "$EXE" L9)" = "fail none" ] && grep -q 'needed by sg-gate-mail' "$D.result" \
+    && pass "an alternative whose others are not installed has no Uninstall (Firefox ESR)" || fail "L9: $(cat "$D.result" 2>/dev/null)"
+[ "$(needuninstall "$T/mut-altskip.exe" L9)" != "fail none" ] && pass "MUTANT ALTSKIP goes for it (gate catches it)" \
+    || fail "ALTSKIP not detected"
+wine reg delete "$K\\L9" /f >/dev/null 2>&1
 [ "$(needuninstall "$T/mut-neededbysystem.exe" L7)" != "fail none" ] && pass "MUTANT NEEDEDBYSYSTEM goes for it (gate catches it)" \
     || fail "NEEDEDBYSYSTEM not detected"
 wine reg delete "$K\\L7" /f >/dev/null 2>&1

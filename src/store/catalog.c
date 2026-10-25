@@ -422,18 +422,47 @@ static BOOL system_name(const char *n, size_t len)
            (len >= 7 && !strncmp(n, "wine-sg", 7));
 }
 
-static BOOL field_needs(const char *f, const char *end, const char *pkg)
+/* is a package installed, by dpkg's whole status text? */
+static BOOL status_installed(const char *text, const char *n, size_t len)
+{
+    const char *p;
+    for (p = strstr(text, "\nPackage: "); p; p = strstr(p + 1, "\nPackage: ")) {
+        const char *name = p + 10, *end;
+        if (strncmp(name, n, len) || name[len] != '\n') continue;
+        end = strstr(name, "\n\n");
+        p = strstr(name, "\nStatus: install ok installed");
+        return p && (!end || p < end);
+    }
+    return FALSE;
+}
+
+/* one Depends line: is pkg its sole choice? An alternative ("firefox-esr |
+ * firefox") counts only when none of the others is installed: SG Session
+ * needs firefox-esr when firefox is not there, and the Store offered
+ * Uninstall for Firefox ESR that sg-admind then refused (qa4 2026-10-25) */
+static BOOL field_needs(const char *text, const char *f, const char *end, const char *pkg)
 {
     size_t want = strlen(pkg);
     while (f < end) {
-        const char *g = f, *ge = memchr(f, ',', end - f), *n;
-        size_t len = 0;
+        const char *g = f, *ge = memchr(f, ',', end - f);
+        BOOL mine = FALSE, other = FALSE;
         if (!ge) ge = end;
         f = ge + 1;
-        if (memchr(g, '|', ge - g)) continue;           /* one of alternatives: another can stay */
-        while (g < ge && (*g == ' ' || *g == '\t')) g++;
-        for (n = g; n < ge && *n != ' ' && *n != '(' && *n != ':' && *n != '\t'; n++) len++;
-        if (len == want && !strncmp(g, pkg, len)) return TRUE;
+        while (g < ge) {
+            const char *n, *ae = memchr(g, '|', ge - g);
+            size_t len = 0;
+            if (!ae) ae = ge;
+            while (g < ae && (*g == ' ' || *g == '\t')) g++;
+            for (n = g; n < ae && *n != ' ' && *n != '(' && *n != ':' && *n != '\t'; n++) len++;
+            if (len == want && !strncmp(g, pkg, len)) mine = TRUE;
+#ifdef SG_MUTANT_ALTSKIP
+            else if (len) other = TRUE;
+#else
+            else if (len && status_installed(text, g, len)) other = TRUE;
+#endif
+            g = ae + 1;
+        }
+        if (mine && !other) return TRUE;
     }
     return FALSE;
 }
@@ -469,15 +498,22 @@ BOOL dpkg_needed_by_system(const WCHAR *pkgw, WCHAR *by, int cch)
         next = end ? strstr(end, "\nPackage: ") : NULL;
         if (end) { save = end[1]; end[1] = 0; }        /* the stanza, its last line's '\n' kept */
         if (system_name(name, nlen) && strstr(p, "\nStatus: install ok installed\n")) {
-            for (j = 0; j < ARRAYSIZE(fields) && !found; j++) {
+            /* the lines, copied: an alternative's check reads the whole text */
+            static char lines[ARRAYSIZE(fields)][8192];
+            for (j = 0; j < ARRAYSIZE(fields); j++) {
                 char *f = strstr(p, fields[j]);
-                if (f) { f += strlen(fields[j]); found = field_needs(f, f + strcspn(f, "\n"), pkg); }
+                lines[j][0] = 0;
+                if (f) { f += strlen(fields[j]); snprintf(lines[j], sizeof(lines[j]), "%.*s", (int)strcspn(f, "\n"), f); }
             }
+            if (end) end[1] = save;
+            for (j = 0; j < ARRAYSIZE(fields) && !found; j++)
+                found = field_needs(text, lines[j], lines[j] + strlen(lines[j]), pkg);
             if (found) {
                 char n[128];
                 snprintf(n, sizeof(n), "%.*s", (int)nlen, name);
                 MultiByteToWideChar(CP_UTF8, 0, n, -1, by, cch);
             }
+            continue;
         }
         if (end) end[1] = save;
     }

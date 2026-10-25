@@ -1,3 +1,12 @@
+sg-shell (0.1.0-215) unstable; urgency=medium
+
+  * SG Store: a Linux app that is one of a system part's alternatives
+    ("firefox-esr | firefox") has no Uninstall when none of the others is
+    installed; it offered one for Firefox ESR, which sg-admind refused (qa4).
+    Gate store-check: case L9, mutant ALTSKIP.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 08:08:20 -0700
+
 sg-shell (0.1.0-214) unstable; urgency=medium
 
   * sg-admind: a maker's key and pin go in place before its apt source.
