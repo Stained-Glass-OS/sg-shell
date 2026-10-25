@@ -61,6 +61,9 @@ COMMONPROG='C:\ProgramData\Microsoft\Windows\Start Menu\Programs'
 mkdir -p "$WINEPREFIX/drive_c/users/Public/Documents"; echo manual > "$WINEPREFIX/drive_c/users/Public/Documents/quill-manual.txt"
 "$WINE" "$T/mklnk.exe" "$USERPROG\\Quill" "Quill Manual" 'C:\users\Public\Documents\quill-manual.txt' >/dev/null 2>&1
 "$WINE" "$T/mklnk.exe" "$USERPROG\\Quill" "Quill64" 'C:\windows\notepad.exe' >/dev/null 2>&1
+# an uninstaller's leftover: a shortcut to a program gone from the disk, beside a live one
+"$WINE" "$T/mklnk.exe" "$COMMONPROG" "Quasar" 'C:\Program Files\Quasar\quasar.exe' >/dev/null 2>&1
+"$WINE" "$T/mklnk.exe" "$USERPROG" "Quasar Live" 'C:\windows\notepad.exe' >/dev/null 2>&1
 "$WINESERVER" -w
 nlnk=$(find "$WINEPREFIX/drive_c" -path '*Start Menu/Programs*' -name '*.lnk' | wc -l)
 [ "$nlnk" -ge 201 ] || { fail "the test's shortcuts were not made ($nlnk)"; echo "RESULT: FAIL"; exit 1; }
@@ -264,6 +267,11 @@ xdotool type --delay 80 gimp; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = "GNU Image Manipulation Program" ] \
     && pass "a Linux app is found by its .desktop file's name: 'gimp' -> GNU Image Manipulation Program" \
     || fail "Linux app words: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_NOLINUXWORDS)"
+xdotool key Escape; sleep 1
+xdotool type --delay 80 quasar; sleep 1.5
+{ [ "$(d | sed -n 's/^best //p')" = "Quasar Live" ] && ! d | grep -qxE '(item|best) Quasar'; } \
+    && pass "a shortcut whose program is gone is not offered: 'quasar' -> Quasar Live only (Wireshark's leftover)" \
+    || fail "dead shortcut: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_DEADLINKS)"
 xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
 [ "$(val visible)" = 0 ] && pass "a second Escape closes Start" || fail "still open"
 

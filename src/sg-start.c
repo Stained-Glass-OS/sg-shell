@@ -211,6 +211,7 @@ struct entry {
     BOOL recent;
     char kw;                /* a Linux app's words from its .desktop file's name: 0 not yet looked */
     char doc;               /* 0 not yet known, 1 a program, 2 a document (a shortcut's target) */
+    char dead;              /* 0 not yet looked, 1 fine, 2 a shortcut to a file gone from a local disk */
 };
 
 static struct entry *g_apps;
@@ -757,6 +758,43 @@ static int score(const struct entry *e, const WCHAR *q)
     return 0;
 }
 
+/* a shortcut whose program is gone: its target on a fixed local disk, and
+ * the file not there. An uninstaller that left its all-users shortcut
+ * (Wireshark on qa4, 2026-10-25) made a dead "Wireshark" the best match
+ * above the Linux one, and Enter did nothing. A target on a network or
+ * removable drive, or one that cannot be read, counts as alive. */
+static BOOL is_dead(struct entry *e)
+{
+    WCHAR raw[MAX_PATH], target[MAX_PATH], root[4], *ext;
+    IShellLinkW *link;
+    IPersistFile *file;
+    DWORD err;
+
+    if (e->dead) return e->dead == 2;
+    e->dead = 1;
+#ifdef SG_MUTANT_START_DEADLINKS
+    return FALSE;
+#endif
+    if (!(ext = wcsrchr(e->path, '.')) || lstrcmpiW(ext, L".lnk")) return FALSE;
+    raw[0] = 0;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) return FALSE;
+    if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+    {
+        if (FAILED(IPersistFile_Load(file, e->path, STGM_READ))
+            || FAILED(IShellLinkW_GetPath(link, raw, MAX_PATH, NULL, SLGP_RAWPATH))) raw[0] = 0;
+        IPersistFile_Release(file);
+    }
+    IShellLinkW_Release(link);
+    if (!raw[0] || !ExpandEnvironmentStringsW(raw, target, MAX_PATH)) return FALSE;
+    if (!iswalpha(target[0]) || target[1] != ':' || target[2] != '\\') return FALSE;
+    root[0] = target[0]; root[1] = ':'; root[2] = '\\'; root[3] = 0;
+    if (GetDriveTypeW(root) != DRIVE_FIXED) return FALSE;
+    if (GetFileAttributesW(target) != INVALID_FILE_ATTRIBUTES) return FALSE;
+    err = GetLastError();
+    if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) e->dead = 2;
+    return e->dead == 2;
+}
+
 /* whether an entry opens a document rather than starting a program: a
  * shortcut's target (or the file itself) is not a program. An installer's
  * "HWiNFO Manual" (a PDF) came before HWiNFO itself, the names alike. */
@@ -830,7 +868,7 @@ static void build_rows(void)
         if (!g_centered) g_content_h += S(SEARCH_H) + S(8);   /* the centred layout's box is above the list; Horizon's is its first row */
         for (i = 0; i < g_napps && n < 1000; i++) {
             if (!g_apps[i].kw) linux_app_words(&g_apps[i]);
-            if ((hits[n].score = score(&g_apps[i], q))) { hits[n].id = i; n++; }
+            if ((hits[n].score = score(&g_apps[i], q)) && !is_dead(&g_apps[i])) { hits[n].id = i; n++; }
         }
         for (i = 0; i < NSETTINGS && n < 1024; i++)
             if ((hits[n].score = score(&g_settings[i], q) - 5) > 0) { hits[n].id = SETTING(i); n++; }
