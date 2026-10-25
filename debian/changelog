@@ -1,3 +1,10 @@
+sg-shell (0.1.0-216) unstable; urgency=medium
+
+  * SG Store search ignores punctuation and spaces in names: "codeblocks"
+    finds Code::Blocks, "xn-view" XnView. Gate store-check, mutant NOSQUASH.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 09:20:46 -0700
+
 sg-shell (0.1.0-215) unstable; urgency=medium
 
   * SG Store: a Linux app that is one of a system part's alternatives

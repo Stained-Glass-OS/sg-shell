@@ -209,6 +209,28 @@ static int section_rank(const app_t *a)
     return 500;     /* a category of a mirror's own, before the Linux apps */
 }
 
+/* letters and digits only, lower case: "Code::Blocks" is "codeblocks" */
+static void squash(const WCHAR *s, WCHAR *out, int cch)
+{
+    int n = 0;
+    for (; *s && n < cch - 1; s++) if (iswalnum(*s)) out[n++] = towlower(*s);
+    out[n] = 0;
+}
+
+/* the word in the name, punctuation and spaces aside: a person types
+ * "codeblocks" for Code::Blocks, "xnview" or "xn-view" for XnView */
+static BOOL squashed_in(const WCHAR *name, const WCHAR *word)
+{
+    WCHAR n[256], w[128];
+#ifdef SG_MUTANT_NOSQUASH
+    return FALSE;
+#endif
+    squash(word, w, ARRAYSIZE(w));
+    if (!w[0]) return FALSE;
+    squash(name, n, ARRAYSIZE(n));
+    return wcsstr(n, w) != NULL;
+}
+
 static BOOL matches_query(const app_t *a, const WCHAR *q)
 {
     WCHAR word[128];
@@ -223,7 +245,7 @@ static BOOL matches_query(const app_t *a, const WCHAR *q)
         while (*p && *p != L' ' && n < 127) word[n++] = *p++;
         word[n] = 0;
         if (!n) break;
-        if (!StrStrIW(a->name, word) && !StrStrIW(a->publisher, word) && !StrStrIW(a->desc, word) &&
+        if (!StrStrIW(a->name, word) && !squashed_in(a->name, word) && !StrStrIW(a->publisher, word) && !StrStrIW(a->desc, word) &&
             !StrStrIW(a->category, word) && !StrStrIW(app_section(a), word) &&
             !((a->tier == TIER_LINUX || a->alt >= 0) && !lstrcmpiW(word, L"linux")))
             return FALSE;

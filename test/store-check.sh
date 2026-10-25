@@ -154,7 +154,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1233,6 +1233,8 @@ if [ "$v" != NOWINDOW ]; then
     [ "$v" = "2 05 L1" ] && pass "searching \"gimp\" lists both GIMPs, the Windows one first ($v)" || fail "view after 'gimp': '$v'"
     xdotool key Escape; sleep 0.3; xdotool type --delay 60 'source code'; sleep 1
     [ "$(field view)" = "1 06" ] && pass "search looks in descriptions too (\"source code\" -> Git)" || fail "view '$(field view)'"
+    xdotool key Escape; sleep 0.3; xdotool type --delay 60 'xn-view'; sleep 1
+    [ "$(field view)" = "1 07" ] && pass "search ignores punctuation in names (\"xn-view\" -> XnView, as \"codeblocks\" -> Code::Blocks)" || fail "view after 'xn-view': '$(field view)'"
     xdotool key Escape; sleep 0.3; xdotool type --delay 60 'git'; sleep 1
     [ "$(field view)" = "2 06 05" ] && pass "the app the search names exactly comes first, its section before the others (\"git\" -> Git, then GIMP)" \
         || fail "view after 'git': '$(field view)'"
@@ -1260,6 +1262,12 @@ wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 v=$(window_checks "$T/mut-nosearch.exe")
 [ "$v" != NOWINDOW ] && [ "$v" != "2 05 L1" ] && pass "MUTANT NOSEARCH lists everything after \"gimp\" (gate catches it)" || fail "NOSEARCH not detected ('$v')"
 wine taskkill /f /im mut-nosearch.exe >/dev/null 2>&1
+rm -f "$D"; wine "$T/mut-nosquash.exe" >/dev/null 2>&1 &
+if waitfor "$D" '^window 1' 60; then
+    sleep 0.8; click "$D" "search -"; sleep 0.4; xdotool type --delay 60 xn-view; sleep 1
+    [ "$(field view)" != "1 07" ] && pass "MUTANT NOSQUASH finds nothing for \"xn-view\" (gate catches it)" || fail "NOSQUASH not detected"
+else fail "NOSQUASH: the window did not open"; fi
+wine taskkill /f /im mut-nosquash.exe >/dev/null 2>&1
 rm -f "$D"; wine "$T/mut-nobestmatch.exe" >/dev/null 2>&1 &
 if waitfor "$D" '^window 1' 60; then
     sleep 0.8; click "$D" "search -"; sleep 0.4; xdotool type --delay 60 git; sleep 1
