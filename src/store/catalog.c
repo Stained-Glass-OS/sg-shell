@@ -125,6 +125,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"RegisterProgram", a->reg_program, ARRAYSIZE(a->reg_program));
         reg_str(item, L"RegisterUninstall", a->reg_uninstall, ARRAYSIZE(a->reg_uninstall));
         reg_str(item, L"UninstallArgs", a->uninstall_args, ARRAYSIZE(a->uninstall_args));
+        reg_str(item, L"InstallArgs", a->install_args, ARRAYSIZE(a->install_args));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
         {
@@ -787,6 +788,9 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     WCHAR winget[MAX_PATH];
     BOOL ok;
     if (!pkg_resolve(id, &p, err, cch)) return 1;
+#ifndef SG_MUTANT_NOINSTALLARGS
+    if (a && a->install_args[0]) lstrcpynW(p.silent, a->install_args, ARRAYSIZE(p.silent));
+#endif
     if (a) lstrcpynW(a->available_version, p.version, ARRAYSIZE(a->available_version));
     if (winget_path(winget, MAX_PATH))   /* winget installs the dependencies itself */
         return winget_install(winget, &p, err, cch) ? 0 : 1;

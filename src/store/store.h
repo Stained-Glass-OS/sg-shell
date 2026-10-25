@@ -69,6 +69,9 @@ typedef struct {
     WCHAR reg_uninstall[256];     /* RegisterUninstall: "uninstall.exe /S" */
     WCHAR uninstall_args[64];     /* UninstallArgs: what makes its uninstaller quiet when its
                                    * entry has no quiet command (Total Commander's "/7") */
+    WCHAR install_args[128];      /* InstallArgs: the installer's quiet switches in place of its
+                                   * manifest's (Dropbox: "--silent"; its "/s" still waits at
+                                   * "Installation complete") */
     BOOL  also_in_category;       /* a Linux app also listed under its Category (Steam in Games) */
     WCHAR deb_url[512];           /* SRC_LINUX_APT: the maker's own .deb (DebUrl), installed
                                    * when its package is in no apt source (Valve's steam.deb) */

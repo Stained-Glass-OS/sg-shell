@@ -92,6 +92,7 @@
 #   SG_MUTANT_NOINVOKER   runs a user-scope installer without __COMPAT_LAYER=RunAsInvoker (Kdenlive)
 #   SG_MUTANT_NOUNINVOKER runs a person's own (HKCU) uninstaller as its manifest asks (Kdenlive)
 #   SG_MUTANT_NOMACHINEELEVATE runs the machine's uninstaller the person cannot change as the person (NVDA)
+#   SG_MUTANT_NOINSTALLARGS keeps the manifest's quiet switches over the catalogue's InstallArgs (Dropbox)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
@@ -153,7 +154,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -516,6 +517,22 @@ grep -q '^elevated 01 0' "$D.result" 2>/dev/null && pass "as the user: its manif
 run --list
 [ "$(kv "$(appline 01)" state)" = installed ] && [ "$(kv "$(appline 01)" installed)" = 1.10.0 ] \
     && pass "and is then detected as installed (1.10.0)" || fail "after install: $(appline 01)"
+
+# the catalogue's InstallArgs in place of the manifest's quiet switches (Dropbox: "--silent"; its "/s"
+# still showed "Installation complete" and waited)
+installargs_case() { # EXE -- the installer's arguments
+    ununinstall FakeApp; rm -f "$G/setup.log"; wineserver -w
+    reg "$K\\01" /v InstallArgs /d '/gate-own --silent'
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' \
+        wine "$1" --install 01 >/dev/null 2>&1
+    wine reg delete "$K\\01" /v InstallArgs /f >/dev/null 2>&1
+    tr '\n' ' ' < "$G/setup.log" 2>/dev/null
+}
+r=$(installargs_case "$EXE")
+case "$r" in *"/gate-own --silent"*"/gate-silent"*|*"/gate-silent"*"/gate-own"*) fail "InstallArgs added to, not in place of: $r" ;;
+    *"/gate-own --silent"*) pass "the catalogue's InstallArgs replace the manifest's quiet switches (Dropbox --silent)" ;; *) fail "InstallArgs: $r" ;; esac
+r=$(installargs_case "$T/mut-noinstallargs.exe")
+case "$r" in *"/gate-own"*) fail "NOINSTALLARGS not detected: $r" ;; *"/gate-silent"*) pass "MUTANT NOINSTALLARGS keeps the manifest's (gate catches it)" ;; *) fail "NOINSTALLARGS case: $r" ;; esac
 
 # an installer that starts a copy of itself and exits at once (InstallShield's
 # setup.exe from %TEMP%: DYMO Label 8): the store waits for the copy -- the app
