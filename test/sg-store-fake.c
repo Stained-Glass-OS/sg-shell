@@ -26,7 +26,8 @@
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
- * <any> /stay                       a program left running (60 s): the store
+ * <any> /stay                       a program left running (60 s; its process id
+ *                                   to %SG_FAKE_PIDFILE%): the store
  *                                   closes the app's own before its uninstaller;
  *                                   uninst.exe logs "app-running" when an
  *                                   app.exe still runs
@@ -89,6 +90,11 @@ int wmain(int argc, WCHAR **argv)
     base = wcsrchr(self, '\\') ? wcsrchr(self, '\\') + 1 : self;
 
     if (wcsstr(args, L" /stay")) {   /* a running program (Dropbox in the person's session) */
+        WCHAR pidfile[MAX_PATH], id[16];
+        if (GetEnvironmentVariableW(L"SG_FAKE_PIDFILE", pidfile, MAX_PATH)) {   /* its process id, for the gate */
+            swprintf(id, ARRAYSIZE(id), L"%lu", GetCurrentProcessId());
+            logline(pidfile, id);
+        }
         Sleep(60000);
         return 0;
     }

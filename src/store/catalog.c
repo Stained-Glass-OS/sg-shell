@@ -683,8 +683,11 @@ static BOOL dep_provided(const WCHAR *id)
 #define DEPS_KEY STORE_KEY L"\\Dependencies"
 
 /* Whether a dependency still has to be installed: not if the system
- * provides it, not if SG Store installed it before (recorded), and not if
- * the catalogue's app of that id is detected as installed. */
+ * provides it; if the catalogue has an app of that id, whether it is
+ * detected; otherwise not if SG Store installed it before (recorded). The
+ * catalogue's answer comes first: the record outlives an uninstall, and
+ * DYMO Connect's setup stopped with code 91 ("you must install .NET") after
+ * .NET Desktop Runtime 8, recorded, had been uninstalled. */
 static BOOL dep_needed(const WCHAR *id)
 {
     static app_t apps[MAX_APPS];
@@ -693,16 +696,22 @@ static BOOL dep_needed(const WCHAR *id)
     int n, i;
     if (dep_provided(id)) return FALSE;
     swprintf(key, ARRAYSIZE(key), L"%ls\\%ls", DEPS_KEY, id);
+#ifdef SG_MUTANT_DEPRECORD
     if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) || !RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h)) {
         RegCloseKey(h);
         return FALSE;
     }
+#endif
     n = catalog_load(apps, MAX_APPS);
     for (i = 0; i < n; i++)
         if (apps[i].method == SRC_WINGET && !lstrcmpiW(apps[i].winget_id, id)) {
             app_detect(&apps[i]);
             return apps[i].state != AST_INSTALLED && apps[i].state != AST_UPDATE;
         }
+    if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) || !RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h)) {
+        RegCloseKey(h);
+        return FALSE;
+    }
     return TRUE;
 }
 
@@ -748,7 +757,7 @@ static int install_deps(const package_t *p, int depth, progress_fn progress, voi
     return 0;
 }
 
-static BOOL tree_alive(DWORD *tree, int *n, int max);
+static BOOL tree_alive(DWORD *tree, int *n, int max, const FILETIME *since);
 
 /* An installer whose work goes on in a process it started: InstallShield's
  * setup.exe starts a copy of itself from %TEMP% and exits at once, and the
@@ -767,7 +776,7 @@ static void settle_install(app_t *a, package_t *p)
     pkg_take_tree(p);
     if (GetEnvironmentVariableW(L"SG_STORE_INSTALL_WAIT", v, ARRAYSIZE(v))) limit = _wtoi(v);
     while (GetTickCount() - start < limit && !find_installed(a->detect_name, ver, ARRAYSIZE(ver)) &&
-           tree_alive(p->tree, &p->ntree, ARRAYSIZE(p->tree)))
+           tree_alive(p->tree, &p->ntree, ARRAYSIZE(p->tree), &p->since))
         Sleep(1000);
 }
 
@@ -1059,7 +1068,7 @@ BOOL app_is_runtime(const app_t *a)
  * store gave up after three minutes and said "was not removed" while the
  * person was still answering it. tree[] holds the process and every
  * descendant seen so far. */
-static BOOL tree_alive(DWORD *tree, int *n, int max)
+static BOOL tree_alive(DWORD *tree, int *n, int max, const FILETIME *since)
 {
     PROCESSENTRY32W pe = { sizeof(pe) };
     BOOL alive = FALSE, grew;
@@ -1077,7 +1086,13 @@ static BOOL tree_alive(DWORD *tree, int *n, int max)
                 if (tree[i] == pe.th32ProcessID) known = TRUE;
                 if (tree[i] == pe.th32ParentProcessID) parent = TRUE;
             }
-            if (!known && parent && *n < max) { tree[(*n)++] = pe.th32ProcessID; grew = TRUE; }
+            if (!known && !parent && GetEnvironmentVariableW(L"SG_STORE_FAKE_CHILD", NULL, 0)) {
+                WCHAR v[16];
+                GetEnvironmentVariableW(L"SG_STORE_FAKE_CHILD", v, ARRAYSIZE(v));
+                parent = (DWORD)_wtoi(v) == pe.th32ProcessID;
+            }
+            /* born before the tree started: another program, whose parent's id was reused (pkg_born_since) */
+            if (!known && parent && *n < max && pkg_born_since(pe.th32ProcessID, since)) { tree[(*n)++] = pe.th32ProcessID; grew = TRUE; }
         } while (Process32NextW(snap, &pe));
     } while (grew);
     if (Process32FirstW(snap, &pe)) do {
@@ -1305,6 +1320,7 @@ static BOOL uninstaller_needs_admin(HKEY root, const WCHAR *file)
 static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
 {
     DWORD tree[64], grace = 180000;
+    FILETIME since;
     int ntree = 0;
     WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
@@ -1324,6 +1340,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     }
     /* a runtime the store put in the system folder: only an administrator
      * can take it out (its uninstaller is cmd, which never asks) */
+    pkg_tree_start(&since);
     for (attempt = app_is_runtime(a) || uninstaller_needs_admin(root, file) ? 1 : 0; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
@@ -1345,7 +1362,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     }
     a->ran_elevated = attempt != 0;
     tree[ntree++] = GetProcessId(sei.hProcess);
-    while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree));
+    while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
     GetExitCodeProcess(sei.hProcess, &code);
     CloseHandle(sei.hProcess);
     /* its entry goes when it is gone; a self-copying uninstaller, or one whose
@@ -1353,7 +1370,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
      * gate's shorter wait after the last of them */
     if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GRACE", ver, ARRAYSIZE(ver))) grace = _wtoi(ver);
     for (start = GetTickCount(); (unregister_gone(a), find_installed(a->detect_name, ver, ARRAYSIZE(ver)));) {
-        BOOL alive = tree_alive(tree, &ntree, ARRAYSIZE(tree));
+        BOOL alive = tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
         if (alive) start = GetTickCount();                  /* 3 minutes after the last of them */
         else if (another_part(a, cmd) || GetTickCount() - start >= grace) break;   /* its part is gone */
         Sleep(1000);

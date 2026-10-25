@@ -1,3 +1,18 @@
+sg-shell (0.1.0-210) unstable; urgency=medium
+
+  * SG Store: a dependency the catalogue lists is checked as installed
+    before the store's record that it installed it once is trusted. The
+    record outlived an uninstall of .NET Desktop Runtime 8, and DYMO
+    Connect's setup then stopped with code 91 ("you must install .NET").
+    store-check case; mutant SG_MUTANT_DEPRECORD.
+  * SG Store: a process is taken for an installer's or uninstaller's child
+    only if it was born after that started. Process ids are reused, and a
+    long-running program whose parent's id the uninstaller happened to get
+    held the store's wait until it ended (seen in store-check). store-check
+    case; mutant SG_MUTANT_PIDREUSE.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 24 Oct 2026 21:23:08 -0700
+
 sg-shell (0.1.0-209) unstable; urgency=medium
 
   * SG Store catalogue: Opera's uninstaller runs with /runimmediately,

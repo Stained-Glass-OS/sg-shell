@@ -411,6 +411,45 @@ static BOOL run_orphan_root(const PROCESSENTRY32W *pe)
     return TRUE;
 }
 
+static FILETIME g_run_since;
+
+/* now, less two seconds of clock granularity: what a process tree started
+ * now is born after */
+void pkg_tree_start(FILETIME *since)
+{
+    ULARGE_INTEGER t;
+    GetSystemTimeAsFileTime(since);
+    t.LowPart = since->dwLowDateTime; t.HighPart = since->dwHighDateTime;
+    t.QuadPart -= 2 * 10000000ULL;
+    since->dwLowDateTime = t.LowPart; since->dwHighDateTime = t.HighPart;
+}
+
+/* A process whose parent id is one of a tree's is that process's child only
+ * if it was born after the tree started: ids are reused, and a program
+ * running since before (the gate's earlier stand-ins, on qa4 anything long
+ * lived) whose parent's id the uninstaller happened to get held SG Store's
+ * wait for good. SG_STORE_FAKE_CHILD names a process to take as the tree's
+ * child whatever its parent (the gate's). One that cannot be asked is taken. */
+BOOL pkg_born_since(DWORD pid, const FILETIME *since)
+{
+    FILETIME created, x1, x2, x3;
+    HANDLE h;
+    BOOL ok;
+#ifdef SG_MUTANT_PIDREUSE
+    return TRUE;
+#endif
+    if (!(h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid))) return TRUE;
+    ok = GetProcessTimes(h, &created, &x1, &x2, &x3);
+    CloseHandle(h);
+    return !ok || CompareFileTime(&created, since) >= 0;
+}
+
+static BOOL fake_child(DWORD pid)
+{
+    WCHAR v[16];
+    return GetEnvironmentVariableW(L"SG_STORE_FAKE_CHILD", v, ARRAYSIZE(v)) && (DWORD)_wtoi(v) == pid;
+}
+
 static void run_tree_grow(void)
 {
     PROCESSENTRY32W pe = { sizeof(pe) };
@@ -426,6 +465,8 @@ static void run_tree_grow(void)
                 if (g_run_tree[i] == pe.th32ProcessID) known = TRUE;
                 if (g_run_tree[i] == pe.th32ParentProcessID) parent = TRUE;
             }
+            if (fake_child(pe.th32ProcessID)) parent = TRUE;
+            if (parent && !pkg_born_since(pe.th32ProcessID, &g_run_since)) parent = FALSE;
             if (!known && (parent || run_orphan_root(&pe)) && g_run_ntree < (int)ARRAYSIZE(g_run_tree)) { g_run_tree[g_run_ntree++] = pe.th32ProcessID; grew = TRUE; }
         } while (Process32NextW(snap, &pe));
     } while (grew);
@@ -436,6 +477,7 @@ static void run_tree_grow(void)
  * batch): its process, for its descendants to be found */
 void pkg_note_installer(DWORD pid)
 {
+    pkg_tree_start(&g_run_since);
     g_run_ntree = 0;
     g_run_tree[g_run_ntree++] = pid;
 }
@@ -446,6 +488,7 @@ void pkg_take_tree(package_t *p)
     if (g_run_ntree) run_tree_grow();   /* what it started at its end too; a parent's id stays its creator's */
     memcpy(p->tree, g_run_tree, g_run_ntree * sizeof(DWORD));
     p->ntree = g_run_ntree;
+    p->since = g_run_since;
 }
 
 static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *code, BOOL *elevated, WCHAR *err, int cch)
@@ -453,6 +496,7 @@ static BOOL run_wait(const WCHAR *file, const WCHAR *args, BOOL admin, DWORD *co
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     int attempt;
     g_run_orphans = FALSE;
+    pkg_tree_start(&g_run_since);
     run_pre_snapshot();
     for (attempt = admin ? 1 : 0; attempt < 2; attempt++) {
         if (attempt && g_runas_hook) {   /* the store's batch: its one administrator's helper */

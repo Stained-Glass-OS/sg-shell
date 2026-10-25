@@ -67,6 +67,8 @@
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
+#   SG_MUTANT_PIDREUSE    takes a program older than the uninstaller, whose parent's id it got, for its child
+#   SG_MUTANT_DEPRECORD   trusts its record of a dependency it installed once, though it was uninstalled (DYMO: .NET 8)
 #   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
 #   SG_MUTANT_NOBESTMATCH a search's exact name match keeps its section's place
 #   SG_MUTANT_NOREGISTER  an installer's missing Uninstall entry is not written for it
@@ -150,7 +152,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -754,6 +756,22 @@ rm -f "$G/setup.log"; ununinstall LonelyApp
 SG_MUT="$T/mut-nodepends.exe" lonely
 ! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && grep -q -- '/lonely' "$G/setup.log" 2>/dev/null \
     && pass "MUTANT NODEPENDS skips it (gate catches it)" || fail "NODEPENDS not detected: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+# a dependency the store installed once (recorded) and that was uninstalled since -- the catalogue lists it
+# and does not find it -- is installed again: DYMO Connect stopped with code 91 after .NET 8 was uninstalled
+app 12 'Dep App' Development windows 'winget:Fake.Dep' 'Never Installed Dep'
+wineserver -w
+deptwice() {   # EXE -> how often the dependency ran in two installs
+    wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+    wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
+    rm -f "$G/setup.log"; ununinstall LonelyApp
+    SG_MUT="$1" lonely; ununinstall LonelyApp; SG_MUT="$1" lonely
+    grep -c -- '/dep-installed' "$G/setup.log" 2>/dev/null
+}
+r=$(deptwice "$EXE")
+[ "$r" = 2 ] && pass "a recorded dependency the catalogue no longer finds is installed again (DYMO Connect: .NET 8)" || fail "dependency again: ran $r time(s)"
+r=$(deptwice "$T/mut-deprecord.exe")
+[ "$r" = 1 ] && pass "MUTANT DEPRECORD trusts the stale record (gate catches it)" || fail "DEPRECORD not detected: ran $r time(s)"
+wine reg delete "$K\\12" /f >/dev/null 2>&1
 wine reg delete "$K\\11" /f >/dev/null 2>&1; ununinstall LonelyApp; ununinstall DepApp; rm -f "$G/setup.log"; wineserver -w
 wine reg delete 'HKLM\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
 wine reg delete 'HKCU\Software\Stained Glass\Store\Dependencies' /f >/dev/null 2>&1
@@ -1494,6 +1512,29 @@ r=$(msi_case "$EXE")
 case "$r" in *"/X$GUID /qn"*"state=not-installed"*) pass "an MSI is removed with /X, quietly (/qn: DYMO Connect's removed nothing with its UI)" ;; *) fail "MSI uninstall: $r" ;; esac
 r=$(msi_case "$T/mut-nomsiquiet.exe")
 case "$r" in *"/qn"*) fail "NOMSIQUIET not detected: $r" ;; *"/X$GUID"*) pass "MUTANT NOMSIQUIET runs the MSI's full UI and it stays (gate catches it)" ;; *) fail "NOMSIQUIET case: $r" ;; esac
+# a program running since before the uninstall whose parent's id the
+# uninstaller got (ids are reused) is not the uninstaller's child: the store
+# waited on the gate's long-lived stand-ins for good. SG_STORE_FAKE_CHILD
+# makes the store take it for a child, as a reused id would.
+mkdir -p "$G/old"; cp "$T/store-fake.exe" "$G/old/old.exe"
+oldchild_case() { # EXE -- seconds the uninstall took
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    # an uninstaller that leaves the entry (as NOMSIQUIET's MSI did): the store waits while its tree runs
+    wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString /f >/dev/null 2>&1
+    wine reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString /d 'C:\windows\system32\cmd.exe /c exit 0' /f >/dev/null 2>&1
+    rm -f "$G/old.pid"
+    SG_FAKE_PIDFILE='C:\gate\old.pid' wine 'C:\gate\old\old.exe' /stay >/dev/null 2>&1 &
+    i=0; while [ ! -s "$G/old.pid" ] && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+    sleep 3   # born well before the uninstaller
+    t0=$(date +%s)
+    SG_STORE_FAKE_CHILD=$(tr -d '\r\n' < "$G/old.pid") SG_STORE_UNINSTALL_GRACE=1000 SG_MUT="$1" run --uninstall 01
+    echo $(( $(date +%s) - t0 ))
+    ununinstall FakeApp; wine taskkill /f /im old.exe >/dev/null 2>&1; sleep 0.5
+}
+r=$(oldchild_case "$EXE")
+[ "$r" -lt 30 ] && pass "a program older than the uninstaller is not waited on as its child (${r} s)" || fail "old program waited on: ${r} s"
+r=$(oldchild_case "$T/mut-pidreuse.exe")
+[ "$r" -ge 40 ] && pass "MUTANT PIDREUSE waits on it until it ends (${r} s; gate catches it)" || fail "PIDREUSE not detected: ${r} s"
 # an entry whose uninstaller is gone (Scribus 1.6.6 on qa5: an earlier
 # uninstall stopped half way): "could not be started (error 2)" for good. As
 # Programs and Features does, the store asks to take it off the list; yes

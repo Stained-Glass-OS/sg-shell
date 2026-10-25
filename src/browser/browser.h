@@ -39,6 +39,7 @@ typedef struct {
     DWORD exit_code;
     DWORD tree[64];             /* the installer's process and every descendant seen while it ran */
     int ntree;
+    FILETIME since;             /* when it was started: a descendant is no older */
 } package_t;
 
 typedef void (*progress_fn)(void *ctx, int stage, ULONGLONG done, ULONGLONG total);
@@ -48,6 +49,8 @@ BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *
 BOOL pkg_install(package_t *p, WCHAR *err, int cch);
 void pkg_take_tree(package_t *p);
 void pkg_note_installer(DWORD pid);
+BOOL pkg_born_since(DWORD pid, const FILETIME *since);
+void pkg_tree_start(FILETIME *since);
 /* set by the store while it installs several apps under one consent: an
  * installer that must run as an administrator is run by this instead of
  * "runas" (its exit code to *code); FALSE: it could not be run */
