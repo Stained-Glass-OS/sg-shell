@@ -735,6 +735,21 @@ if [ -n "$TOOL" ]; then
     [ "$r" = reused ] && pass "Firefox for Linux with Mozilla's repository already set up by hand: reused, no conflicting second entry" || fail "own mozilla source: $r"
     r=$(own_mozilla /nonexistent)
     [ "$r" != reused ] && pass "MUTANT no sg-apt-sources: a second Mozilla entry is added (gate catches it)" || fail "NO_ADOPT mutant not detected"
+    # a machine that never had it: the source the Store adds stays on -- with
+    # the source first, healing turned it off as keyless before the key came
+    # ("Package 'firefox' has no installation candidate", qa4 2026-10-25)
+    fresh_mozilla() { # ADMIND -- "on" when mozilla.list is in place and not commented out
+        rm -f "$A"/* "$T"/prefs/*; rm -rf "$T/aroot"; mkdir -p "$T/aroot/usr/share/keyrings"
+        id=$(next_id); printf 'apt-install\nfirefox\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+        SG_APT_ROOT="$T/aroot" SG_ADMIN_KEYRINGS="$T/aroot/usr/share/keyrings" SG_ADMIN_APT_SOURCES_TOOL=$TOOL python3 "$1" 2>>"$T/log"
+        grep -q '^deb .*packages.mozilla.org' "$A/mozilla.list" 2>/dev/null && echo on || echo "off:$(head -c 120 "$A/mozilla.list" 2>/dev/null)"
+    }
+    r=$(fresh_mozilla "$ADMIND")
+    [ "$r" = on ] && pass "Firefox for Linux on a machine that never had it: Mozilla's source stays on (key first)" || fail "fresh mozilla source: $r"
+    sed 's/in sorted(VENDOR_SOURCES\[pkg\], key=lambda f: f\[1\] == "sources"):/in VENDOR_SOURCES[pkg]:/' "$ADMIND" > "$T/mut-sourcefirst"
+    grep -q 'in VENDOR_SOURCES\[pkg\]:$' "$T/mut-sourcefirst" || fail "the SOURCEFIRST mutant did not apply"
+    r=$(fresh_mozilla "$T/mut-sourcefirst")
+    [ "$r" != on ] && pass "MUTANT SOURCEFIRST: the source is turned off before its key arrives (gate catches it)" || fail "SOURCEFIRST not detected"
     rm -f "$A"/*
 else echo "SKIP  sg-session's sg-apt-sources not found (SG_APT_SOURCES_TOOL): the reuse case"; fi
 r=$(browser "$T/mut-novendor" firefox "mozilla.list:$A")

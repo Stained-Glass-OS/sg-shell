@@ -1,3 +1,13 @@
+sg-shell (0.1.0-214) unstable; urgency=medium
+
+  * sg-admind: a maker's key and pin go in place before its apt source.
+    Adopting the source heals apt's sources, which turned the new entry
+    off as keyless, so Firefox, Chrome, Edge and Steam from their makers had
+    "no installation candidate" on a machine that never had them (qa4).
+    Gate admind-check: fresh Firefox case, mutant SOURCEFIRST.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 06:32:45 -0700
+
 sg-shell (0.1.0-213) unstable; urgency=medium
 
   * Start: a Linux app is also found by its .desktop file's name. Its
