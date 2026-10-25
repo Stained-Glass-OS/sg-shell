@@ -1,3 +1,12 @@
+sg-shell (0.1.0-209) unstable; urgency=medium
+
+  * SG Store catalogue: Opera's uninstaller runs with /runimmediately,
+    which removes it with no window. Its survey (and before wine-sg 6100 a
+    dialog with no buttons) waited for a click and the store timed out
+    (qa4 regression walk; switch found by the gaps agent).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 24 Oct 2026 21:20:24 -0700
+
 sg-shell (0.1.0-208) unstable; urgency=medium
 
   * SG Store: an installer for one person (the entry's scope "user") runs
