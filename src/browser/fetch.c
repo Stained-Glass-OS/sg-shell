@@ -737,6 +737,20 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 #ifdef SG_MUTANT_NOELEVATE
     p->elevate = FALSE;
 #endif
+#ifndef SG_MUTANT_NOINVOKER
+    /* An installer for one person (the entry's scope "user": Kdenlive's NSIS,
+     * /CurrentUser) runs as that person. Its manifest may still ask for the
+     * highest level (NSIS "highest"), and an administrator's elevation here is
+     * another account, sgsystem: it installed into sgsystem's profile, out of
+     * the person's reach. __COMPAT_LAYER=RunAsInvoker, as on Windows (wine-sg 5958). */
+    if (file != msi && !p->elevate && !_wcsicmp(p->scope, L"user")) {
+        BOOL ok;
+        SetEnvironmentVariableW(L"__COMPAT_LAYER", L"RunAsInvoker");
+        ok = run_wait(file, args, FALSE, &code, &p->elevated, err, cch);
+        SetEnvironmentVariableW(L"__COMPAT_LAYER", NULL);
+        if (!ok) return FALSE;
+    } else
+#endif
     if (!run_wait(file, args, file == msi || p->elevate, &code, &p->elevated, err, cch)) return FALSE;
     p->exit_code = code;
     if (code != 0 && code != 3010 && code != 1641) {

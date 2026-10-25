@@ -1691,6 +1691,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
                 swprintf(tmp, ARRAYSIZE(tmp), L"%ls.result", g_dump);
                 if ((f = _wfopen(tmp, L"wb"))) {
                     dumpf(f, L"uninstall %ls %ls %d %ls\n", g_apps[k].ord, rc ? L"fail" : L"ok", rc, err);
+                    dumpf(f, L"elevated %ls %d\n", g_apps[k].ord, g_apps[k].ran_elevated);
                     fclose(f);
                 }
                 dump();

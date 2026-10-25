@@ -171,6 +171,10 @@ int wmain(int argc, WCHAR **argv)
     }
 
     logline(L"C:\\gate\\setup.log", args);
+    {   /* the compatibility layers it was started with: SG Store's RunAsInvoker for one person's install */
+        WCHAR layer[256];
+        if (GetEnvironmentVariableW(L"__COMPAT_LAYER", layer, ARRAYSIZE(layer))) logline(L"C:\\gate\\layer.log", layer);
+    }
     {
         const WCHAR *t = wcsstr(args, L"/T:");
         WCHAR from[MAX_PATH], to[MAX_PATH], pat[MAX_PATH], a[MAX_PATH], b[MAX_PATH];

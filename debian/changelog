@@ -1,3 +1,20 @@
+sg-shell (0.1.0-208) unstable; urgency=medium
+
+  * SG Store: an installer for one person (the entry's scope "user") runs
+    with __COMPAT_LAYER=RunAsInvoker (wine-sg 5958 honours it). Kdenlive's
+    NSIS installer (/CurrentUser, manifest "highest") asked an
+    administrator's consent and installed into sgsystem's profile, where
+    the person could not uninstall it (qa4 regression walk). store-check
+    case; mutant SG_MUTANT_NOINVOKER.
+  * SG Store: the machine's uninstaller (its entry in HKLM) that the person
+    cannot change runs as an administrator from the start. NVDA's NSIS
+    uninstaller (asInvoker) never asked, removed nothing as the person and
+    the store said "NVDA was not removed" (qa4 regression walk). The
+    result dump gains "elevated" for an uninstall. store-check case;
+    mutant SG_MUTANT_NOMACHINEELEVATE.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 24 Oct 2026 20:31:03 -0700
+
 sg-shell (0.1.0-207) unstable; urgency=medium
 
   * SG Store: a Chromium-family uninstaller ("setup.exe --uninstall":

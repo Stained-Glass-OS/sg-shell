@@ -1281,6 +1281,25 @@ static BOOL another_part(const app_t *a, const WCHAR *cmd)
 
 #define UNINSTALL_NEXT 4   /* uninstall_once: removed one part; another is left */
 
+/* An uninstaller of the machine's (its entry in HKLM) that the person cannot
+ * change: run as an administrator from the start. NVDA's (NSIS, asInvoker)
+ * never asks; run as the person it copied itself to %TEMP%, could delete
+ * nothing in Program Files, ended with 0, and the store said "NVDA was not
+ * removed" three minutes later. On Windows an administrator's uninstall from
+ * Settings would ask; one the person can change (a per-user folder) runs as
+ * them, as before. */
+static BOOL uninstaller_needs_admin(HKEY root, const WCHAR *file)
+{
+    HANDLE h;
+#ifdef SG_MUTANT_NOMACHINEELEVATE
+    return FALSE;
+#endif
+    if (root != HKEY_LOCAL_MACHINE) return FALSE;
+    h = CreateFileW(file, FILE_WRITE_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); return FALSE; }
+    return GetLastError() == ERROR_ACCESS_DENIED;
+}
+
 /* one uninstaller (the first entry named like the app): ran is the
  * command it ran */
 static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
@@ -1305,7 +1324,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     }
     /* a runtime the store put in the system folder: only an administrator
      * can take it out (its uninstaller is cmd, which never asks) */
-    for (attempt = app_is_runtime(a) ? 1 : 0; attempt < 2; attempt++) {
+    for (attempt = app_is_runtime(a) || uninstaller_needs_admin(root, file) ? 1 : 0; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
         sei.lpFile = file;
@@ -1324,6 +1343,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
         else swprintf(err, cch, L"%ls's uninstaller could not be started (error %lu).", a->name, GetLastError());
         return 1;
     }
+    a->ran_elevated = attempt != 0;
     tree[ntree++] = GetProcessId(sei.hProcess);
     while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree));
     GetExitCodeProcess(sei.hProcess, &code);

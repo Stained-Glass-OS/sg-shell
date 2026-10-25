@@ -87,6 +87,8 @@
 #   SG_MUTANT_NOELEVATEDTREE does not follow a consent-run installer's parentless copy
 #   SG_MUTANT_NODISKHINT  a failed install on a nearly full drive does not say so (Edge: "code 91")
 #   SG_MUTANT_NOCHROMIUMFORCE leaves a Chromium-family uninstaller (--uninstall) asking
+#   SG_MUTANT_NOINVOKER   runs a user-scope installer without __COMPAT_LAYER=RunAsInvoker (Kdenlive)
+#   SG_MUTANT_NOMACHINEELEVATE runs the machine's uninstaller the person cannot change as the person (NVDA)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
@@ -148,7 +150,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -585,17 +587,27 @@ grep -q '/picked-nullsoft' "$G/setup.log" 2>/dev/null && ! grep -q 'gate-custom'
     && pass "MUTANT NOCUSTOM drops the Custom switches (gate catches it)" || fail "NOCUSTOM not detected: $(cat "$G/setup.log" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall PickApp
 # --- an Inno Setup installer is told the scope of its manifest entry, as winget does ----------------
-rm -f "$G/setup.log"
+rm -f "$G/setup.log" "$G/layer.log"
 SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno Machine' \
     wine "$EXE" --install 0A >/dev/null 2>&1
 grep -q '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS' "$G/setup.log" 2>/dev/null && grep -q '^elevated 0A 1' "$D.result" 2>/dev/null \
+    && [ ! -e "$G/layer.log" ] \
     && pass "Inno, machine scope: /ALLUSERS, as an administrator (RawTherapee, GIMP)" || fail "Inno machine: $(cat "$G/setup.log" "$D.result" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall InnoM
 SG_FAKE_KEY=InnoU SG_FAKE_DISPLAY='Inno User' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno User' \
     wine "$EXE" --install 0B >/dev/null 2>&1
 grep -q '/SP- /CURRENTUSER' "$G/setup.log" 2>/dev/null && grep -q '^elevated 0B 0' "$D.result" 2>/dev/null \
     && pass "Inno, user scope: /CURRENTUSER, as the user" || fail "Inno user: $(cat "$G/setup.log" "$D.result" 2>/dev/null)"
-rm -f "$G/setup.log"; ununinstall InnoU
+# ... and as the user even when its manifest asks for the highest level (Kdenlive's NSIS, /CurrentUser):
+# an administrator's elevation is sgsystem, whose profile it installed into
+grep -qx 'RunAsInvoker' "$G/layer.log" 2>/dev/null \
+    && pass "a user-scope installer runs with __COMPAT_LAYER=RunAsInvoker (Kdenlive)" || fail "user scope, layer: '$(cat "$G/layer.log" 2>/dev/null)'"
+rm -f "$G/setup.log" "$G/layer.log"; ununinstall InnoU
+SG_FAKE_KEY=InnoU SG_FAKE_DISPLAY='Inno User' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno User' \
+    wine "$T/mut-noinvoker.exe" --install 0B >/dev/null 2>&1
+grep -q '/CURRENTUSER' "$G/setup.log" 2>/dev/null && [ ! -e "$G/layer.log" ] \
+    && pass "MUTANT NOINVOKER runs it without RunAsInvoker (gate catches it)" || fail "NOINVOKER not detected: $(cat "$G/layer.log" 2>/dev/null)"
+rm -f "$G/setup.log" "$G/layer.log"; ununinstall InnoU
 SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno Machine' \
     wine "$T/mut-noinnoscope.exe" --install 0A >/dev/null 2>&1
 grep -q '/SP-' "$G/setup.log" 2>/dev/null && ! grep -q 'ALLUSERS' "$G/setup.log" \
@@ -1435,6 +1447,24 @@ r=$(chromium_case "$EXE")
 case "$r" in *"--uninstall --system-level --force-uninstall"*) pass "a Chromium-family uninstaller (--uninstall) runs with --force-uninstall (Vivaldi)" ;; *) fail "Chromium uninstall: $r" ;; esac
 r=$(chromium_case "$T/mut-nochromiumforce.exe")
 case "$r" in *"--force-uninstall"*) fail "NOCHROMIUMFORCE not detected: $r" ;; *) pass "MUTANT NOCHROMIUMFORCE leaves Vivaldi's uninstaller asking (gate catches it)" ;; esac
+# the machine's uninstaller (its entry in HKLM) that the person cannot change
+# runs as an administrator from the start: NVDA's (asInvoker) never asked,
+# could remove nothing as the person and the store said "not removed"
+machine_case() { # EXE WRITABLE(1|0) -- the elevated line of the result
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    [ "$2" = 0 ] && chmod a-w "$WINEPREFIX/drive_c/Program Files/Fake App/uninst.exe"
+    rm -f "$D.result"
+    SG_MUT="$1" run --uninstall 01
+    chmod u+w "$WINEPREFIX/drive_c/Program Files/Fake App/uninst.exe" 2>/dev/null
+    grep '^elevated 01' "$D.result" 2>/dev/null
+    ununinstall FakeApp; sleep 0.5
+}
+r=$(machine_case "$EXE" 0)
+[ "$r" = "elevated 01 1" ] && pass "the machine's uninstaller the person cannot change runs as an administrator (NVDA)" || fail "NVDA case: '$r'"
+r=$(machine_case "$EXE" 1)
+[ "$r" = "elevated 01 0" ] && pass "...one the person can change runs as them" || fail "writable machine uninstaller: '$r'"
+r=$(machine_case "$T/mut-nomachineelevate.exe" 0)
+[ "$r" = "elevated 01 0" ] && pass "MUTANT NOMACHINEELEVATE runs NVDA's uninstaller as the person (gate catches it)" || fail "NOMACHINEELEVATE not detected: '$r'"
 # the catalogue's quiet switch for an uninstaller with none in its entry
 # (Total Commander's tcunin64.exe /7: its Uninstall/Repair/Cancel waited)
 reg "$K\\01" /v UninstallArgs /d '/7'
