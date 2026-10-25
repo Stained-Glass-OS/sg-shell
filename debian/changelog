@@ -1,3 +1,14 @@
+sg-shell (0.1.0-213) unstable; urgency=medium
+
+  * Start: a Linux app is also found by its .desktop file's name. Its
+    shortcut is named by Name=, and GIMP's ("GNU Image Manipulation
+    Program") was not found for "gimp" (qa4 Linux apps walk). Gate
+    test-start; mutant SG_MUTANT_START_NOLINUXWORDS. test-start no longer
+    sees the host's Linux apps (its own XDG_DATA_DIRS): their shortcuts,
+    made during the run, all read as "Recently added" and failed it.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 02:55:37 -0700
+
 sg-shell (0.1.0-212) unstable; urgency=medium
 
   * SG Store: a catalogue entry's InstallArgs replace its manifest's quiet

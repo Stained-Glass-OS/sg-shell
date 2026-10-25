@@ -38,6 +38,10 @@ for t in Xvfb xdotool import identify x86_64-w64-mingw32-gcc; do command -v "$t"
 [ -x "$WINE" ] && [ -f "$START" ] || { echo "SKIP: wine-sg or sg-start not built"; exit 77; }
 
 export WINEPREFIX="$T/pfx" WINEDLLOVERRIDES='mscoree,mshtml=' WINEDEBUG=-all SG_START_DUMP="$T/dump"
+# no host Linux apps: Start's sync (sg-linuxapp) would make each one's shortcut now, all "Recently added"
+# ...but one of the test's own, as GIMP's: its Name= does not hold "GIMP"
+mkdir -p "$T/xdg/applications"; export XDG_DATA_DIRS="$T/xdg" XDG_DATA_HOME="$T/xdg"
+printf '[Desktop Entry]\nType=Application\nName=GNU Image Manipulation Program\nExec=true %%U\n' > "$T/xdg/applications/org.gimp.GIMP.desktop"
 "$WINE" wineboot --init >/dev/null 2>&1; "$WINESERVER" -w
 "${MINGW64:-x86_64-w64-mingw32-gcc}" -O2 -municode -mwindows -o "$T/poke.exe" "$HERE/test/sg-start-poke.c" 2>/dev/null
 "${MINGW64:-x86_64-w64-mingw32-gcc}" -O2 -municode -o "$T/mklnk.exe" "$HERE/test/sg-start-mklnk.c" -lole32 -luuid -lshell32
@@ -107,7 +111,9 @@ has "item Zeta Test App" && pass "apps come from the Start Menu, three folders d
 [ "$(d | grep -c '^item Filler ')" -ge 200 ] && pass "all of them (200 more in the common Start Menu)" || fail "fillers: $(d | grep -c '^item Filler ')"
 has "header Z" && has "header F" && pass "grouped under letter headers" || fail "no letter headers"
 d | grep -q '(no icon)' && fail "some apps have no icon: $(d | grep '(no icon)' | head -3)" || pass "every app has its icon"
-d | sed -n '/^header Recently added$/{n;p;}' | grep -qxF "item Brand New App" && pass "a new app is under Recently added" || fail "Recently added: $(d | head -12 | tr '\n' '|')"
+# (anywhere among the three: the host's own Linux apps, newly installed, are listed too)
+d | sed -n '/^header Recently added$/,/^header [^R]/p' | grep -qxF "item Brand New App" && pass "a new app is under Recently added" \
+    || fail "Recently added: $(d | grep -E '^(header|item)' | head -6 | tr '\n' '|')"
 has "tile File Explorer" && has "tile Notepad" && has "tile Control Panel" && has "tile SG Store" && pass "pinned by default: File Explorer, Control Panel, Notepad, SG Store" || fail "tiles: $(d | grep '^tile')"
 shot open
 colors=$(import -window "$P" -depth 4 "$T/c.gif" 2>/dev/null; identify -format '%k' "$T/c.gif" 2>/dev/null || echo 1)
@@ -253,6 +259,11 @@ xdotool type --delay 80 quill; sleep 1.5
 { [ "$(d | sed -n 's/^best //p')" = Quill64 ] && has "item Quill Manual"; } \
     && pass "as well matched, a program comes before a document: 'quill' -> Quill64, then Quill Manual (a document)" \
     || fail "program before document: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_DOCS_EQUAL: SG_START_EXE=<built with -DSG_MUTANT_START_DOCS_EQUAL>)"
+xdotool key Escape; sleep 1
+xdotool type --delay 80 gimp; sleep 1.5
+[ "$(d | sed -n 's/^best //p')" = "GNU Image Manipulation Program" ] \
+    && pass "a Linux app is found by its .desktop file's name: 'gimp' -> GNU Image Manipulation Program" \
+    || fail "Linux app words: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_NOLINUXWORDS)"
 xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
 [ "$(val visible)" = 0 ] && pass "a second Escape closes Start" || fail "still open"
 

@@ -209,6 +209,7 @@ struct entry {
     FILETIME created;
     HICON icon;             /* 32 px, cached by path */
     BOOL recent;
+    char kw;                /* a Linux app's words from its .desktop file's name: 0 not yet looked */
     char doc;               /* 0 not yet known, 1 a program, 2 a document (a shortcut's target) */
 };
 
@@ -699,6 +700,42 @@ static void add_row(enum row_type type, int id, const WCHAR *label)
     g_content_h += r->h;
 }
 
+/* A Linux app's shortcut (sg-linuxapp64.exe --run FILE.desktop) is named by
+ * the app's Name=, which need not hold what people call it: GIMP's is "GNU
+ * Image Manipulation Program", and Start found nothing for "gimp". The
+ * .desktop file's own name does (org.gimp.GIMP, gimp, org.kde.krita): its
+ * words go into the keywords, once, when first searched. */
+static void linux_app_words(struct entry *e)
+{
+    WCHAR args[1024] = L"", target[MAX_PATH] = L"", *base, *dot, *p;
+    IShellLinkW *link;
+    IPersistFile *file;
+    int len;
+    e->kw = 1;
+#ifdef SG_MUTANT_START_NOLINUXWORDS
+    return;
+#endif
+    if (!wcsstr(e->path, L"\\Linux apps\\") || e->kind != K_APP) return;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) return;
+    if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+    {
+        if (SUCCEEDED(IPersistFile_Load(file, e->path, STGM_READ)))
+        {
+            IShellLinkW_GetPath(link, target, MAX_PATH, NULL, SLGP_RAWPATH);
+            IShellLinkW_GetArguments(link, args, ARRAYSIZE(args));
+        }
+        IPersistFile_Release(file);
+    }
+    IShellLinkW_Release(link);
+    if (!wcsstr(target, L"sg-linuxapp") || !(p = wcsstr(args, L".desktop"))) return;
+    *p = 0;
+    for (base = p; base > args && base[-1] != '/' && base[-1] != '\\' && base[-1] != ' ' && base[-1] != '"'; base--);
+    for (dot = base; *dot; dot++) if (*dot == '.' || *dot == '-' || *dot == '_') *dot = ' ';
+    len = lstrlenW(e->keywords);
+    _snwprintf(e->keywords + len, ARRAYSIZE(e->keywords) - len, L"%s%s", len ? L" " : L"", base);
+    e->keywords[ARRAYSIZE(e->keywords) - 1] = 0;
+}
+
 /* how well a name answers the search: 0 not at all */
 static int score(const struct entry *e, const WCHAR *q)
 {
@@ -791,8 +828,10 @@ static void build_rows(void)
         for (i = 0; g_search[i]; i++) q[i] = towlower(g_search[i]);
         q[i] = 0;
         if (!g_centered) g_content_h += S(SEARCH_H) + S(8);   /* the centred layout's box is above the list; Horizon's is its first row */
-        for (i = 0; i < g_napps && n < 1000; i++)
+        for (i = 0; i < g_napps && n < 1000; i++) {
+            if (!g_apps[i].kw) linux_app_words(&g_apps[i]);
             if ((hits[n].score = score(&g_apps[i], q))) { hits[n].id = i; n++; }
+        }
         for (i = 0; i < NSETTINGS && n < 1024; i++)
             if ((hits[n].score = score(&g_settings[i], q) - 5) > 0) { hits[n].id = SETTING(i); n++; }
         qsort(hits, n, sizeof(*hits), hit_cmp);
