@@ -151,6 +151,13 @@ int wmain(int argc, WCHAR **argv)
         }
         if (wcsstr(args, L"/child") && GetEnvironmentVariableW(L"SG_FAKE_HANDOFF", ms, ARRAYSIZE(ms))) Sleep(_wtoi(ms));
         logline(L"C:\\gate\\uninstall.log", args);
+        {   /* the compatibility layers it was started with (a person's own entry: RunAsInvoker) */
+            WCHAR layer[256], line[300];
+            if (GetEnvironmentVariableW(L"__COMPAT_LAYER", layer, ARRAYSIZE(layer))) {
+                swprintf(line, ARRAYSIZE(line), L"layer=%ls", layer);
+                logline(L"C:\\gate\\uninstall.log", line);
+            }
+        }
         {   /* is the app still running (its files in use)? */
             PROCESSENTRY32W pe = { sizeof(pe) };
             HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -172,6 +179,7 @@ int wmain(int argc, WCHAR **argv)
             name[n] = 0;
             swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", name);
             RegDeleteKeyW(HKEY_LOCAL_MACHINE, sub);
+            RegDeleteKeyW(HKEY_CURRENT_USER, sub);
         }
         return 0;
     }

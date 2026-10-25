@@ -1341,6 +1341,13 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     /* a runtime the store put in the system folder: only an administrator
      * can take it out (its uninstaller is cmd, which never asks) */
     pkg_tree_start(&since);
+#ifndef SG_MUTANT_NOUNINVOKER
+    /* the person's own entry (HKCU): its uninstaller runs as them, whatever
+     * its manifest asks (wine-sg 5958). Kdenlive's NSIS uninstaller asks for
+     * the highest level; elevated it was sgsystem, found nothing of bob's and
+     * the store said "Kdenlive was not removed". */
+    if (root == HKEY_CURRENT_USER) SetEnvironmentVariableW(L"__COMPAT_LAYER", L"RunAsInvoker");
+#endif
     for (attempt = app_is_runtime(a) || uninstaller_needs_admin(root, file) ? 1 : 0; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
@@ -1350,6 +1357,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
         if (ShellExecuteExW(&sei)) break;
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) break;
     }
+    SetEnvironmentVariableW(L"__COMPAT_LAYER", NULL);
     if (!sei.hProcess) {
         if (GetLastError() == ERROR_CANCELLED)   /* the consent prompt said no, or went unanswered */
             swprintf(err, cch, L"%ls was not removed: an administrator's consent was not given.", a->name);

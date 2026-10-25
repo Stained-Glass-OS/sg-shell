@@ -1,3 +1,13 @@
+sg-shell (0.1.0-211) unstable; urgency=medium
+
+  * SG Store: a person's own entry's (HKCU) uninstaller runs with
+    __COMPAT_LAYER=RunAsInvoker. Kdenlive's NSIS uninstaller asks for the
+    highest level; elevated it ran as sgsystem, found nothing of bob's and
+    the store said "Kdenlive was not removed" (qa4, release 597).
+    store-check case; mutant SG_MUTANT_NOUNINVOKER.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 25 Oct 2026 01:36:32 -0700
+
 sg-shell (0.1.0-210) unstable; urgency=medium
 
   * SG Store: a dependency the catalogue lists is checked as installed

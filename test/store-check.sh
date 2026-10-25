@@ -90,6 +90,7 @@
 #   SG_MUTANT_NODISKHINT  a failed install on a nearly full drive does not say so (Edge: "code 91")
 #   SG_MUTANT_NOCHROMIUMFORCE leaves a Chromium-family uninstaller (--uninstall) asking
 #   SG_MUTANT_NOINVOKER   runs a user-scope installer without __COMPAT_LAYER=RunAsInvoker (Kdenlive)
+#   SG_MUTANT_NOUNINVOKER runs a person's own (HKCU) uninstaller as its manifest asks (Kdenlive)
 #   SG_MUTANT_NOMACHINEELEVATE runs the machine's uninstaller the person cannot change as the person (NVDA)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
@@ -152,7 +153,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1512,6 +1513,24 @@ r=$(msi_case "$EXE")
 case "$r" in *"/X$GUID /qn"*"state=not-installed"*) pass "an MSI is removed with /X, quietly (/qn: DYMO Connect's removed nothing with its UI)" ;; *) fail "MSI uninstall: $r" ;; esac
 r=$(msi_case "$T/mut-nomsiquiet.exe")
 case "$r" in *"/qn"*) fail "NOMSIQUIET not detected: $r" ;; *"/X$GUID"*) pass "MUTANT NOMSIQUIET runs the MSI's full UI and it stays (gate catches it)" ;; *) fail "NOMSIQUIET case: $r" ;; esac
+# a person's own entry (HKCU): its uninstaller runs as them, RunAsInvoker --
+# Kdenlive's ("highest") was elevated to sgsystem and removed nothing of bob's
+person_case() { # EXE -- the uninstaller's log
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    u=$(wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')
+    ununinstall FakeApp
+    wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v DisplayName /d 'Fake App' /f >/dev/null 2>&1
+    wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v DisplayVersion /d '1.10.0' /f >/dev/null 2>&1
+    wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString /d "$u" /f >/dev/null 2>&1
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null
+    wine reg delete 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /f >/dev/null 2>&1; sleep 0.5
+}
+r=$(person_case "$EXE")
+case "$r" in *"layer=RunAsInvoker"*) pass "a person's own entry: its uninstaller runs as them, RunAsInvoker (Kdenlive)" ;; *) fail "HKCU uninstall layer: $r" ;; esac
+r=$(person_case "$T/mut-nouninvoker.exe")
+case "$r" in *"layer="*) fail "NOUNINVOKER not detected: $r" ;; *"/ui"*) pass "MUTANT NOUNINVOKER runs it as its manifest asks (gate catches it)" ;; *) fail "NOUNINVOKER case: $r" ;; esac
 # a program running since before the uninstall whose parent's id the
 # uninstaller got (ids are reused) is not the uninstaller's child: the store
 # waited on the gate's long-lived stand-ins for good. SG_STORE_FAKE_CHILD
