@@ -1,3 +1,18 @@
+sg-shell (0.1.0-222) unstable; urgency=medium
+
+  * SG Store: an app with a Linux and a Windows build whose one build is
+    installed offers the other on its page ("Also as a Windows program":
+    Install, or Open and Uninstall). Thunderbird's Linux app comes with the
+    system, so its Windows program could not be installed (qa4 walk, release
+    601). Gate store-check, mutant NOOTHERBUILD.
+  * SG Store: the store's own Apps & features record of a program whose
+    installer wrote none (DOSBox) runs its uninstaller as an administrator
+    when the program is in a folder the person cannot change. Run as the
+    person it deleted nothing: "DOSBox was not removed". Gate store-check,
+    mutant RECORDASUSER.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 11:42:38 -0700
+
 sg-shell (0.1.0-221) unstable; urgency=medium
 
   * SG Store: a Depends entry can name another of the catalogue's apps,

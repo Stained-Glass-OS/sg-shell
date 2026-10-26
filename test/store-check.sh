@@ -80,6 +80,8 @@
 #   SG_MUTANT_NODESKTOP   runs a Linux app's desktop entry as a program
 #   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
 #   SG_MUTANT_NOPAIR      lists both builds of an app as apps of their own
+#   SG_MUTANT_NOOTHERBUILD  an installed build's page offers no other build
+#   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
 #   SG_MUTANT_NOICON      keeps the letter badges
@@ -158,7 +160,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -955,6 +957,20 @@ run --list
     && [ "$(kv "$(appline 11)" state)" = not-installed ] \
     && pass "...Uninstall runs its uninstaller, and the store's entry goes with the program" \
     || fail "unregistered uninstall: exit $ec, $(cat "$D.result" 2>/dev/null); $(appline 11)"
+# ...and when the program is in the machine's folder, which the person cannot
+# change (DOSBox, installed as an administrator), its uninstaller runs as an
+# administrator: the record is the person's, the program the machine's
+record_case() { # EXE -- the elevated line of the uninstall's result
+    bare; chmod a-w "$WINEPREFIX/drive_c/Program Files/Bare App/uninst.exe"
+    rm -f "$D.result"; SG_MUT="$1" run --uninstall 11
+    chmod u+w "$WINEPREFIX/drive_c/Program Files/Bare App/uninst.exe" 2>/dev/null
+    grep '^elevated 11' "$D.result" 2>/dev/null
+    wine reg delete "$BK" /f >/dev/null 2>&1; rm -rf "$WINEPREFIX/drive_c/Program Files/Bare App"; wineserver -w
+}
+r=$(record_case "$EXE")
+[ "$r" = "elevated 11 1" ] && pass "...its uninstaller in a folder the person cannot change runs as an administrator (DOSBox)" || fail "store record, machine folder: '$r'"
+r=$(record_case "$T/mut-recordasuser.exe")
+[ "$r" = "elevated 11 0" ] && pass "MUTANT RECORDASUSER runs DOSBox's uninstaller as the person (gate catches it)" || fail "RECORDASUSER not detected: '$r'"
 SG_MUT="$T/mut-noregister.exe" bare
 run --list
 [ "$(kv "$(appline 11)" state)" != installed ] && pass "MUTANT NOREGISTER leaves it undetected (gate catches it)" || fail "NOREGISTER not detected"
@@ -1462,6 +1478,22 @@ sleep 0.5
 run --list
 grep -q '^pair 05 L1 choice=linux target=05$' "$D" && pass "the build that is installed is the card's (Open, Uninstall)" \
     || fail "installed build: $(grep '^pair' "$D")"
+# ...and its page still offers the other build (Thunderbird: the Linux app
+# comes with the system; its Windows program was out of reach)
+for exe in "$EXE" "$T/mut-nootherbuild.exe"; do
+    rm -f "$D"
+    wine "$exe" --page 05 >/dev/null 2>&1 &
+    if waitfor "$D" '^detail 05' 60; then
+        sleep 1
+        if [ "$exe" = "$EXE" ]; then
+            grep -q '^hit install L1 ' "$D" && pass "...and its page offers the Linux build beside it (Also as a Linux app: Install)" \
+                || fail "no Install of the other build: $(grep '^hit' "$D" | head -8 | tr '\n' '|')"
+        else
+            grep -q '^hit install L1 ' "$D" && fail "MUTANT NOOTHERBUILD not caught" || pass "MUTANT NOOTHERBUILD caught (no other build on the page)"
+        fi
+    else fail "--page 05 did not open ($exe)"; fi
+    wine taskkill /f /im "$(basename "$exe")" >/dev/null 2>&1; sleep 0.5
+done
 ununinstall GIMP_is1; sleep 0.5
 
 # pictures: a PNG and an ICO from the web, drawn on the cards, cached

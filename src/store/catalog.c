@@ -1393,6 +1393,15 @@ static BOOL uninstaller_needs_admin(HKEY root, const WCHAR *file)
     return GetLastError() == ERROR_ACCESS_DENIED;
 }
 
+/* the store's own entry (register_installed): the person's (HKCU), for a
+ * program its installer may have put in a machine folder as an administrator */
+static BOOL store_record(HKEY root, const WCHAR *entry)
+{
+    DWORD v = 0, cb = sizeof(v);
+    if (root != HKEY_CURRENT_USER) return FALSE;
+    return !RegGetValueW(root, entry, L"SgStoreEntry", RRF_RT_REG_DWORD, NULL, &v, &cb) && v;
+}
+
 /* one uninstaller (the first entry named like the app): ran is the
  * command it ran */
 static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
@@ -1419,6 +1428,13 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     /* a runtime the store put in the system folder: only an administrator
      * can take it out (its uninstaller is cmd, which never asks) */
     pkg_tree_start(&since);
+    /* the store's record of a program in the machine's Program Files
+     * (DOSBox 0.74-3, installed as an administrator, wrote no entry): its
+     * uninstaller is the machine's, the record only the person's. Run as them
+     * it deleted nothing and "DOSBox was not removed" (qa4, release 601) */
+#ifndef SG_MUTANT_RECORDASUSER
+    if (store_record(root, entry)) root = HKEY_LOCAL_MACHINE;
+#endif
 #ifndef SG_MUTANT_NOUNINVOKER
     /* the person's own entry (HKCU): its uninstaller runs as them, whatever
      * its manifest asks (wine-sg 5958). Kdenlive's NSIS uninstaller asks for

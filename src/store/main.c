@@ -1033,6 +1033,31 @@ static void paint_details(HDC dc, const RECT *rc)
         }
         y += dpx(48);
     }
+    /* the other build, once one is installed: the card acts on the installed
+     * one and its build drop-down is gone (2026-10-26: Thunderbird's Linux app
+     * comes with the system, so its Windows program could not be installed) */
+#ifndef SG_MUTANT_NOOTHERBUILD
+    if (a->alt >= 0 && has_it(s) && !in_hand(t)) {
+        int o = t == g_detail ? a->alt : g_detail;
+        app_t *ob = &g_apps[o];
+        RECT lab = { x, y, x + dpx(230), y + dpx(34) }, bt = { x + dpx(240), y, x + dpx(380), y + dpx(34) };
+        text(dc, g_f_body, C_SUB, lab, ob->tier == TIER_LINUX ? L"Also as a Linux app" : L"Also as a Windows program",
+             DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        if (in_hand(o)) {
+            RECT wide = bt;
+            wide.right = bt.left + dpx(300);
+            text(dc, g_f_body, C_SUB, wide, ob->queued ? L"Waiting..." : L"Working on it...", DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        } else if (has_it(ob)) {
+            RECT b2 = { bt.right + dpx(10), bt.top, bt.right + dpx(150), bt.bottom };
+            button(dc, bt, L"Open", FALSE); add_hit(H_OPEN, o, bt);
+            if (can_uninstall(ob)) { button(dc, b2, L"Uninstall", FALSE); add_hit(H_UNINSTALL, o, b2); }
+        } else {
+            button(dc, bt, ob->state == AST_FAILED ? L"Try again" : L"Install", FALSE);
+            add_hit(H_INSTALL, o, bt);
+        }
+        y += dpx(48);
+    }
+#endif
     if (s->msg[0]) { y += wrapped(dc, g_f_small, s->msg_error || s->state == AST_FAILED ? C_ERR : C_SUB, x, w, y, s->msg, rc->bottom) + dpx(8); }
 
     /* where it comes from */
