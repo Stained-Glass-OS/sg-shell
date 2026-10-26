@@ -104,6 +104,7 @@
 #   SG_MUTANT_NOCLOSEAPP runs the uninstaller while the app still runs
 #   SG_MUTANT_NOPARTS    stops after the first of an app's listed parts (DYMO Connect's MSI stayed)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
+#   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
 #   SG_MUTANT_NO_SELECT_ALL  Ctrl+A in the search box selects nothing (K2)
 #   SG_MUTANT_MULTI_INSTANCE each start opens another store (the walk found 20 open)
@@ -160,7 +161,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1116,6 +1117,34 @@ EOF2
     [ ! -e "$RT" ] && ! { wine reg query 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\SG-gatert.dll' /reg:32 >/dev/null 2>&1; } \
         && pass "Uninstall removes it and its entry" || fail "uninstall 11: $(cat "$D.result" 2>/dev/null); $(ls "$RT" 2>&1)"
     wine reg delete 'HKLM\Software\SgGateRuntime' /f /reg:32 >/dev/null 2>&1
+    # both builds from one package (the 64-bit MFC 4.2 runtime: XP x64 SP2
+    # holds amd64\mfc42.dl_ and the 32-bit amd64\wow\wmfc42.dl_, which unpacks
+    # as wmfc42.dll): the 32-bit one into syswow64 under the DLL's name, the
+    # 64-bit one into system32 (CutePDF's 64-bit save helper)
+    RT64="$WINEPREFIX/drive_c/windows/system32/gatert.dll"
+    if x86_64-w64-mingw32-gcc -shared -O2 -o "$T/gatert64.dll" "$T/gatert.c" 2>>"$T/cc.log" \
+        && python3 "$HERE/test/store-cab.py" "$T/inner64.cab" "gatert.dll=$T/gatert64.dll" \
+        && python3 "$HERE/test/store-cab.py" "$T/innerw.cab" "wgatert.dll=$T/gatert.dll" \
+        && python3 "$HERE/test/store-cab.py" "$T/outer64.cab" "amd64\\gatert.dl_=$T/inner64.cab" "amd64\\wow\\wgatert.dl_=$T/innerw.cab" \
+        && { head -c 2000 /dev/zero; cat "$T/outer64.cab"; } > "$W/files/gate-sp64.exe"; then
+        RSHA64=$(sha256sum "$W/files/gate-sp64.exe" | cut -d' ' -f1)
+        reg "$K\\11" /v Source /d "pin:http://127.0.0.1:$PORT/files/gate-sp64.exe|$RSHA64|cab-dll|amd64\\wow\\wgatert.dl_|gatert.dll|Gate Runtime|1.2.3|amd64\\gatert.dl_"
+        sleep 1
+        both() { rm -f "$D.result"; wine "$1" --install 11 >/dev/null 2>&1
+                 cmp -s "$RT" "$T/gatert.dll" && echo 32; cmp -s "$RT64" "$T/gatert64.dll" && echo 64; }
+        r=$(both "$EXE" | tr '\n' ' ')
+        [ "$r" = "32 64 " ] && pass "a runtime's 32-bit and 64-bit builds from one package: syswow64 and system32 (MFC 4.2 for CutePDF)" \
+            || fail "both builds: '$r' $(cat "$D.result" 2>/dev/null)"
+        rm -f "$D.result"; wine "$EXE" --uninstall 11 >/dev/null 2>&1
+        [ ! -e "$RT" ] && [ ! -e "$RT64" ] && pass "...Uninstall removes both" || fail "uninstall both: $(ls "$RT" "$RT64" 2>&1)"
+        wine reg delete 'HKLM\Software\SgGateRuntime' /f /reg:32 >/dev/null 2>&1
+        r=$(both "$T/mut-nocab64.exe" | tr '\n' ' ')
+        [ "$r" = "32 " ] && pass "MUTANT NOCAB64 leaves the 64-bit build out (gate catches it)" || fail "NOCAB64 not detected: '$r'"
+        rm -f "$D.result"; wine "$EXE" --uninstall 11 >/dev/null 2>&1; rm -f "$RT" "$RT64"
+        wine reg delete 'HKLM\Software\SgGateRuntime' /f /reg:32 >/dev/null 2>&1
+        reg "$K\\11" /v Source /d "pin:http://127.0.0.1:$PORT/files/gate-sp.exe|$RSHA|cab-dll|i386\\gatert.dl_|gatert.dll|Gate Runtime|1.2.3"
+        sleep 1
+    else fail "the 64-bit runtime stand-in does not build: $(tail -3 "$T/cc.log")"; fi
     wine "$T/mut-nocabdll.exe" --install 11 >/dev/null 2>&1
     [ ! -e "$RT" ] && pass "MUTANT NOCABDLL installs nothing (gate catches it)" || fail "NOCABDLL not detected"
     wine reg delete "$K\\11" /f >/dev/null 2>&1; sleep 1

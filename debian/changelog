@@ -1,3 +1,13 @@
+sg-shell (0.1.0-223) unstable; urgency=medium
+
+  * SG Store: a runtime taken from a Microsoft package's cabinet (cab-dll)
+    can carry its 64-bit build as well, into system32 (a fifth field). The
+    MFC 4.2 runtime (4.2.1) now comes from the 64-bit Service Pack 2 of
+    Windows Server 2003, with both builds: CutePDF Writer's 64-bit save
+    helper needs the 64-bit MFC42.DLL. Gate store-check, mutant NOCAB64.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 12:26:16 -0700
+
 sg-shell (0.1.0-222) unstable; urgency=medium
 
   * SG Store: an app with a Linux and a Windows build whose one build is
