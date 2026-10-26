@@ -68,6 +68,7 @@
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
 #   SG_MUTANT_NOPINDEPENDS ignores a pinned entry's Depends (CCleaner: WebView2)
+#   SG_MUTANT_NOSUCCESSCODES ignores a manifest's InstallerSuccessCodes (WebView2's 0x80040828)
 #   SG_MUTANT_PIDREUSE    takes a program older than the uninstaller, whose parent's id it got, for its child
 #   SG_MUTANT_DEPRECORD   trusts its record of a dependency it installed once, though it was uninstalled (DYMO: .NET 8)
 #   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
@@ -156,7 +157,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -776,6 +777,36 @@ rm -f "$G/setup.log"; ununinstall LonelyApp
 SG_MUT="$T/mut-nodepends.exe" lonely
 ! grep -q -- '/dep-installed' "$G/setup.log" 2>/dev/null && grep -q -- '/lonely' "$G/setup.log" 2>/dev/null \
     && pass "MUTANT NODEPENDS skips it (gate catches it)" || fail "NODEPENDS not detected: $(tr '\n' '|' < "$G/setup.log" 2>/dev/null)"
+# an exit code the manifest lists as success (InstallerSuccessCodes) is not a
+# failure: WebView2's installer ends with 0x80040828 (-2147219416) when a
+# runtime is there already, and CCleaner's install stopped on it (qa4)
+mkdir -p "$W/raw/f/Fake/Coded/1.0"; printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Coded"
+cat > "$W/raw/f/Fake/Coded/1.0/Fake.Coded.installer.yaml" <<EOF
+PackageIdentifier: Fake.Coded
+PackageVersion: 1.0
+InstallerType: exe
+InstallerSuccessCodes:
+- -2147219416
+Installers:
+- Architecture: x64
+  InstallerSwitches:
+    Silent: /coded
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+EOF
+app 14 'Coded App' Development windows 'winget:Fake.Coded' 'Coded App'
+wineserver -w
+coded() { # EXE -> the result line
+    ununinstall CodedApp
+    SG_FAKE_EXIT=-2147219416 SG_FAKE_KEY=CodedApp SG_FAKE_DISPLAY='Coded App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Coded App' \
+        SG_MUT="$1" run --install 14
+    head -1 "$D.result" 2>/dev/null; ununinstall CodedApp
+}
+case "$(coded "$EXE")" in "result 14 ok"*) pass "an exit code the manifest lists as success installs (WebView2's 0x80040828)" ;;
+                          *) fail "success code: $(coded "$EXE")" ;; esac
+case "$(coded "$T/mut-nosuccesscodes.exe")" in *"code -2147219416"*) pass "MUTANT NOSUCCESSCODES calls it a failure (gate catches it)" ;;
+                          *) fail "NOSUCCESSCODES not detected: $(coded "$T/mut-nosuccesscodes.exe")" ;; esac
+wine reg delete "$K\\14" /f >/dev/null 2>&1; wineserver -w
 # a pinned download's Depends too (CCleaner 7 needs the WebView2 runtime)
 app 13 'Pinned Lonely' Development windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S /pinlonely" 'Pinned Lonely'
 reg "$K\\13" /v PinVersion /d '1.0'

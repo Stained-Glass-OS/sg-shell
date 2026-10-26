@@ -6,13 +6,15 @@
  * may have its own InstallerSwitches, and lists such as InstallModes that we
  * skip). Only the keys we use are kept: Architecture, Scope,
  * InstallerLocale, InstallerType, InstallerUrl, InstallerSha256 and the
- * Silent/SilentWithProgress and Custom switches, and ElevationRequirement.
+ * Silent/SilentWithProgress and Custom switches, ElevationRequirement and
+ * InstallerSuccessCodes.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "manifest.h"
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -87,6 +89,19 @@ static void unquote(char *s)
     }
 }
 
+/* one exit code (decimal, maybe negative) onto an entry's success list */
+static void add_code(mf_entry *e, const char *text)
+{
+    char *end;
+    long v;
+    size_t len;
+    while (*text == ' ') text++;
+    v = strtol(text, &end, 10);
+    if (end == text) return;
+    len = strlen(e->success);
+    if (len + 16 < sizeof(e->success)) snprintf(e->success + len, sizeof(e->success) - len, "%s%ld", len ? " " : "", v);
+}
+
 static void set_field(mf_entry *e, const char *key, const char *val, int switches)
 {
     char v[2048];
@@ -106,6 +121,16 @@ static void set_field(mf_entry *e, const char *key, const char *val, int switche
     else if (!strcmp(key, "InstallerSha256")) copy(e->sha, v, sizeof(e->sha));
     else if (!strcmp(key, "NestedInstallerType")) copy(e->nested, v, sizeof(e->nested));
     else if (!strcmp(key, "ElevationRequirement")) copy(e->elevation, v, sizeof(e->elevation));
+    else if (!strcmp(key, "InstallerSuccessCodes")) {      /* the flow form: [1, 2] */
+        const char *t = v;
+        while (*t) {
+            while (*t && *t != '-' && !isdigit((unsigned char)*t)) t++;
+            if (!*t) break;
+            add_code(e, t);
+            t++;
+            while (isdigit((unsigned char)*t)) t++;
+        }
+    }
 }
 
 int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
@@ -118,6 +143,8 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
     mf_entry *dep_to = NULL;
     int nf_indent = -1;          /* NestedInstallerFiles' own indentation, while inside it */
     mf_entry *nf_to = NULL;
+    int sc_indent = -1;          /* InstallerSuccessCodes' own indentation, while inside it */
+    mf_entry *sc_to = NULL;
     memset(root, 0, sizeof(*root));
     for (line = text; line && *line; line = next) {
         char *colon, key[64], *body;
@@ -138,6 +165,13 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         /* NestedInstallerFiles: - RelativeFilePath: the installer inside the zip
          * (CutePDF's zip holds two .exe files; the manifest says which) */
         if (nf_indent >= 0 && (indent < nf_indent || (indent == nf_indent && !item))) nf_indent = -1;
+        /* InstallerSuccessCodes: - -2147219416 (WebView2's "already installed
+         * by a newer one" and the like): exit codes that are not failures */
+        if (sc_indent >= 0 && (indent < sc_indent || (indent == sc_indent && !item))) sc_indent = -1;
+        if (sc_indent >= 0) {
+            if (item) add_code(sc_to, body + 1);
+            continue;
+        }
         if (nf_indent >= 0) {
 #ifndef SG_MUTANT_NONESTEDFILE
             char *k = item ? body + 1 : body;
@@ -195,6 +229,10 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
                 dep_indent = indent;
                 dep_to = indent == 0 ? root : &list[n];
             }
+            else if (!strcmp(key, "InstallerSuccessCodes") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
+                sc_indent = indent;
+                sc_to = indent == 0 ? root : &list[n];
+            }
             else if (!strcmp(key, "NestedInstallerFiles") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
                 nf_indent = indent;
                 nf_to = indent == 0 ? root : &list[n];
@@ -222,6 +260,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->nested[0]) copy(e->nested, root->nested, sizeof(e->nested));
         if (!e->nested_file[0]) copy(e->nested_file, root->nested_file, sizeof(e->nested_file));
         if (!e->deps[0]) copy(e->deps, root->deps, sizeof(e->deps));
+        if (!e->success[0]) copy(e->success, root->success, sizeof(e->success));
     }
     return n + 1;
 }

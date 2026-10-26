@@ -303,5 +303,10 @@ int wmain(int argc, WCHAR **argv)
         swprintf(icon, MAX_PATH, L"%ls,0", exe);
         sz(HKEY_LOCAL_MACHINE, sub, L"DisplayIcon", icon);
     }
+    {   /* %SG_FAKE_EXIT%: installed, but ends with this code (WebView2's
+         * 0x80040828, which its manifest lists as success) */
+        WCHAR rc[24];
+        if (GetEnvironmentVariableW(L"SG_FAKE_EXIT", rc, ARRAYSIZE(rc))) return (int)wcstol(rc, NULL, 10);
+    }
     return 0;
 }

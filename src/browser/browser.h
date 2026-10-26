@@ -29,6 +29,7 @@ typedef struct {
     WCHAR nested_file[MAX_PATH];/* and which file in it the installer is (NestedInstallerFiles) */
     WCHAR custom[512];          /* the manifest's Custom switches, passed after the silent ones */
     WCHAR deps[512];            /* the packages it needs first (winget Dependencies), space-separated */
+    char success[256];          /* InstallerSuccessCodes: more exit codes that mean it installed */
     BOOL elevate;               /* ElevationRequirement: elevationRequired -- ask for an administrator first */
     BOOL elevated;              /* the installer was started as an administrator (runas) */
     BYTE sha256[32];

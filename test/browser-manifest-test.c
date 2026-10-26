@@ -183,6 +183,27 @@ static const char ROOTDEPS[] =
     "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
     "ManifestType: installer\n";
 
+/* WebView2 Runtime: InstallerSuccessCodes at the root (a newer runtime is there
+ * already); one installer adds its own in the flow form */
+static const char WEBVIEW2[] =
+    "PackageIdentifier: Microsoft.EdgeWebView2Runtime\n"
+    "InstallerType: exe\n"
+    "InstallerSuccessCodes:\n"
+    "- -2147219416\n"
+    "- -2147219187\n"
+    "ExpectedReturnCodes:\n"
+    "- InstallerReturnCode: -2147219440\n"
+    "  ReturnResponse: cancelledByUser\n"
+    "Installers:\n"
+    "- Architecture: x86\n"
+    "  InstallerUrl: https://example.org/wv86.exe\n"
+    "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
+    "- Architecture: x64\n"
+    "  InstallerSuccessCodes: [1638, 3]\n"
+    "  InstallerUrl: https://example.org/wv64.exe\n"
+    "  InstallerSha256: E07EBF37063023D96DC8509A5D69FFA52D316CDA8FEEA08BEDDAD4B9818E7BE5\n"
+    "ManifestType: installer\n";
+
 /* CutePDF Writer 4.0: a zip holding two programs; NestedInstallerFiles names
  * the installer (and InstallerSwitches would end the block too) */
 static const char CUTEPDF[] =
@@ -282,6 +303,12 @@ int main(void)
     CHECK(n == 2 && !strcmp(list[0].nested_file, "CuteWriter.exe"), "the root's NestedInstallerFiles names the installer (%s)", n ? list[0].nested_file : "");
     CHECK(n == 2 && !strcmp(list[1].nested_file, "x64/CuteWriter.exe"), "an installer's own NestedInstallerFiles wins (%s)", n > 1 ? list[1].nested_file : "");
     CHECK(!strcmp(root.scope, "machine"), "the root's keys after the block still count (Scope %s)", root.scope);
+    strcpy(buf, WEBVIEW2);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 2, "WebView2: two installers, ExpectedReturnCodes is no installer (%d)", n);
+    CHECK(n == 2 && !strcmp(list[0].success, "-2147219416 -2147219187"), "the root's InstallerSuccessCodes go to an installer (%s)", n ? list[0].success : "");
+    CHECK(n == 2 && !strcmp(list[1].success, "1638 3"), "an installer's own, in the flow form, win (%s)", n > 1 ? list[1].success : "");
+    CHECK(n == 2 && !strcmp(list[1].url, "https://example.org/wv64.exe"), "the installer's fields after it still read");
     printf("browser-manifest-test: %s\n", fails ? "FAILED" : "all passed");
     return fails ? 1 : 0;
 }

@@ -204,6 +204,7 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     MultiByteToWideChar(CP_UTF8, 0, best->custom, -1, p->custom, 512);
     MultiByteToWideChar(CP_UTF8, 0, best->deps, -1, p->deps, 512);
     p->elevate = !_stricmp(best->elevation, "elevationRequired");
+    lstrcpynA(p->success, best->success, sizeof(p->success));
     free(list);
     if (!p->type[0]) { seterr(err, cch, L"%ls %ls does not say how to install it.", id, p->version); return FALSE; }
     return TRUE;
@@ -422,6 +423,25 @@ void pkg_tree_start(FILETIME *since)
     t.LowPart = since->dwLowDateTime; t.HighPart = since->dwHighDateTime;
     t.QuadPart -= 2 * 10000000ULL;
     since->dwLowDateTime = t.LowPart; since->dwHighDateTime = t.HighPart;
+}
+
+/* an exit code the package's manifest lists as success (InstallerSuccessCodes):
+ * WebView2's installer ends with 0x80040828 when a newer runtime is there
+ * already, and CCleaner's install stopped on it as "did not install" */
+static BOOL success_code(const package_t *p, DWORD code)
+{
+    const char *t = p->success;
+    char *end;
+#ifdef SG_MUTANT_NOSUCCESSCODES
+    return FALSE;
+#endif
+    while (*t) {
+        long v = strtol(t, &end, 10);
+        if (end == t) break;
+        if ((DWORD)v == code) return TRUE;
+        t = end;
+    }
+    return FALSE;
 }
 
 /* A process whose parent id is one of a tree's is that process's child only
@@ -797,7 +817,7 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 #endif
     if (!run_wait(file, args, file == msi || p->elevate, &code, &p->elevated, err, cch)) return FALSE;
     p->exit_code = code;
-    if (code != 0 && code != 3010 && code != 1641) {
+    if (code != 0 && code != 3010 && code != 1641 && !success_code(p, code)) {
         seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
         return FALSE;
     }

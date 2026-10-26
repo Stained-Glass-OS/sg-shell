@@ -1,3 +1,16 @@
+sg-shell (0.1.0-219) unstable; urgency=medium
+
+  * SG Store (and Get a web browser) honour a winget manifest's
+    InstallerSuccessCodes: exit codes that mean it installed. The WebView2
+    runtime's installer ends with 0x80040828 (-2147219416) when a runtime is
+    there already, the store said it "did not install", and CCleaner, which
+    needs it, was not installed either (qa4). Both list forms are read, at
+    the root and per installer. Gates: browser-manifest-test (WebView2's
+    manifest), store-check (an installer ending with a listed code; mutant
+    NOSUCCESSCODES).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 00:04:05 -0700
+
 sg-shell (0.1.0-218) unstable; urgency=medium
 
   * SG Store: CCleaner, GOM Player and AIMP install from pinned downloads.

@@ -13,7 +13,8 @@ typedef struct {
     char nested_file[260];      /* NestedInstallerFiles' first RelativeFilePath: which file in the zip it is */
     char custom[512];
     char deps[512];             /* Dependencies: PackageDependencies' PackageIdentifiers, space-separated */
-    char elevation[32];         /* ElevationRequirement: elevationRequired = run it as an administrator */           /* InstallerSwitches Custom: passed as well, whatever the mode (Opera's /allusers=0) */
+    char elevation[32];         /* ElevationRequirement: elevationRequired = run it as an administrator */
+    char success[256];          /* InstallerSuccessCodes: exit codes that mean it installed, space-separated */           /* InstallerSwitches Custom: passed as well, whatever the mode (Opera's /allusers=0) */
 } mf_entry;
 
 #define MF_MAX_ENTRIES 64
