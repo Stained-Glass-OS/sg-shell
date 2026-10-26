@@ -3329,6 +3329,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00c62828
 "Tier"="windows"
 "Source"="winget:AcroSoftware.CutePDFWriter"
+"Depends"="store:130"
 "DetectName"="CutePDF Writer"
 "Icon"="https://www.cutepdf.com/images/favicon.ico"
 
@@ -3546,6 +3547,19 @@ Windows Registry Editor Version 5.00
 "DetectName"="Microsoft Visual Basic 6.0 Runtime"
 "License"="Proprietary: Microsoft's licence (free to use with the programs that need it; not open source)"
 "Homepage"="https://learn.microsoft.com/previous-versions/visualstudio/visual-basic-6/visual-basic-6-support-policy"
+"Icon"="https://www.microsoft.com/favicon.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\130]
+"Name"="MFC 4.2 runtime"
+"Publisher"="Microsoft"
+"Description"="What older programs written with Microsoft's MFC 4.2 need to run (MFC42.DLL), such as CutePDF Writer's printer setup. It is taken from Microsoft's own download of XP Service Pack 3 (332 MB), and only that one file is kept."
+"Category"="Development"
+"Colour"=dword:00a4373a
+"Tier"="windows"
+"Source"="pin:https://catalog.s.download.windowsupdate.com/msdownload/update/software/dflt/2008/04/windowsxp-kb936929-sp3-x86-enu_c81472f7eeea2eca421e116cd4c03e2300ebfde4.exe|62e524a552db9f6fd22d469010ea4d7e28ee06fa615a1c34362129f808916654|cab-dll|i386\\mfc42.dl_|mfc42.dll|Microsoft MFC 4.2 Runtime|4.2"
+"PinVersion"="4.2"
+"DetectName"="Microsoft MFC 4.2 Runtime"
+"License"="Proprietary: Microsoft's licence (free to use with the programs that need it; not open source)"
 "Icon"="https://www.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\L185]

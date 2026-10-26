@@ -725,13 +725,33 @@ static BOOL dep_provided(const WCHAR *id)
  * catalogue's answer comes first: the record outlives an uninstall, and
  * DYMO Connect's setup stopped with code 91 ("you must install .NET") after
  * .NET Desktop Runtime 8, recorded, had been uninstalled. */
+/* a dependency on another of the catalogue's apps, by its ordinal
+ * ("store:130"): a runtime only a pinned download has (MFC 4.2 for
+ * CutePDF's printer setup), which no winget package provides */
+static app_t *dep_store_app(const WCHAR *id, app_t *apps, int *n)
+{
+    int i;
+#ifdef SG_MUTANT_NOSTOREDEP
+    return NULL;
+#endif
+    if (_wcsnicmp(id, L"store:", 6)) return NULL;
+    *n = catalog_load(apps, MAX_APPS);
+    for (i = 0; i < *n; i++) if (!lstrcmpiW(apps[i].ord, id + 6)) return &apps[i];
+    return NULL;
+}
+
 static BOOL dep_needed(const WCHAR *id)
 {
     static app_t apps[MAX_APPS];
     WCHAR key[300];
     HKEY h;
     int n, i;
+    app_t *sa;
     if (dep_provided(id)) return FALSE;
+    if ((sa = dep_store_app(id, apps, &n))) {
+        app_detect(sa);
+        return sa->state != AST_INSTALLED && sa->state != AST_UPDATE;
+    }
     swprintf(key, ARRAYSIZE(key), L"%ls\\%ls", DEPS_KEY, id);
 #ifdef SG_MUTANT_DEPRECORD
     if (!RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) || !RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h)) {
@@ -785,6 +805,17 @@ static int install_deps(const package_t *p, int depth, progress_fn progress, voi
         if (depth >= 2) {   /* deeper chains are not followed */
             swprintf(err, cch, L"%ls needs %ls, which needs still more; install %ls first.", p->id, tok, tok);
             return 1;
+        }
+        if (!_wcsnicmp(tok, L"store:", 6)) {
+            static app_t sapps[MAX_APPS];
+            int sn;
+            app_t *sa = dep_store_app(tok, sapps, &sn);
+            if (!sa) { swprintf(err, cch, L"%ls needs %ls, which the catalogue does not list.", p->id, tok); return 1; }
+            if (app_install(sa, progress, ctx, cancel, why, ARRAYSIZE(why))) {
+                swprintf(err, cch, L"%ls needs %ls, which did not install: %ls", p->id, sa->name, why);
+                return 1;
+            }
+            continue;
         }
         if (install_id(tok, depth + 1, NULL, progress, ctx, cancel, why, ARRAYSIZE(why))) {
             swprintf(err, cch, L"%ls needs %ls, which did not install: %ls", p->id, tok, why);

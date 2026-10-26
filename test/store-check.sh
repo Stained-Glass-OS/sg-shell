@@ -69,6 +69,7 @@
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
 #   SG_MUTANT_NOPINDEPENDS ignores a pinned entry's Depends (CCleaner: WebView2)
 #   SG_MUTANT_NOSUCCESSCODES ignores a manifest's InstallerSuccessCodes (WebView2's 0x80040828)
+#   SG_MUTANT_NOSTOREDEP  cannot depend on another catalogue app (store:N; CutePDF needs MFC 4.2)
 #   SG_MUTANT_PIDREUSE    takes a program older than the uninstaller, whose parent's id it got, for its child
 #   SG_MUTANT_DEPRECORD   trusts its record of a dependency it installed once, though it was uninstalled (DYMO: .NET 8)
 #   SG_MUTANT_NO429RETRY  gives up on the first 429 (too many requests)
@@ -157,7 +158,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -834,6 +835,24 @@ case "$(coded "$EXE")" in "result 14 ok"*) pass "an exit code the manifest lists
 case "$(coded "$T/mut-nosuccesscodes.exe")" in *"code -2147219416"*) pass "MUTANT NOSUCCESSCODES calls it a failure (gate catches it)" ;;
                           *) fail "NOSUCCESSCODES not detected: $(coded "$T/mut-nosuccesscodes.exe")" ;; esac
 wine reg delete "$K\\14" /f >/dev/null 2>&1; wineserver -w
+# a dependency on another of the catalogue's apps (store:N): a runtime only a
+# pinned download has (CutePDF's printer setup needs MFC 4.2)
+app 19 'Store Dep' Development windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S /storedep" 'Store Dep Missing'
+reg "$K\\19" /v PinVersion /d '1.0'
+app 20 'Needs Store Dep' Development windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S /needsdep" 'Needs Store Dep'
+reg "$K\\20" /v PinVersion /d '1.0'
+reg "$K\\20" /v Depends /d 'store:19'
+wineserver -w
+storedep() { # EXE -> setup.log on one line
+    rm -f "$G/setup.log"; ununinstall NeedsDep
+    SG_FAKE_KEY=NeedsDep SG_FAKE_DISPLAY='Needs Store Dep' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Needs Dep' wine "$1" --install 20 >/dev/null 2>&1
+    tr '\n' '|' < "$G/setup.log" 2>/dev/null; ununinstall NeedsDep
+}
+case "$(storedep "$EXE")" in *storedep*needsdep*) pass "a dependency on another catalogue app (store:N) is installed first (CutePDF: MFC 4.2)" ;;
+                             *) fail "store:N dependency: $(storedep "$EXE")" ;; esac
+case "$(storedep "$T/mut-nostoredep.exe")" in *needsdep*) fail "NOSTOREDEP not detected" ;;
+                             *) pass "MUTANT NOSTOREDEP cannot install it (gate catches it)" ;; esac
+wine reg delete "$K\\19" /f >/dev/null 2>&1; wine reg delete "$K\\20" /f >/dev/null 2>&1; wineserver -w
 # a pinned download's Depends too (CCleaner 7 needs the WebView2 runtime)
 app 13 'Pinned Lonely' Development windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S /pinlonely" 'Pinned Lonely'
 reg "$K\\13" /v PinVersion /d '1.0'

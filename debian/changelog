@@ -1,3 +1,14 @@
+sg-shell (0.1.0-221) unstable; urgency=medium
+
+  * SG Store: a Depends entry can name another of the catalogue's apps,
+    "store:<ordinal>", for a runtime only a pinned download has. New entry:
+    MFC 4.2 runtime (MFC42.DLL from Microsoft's XP SP3 download, as the
+    VB6 runtime's), which CutePDF Writer's printer setup needs; CutePDF
+    depends on it (its setup ran nothing without it). Gate store-check:
+    a store:N dependency is installed first, mutant NOSTOREDEP.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 09:41:08 -0700
+
 sg-shell (0.1.0-220) unstable; urgency=medium
 
   * SG Store: four apps' DetectName rules match what their installers
