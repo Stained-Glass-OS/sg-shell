@@ -463,6 +463,33 @@ run --list
 for k in GIMP_is1 GitHubDesktop XnViewMP Git_is1 XnView_is1; do ununinstall $k; done
 wineserver -w
 
+# the real catalogue's DetectName rules, against what the installers write
+# (/var/tmp/detect-audit, 2026-10-26): .NET 10's name lost its " - "; Edge's
+# rule took the WebView2 runtime, Git's Git LFS, Temurin 21's the 17 JDK
+realdet() { awk -v k="Apps\\\\$1]" 'index($0, k) {s=1; next} /^\[/ {s=0} s && /^"DetectName"=/' "$HERE/defaults/85-sg-store.reg" | sed 's/^"DetectName"="//; s/"$//; s/\\\\/\\/g'; }
+detcase() { # ord realord name
+    app "$1" "$3" Development windows "winget:Fake.Det$1" "$(realdet "$2")"
+}
+detcase 15 101 'Dotnet Ten'; detcase 16 94 'Edge'; detcase 17 49 'Git Real'; detcase 18 57 'Temurin 21'
+uninstall DotNet10 'Microsoft Windows Desktop Runtime 10.0.14 (x64)' 10.0.14
+uninstall EdgeWV 'Microsoft Edge WebView2 Runtime' 155.0.4283.62
+uninstall GitLFS 'Git LFS version 3.7.1' 3.7.1
+uninstall Temurin17 'Eclipse Temurin JDK with Hotspot 17.0.16+8 (x64)' 17.0.16.8
+wineserver -w
+run --list
+[ "$(kv "$(appline 15)" state)" = installed ] && pass ".NET Desktop Runtime 10 is detected by its real name (no \" - \")" || fail "15: $(appline 15)"
+[ "$(kv "$(appline 16)" state)" = not-installed ] && pass "the WebView2 runtime is not Edge" || fail "16: $(appline 16)"
+[ "$(kv "$(appline 17)" state)" = not-installed ] && pass "Git LFS is not Git" || fail "17: $(appline 17)"
+[ "$(kv "$(appline 18)" state)" = not-installed ] && pass "the Temurin 17 JDK is not Temurin 21" || fail "18: $(appline 18)"
+uninstall Edge 'Microsoft Edge' 141.0.1; uninstall GitReal 'Git' 2.55.0; uninstall Temurin21 'Eclipse Temurin JDK with Hotspot 21.0.8+9 (x64)' 21.0.8.9
+wineserver -w
+run --list
+[ "$(kv "$(appline 16)" state)" = installed ] && [ "$(kv "$(appline 17)" state)" = installed ] && [ "$(kv "$(appline 18)" state)" = installed ] \
+    && pass "Edge, Git and Temurin 21 are detected by their own entries" || fail "16/17/18: $(appline 16) / $(appline 17) / $(appline 18)"
+for k in DotNet10 EdgeWV GitLFS Temurin17 Edge GitReal Temurin21; do ununinstall $k; done
+for o in 15 16 17 18; do wine reg delete "$K\\$o" /f >/dev/null 2>&1; done
+wineserver -w
+
 # a 32-bit installer's per-user entry: Wine files it under HKCU\Software\WOW6432Node
 # (Kdenlive, BleachBit said "Installed." and stayed "Install")
 reg 'HKCU\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Git' /v DisplayName /d 'Git'

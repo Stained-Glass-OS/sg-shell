@@ -674,7 +674,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00f05033
 "Tier"="windows"
 "Source"="winget:Git.Git"
-"DetectName"="Git"
+"DetectName"="Git|!Git LFS|!Git Extensions"
 "Icon"="https://git-scm.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\50]
@@ -763,7 +763,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00e76f00
 "Tier"="windows"
 "Source"="winget:EclipseAdoptium.Temurin.21.JDK"
-"DetectName"="Eclipse Temurin JDK"
+"DetectName"="Eclipse Temurin JDK with Hotspot 21"
 "Icon"="https://adoptium.net/images/adoptium-icon.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\58]
@@ -3173,7 +3173,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:000078d4
 "Tier"="windows"
 "Source"="winget:Microsoft.Edge"
-"DetectName"="Microsoft Edge"
+"DetectName"="Microsoft Edge|!Microsoft Edge WebView2|!Microsoft Edge Update"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.microsoft.Edge.png"
 "Linux"="L186"
 "Prefer"="windows"
@@ -3252,7 +3252,7 @@ Windows Registry Editor Version 5.00
 "Colour"=dword:00512bd4
 "Tier"="windows"
 "Source"="winget:Microsoft.DotNet.DesktopRuntime.10"
-"DetectName"="Microsoft *Desktop Runtime - 10"
+"DetectName"="Microsoft *Desktop Runtime - 10|Microsoft *Desktop Runtime 10"
 "Icon"="https://dotnet.microsoft.com/favicon.ico"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\102]

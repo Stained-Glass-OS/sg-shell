@@ -1,3 +1,16 @@
+sg-shell (0.1.0-220) unstable; urgency=medium
+
+  * SG Store: four apps' DetectName rules match what their installers
+    write (audit of all 120 winget entries against their manifests):
+    .NET Desktop Runtime 10 (its name lost " - ": never detected, could
+    not be uninstalled), Edge (the WebView2 runtime made it look
+    installed), Git (Git LFS and Git Extensions did) and Java 21 Temurin
+    (the 17 JDK did, and Uninstall would have removed it). Gate
+    store-check: the real catalogue's rules against real entry names;
+    the old rules fail all four.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 07:31:17 -0700
+
 sg-shell (0.1.0-219) unstable; urgency=medium
 
   * SG Store (and Get a web browser) honour a winget manifest's
