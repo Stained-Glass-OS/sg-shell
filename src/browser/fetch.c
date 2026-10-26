@@ -151,6 +151,24 @@ static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
     return buf;
 }
 
+/* Whether the person is an administrator, for the scope of the installer
+ * picked. In an administrator's session the token is not elevated, and
+ * IsUserAnAdmin says no, as on Windows under UAC; the session says so
+ * instead (SG_USER_ADMIN, from sg-session-start, as wine-sg's own
+ * highestAvailable check reads it). Taken as a person's, Total Commander's
+ * user entry (/AH) ran as the person, could not write Program Files, and
+ * stopped with code 3. SG_STORE_FAKE_LIMITED is the gate's unelevated token. */
+static BOOL store_admin(void)
+{
+    WCHAR v[4];
+    if (IsUserAnAdmin() && !GetEnvironmentVariableW(L"SG_STORE_FAKE_LIMITED", v, ARRAYSIZE(v))) return TRUE;
+#ifdef SG_MUTANT_TOKENADMINONLY
+    return FALSE;
+#else
+    return GetEnvironmentVariableW(L"SG_USER_ADMIN", v, ARRAYSIZE(v)) == 1 && v[0] == L'1';
+#endif
+}
+
 BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
 {
     WCHAR base[1024], path[512], url[2048];
@@ -183,9 +201,9 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH);
     WideCharToMultiByte(CP_UTF8, 0, locale, -1, loc8, sizeof(loc8), NULL, NULL);
 #ifdef _WIN64
-    k = mf_pick(list, n, loc8, IsUserAnAdmin(), 1);
+    k = mf_pick(list, n, loc8, store_admin(), 1);
 #else
-    k = mf_pick(list, n, loc8, IsUserAnAdmin(), 0);
+    k = mf_pick(list, n, loc8, store_admin(), 0);
 #endif
     if (k < 0) { free(list); seterr(err, cch, L"%ls %ls has no installer for this PC.", id, p->version); return FALSE; }
     best = &list[k];

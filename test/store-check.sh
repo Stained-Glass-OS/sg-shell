@@ -81,6 +81,7 @@
 #   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
 #   SG_MUTANT_NOPAIR      lists both builds of an app as apps of their own
 #   SG_MUTANT_NOOTHERBUILD  an installed build's page offers no other build
+#   SG_MUTANT_TOKENADMINONLY an administrator's unelevated session gets the person's installer (Total Commander)
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
@@ -161,7 +162,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 TOKENADMINONLY; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -173,7 +174,7 @@ done
 W="$T/www"
 mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad/Hash/2.0" "$W/files" \
          "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0" \
-         "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0"
+         "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0" "$W/raw/f/Fake/Scopes/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
 SHA=$(sha256sum "$W/files/store-fake.exe" | cut -d' ' -f1)
 # a zip that holds the installer (and a readme), as Paint.NET's does
@@ -195,6 +196,27 @@ printf '[{"name": "5.1", "type": "dir"}]' > "$W/api/f/Fake/Zip"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Plus++"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoM"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoU"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Scopes"
+# one installer offered for both scopes, as Total Commander's (machine /AHN*, user /AH)
+cat > "$W/raw/f/Fake/Scopes/1.0/Fake.Scopes.installer.yaml" <<EOF
+PackageIdentifier: Fake.Scopes
+PackageVersion: 1.0
+InstallerType: exe
+Installers:
+- Architecture: x64
+  Scope: user
+  InstallerSwitches:
+    Silent: /gate-user-scope
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+- Architecture: x64
+  Scope: machine
+  InstallerSwitches:
+    Silent: /gate-machine-scope
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+ManifestType: installer
+EOF
 # Inno Setup installers of one scope each, as RawTherapee's (machine) and a per-user one
 for sc in M:machine U:user; do
 cat > "$W/raw/f/Fake/Inno${sc%%:*}/1.0/Fake.Inno${sc%%:*}.installer.yaml" <<EOF
@@ -394,6 +416,7 @@ app 08 'Pick App' Utilities windows 'winget:Fake.Pick' 'Pick App'
 app 09 'Zip App' Graphics windows 'winget:Fake.Zip' 'Zip App'
 app 0A 'Inno Machine' Graphics windows 'winget:Fake.InnoM' 'Inno Machine'
 app 0B 'Inno User' Graphics windows 'winget:Fake.InnoU' 'Inno User'
+app 0C 'Two Scopes' Utilities windows 'winget:Fake.Scopes' 'Two Scopes'
 app L1 'GIMP' Graphics linux 'linux:apt:gimp' 'GIMP'
 app L2 'Gate Tool' Utilities linux 'linux:apt:sg-gate-tool'
 wineserver -w
@@ -429,7 +452,7 @@ SG_MUT="$T/mut-nosweep.exe" run --list
 [ "$(sweep_check)" = kept ] && pass "MUTANT NOSWEEP leaves it (gate catches it)" || fail "NOSWEEP not detected"
 rm -rf "$TMPD/StainedGlass-Browser-0old" "$TMPD/StainedGlass-Browser-0new"
 run --list
-[ "$(field catalog)" = 12 ] && pass "the catalogue loads (12 apps)" || fail "catalog '$(field catalog)'"
+[ "$(field catalog)" = 13 ] && pass "the catalogue loads (13 apps)" || fail "catalog '$(field catalog)'"
 [ "$(kv "$(appline L1)" section)" = Linux ] && pass "a Linux app is in the Linux apps section" || fail "L1: $(appline L1)"
 [ "$(kv "$(appline 05)" section)" = Graphics ] && pass "a Windows program is in its category" || fail "05: $(appline 05)"
 [ -n "$(pos L1)" ] && [ "$(pos L1)" -gt "$(pos 09)" ] && [ "$(pos L1)" -gt "$(pos 02)" ] && [ "$(pos L2)" -gt "$(pos 02)" ] \
@@ -667,6 +690,23 @@ SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR
 grep -q '/SP-' "$G/setup.log" 2>/dev/null && ! grep -q 'ALLUSERS' "$G/setup.log" \
     && pass "MUTANT NOINNOSCOPE runs it without its scope (gate catches it)" || fail "NOINNOSCOPE not detected: $(cat "$G/setup.log" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall InnoM
+# --- an administrator whose token is not elevated (UAC) gets the machine's installer --------------
+# IsUserAnAdmin says no in an administrator's session; the session says SG_USER_ADMIN=1. As a person's,
+# Total Commander's user entry (/AH) ran as the person and could not write Program Files: code 3
+scopes() { # exe label
+    rm -f "$G/setup.log"
+    SG_FAKE_KEY=Scopes SG_FAKE_DISPLAY='Two Scopes' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Two Scopes' \
+        wine "$1" --install 0C >/dev/null 2>&1
+    cat "$G/setup.log" 2>/dev/null; rm -f "$G/setup.log"; ununinstall Scopes
+}
+r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$EXE")
+case "$r" in *gate-machine-scope*) pass "an administrator's unelevated session takes the machine's installer (Total Commander)";;
+    *) fail "admin session, scope: '$r'";; esac
+r=$(SG_STORE_FAKE_LIMITED=1 scopes "$EXE")
+case "$r" in *gate-user-scope*) pass "...a standard user's takes the person's";; *) fail "standard user, scope: '$r'";; esac
+r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$T/mut-tokenadminonly.exe")
+case "$r" in *gate-user-scope*) pass "MUTANT TOKENADMINONLY gives the administrator the person's installer (gate catches it)";;
+    *) fail "TOKENADMINONLY not detected: '$r'";; esac
 SG_MUT="$T/mut-anytype.exe" run --install 08
 [ ! -e "$G/setup.log" ] && pass "MUTANT ANYTYPE picks the portable zip and installs nothing (gate catches it)" || fail "ANYTYPE not detected"
 

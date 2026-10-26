@@ -1,3 +1,15 @@
+sg-shell (0.1.0-224) unstable; urgency=medium
+
+  * SG Store: an administrator gets an app's installer for the machine.
+    In an administrator's session the token is not elevated, so
+    IsUserAnAdmin says no (as on Windows under UAC); the Store now also
+    takes the session's word (SG_USER_ADMIN). Total Commander's per-user
+    entry (/AH) ran as the person, could not write Program Files and
+    stopped with code 3; Heroic took its per-user entry the same way.
+    Gate store-check, mutant TOKENADMINONLY.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 26 Oct 2026 15:10:00 -0700
+
 sg-shell (0.1.0-223) unstable; urgency=medium
 
   * SG Store: a runtime taken from a Microsoft package's cabinet (cab-dll)
