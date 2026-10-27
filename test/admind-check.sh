@@ -389,7 +389,8 @@ v=\$(sed -n "s/^\$pkg //p" "$T/installed" 2>/dev/null | tail -1)
 [ -n "\$v" ] || exit 1
 printf 'installed %s' "\$v"
 EOF
-chmod +x "$B/apt-get" "$B/dpkg-query"
+printf '#!/bin/sh\nprintf "apt-mark %%s\\n" "$*" >> "%s"\n' "$CALLS" > "$B/apt-mark"
+chmod +x "$B/apt-get" "$B/dpkg-query" "$B/apt-mark"
 DEBS="$T/debs"; mkdir -p "$DEBS" "$T/work"; chmod 700 "$DEBS"
 export SG_ADMIN_DEBS="$DEBS" SG_ADMIN_WORK="$T/work"
 : > "$CALLS"; : > "$T/installed"
@@ -577,12 +578,30 @@ steam_cases() { # ADMIND -- one word per case
     : > "$CALLS"; printf 'sudo 1.9\nxdg-utils 1.2\n' > "$T/installed"
     r=$(steam_request "$1")
     { [ "$(first "$r")" = OK ] && ! grep -q add-architecture "$CALLS"; } && echo once || echo twice
+    { grep -q '^apt-mark auto sg-gate-libs-amd64$' "$CALLS" && grep -q '^apt-mark auto sg-gate-libs-i386:i386$' "$CALLS"; } \
+        && echo marked || echo manual
+    # installed again after an Uninstall that left its libraries: apt still
+    # learns the source the package added (Valve's steamdeps asked for a root
+    # apt-get update, qa4 2026-10-27)
+    : > "$CALLS"; printf 'sudo 1.9\nxdg-utils 1.2\nsg-gate-libs-amd64 1.0\nsg-gate-libs-i386 1.0\n' > "$T/installed"
+    r=$(steam_request "$1")
+    deb=$(grep -n ' install .*/package.deb$' "$CALLS" | cut -d: -f1 | head -1)
+    { [ "$(first "$r")" = OK ] && [ -n "$deb" ] && [ "$(sed -n "$deb,\$p" "$CALLS" | grep -c ' update$')" -ge 1 ]; } \
+        && echo refreshed || echo stale
 }
 # shellcheck disable=SC2046
 set -- $(steam_cases "$ADMIND")
 [ "${1:-}" = i386-first ] && pass "a package that asks for i386 libraries turns i386 on before it installs" || fail "i386: ${1:-} $(cat "$CALLS")"
 [ "${2:-}" = recommends ] && pass "then its missing Recommends come from the source it added (the i386 one as :i386; ones met are left)" || fail "recommends: ${2:-} $(cat "$CALLS")"
 [ "${3:-}" = once ] && pass "i386 already on: left as it is" || fail "turned on twice: $(cat "$CALLS")"
+[ "${4:-}" = marked ] && pass "the Recommends it installs are marked automatic (its Uninstall takes them)" || fail "recommends left manual: $(cat "$CALLS")"
+[ "${5:-}" = refreshed ] && pass "its Recommends all there already: the package lists are still refreshed after it (Steam's own repository)" || fail "lists stale: $(cat "$CALLS")"
+# shellcheck disable=SC2046
+set -- $(SG_MUTANT_RECOMMENDS_MANUAL=1 steam_cases "$ADMIND")
+[ "${4:-}" = manual ] && pass "MUTANT RECOMMENDS_MANUAL (Steam's libraries stay after Uninstall) is caught" || fail "RECOMMENDS_MANUAL not detected"
+# shellcheck disable=SC2046
+set -- $(SG_MUTANT_DEB_SOURCES_STALE=1 steam_cases "$ADMIND")
+[ "${5:-}" = stale ] && pass "MUTANT DEB_SOURCES_STALE (steamdeps asks for apt-get update) is caught" || fail "DEB_SOURCES_STALE not detected"
 : > "$CALLS"; : > "$T/installed"
 id=$(next_id); r=$(deb_request "$ADMIND" "$id" 1.2-3)
 { [ "$(first "$r")" = OK ] && ! grep -q 'add-architecture' "$CALLS" && [ "$(grep -c ' install ' "$CALLS")" = 1 ]; } \
@@ -771,7 +790,14 @@ printf 'apt-get %s\n' "\$*" >> "$CALLS"
 sim=; act=; pkgs=
 for a in "\$@"; do case \$a in -s) sim=1 ;; -*|*=*) ;; remove|autoremove|install|update) act=\$a ;; *) pkgs="\$pkgs \$a" ;; esac; done
 if [ -n "\$sim" ]; then
-    if [ "\$act" = autoremove ]; then for p in \$(cat "$T/auto" 2>/dev/null); do grep -q "^\$p " "$T/installed" && echo "Remv \$p [1.0]"; done; exit 0; fi
+    if [ "\$act" = autoremove ]; then
+        while read -r p needer; do
+            [ -n "\$p" ] || continue
+            [ -n "\$needer" ] && grep -q "^\$needer " "$T/installed" && continue
+            grep -q "^\$p " "$T/installed" && echo "Remv \$p [1.0]"
+        done < "$T/auto" 2>/dev/null
+        exit 0
+    fi
     for p in \$pkgs; do echo "Remv \$p [1.0]"; sed -n "s/^\$p //p" "$T/rdeps" 2>/dev/null | tr ' ' '\n' | sed '/^$/d; s/^/Remv /; s/$/ [1.0]/'; done
     exit 0
 fi
@@ -871,6 +897,25 @@ libgexiv2-tool 1.0
     python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null)
     { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* remove shotwell$' "$CALLS" && ! grep -qE '^apt-get [^-]*-y.* remove .*libgexiv2' "$CALLS" \
       && grep -q '^libgexiv2-tool ' "$T/installed"; } && echo contained || echo cascaded
+    # what it brought, all the way down: Steam's recommended steam-libs-i386,
+    # then the 32-bit libraries under it once that is gone (200 stayed)
+    printf 'steam-launcher 1.0\nsteam-libs-i386:i386 1.0\nlibgl1:i386 1.7\nlibc6 2.41\nlibc6:i386 2.41\n' > "$T/installed"
+    printf 'steam-launcher curl, steam-libs-i386\nsteam-libs-i386:i386 libgl1, libc6\n' > "$T/deps"
+    printf 'steam-libs-i386:i386\nlibgl1:i386\nlibc6:i386\n' > "$T/auto"; printf 'steam-libs-i386 foreign\n' > "$T/ma"; : > "$T/rdeps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\nsteam-launcher\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null); rm -f "$T/ma"
+    { [ "$(first "$r")" = OK ] && grep -q '^apt-get .* remove steam-libs-i386:i386$' "$CALLS" && grep -qE '^apt-get -y .* remove (.* )?libgl1:i386( |$)' "$CALLS" \
+      && ! grep -q '^libgl1:i386 ' "$T/installed" && grep -q '^libc6 ' "$T/installed" && ! grep -q '^libc6:i386 ' "$T/installed"; } && echo deep || echo shallow
+    # what became unneeded that its dependencies do not name (libsndfile1,
+    # needed by libpulse0 alone): taken too; a leftover from before stays
+    printf 'steam-launcher 1.0\nsteam-libs-i386:i386 1.0\nlibpulse0:i386 17\nlibsndfile1:i386 1.2\noldjunk 1.0\n' > "$T/installed"
+    printf 'steam-launcher steam-libs-i386\nsteam-libs-i386:i386 libpulse0\n' > "$T/deps"
+    printf 'steam-libs-i386:i386\nlibpulse0:i386\nlibsndfile1:i386 libpulse0:i386\noldjunk\n' > "$T/auto"
+    printf 'steam-libs-i386 foreign\n' > "$T/ma"; : > "$T/rdeps"; : > "$CALLS"
+    id=$(next_id); printf 'apt-remove\nsteam-launcher\n' > "$S/requests/.r"; mv "$S/requests/.r" "$S/requests/$id.req"
+    python3 "$1" 2>>"$T/log"; r=$(cat "$S/replies/$id.rep" 2>/dev/null); rm -f "$T/ma"
+    { [ "$(first "$r")" = OK ] && ! grep -q '^libpulse0:i386 ' "$T/installed" && ! grep -q '^libsndfile1:i386 ' "$T/installed" \
+      && grep -q '^oldjunk ' "$T/installed"; } && echo swept || echo unswept
 }
 # shellcheck disable=SC2046
 set -- $(remove_cases "$ADMIND")
@@ -878,6 +923,21 @@ set -- $(remove_cases "$ADMIND")
     || fail "apt-remove gimp: ${1:-} $(tr '\n' '|' < "$CALLS")"
 [ "${2:-}" = guarded ] && pass "apt-remove refuses what would remove the system's own packages (sg-shell); apt removes nothing" \
     || fail "apt-remove guard: ${2:-} $(tr '\n' '|' < "$CALLS")"
+[ "${7:-}" = swept ] && pass "apt-remove also takes what became unneeded that no dependency names (not what was unneeded before)" \
+    || fail "apt-remove sweep: ${7:-} $(tr '\n' '|' < "$CALLS") / $(tr '\n' ' ' < "$T/installed")"
+# shellcheck disable=SC2046
+set -- $(SG_MUTANT_NO_SWEEP=1 remove_cases "$ADMIND")
+[ "${7:-}" = unswept ] && pass "MUTANT NO_SWEEP (Steam's 49 libraries stay) is caught" || fail "NO_SWEEP not detected"
+# shellcheck disable=SC2046
+set -- $(remove_cases "$ADMIND")
+[ "${6:-}" = deep ] && pass "apt-remove takes what the app brought all the way down (Steam: steam-libs-i386, then the libraries under it, libc6:i386 too; libc6 stays)" \
+    || fail "apt-remove depth: ${6:-} $(tr '\n' '|' < "$CALLS")"
+# shellcheck disable=SC2046
+set -- $(SG_MUTANT_REMOVE_ONE_ROUND=1 remove_cases "$ADMIND")
+[ "${6:-}" = shallow ] && pass "MUTANT REMOVE_ONE_ROUND (Steam's 32-bit libraries stay) is caught" || fail "REMOVE_ONE_ROUND not detected"
+# shellcheck disable=SC2046
+set -- $(SG_MUTANT_FOREIGN_PROTECTED=1 remove_cases "$ADMIND")
+[ "${6:-}" = shallow ] && pass "MUTANT FOREIGN_PROTECTED (libc6:i386 kept as the system's) is caught" || fail "FOREIGN_PROTECTED not detected"
 [ "${5:-}" = contained ] && pass "apt-remove leaves the app's parts when removing them would take more than leftovers (no cascade)" \
     || fail "apt-remove cascade: ${5:-} $(tr '\n' '|' < "$CALLS")"
 [ "${4:-}" = archsafe ] && pass "apt-remove takes no other architecture's leftovers for the app's (Firefox: libx11-6 stays; Steam's steam-libs-i386:i386 goes)" \

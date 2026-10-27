@@ -1309,6 +1309,13 @@ REMOVABLE_OURS = ("sg-office", "sg-office-editors")
 def protected(pkg):
     if pkg in REMOVABLE_OURS:
         return False
+    if ":" in pkg and os.environ.get("SG_MUTANT_FOREIGN_PROTECTED") != "1":
+        # another architecture's (qualified() names only those so): never
+        # the system's own, which is the native one -- libc6:i386 shares
+        # libc6's name and zlib1g:i386 its Priority, and Steam's 32-bit
+        # libraries stayed under them. What the system does need of one, the
+        # cascade check sees: apt would remove the native package with it
+        return False
     if pkg.startswith(PROTECTED_PREFIXES):
         return True
     r = run(["dpkg-query", "-W", "-f", "${Essential} ${Priority}", pkg])
@@ -1357,11 +1364,11 @@ def instances(name):
 
 
 def installed_depends(pkg):
-    """the installed packages pkg depends on (each alternative), as apt-get
-    names them: a dependency is pkg's own architecture's (or "all"), else a
+    """the installed packages pkg depends on or recommends (each
+    alternative), as apt-get names them: a dependency is pkg's own architecture's (or "all"), else a
     Multi-Arch: foreign one's (steam-installer's steam-libs-i386:i386), or
     the architecture it names"""
-    r = run(["dpkg-query", "-W", "-f", "${Pre-Depends}, ${Depends}", pkg])
+    r = run(["dpkg-query", "-W", "-f", "${Pre-Depends}, ${Depends}, ${Recommends}", pkg])
     rel = parse_relations("Depends: " + r.stdout) if r.returncode == 0 else {}
     mine = instances(pkg)
     arch = mine[0][0] if mine else native_arch()
@@ -1464,6 +1471,8 @@ def op_apt_remove(args):
     # in for it, once it is gone (apt-get autoremove's own view, narrowed to
     # this package's -- never every leftover on the system)
     deps = installed_depends(pkg)
+    # what apt calls unneeded already: not this app's, never taken with it
+    before = set(simulated_removals(["autoremove"]))
     for name in [pkg] + gone:
         if protected(name):
             log("apt-remove %s: refused, it would remove %s" % (pkg, name))
@@ -1480,30 +1489,62 @@ def op_apt_remove(args):
     if installed_version(pkg):
         raise Refused("%s was not uninstalled." % pkg)
     remove_vendor_source(pkg)
-    leftover = set(simulated_removals(["autoremove"]))
-    extra = [d for d in deps if d in leftover and not protected(d)]
-    # and only if removing them takes nothing else: what apt-get remove of
-    # the parts would take must all be leftovers, none of them the system's.
-    # (qa5 2026-10-21: the parts named the system's libcairo2 and
-    # libgdk-pixbuf, and apt -y took 763 packages with them -- Mesa, GTK,
-    # Qt, SG Mail -- until it was stopped)
-    if extra:
+    # what it brought that nothing else needs, all the way down: its own
+    # dependencies first, then theirs once they are gone (Steam: steam-libs-
+    # i386, then the 32-bit libraries under it -- 200 packages stayed)
+    removed = []
+    rounds = 1 if os.environ.get("SG_MUTANT_REMOVE_ONE_ROUND") == "1" else 64
+    for _ in range(rounds):
+        leftover = set(simulated_removals(["autoremove"]))
+        extra = sorted(d for d in deps if d in leftover and not protected(d) and d not in removed)
+        if not extra and os.environ.get("SG_MUTANT_NO_SWEEP") != "1":
+            # and what became unneeded on the way that the walk did not reach
+            # (a library whose last user went in another round: 49 of
+            # Steam's 32-bit libraries stayed): what apt calls unneeded now
+            # and did not before this uninstall
+            extra = sorted(d for d in leftover - before if not protected(d) and d not in removed)
+        if not extra:
+            break
+        # and only if removing them takes nothing else: what apt-get remove of
+        # the parts would take must all be leftovers, none of them the system's.
+        # (qa5 2026-10-21: the parts named the system's libcairo2 and
+        # libgdk-pixbuf, and apt -y took 763 packages with them -- Mesa, GTK,
+        # Qt, SG Mail -- until it was stopped)
         try:
-            cascade = simulated_removals(["remove"] + sorted(extra))
+            cascade = simulated_removals(["remove"] + extra)
         except Refused:
             cascade = None
         if cascade is None or any(c not in leftover or protected(c) for c in cascade):
-            log("apt-remove %s: its parts stay, removing them would take %s" % (
+            log("apt-remove %s: some parts stay, removing them all would take %s" % (
                 pkg, "more" if cascade is None else " ".join(sorted(c for c in cascade if c not in leftover or protected(c))[:8])))
-            extra = []
-    if extra:
+            # each on its own: the ones whose removal takes only leftovers go
+            alone = []
+            for d in extra:
+                try:
+                    c = simulated_removals(["remove", d])
+                except Refused:
+                    continue
+                if all(x in leftover and not protected(x) for x in c):
+                    alone.append(d)
+            if not alone:
+                break
+            extra = alone
+        below = set()
+        for d in extra:
+            below |= installed_depends(d)
         progress(75, "Removing what it brought with it...")
         for d in extra:
             if d in OUR_PACKAGES:
                 unregister_defaults(d)
-        apt_get(["--purge", "remove"] + sorted(extra), "%s's parts could not be uninstalled" % pkg, 75, 24)
+        apt_get(["--purge", "remove"] + extra, "%s's parts could not be uninstalled" % pkg, 75, 20)
+        removed += extra
+        deps = below - set(removed)
     progress(100, "Done")
-    return ["%s" % pkg] + (["Also removed: %s" % " ".join(sorted(extra))] if extra else [])
+    if len(removed) > 12:
+        shown = " ".join(removed[:12]) + " and %d more" % (len(removed) - 12)
+    else:
+        shown = " ".join(removed)
+    return ["%s" % pkg] + (["Also removed: %s" % shown] if removed else [])
 
 
 def deb_fields(path):
@@ -1575,13 +1616,13 @@ def wants_i386(rel):
 def install_recommends(rel, base, span):
     """the Recommends apt could not see when the package went in: ones from
     the sources the package itself added (Steam's steam-libs-amd64 and
-    steam-libs-i386). Each on its own, and a failure is only noted -- the
-    package is installed. Answers the names that did not install."""
+    steam-libs-i386), with the lists already refreshed. Each on its own, and
+    a failure is only noted -- the package is installed. Answers the names
+    that did not install."""
     missing = [alts[0][0] for alts in rel.get("Recommends", [])
                if not any(installed_version(n) for n, _ in alts) and PKG_RE.fullmatch(alts[0][0])]
     if not missing:
         return []
-    refresh_lists()
     i386 = "i386" in foreign_archs()
     failed = []
     for i, name in enumerate(missing):
@@ -1589,6 +1630,11 @@ def install_recommends(rel, base, span):
         try:
             apt_get(["install", target], "%s could not be installed" % name,
                     base + span * i / len(missing), span / len(missing))
+            # installed for the package, as apt's own Recommends are: marked
+            # automatic, so its Uninstall takes them (Steam's steam-libs-*
+            # and the 32-bit libraries under them stayed, manual)
+            if os.environ.get("SG_MUTANT_RECOMMENDS_MANUAL") != "1":
+                run(["apt-mark", "auto", target])
         except Refused as e:
             log("recommended %s: %s" % (name, e))
             failed.append(name)
@@ -1667,6 +1713,12 @@ def op_deb_install(args):
     got = installed_version(pkg)
     if got != ver:
         raise Refused("%s %s was not installed." % (pkg, ver))
+    if sources and os.environ.get("SG_MUTANT_DEB_SOURCES_STALE") != "1":
+        # apt learns the sources the package added -- even when its
+        # Recommends were all there already (Steam installed again after an
+        # Uninstall): Valve's steamdeps found its repository missing from
+        # apt-cache policy and asked for a root "apt-get update" in a terminal
+        refresh_lists()
     failed = install_recommends(rel, 60, 38) if sources else []
     progress(100, "Done")
     return ["%s %s" % (pkg, ver)] + (["Not installed: %s" % " ".join(failed)] if failed else [])

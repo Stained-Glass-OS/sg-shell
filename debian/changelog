@@ -1,3 +1,22 @@
+sg-shell (0.1.0-226) unstable; urgency=medium
+
+  * sg-admind: Linux apps uninstall whole and Steam installs again cleanly.
+    Uninstall took only an app's direct dependencies: what those brought,
+    and the Recommends sg-admind installs itself (marked manual), stayed --
+    Steam left steam-libs-* and about 200 32-bit libraries. Now the
+    Recommends it installs are marked automatic, and Uninstall walks the
+    app's dependencies down and then sweeps what became unneeded during it
+    (never what apt called unneeded before), each round under the cascade
+    check; another architecture's package (libc6:i386) is not taken for
+    the system's own. A .deb that adds apt sources (Valve's) always
+    refreshes the lists: installed again, Steam's steamdeps found its
+    repository missing and asked for a root apt-get update in a terminal.
+    qa4: Steam in and out twice, 1520 packages before, 1521 after.
+    Gate test/admind-check.sh; mutants RECOMMENDS_MANUAL, DEB_SOURCES_STALE,
+    REMOVE_ONE_ROUND, FOREIGN_PROTECTED, NO_SWEEP.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 27 Oct 2026 08:47:18 -0700
+
 sg-shell (0.1.0-225) unstable; urgency=medium
 
   * Linux programs' tray icons in the taskbar (sg-sni64.exe): sg-session's
