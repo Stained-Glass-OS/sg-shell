@@ -1,3 +1,13 @@
+sg-shell (0.1.0-225) unstable; urgency=medium
+
+  * Linux programs' tray icons in the taskbar (sg-sni64.exe): sg-session's
+    sg-sni-bridge hands it each StatusNotifierItem's icon, tooltip and menu;
+    it shows them in the notification area and sends clicks and menu
+    choices back. Flameshot, KeePassXC, Nextcloud and Telegram had no icon
+    anywhere. Gate: sg-session's test-sni, mutant SNI_NO_MENU.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 27 Oct 2026 03:30:00 -0700
+
 sg-shell (0.1.0-224) unstable; urgency=medium
 
   * SG Store: an administrator gets an app's installer for the machine.

@@ -132,6 +132,9 @@ build:
 	    -lshell32 -luser32 -lole32 -luuid -municode -mwindows && echo "built sg-kiosk (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe src/sg-volume.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-volume (64-bit)"
+	@# Linux programs' tray icons (sg-sni): sg-session's sg-sni-bridge feeds it
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sni64.exe src/sg-sni.c \
+	    -lshell32 -luser32 -lgdi32 -lole32 -lwindowscodecs -luuid -municode -mwindows && echo "built sg-sni (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-notify64.exe src/sg-notify.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-notify (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
