@@ -28,6 +28,9 @@
 
 #define DEFAULT_LIST L"https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/"
 #define DEFAULT_RAW  L"https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/"
+/* every winget package's newest version, one "id<TAB>version" line each, made every hour on the
+ * project server from winget's own index (its CDN, source2.msix) */
+#define DEFAULT_LATEST L"https://freesoft.page/winget/latest.tsv"
 #define MAX_MANIFEST (4 << 20)
 
 static void seterr(WCHAR *err, int cch, const WCHAR *fmt, ...)
@@ -44,7 +47,7 @@ static void source_url(const WCHAR *name, const WCHAR *def, WCHAR *out, int cch)
 {
     WCHAR env[64];
     DWORD cb = cch * sizeof(WCHAR);
-    swprintf(env, 64, L"SG_BROWSER_%ls_URL", !wcscmp(name, L"ListUrl") ? L"LIST" : L"RAW");
+    swprintf(env, 64, L"SG_BROWSER_%ls_URL", !wcscmp(name, L"ListUrl") ? L"LIST" : !wcscmp(name, L"LatestUrl") ? L"LATEST" : L"RAW");
     if (GetEnvironmentVariableW(env, out, cch) && out[0]) return;
     if (!RegGetValueW(HKEY_LOCAL_MACHINE, BROWSERS_KEY, name, RRF_RT_REG_SZ, NULL, out, &cb) && out[0]) return;
     lstrcpynW(out, def, cch);
@@ -151,49 +154,110 @@ static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
     return buf;
 }
 
-/* Whether the person is an administrator, for the scope of the installer
- * picked. In an administrator's session the token is not elevated, and
- * IsUserAnAdmin says no, as on Windows under UAC; the session says so
- * instead (SG_USER_ADMIN, from sg-session-start, as wine-sg's own
- * highestAvailable check reads it). Taken as a person's, Total Commander's
- * user entry (/AH) ran as the person, could not write Program Files, and
- * stopped with code 3. SG_STORE_FAKE_LIMITED is the gate's unelevated token. */
-static BOOL store_admin(void)
+/* Which scope's installer is taken when a package offers both: winget's own
+ * default, the person's (user), in an administrator's session too; the
+ * machine's only when the catalogue asks for it (Scope "machine"), for an app
+ * whose per-user entry still writes Program Files (Total Commander's /AH ran
+ * as the person and stopped with code 3). Taking the machine's for every
+ * administrator ran Joplin's and Obsidian's electron-builder installers with
+ * /allusers, and both stopped with code 2. */
+static int prefer_machine(const WCHAR *scope)
 {
+#ifdef SG_MUTANT_ADMINMACHINE
     WCHAR v[4];
-    if (IsUserAnAdmin() && !GetEnvironmentVariableW(L"SG_STORE_FAKE_LIMITED", v, ARRAYSIZE(v))) return TRUE;
-#ifdef SG_MUTANT_TOKENADMINONLY
-    return FALSE;
-#else
-    return GetEnvironmentVariableW(L"SG_USER_ADMIN", v, ARRAYSIZE(v)) == 1 && v[0] == L'1';
+    if (GetEnvironmentVariableW(L"SG_USER_ADMIN", v, ARRAYSIZE(v)) == 1 && v[0] == L'1') return 1;
 #endif
+#ifdef SG_MUTANT_NOSCOPEPIN
+    return 0;
+#else
+    return scope && !_wcsicmp(scope, L"machine");
+#endif
+}
+
+/* The newest version from the project server's list, fetched once per run. GitHub's API, which
+ * lists a package's versions, answers 60 requests an hour to an address: a walk of the Store,
+ * an update check of many apps, or an office of PCs behind one address ran out, and every
+ * install stopped with "answered 403". */
+static char *latest_list;
+static LONG latest_tried;
+
+static BOOL mirror_version(const WCHAR *id, char *ver, int cap)
+{
+    char id8[256], *line;
+    size_t n;
+#ifdef SG_MUTANT_NOMIRROR
+    return FALSE;
+#endif
+    if (!InterlockedCompareExchange(&latest_tried, 1, 0)) {
+        WCHAR url[1024], err[512];
+        DWORD status = 0;
+        source_url(L"LatestUrl", DEFAULT_LATEST, url, 1024);
+        InterlockedExchangePointer((void **)&latest_list, http_get(url, &status, err, 512));
+    }
+    if (!latest_list || !WideCharToMultiByte(CP_UTF8, 0, id, -1, id8, sizeof(id8), NULL, NULL)) return FALSE;
+    n = strlen(id8);
+    for (line = latest_list; line && *line; line = strchr(line, '\n') ? strchr(line, '\n') + 1 : NULL) {
+        if (!_strnicmp(line, id8, n) && line[n] == '\t') {
+            const char *v = line + n + 1;
+            int k = 0;
+            while (v[k] && v[k] != '\n' && v[k] != '\r' && k < cap - 1) { ver[k] = v[k]; k++; }
+            ver[k] = 0;
+            return k > 0;
+        }
+    }
+    return FALSE;
+}
+
+/* A package's newest version: the project server's list, else GitHub's listing of its folder
+ * (a package newer than the list, or the list out of reach). from_list says which. */
+static BOOL newest_version(const WCHAR *id, const WCHAR *path, BOOL use_list, char *ver, int cap,
+                           BOOL *from_list, WCHAR *err, int cch)
+{
+    WCHAR base[1024], url[2048];
+    DWORD status;
+    char *json;
+    int k;
+    *from_list = use_list && mirror_version(id, ver, cap);
+    if (*from_list) return TRUE;
+    source_url(L"ListUrl", DEFAULT_LIST, base, 1024);
+    swprintf(url, 2048, L"%ls%ls", base, path);
+    if (!(json = http_get(url, &status, err, cch))) return FALSE;
+    k = mf_newest_version(json, ver, cap);
+    free(json);
+    if (!k) { seterr(err, cch, L"No version of %ls was found.", id); return FALSE; }
+    return TRUE;
 }
 
 BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
 {
+    return pkg_resolve_scope(id, NULL, p, err, cch);
+}
+
+BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR *err, int cch)
+{
     WCHAR base[1024], path[512], url[2048];
-    char *json, *yaml, ver[64], loc8[LOCALE_NAME_MAX_LENGTH];
+    char *yaml, ver[64], loc8[LOCALE_NAME_MAX_LENGTH];
     mf_entry root, *list = calloc(MF_MAX_ENTRIES, sizeof(mf_entry)), *best;
     DWORD status;
-    int n, k;
+    int n, k, pass;
+    BOOL from_list = FALSE;
     WCHAR locale[LOCALE_NAME_MAX_LENGTH] = L"en-US";
     memset(p, 0, sizeof(*p));
     lstrcpynW(p->id, id, 128);
     if (!list) return FALSE;
     if (!id_path(id, path, 512)) { seterr(err, cch, L"'%ls' is not a package name.", id); free(list); return FALSE; }
-    source_url(L"ListUrl", DEFAULT_LIST, base, 1024);
-    swprintf(url, 2048, L"%ls%ls", base, path);
-    if (!(json = http_get(url, &status, err, cch))) { free(list); return FALSE; }
-    k = mf_newest_version(json, ver, sizeof(ver));
-    free(json);
-    if (!k) { free(list); seterr(err, cch, L"No version of %ls was found.", id); return FALSE; }
-    MultiByteToWideChar(CP_UTF8, 0, ver, -1, p->version, 64);
-    source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
-    swprintf(url, 2048, L"%ls%ls/%ls/%ls.installer.yaml", base, path, p->version, id);
-    if (!(yaml = http_get(url, &status, err, cch)) && status == 404) {
-        /* an older package: one file for everything */
-        swprintf(url, 2048, L"%ls%ls/%ls/%ls.yaml", base, path, p->version, id);
-        yaml = http_get(url, &status, err, cch);
+    for (pass = 0, yaml = NULL; pass < 2 && !yaml; pass++) {
+        /* the list's version first; one it names that has no manifest (yet): GitHub's */
+        if (pass && !from_list) break;
+        if (!newest_version(id, path, !pass, ver, sizeof(ver), &from_list, err, cch)) { free(list); return FALSE; }
+        MultiByteToWideChar(CP_UTF8, 0, ver, -1, p->version, 64);
+        source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
+        swprintf(url, 2048, L"%ls%ls/%ls/%ls.installer.yaml", base, path, p->version, id);
+        if (!(yaml = http_get(url, &status, err, cch)) && status == 404) {
+            /* an older package: one file for everything */
+            swprintf(url, 2048, L"%ls%ls/%ls/%ls.yaml", base, path, p->version, id);
+            yaml = http_get(url, &status, err, cch);
+        }
     }
     if (!yaml) { free(list); return FALSE; }
     n = mf_parse(yaml, &root, list, MF_MAX_ENTRIES);
@@ -201,9 +265,9 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch)
     GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH);
     WideCharToMultiByte(CP_UTF8, 0, locale, -1, loc8, sizeof(loc8), NULL, NULL);
 #ifdef _WIN64
-    k = mf_pick(list, n, loc8, store_admin(), 1);
+    k = mf_pick(list, n, loc8, prefer_machine(scope), 1);
 #else
-    k = mf_pick(list, n, loc8, store_admin(), 0);
+    k = mf_pick(list, n, loc8, prefer_machine(scope), 0);
 #endif
     if (k < 0) { free(list); seterr(err, cch, L"%ls %ls has no installer for this PC.", id, p->version); return FALSE; }
     best = &list[k];
@@ -235,16 +299,12 @@ char *winget_locale_manifest(const WCHAR *id, WCHAR *version, int vcch, WCHAR *e
 {
     WCHAR base[1024], path[512], url[2048], locale[LOCALE_NAME_MAX_LENGTH] = L"en-US";
     const WCHAR *tries[3];
-    char *json, *yaml = NULL, ver[64];
+    char *yaml = NULL, ver[64];
     DWORD status = 0;
+    BOOL from_list;
     int k;
     if (!id_path(id, path, 512)) { seterr(err, cch, L"'%ls' is not a package name.", id); return NULL; }
-    source_url(L"ListUrl", DEFAULT_LIST, base, 1024);
-    swprintf(url, 2048, L"%ls%ls", base, path);
-    if (!(json = http_get(url, &status, err, cch))) return NULL;
-    k = mf_newest_version(json, ver, sizeof(ver));
-    free(json);
-    if (!k) { seterr(err, cch, L"No version of %ls was found.", id); return NULL; }
+    if (!newest_version(id, path, TRUE, ver, sizeof(ver), &from_list, err, cch)) return NULL;
     MultiByteToWideChar(CP_UTF8, 0, ver, -1, version, vcch);
     source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
     GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH);

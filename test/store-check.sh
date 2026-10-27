@@ -81,7 +81,9 @@
 #   SG_MUTANT_NOUNINSTALL offers no Uninstall for a system package (SG Office)
 #   SG_MUTANT_NOPAIR      lists both builds of an app as apps of their own
 #   SG_MUTANT_NOOTHERBUILD  an installed build's page offers no other build
-#   SG_MUTANT_TOKENADMINONLY an administrator's unelevated session gets the person's installer (Total Commander)
+#   SG_MUTANT_ADMINMACHINE  an administrator's session gets the machine's installer (Joplin's /allusers: code 2)
+#   SG_MUTANT_NOSCOPEPIN    the catalogue's Scope "machine" is ignored (Total Commander's user entry: code 3)
+#   SG_MUTANT_NOMIRROR      asks GitHub's API for every version, not the project server's list (403 after 60)
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
@@ -162,7 +164,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 TOKENADMINONLY; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -332,6 +334,8 @@ DPY=$(cat "$T/display" 2>/dev/null); [ -n "$DPY" ] || { echo "FAIL  Xvfb did not
 export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDLLOVERRIDES='mscoree,mshtml=;winemenubuilder.exe=d' WINEDEBUG=-all
 export PATH="$WINE_DIR/bin:$PATH"
 export SG_BROWSER_LIST_URL="http://127.0.0.1:$PORT/api/" SG_BROWSER_RAW_URL="http://127.0.0.1:$PORT/raw/"
+# the project server's version list: none here (404) but in its own cases, so the rest asks the API
+export SG_BROWSER_LATEST_URL="http://127.0.0.1:$PORT/latest.tsv"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 
@@ -539,6 +543,24 @@ a01=$(appline 01)
 [ "$(kv "$a01" state)" = update ] && pass "the app is marked as an update" || fail "01 state '$(kv "$a01" state)'"
 SG_MUT="$T/mut-noupdate.exe" run --check-updates
 [ "$(kv "$(appline 01)" state)" != update ] && pass "MUTANT NOUPDATE misses the update (gate catches it)" || fail "NOUPDATE not detected by the gate"
+# the project server's list of newest versions (freesoft.page/winget/latest.tsv) in place of GitHub's
+# API, which answers 60 requests an hour to an address: a walk of the Store ran out ("answered 403")
+mv "$W/api/f/Fake/App" "$W/api-app.off"
+printf 'Fake.Other\t3.0\nfake.app\t1.10.0\n' > "$W/latest.tsv"
+run --check-updates
+[ "$(kv "$(appline 01)" available)" = 1.10.0 ] && pass "the newest version comes from the project server's list, GitHub's API not asked" \
+    || fail "version list: $(appline 01)"
+SG_MUT="$T/mut-nomirror.exe" run --check-updates
+[ "$(kv "$(appline 01)" available)" != 1.10.0 ] && pass "MUTANT NOMIRROR asks GitHub's API (gate catches it)" || fail "NOMIRROR not detected: $(appline 01)"
+mv "$W/api-app.off" "$W/api/f/Fake/App"
+printf 'Fake.App\t9.9.9\n' > "$W/latest.tsv"
+run --check-updates
+[ "$(kv "$(appline 01)" available)" = 1.10.0 ] && pass "...a version the list names that has no manifest (yet): GitHub's newest" \
+    || fail "stale list: $(appline 01)"
+printf 'Fake.Other\t3.0\n' > "$W/latest.tsv"
+run --check-updates
+[ "$(kv "$(appline 01)" available)" = 1.10.0 ] && pass "...a package the list lacks: GitHub's" || fail "not in list: $(appline 01)"
+rm -f "$W/latest.tsv"
 ununinstall FakeApp; wineserver -w
 
 # --- D. a tampered download is refused ------------------------------------------------------------
@@ -690,23 +712,32 @@ SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR
 grep -q '/SP-' "$G/setup.log" 2>/dev/null && ! grep -q 'ALLUSERS' "$G/setup.log" \
     && pass "MUTANT NOINNOSCOPE runs it without its scope (gate catches it)" || fail "NOINNOSCOPE not detected: $(cat "$G/setup.log" 2>/dev/null)"
 rm -f "$G/setup.log"; ununinstall InnoM
-# --- an administrator whose token is not elevated (UAC) gets the machine's installer --------------
-# IsUserAnAdmin says no in an administrator's session; the session says SG_USER_ADMIN=1. As a person's,
-# Total Commander's user entry (/AH) ran as the person and could not write Program Files: code 3
-scopes() { # exe label
+# --- which scope's installer, when a package offers both -------------------------------------------
+# winget's default: the person's, in an administrator's session too (the machine's, /allusers, made
+# Joplin's and Obsidian's installers stop with code 2); the catalogue's Scope "machine" takes the
+# machine's (Total Commander's user entry /AH still writes Program Files: code 3 as the person)
+scopes() { # exe [catalogue scope]
     rm -f "$G/setup.log"
+    [ -n "${2:-}" ] && reg "$K\\0C" /v Scope /d "$2"
     SG_FAKE_KEY=Scopes SG_FAKE_DISPLAY='Two Scopes' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Two Scopes' \
         wine "$1" --install 0C >/dev/null 2>&1
+    wine reg delete "$K\\0C" /v Scope /f >/dev/null 2>&1
     cat "$G/setup.log" 2>/dev/null; rm -f "$G/setup.log"; ununinstall Scopes
 }
 r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$EXE")
-case "$r" in *gate-machine-scope*) pass "an administrator's unelevated session takes the machine's installer (Total Commander)";;
+case "$r" in *gate-user-scope*) pass "an administrator's session takes the person's installer, as winget does (Joplin)";;
     *) fail "admin session, scope: '$r'";; esac
 r=$(SG_STORE_FAKE_LIMITED=1 scopes "$EXE")
-case "$r" in *gate-user-scope*) pass "...a standard user's takes the person's";; *) fail "standard user, scope: '$r'";; esac
-r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$T/mut-tokenadminonly.exe")
-case "$r" in *gate-user-scope*) pass "MUTANT TOKENADMINONLY gives the administrator the person's installer (gate catches it)";;
-    *) fail "TOKENADMINONLY not detected: '$r'";; esac
+case "$r" in *gate-user-scope*) pass "...a standard user's too";; *) fail "standard user, scope: '$r'";; esac
+r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$EXE" machine)
+case "$r" in *gate-machine-scope*) pass "the catalogue's Scope machine takes the machine's (Total Commander)";;
+    *) fail "Scope machine: '$r'";; esac
+r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$T/mut-adminmachine.exe")
+case "$r" in *gate-machine-scope*) pass "MUTANT ADMINMACHINE gives the administrator the machine's installer (gate catches it)";;
+    *) fail "ADMINMACHINE not detected: '$r'";; esac
+r=$(SG_STORE_FAKE_LIMITED=1 SG_USER_ADMIN=1 scopes "$T/mut-noscopepin.exe" machine)
+case "$r" in *gate-user-scope*) pass "MUTANT NOSCOPEPIN ignores the catalogue's Scope (gate catches it)";;
+    *) fail "NOSCOPEPIN not detected: '$r'";; esac
 SG_MUT="$T/mut-anytype.exe" run --install 08
 [ ! -e "$G/setup.log" ] && pass "MUTANT ANYTYPE picks the portable zip and installs nothing (gate catches it)" || fail "ANYTYPE not detected"
 

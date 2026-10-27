@@ -1,3 +1,24 @@
+sg-shell (0.1.0-227) unstable; urgency=medium
+
+  * SG Store: an app offered for both scopes gets the person's installer,
+    as winget does by default -- in an administrator's session too. Taking
+    the machine's for every administrator (0.1.0-224) ran Joplin's,
+    Obsidian's and Bitwarden's installers with /allusers and they stopped
+    with code 2. The catalogue asks for the machine's where the person's
+    still writes Program Files (Scope "machine": Total Commander, Heroic).
+    Gate store-check, mutants ADMINMACHINE, NOSCOPEPIN.
+  * SG Store: the newest versions come from one list on the project server
+    (freesoft.page/winget/latest.tsv, made hourly from winget's own index),
+    fetched once per run; GitHub's API, asked per app before, answers 60
+    requests an hour to an address and installs stopped with "answered
+    403". A package the list lacks, or a version it names without a
+    manifest yet, still goes to GitHub. LatestUrl beside ListUrl/RawUrl.
+    Mutant NOMIRROR.
+  * SG Store: CCleaner uninstalls quietly (/silent); its uninstaller waited
+    at "Uninstallation complete" for Done.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 27 Oct 2026 14:46:44 -0700
+
 sg-shell (0.1.0-226) unstable; urgency=medium
 
   * sg-admind: Linux apps uninstall whole and Steam installs again cleanly.

@@ -72,6 +72,9 @@ typedef struct {
     WCHAR install_args[128];      /* InstallArgs: the installer's quiet switches in place of its
                                    * manifest's (Dropbox: "--silent"; its "/s" still waits at
                                    * "Installation complete") */
+    WCHAR scope[16];              /* Scope: "machine" takes the machine's installer where the
+                                   * package offers both (Total Commander's user entry still
+                                   * writes Program Files); else winget's default, the person's */
     BOOL  also_in_category;       /* a Linux app also listed under its Category (Steam in Games) */
     WCHAR deb_url[512];           /* SRC_LINUX_APT: the maker's own .deb (DebUrl), installed
                                    * when its package is in no apt source (Valve's steam.deb) */

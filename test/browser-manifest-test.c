@@ -264,8 +264,8 @@ int main(void)
     CHECK(n == 2, "Brave: 2 installers (indented list, InstallModes skipped) (%d)", n);
     CHECK(!strcmp(list[0].scope, "user") && !list[0].silent[0], "Brave: the user installer has no switches");
     CHECK(!strcmp(list[1].silent, "/silent /install") && !strcmp(list[1].scope, "machine"), "Brave: the machine installer's own switches (%s)", list[1].silent);
-    CHECK(mf_pick(list, n, "en-US", 0, 1) == 0, "Brave: a standard user gets the per-user installer");
-    CHECK(mf_pick(list, n, "en-US", 1, 1) == 1, "Brave: an administrator gets the machine-wide one");
+    CHECK(mf_pick(list, n, "en-US", 0, 1) == 0, "Brave: the person's installer by default (winget's)");
+    CHECK(mf_pick(list, n, "en-US", 1, 1) == 1, "Brave: the machine-wide one when asked for (catalogue Scope)");
 
     strcpy(buf, OPERA);
     n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);

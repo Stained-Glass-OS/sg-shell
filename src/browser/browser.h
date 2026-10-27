@@ -46,6 +46,8 @@ typedef struct {
 typedef void (*progress_fn)(void *ctx, int stage, ULONGLONG done, ULONGLONG total);
 
 BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch);
+/* scope "machine": the machine's installer where the package offers both (NULL: winget's default, the person's) */
+BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR *err, int cch);
 BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 BOOL pkg_install(package_t *p, WCHAR *err, int cch);
 void pkg_take_tree(package_t *p);
