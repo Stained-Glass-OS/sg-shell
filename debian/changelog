@@ -1,3 +1,18 @@
+sg-shell (0.1.0-232) unstable; urgency=medium
+
+  * SG Store and Get a web browser: a download not matching its manifest's
+    SHA-256 at an address that names no version (Spotify's
+    SpotifyFullSetupX64.exe, AnyDesk.exe: one address for every release)
+    says what it most likely is -- the maker's newer release at the same
+    address: try again in a day or two -- instead of only "not the file its
+    maker published". It is still not run. Spotify's install failed so in
+    release 609 (its file moved past winget's listing; it installed on
+    605). Gates browser-check (wording; mutant URLVER), the manifest unit
+    test (Chrome.EXE, WinRAR name their version; Spotify, AnyDesk, Chrome's
+    enterprise MSI do not).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 08:04:23 -0700
+
 sg-shell (0.1.0-231) unstable; urgency=medium
 
   * Google Chrome from winget's Google.Chrome.EXE, in the SG Store and Get a

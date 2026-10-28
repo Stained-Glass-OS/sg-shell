@@ -34,6 +34,10 @@ int mf_type_rank(const char *type, const char *nested);
  * 64-bit, the user's locale, the scope an administrator (machine) or a user
  * (user) installs to; -1 if none fits */
 int mf_pick(const mf_entry *list, int n, const char *locale, int admin, int is64);
+/* whether an installer URL's path names this version: the version itself, or its numbers run
+ * together (WinRAR's winrar-x64-723.exe for 7.23.0). 0: one address for every release
+ * (Spotify's SpotifyFullSetupX64.exe), whose file changes before its listing does */
+int mf_url_names_version(const char *url, const char *version);
 /* 64 hex digits -> 32 bytes; 0 if not valid */
 int mf_sha256(const char *hex, unsigned char out[32]);
 

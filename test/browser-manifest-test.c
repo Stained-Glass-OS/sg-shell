@@ -309,6 +309,16 @@ int main(void)
     CHECK(n == 2 && !strcmp(list[0].success, "-2147219416 -2147219187"), "the root's InstallerSuccessCodes go to an installer (%s)", n ? list[0].success : "");
     CHECK(n == 2 && !strcmp(list[1].success, "1638 3"), "an installer's own, in the flow form, win (%s)", n > 1 ? list[1].success : "");
     CHECK(n == 2 && !strcmp(list[1].url, "https://example.org/wv64.exe"), "the installer's fields after it still read");
+    /* an installer address that names its version, or one address for every release */
+    CHECK(mf_url_names_version("https://dl.google.com/release2/chrome/bepev3654e27_156.0.8078.74/156.0.8078.74_chrome_installer_uncompressed.exe", "156.0.8078.74"),
+          "Chrome.EXE's address names its version");
+    CHECK(mf_url_names_version("https://www.rarlab.com/rar/winrar-x64-723.exe", "7.23.0"), "WinRAR's winrar-x64-723.exe names 7.23.0");
+    CHECK(!mf_url_names_version("https://download.scdn.co/SpotifyFullSetupX64.exe", "1.3.6.1921.g7086c071a617"),
+          "Spotify's SpotifyFullSetupX64.exe names no version");
+    CHECK(!mf_url_names_version("https://download.anydesk.com/AnyDesk.exe", "9.8.3"), "AnyDesk.exe names none");
+    CHECK(!mf_url_names_version("https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi", "156.0.8078.48"),
+          "Chrome's enterprise MSI names none (64 is not 156...)");
+    CHECK(!mf_url_names_version("http://127.0.0.1:40849/files/setup.exe", "2.0"), "the host's numbers do not count");
     printf("browser-manifest-test: %s\n", fails ? "FAILED" : "all passed");
     return fails ? 1 : 0;
 }

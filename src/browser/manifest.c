@@ -318,6 +318,28 @@ static int hexval(int c)
     return c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
 }
 
+int mf_url_names_version(const char *url, const char *version)
+{
+    char vd[64], pd[2048], parts[64];
+    const char *path = strstr(url, "://");
+    int n = 0, k = 0, len;
+#ifdef SG_MUTANT_URLVER
+    return 1;
+#endif
+    if (!path || !(path = strchr(path + 3, '/')) || !version[0]) return 0;
+    if (strstr(path, version)) return 1;
+    /* the version less its trailing ".0" parts, digits only: 7.23.0 -> 723 */
+    snprintf(parts, sizeof(parts), "%s", version);
+    len = (int)strlen(parts);
+    while (len >= 2 && parts[len - 1] == '0' && parts[len - 2] == '.') parts[len -= 2] = 0;
+    for (k = 0; parts[k] && n < (int)sizeof(vd) - 1; k++) if (isdigit((unsigned char)parts[k])) vd[n++] = parts[k];
+    vd[n] = 0;
+    if (n < 2) return 0;
+    for (k = 0, n = 0; path[k] && n < (int)sizeof(pd) - 1; k++) if (isdigit((unsigned char)path[k])) pd[n++] = path[k];
+    pd[n] = 0;
+    return strstr(pd, vd) != NULL;
+}
+
 int mf_sha256(const char *hex, unsigned char out[32])
 {
     int k;

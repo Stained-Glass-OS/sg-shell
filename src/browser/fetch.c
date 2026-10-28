@@ -508,7 +508,15 @@ BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *
     memcpy(digest, p->sha256, 32);
 #endif
     if (!p->nohash && memcmp(digest, p->sha256, 32)) {
-        seterr(err, cch, L"The download is not the file its maker published (its SHA-256 does not match), so it was not run.");
+        char u8[2048], v8[64];
+        WideCharToMultiByte(CP_UTF8, 0, p->url, -1, u8, sizeof(u8), NULL, NULL);
+        WideCharToMultiByte(CP_UTF8, 0, p->version, -1, v8, sizeof(v8), NULL, NULL);
+        if (mf_url_names_version(u8, v8))
+            seterr(err, cch, L"The download is not the file its maker published (its SHA-256 does not match), so it was not run.");
+        else    /* one address for every release (Spotify): the maker's newer file, not listed yet; short
+                 * enough for the Store's message with its full-drive hint after it (256) */
+            seterr(err, cch, L"Not run: not the listed %ls (SHA-256 does not match). "
+                   L"Its maker likely put a newer release at the same address; try again in a day or two.", p->version);
         goto done;
     }
     p->size = done;

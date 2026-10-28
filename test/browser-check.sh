@@ -171,6 +171,9 @@ click_hit install 1 || fail "no Install button for the tampered browser"
 if wait_line '^offer Tampered.Offer failed' 20; then
     grep -q '^offer Tampered.Offer failed .*SHA-256 does not match' "$D" && pass "a download whose SHA-256 is not the manifest's is refused (an offer's Package resolved)" \
         || fail "tampered: '$(grep '^offer Tampered.Offer' "$D")'"
+    # its address (files/fakebrowser-setup.exe) names no version, as Spotify's: most likely a newer release
+    grep -q '^offer Tampered.Offer failed .*not the listed 2.0 .*newer release at the same address' "$D" \
+        && pass "...at one address for every release: 'likely a newer release at the same address'" || fail "wording: '$(grep '^offer Tampered.Offer' "$D")'"
 else fail "tampered: '$(grep '^offer Tampered.Offer' "$D")'"; fi
 [ ! -e "$G/setup.log" ] && pass "and its installer never ran" || fail "the tampered installer ran: $(cat "$G/setup.log")"
 shot refused
