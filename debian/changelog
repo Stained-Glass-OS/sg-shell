@@ -1,3 +1,14 @@
+sg-shell (0.1.0-229) unstable; urgency=medium
+
+  * SG Store: an app's first settings, written once after its install where
+    the app has none yet (never over the person's own): the catalogue's
+    SettingsFile and SettingsLine1..N. Everything indexes NTFS volumes only
+    and found nothing here; it now starts with C:\ indexed as folders, kept
+    up to date (the person's linked Documents included). Gate store-check,
+    mutant NOSEED.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 05:10:05 -0700
+
 sg-shell (0.1.0-228) unstable; urgency=medium
 
   * SG Store: an app installed from the Store can be found in Start. Where

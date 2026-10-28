@@ -906,6 +906,12 @@ Windows Registry Editor Version 5.00
 "Source"="winget:voidtools.Everything"
 "DetectName"="Everything"
 "Icon"="https://www.voidtools.com/favicon.ico"
+; it indexes NTFS volumes only (none here): C:\ as folders, kept up to date
+"SettingsFile"="%APPDATA%\\Everything\\Everything.ini"
+"SettingsLine1"="[Everything]"
+"SettingsLine2"="folders=\"C:\\\\\""
+"SettingsLine3"="folder_monitor_changes=1"
+"SettingsLine4"="folder_update_types=2"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\71]
 "Name"="CPU-Z"

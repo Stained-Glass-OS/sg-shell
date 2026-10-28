@@ -86,6 +86,7 @@
 #   SG_MUTANT_NOMIRROR      asks GitHub's API for every version, not the project server's list (403 after 60)
 #   SG_MUTANT_WAITLASTMESSAGE  waits for an uninstaller left up at its last message (CutePDF: 20 minutes)
 #   SG_MUTANT_NOSTARTLINK   an app whose installer made no Start shortcut is not found in Start (Winamp, AIMP)
+#   SG_MUTANT_NOSEED        an app's first settings (Everything's folders to index) are not written
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
@@ -166,7 +167,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1940,6 +1941,27 @@ r=$(startlnk "$EXE" SG_FAKE_LINK=1)
 case "$r" in "installer's"*) pass "...not when its installer made one";; *) fail "an installer's own shortcut: $r";; esac
 r=$(startlnk "$T/mut-nostartlink.exe")
 case "$r" in none*) pass "MUTANT NOSTARTLINK leaves it out of Start (gate catches it)";; *) fail "NOSTARTLINK not detected: $r";; esac
+# the app's first settings (Everything: the folders to index), written once, never over the person's own
+reg "$K\\01" /v SettingsFile /d '%APPDATA%\Fake App\fake.ini'
+reg "$K\\01" /v SettingsLine1 /d '[Fake]'
+reg "$K\\01" /v SettingsLine2 /d 'folders="C:\\"'
+seed() { # exe [own] -> the settings file's text after the install ("none" when there is none)
+    ini=$(ls -d "$WINEPREFIX"/drive_c/users/*/AppData/Roaming | grep -v Public | head -1)/Fake\ App/fake.ini
+    rm -f "$ini"
+    [ -n "${2:-}" ] && { mkdir -p "$(dirname "$ini")"; printf 'mine\r\n' > "$ini"; }
+    rm -f "$D" "$D.result"
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$1" --install 01 >/dev/null 2>&1
+    [ -f "$ini" ] && tr -d '\r' < "$ini" | tr '\n' '|' || echo none
+    SG_STORE_UNINSTALL_GRACE=1000 wine "$1" --uninstall 01 >/dev/null 2>&1
+    ununinstall FakeApp; find "$WINEPREFIX/drive_c" -iname '*Fake App.lnk' -delete 2>/dev/null; rm -f "$ini"; sleep 0.5
+}
+r=$(seed "$EXE")
+[ "$r" = '[Fake]|folders="C:\\"|' ] && pass "an app's first settings written after its install (Everything: C:\\ to index)" || fail "first settings: $r"
+r=$(seed "$EXE" own)
+[ "$r" = 'mine|' ] && pass "...never over the person's own settings" || fail "first settings over the person's own: $r"
+r=$(seed "$T/mut-noseed.exe")
+[ "$r" = none ] && pass "MUTANT NOSEED writes no settings (gate catches it)" || fail "NOSEED not detected: $r"
+wine reg delete "$K\\01" /v SettingsFile /f >/dev/null 2>&1
 
 # --- M. several apps, one consent ------------------------------------------------------------------
 "$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"

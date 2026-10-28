@@ -688,6 +688,56 @@ static void ensure_start_shortcut(const app_t *a)
     if (SUCCEEDED(init)) CoUninitialize();
 }
 
+/* ---- the app's first settings -----------------------------------------------------------------------
+ *
+ * Settings an app needs to be useful here, written once after its install
+ * where the app has none yet (never over the person's own): the catalogue's
+ * SettingsFile (environment variables expanded: %APPDATA%\...) and its
+ * SettingsLine1, SettingsLine2, ... as the file's lines. Everything indexes
+ * NTFS volumes only, and there are none here: it found nothing until told to
+ * index C:\ as folders. */
+static void seed_settings(const app_t *a)
+{
+    WCHAR key[160], spec[MAX_PATH], path[MAX_PATH], line[1024], name[32], *slash;
+    char *buf = NULL, *nb;
+    size_t len = 0;
+    DWORD cb;
+    HANDLE f;
+    HKEY h;
+    int i, n;
+#ifdef SG_MUTANT_NOSEED
+    return;
+#endif
+    swprintf(key, ARRAYSIZE(key), STORE_KEY L"\\Apps\\%ls", a->ord);
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h)) return;
+    cb = sizeof(spec);
+    if (RegGetValueW(h, NULL, L"SettingsFile", RRF_RT_REG_SZ, NULL, spec, &cb) || !spec[0]
+        || !ExpandEnvironmentStringsW(spec, path, MAX_PATH) || wcschr(path, L'%')
+        || GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) { RegCloseKey(h); return; }
+    for (i = 1; i <= 64; i++) {
+        swprintf(name, ARRAYSIZE(name), L"SettingsLine%d", i);
+        cb = sizeof(line);
+        if (RegGetValueW(h, NULL, name, RRF_RT_REG_SZ, NULL, line, &cb)) break;
+        n = WideCharToMultiByte(CP_UTF8, 0, line, -1, NULL, 0, NULL, NULL);   /* with its NUL: room for \r\n */
+        if (n <= 0 || !(nb = realloc(buf, len + n + 2))) break;
+        buf = nb;
+        WideCharToMultiByte(CP_UTF8, 0, line, -1, buf + len, n, NULL, NULL);
+        len += n - 1;
+        buf[len++] = '\r'; buf[len++] = '\n';
+    }
+    RegCloseKey(h);
+    if (!len) { free(buf); return; }
+    lstrcpynW(line, path, MAX_PATH);
+    if ((slash = wcsrchr(line, L'\\'))) { *slash = 0; SHCreateDirectoryExW(NULL, line, NULL); }
+    f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f != INVALID_HANDLE_VALUE) {
+        DWORD done;
+        WriteFile(f, buf, (DWORD)len, &done, NULL);
+        CloseHandle(f);
+    }
+    free(buf);
+}
+
 /* the shortcut the store made for the app, taken away */
 static void forget_start_shortcut(const app_t *a)
 {
@@ -1033,7 +1083,7 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
         rc = a->method == SRC_WINGET ? install_winget(a, progress, ctx, cancel, err, cch)
                                      : install_pin(a, progress, ctx, cancel, err, cch);
         if (rc && !(cancel && *cancel)) disk_hint(err, cch);
-        if (!rc) ensure_start_shortcut(a);
+        if (!rc) { ensure_start_shortcut(a); seed_settings(a); }
         return rc;
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
