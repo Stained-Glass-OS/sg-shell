@@ -111,7 +111,7 @@ Windows Registry Editor Version 5.00
 "Category"="Browsers"
 "Colour"=dword:001a73e8
 "Tier"="windows"
-"Source"="winget:Google.Chrome"
+"Source"="winget:Google.Chrome.EXE"
 "DetectName"="Google Chrome"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.google.Chrome.png"
 "Linux"="L185"

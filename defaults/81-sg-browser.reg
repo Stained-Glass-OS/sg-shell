@@ -47,6 +47,7 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Web Browsers\Offers\02]
 "Id"="Google.Chrome"
+"Package"="Google.Chrome.EXE"
 "Name"="Google Chrome"
 "Publisher"="Google"
 "Description"="The most used browser, from Google."

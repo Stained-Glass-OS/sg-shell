@@ -49,7 +49,10 @@
 #define C_ERROR   RGB(0xC4, 0x2B, 0x1C)
 #define C_OK      RGB(0x10, 0x7C, 0x10)
 
-typedef struct { WCHAR id[128], name[128], maker[128], desc[256]; COLORREF colour; } offer_t;
+/* id: the offer (what OOBE and the dump name); pkg: the winget package it installs, when not
+ * the id (Chrome: Google.Chrome.EXE, whose installers are per version -- Google.Chrome's MSI is
+ * one unversioned URL that stops matching its manifest whenever Google ships first) */
+typedef struct { WCHAR id[128], name[128], maker[128], desc[256]; COLORREF colour; WCHAR pkg[128]; } offer_t;
 typedef struct { WCHAR key[128], name[128], cmd[1024], url_progid[128], html_progid[128]; BOOL hkcu; } installed_t;
 typedef struct { RECT rc; int cmd, arg; } hit_t;
 
@@ -141,7 +144,8 @@ static void load_offers(void)
 {
     static const offer_t BUILTIN[] = {
         { L"Mozilla.Firefox", L"Mozilla Firefox", L"Mozilla", L"Free and open source, from a non-profit.", RGB(0xE6, 0x60, 0x00) },
-        { L"Google.Chrome", L"Google Chrome", L"Google", L"The most used browser, from Google.", RGB(0x1A, 0x73, 0xE8) },
+        { L"Google.Chrome", L"Google Chrome", L"Google", L"The most used browser, from Google.", RGB(0x1A, 0x73, 0xE8),
+          L"Google.Chrome.EXE" },
         { L"Microsoft.Edge", L"Microsoft Edge", L"Microsoft", L"Microsoft's browser, downloaded from Microsoft.", RGB(0x00, 0x78, 0xD4) },
     };
     HKEY key;
@@ -158,12 +162,22 @@ static void load_offers(void)
             cb = sizeof(o->maker); RegGetValueW(key, sub, L"Publisher", RRF_RT_REG_SZ, NULL, o->maker, &cb);
             cb = sizeof(o->desc); RegGetValueW(key, sub, L"Description", RRF_RT_REG_SZ, NULL, o->desc, &cb);
             cb = sizeof(col); RegGetValueW(key, sub, L"Colour", RRF_RT_REG_DWORD, NULL, &col, &cb);
+            cb = sizeof(o->pkg); RegGetValueW(key, sub, L"Package", RRF_RT_REG_SZ, NULL, o->pkg, &cb);
             o->colour = RGB((col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF);
             if (o->id[0] && o->name[0]) g_noffers++;
         }
         RegCloseKey(key);
     }
     if (!g_noffers) { memcpy(g_offers, BUILTIN, sizeof(BUILTIN)); g_noffers = ARRAYSIZE(BUILTIN); }
+}
+
+/* the winget package an offer installs */
+static const WCHAR *offer_pkg(const offer_t *o)
+{
+#ifndef SG_MUTANT_NOPKG
+    if (o->pkg[0]) return o->pkg;
+#endif
+    return o->id;
 }
 
 static BOOL command_exe_exists(const WCHAR *cmd)
@@ -355,7 +369,7 @@ static DWORD WINAPI install_thread(void *arg)
     if (!r) return 0;
     r->offer = k;
     memset(&g_pkg, 0, sizeof(g_pkg));
-    lstrcpynW(g_pkg.id, g_offers[k].id, 128);
+    lstrcpynW(g_pkg.id, offer_pkg(&g_offers[k]), 128);
     PostMessageW(g_wnd, WM_APP_PROGRESS, STAGE_FIND, 0);
     if (winget_path(winget, MAX_PATH)) {
         lstrcpyW(g_method, L"winget");
@@ -363,7 +377,7 @@ static DWORD WINAPI install_thread(void *arg)
         r->ok = winget_install(winget, &g_pkg, r->msg, 512);
     } else {
         lstrcpyW(g_method, L"manifest");
-        if (pkg_resolve(g_offers[k].id, &g_pkg, r->msg, 512) &&
+        if (pkg_resolve(offer_pkg(&g_offers[k]), &g_pkg, r->msg, 512) &&
             pkg_download(&g_pkg, progress, NULL, &g_cancel, r->msg, 512)) {
             PostMessageW(g_wnd, WM_APP_PROGRESS, STAGE_INSTALL, 0);
             r->ok = pkg_install(&g_pkg, r->msg, 512);
@@ -749,10 +763,10 @@ static int install_quietly(const WCHAR *id)
     for (k = 0; k < g_noffers; k++) if (!_wcsicmp(g_offers[k].id, id)) break;
     if (k == g_noffers) { fwprintf(stderr, L"sg-browser: %ls is not offered\n", id); return 2; }
     memset(&pkg, 0, sizeof(pkg));
-    lstrcpynW(pkg.id, g_offers[k].id, 128);
+    lstrcpynW(pkg.id, offer_pkg(&g_offers[k]), 128);
     if (winget_path(winget, MAX_PATH)) ok = winget_install(winget, &pkg, msg, 512);
     else {
-        if (pkg_resolve(g_offers[k].id, &pkg, msg, 512) && pkg_download(&pkg, NULL, NULL, &g_cancel, msg, 512))
+        if (pkg_resolve(offer_pkg(&g_offers[k]), &pkg, msg, 512) && pkg_download(&pkg, NULL, NULL, &g_cancel, msg, 512))
             ok = pkg_install(&pkg, msg, 512);
         pkg_cleanup(&pkg);
     }

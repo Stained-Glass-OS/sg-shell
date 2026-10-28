@@ -122,7 +122,8 @@ reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\01' /v Id /d Fake.Browser
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\01' /v Name /d 'Fake Browser'
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\01' /v Publisher /d 'The gate'
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\01' /v Description /d 'Installs from this machine.'
-reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Id /d Bad.Hash
+reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Id /d Tampered.Offer
+reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Package /d Bad.Hash
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Name /d 'Tampered Browser'
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Publisher /d 'Nobody'
 reg 'HKLM\Software\Stained Glass\Web Browsers\Offers\02' /v Description /d 'Its download does not match its manifest.'
@@ -160,16 +161,17 @@ wine start 'http://example.com/first' >/dev/null 2>&1 &
 if wait_line '^mode get' 20; then pass "with no browser, a web link opens Get a web browser"
 else fail "a web link: dump '$(head -3 "$D" 2>/dev/null | tr '\n' ' ')'"; fi
 [ "$(field target)" = 'http://example.com/first' ] && pass "it names the link to open" || fail "target '$(field target)'"
-grep -q '^offer Fake.Browser idle' "$D" && grep -q '^offer Bad.Hash idle' "$D" && pass "it offers what HKLM's Offers list" || fail "offers: $(grep ^offer "$D")"
+grep -q '^offer Fake.Browser idle' "$D" && grep -q '^offer Tampered.Offer idle' "$D" && pass "it offers what HKLM's Offers list" || fail "offers: $(grep ^offer "$D")"
 grep -q '^hit ie ' "$D" && pass "Internet Explorer is offered for the link" || fail "no Internet Explorer link"
 shot get
 
 # --- a download that is not what its maker published ---------------------------------------------------
 click_hit install 1 || fail "no Install button for the tampered browser"
-if wait_line '^offer Bad.Hash failed' 20; then
-    grep -q '^offer Bad.Hash failed .*SHA-256 does not match' "$D" && pass "a download whose SHA-256 is not the manifest's is refused" \
-        || fail "tampered: '$(grep '^offer Bad.Hash' "$D")'"
-else fail "tampered: '$(grep '^offer Bad.Hash' "$D")'"; fi
+# (offer Tampered.Offer installs the package Bad.Hash: an offer's Package, as Chrome's Google.Chrome.EXE)
+if wait_line '^offer Tampered.Offer failed' 20; then
+    grep -q '^offer Tampered.Offer failed .*SHA-256 does not match' "$D" && pass "a download whose SHA-256 is not the manifest's is refused (an offer's Package resolved)" \
+        || fail "tampered: '$(grep '^offer Tampered.Offer' "$D")'"
+else fail "tampered: '$(grep '^offer Tampered.Offer' "$D")'"; fi
 [ ! -e "$G/setup.log" ] && pass "and its installer never ran" || fail "the tampered installer ran: $(cat "$G/setup.log")"
 shot refused
 

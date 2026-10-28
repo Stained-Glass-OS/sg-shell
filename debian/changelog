@@ -1,3 +1,18 @@
+sg-shell (0.1.0-231) unstable; urgency=medium
+
+  * Google Chrome from winget's Google.Chrome.EXE, in the SG Store and Get a
+    web browser: Google.Chrome's MSI is one unversioned dl.google.com URL
+    that stops matching its manifest's SHA-256 whenever Google ships before
+    winget catches up (a walk: "The download is not the file its maker
+    published"), so Chrome could not be installed. Google.Chrome.EXE's
+    installers are per version. Installed and uninstalled for the person
+    (Chrome 156.0.8078.74). Get a web browser's offers take a "Package":
+    the winget package an offer installs, when not its Id (OOBE still
+    names Google.Chrome). Gate browser-check (an offer's Package resolved;
+    mutant NOPKG fails it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 07:50:57 -0700
+
 sg-shell (0.1.0-230) unstable; urgency=medium
 
   * SG Store: winget manifests from winget's own CDN, as winget reads them,
