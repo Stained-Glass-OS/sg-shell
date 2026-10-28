@@ -1,3 +1,12 @@
+sg-shell (0.1.0-234) unstable; urgency=medium
+
+  * The taskbar clock's calendar flyout (sg-calendar), as on Windows 10:
+    the time, the date (to its settings), the month with arrows, today in
+    the accent colour; wheel and Page Up/Down change the month, a second
+    click on the clock or Esc closes it. Gate calendar-check.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 15:43:21 -0700
+
 sg-shell (0.1.0-233) unstable; urgency=medium
 
   * sg-roots: Windows' code signing and time stamping roots (Microsoft's

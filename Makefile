@@ -124,6 +124,9 @@ build:
 	done
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe src/sg-battery.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-battery (64-bit)"
+	@# the taskbar clock's calendar flyout (sg-calendar)
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calendar64.exe src/sg-calendar.c \
+	    -lshell32 -luser32 -lgdi32 -ladvapi32 && echo "built sg-calendar (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-defender-notice64.exe src/sg-defender-notice.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-defender-notice (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-restart-notice64.exe src/sg-restart-notice.c \
@@ -431,6 +434,7 @@ test: build
 	@sh test/terminal-settings-check.sh
 	@sh test/clock-check.sh
 	@sh test/gpresult-check.sh
+	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/calendar-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/roots-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/net-ui-check.sh
 	@sh test/office-check.sh
