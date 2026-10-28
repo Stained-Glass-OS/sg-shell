@@ -77,7 +77,7 @@ FONTVIEW_SRC  = $(wildcard src/fontview/*.c)
 FONTVIEW_LIBS = -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lgdi32 -luser32 -ladvapi32 -lwinspool -lole32
 # Get a web browser (sg-browser): src/browser/, WinINet and BCrypt; its
 # manifest reader (manifest.c) is plain C, also built natively by its gate.
-BROWSER_SRC  = $(wildcard src/browser/*.c)
+BROWSER_SRC  = $(wildcard src/browser/*.c) src/zip/zipcore.c
 BROWSER_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32
 # SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
 # install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build

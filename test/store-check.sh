@@ -87,6 +87,8 @@
 #   SG_MUTANT_WAITLASTMESSAGE  waits for an uninstaller left up at its last message (CutePDF: 20 minutes)
 #   SG_MUTANT_NOSTARTLINK   an app whose installer made no Start shortcut is not found in Start (Winamp, AIMP)
 #   SG_MUTANT_NOSEED        an app's first settings (Everything's folders to index) are not written
+#   SG_MUTANT_NOCDN         manifests only from raw.githubusercontent.com (429 to a busy address), not winget's CDN
+#   SG_MUTANT_NOCDNHASH     a CDN manifest taken without checking its SHA-256 against winget's version data
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
@@ -167,7 +169,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -339,6 +341,8 @@ export PATH="$WINE_DIR/bin:$PATH"
 export SG_BROWSER_LIST_URL="http://127.0.0.1:$PORT/api/" SG_BROWSER_RAW_URL="http://127.0.0.1:$PORT/raw/"
 # the project server's version list: none here (404) but in its own cases, so the rest asks the API
 export SG_BROWSER_LATEST_URL="http://127.0.0.1:$PORT/latest.tsv"
+# its index of winget's CDN folders, and the CDN: likewise only in their own cases
+export SG_BROWSER_INDEX_URL="http://127.0.0.1:$PORT/index.tsv" SG_BROWSER_CDN_URL="http://127.0.0.1:$PORT/cdn/"
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 
@@ -1962,6 +1966,76 @@ r=$(seed "$EXE" own)
 r=$(seed "$T/mut-noseed.exe")
 [ "$r" = none ] && pass "MUTANT NOSEED writes no settings (gate catches it)" || fail "NOSEED not detected: $r"
 wine reg delete "$K\\01" /v SettingsFile /f >/dev/null 2>&1
+
+# --- winget's CDN: its own copies of the manifests ------------------------------------------------
+# raw.githubusercontent.com answers 429 to a busy address: SumatraPDF's install stopped there in a
+# walk. versionData.mszyml (the Compression API's MSZIP) names each version's manifest there and its
+# SHA-256; the project server's index.tsv names the folder.
+mkzyml() { # text-file mszyml-file
+    python3 -c 'import struct, sys, zlib
+d = open(sys.argv[1], "rb").read(); c = zlib.compressobj(9, zlib.DEFLATED, -15); z = c.compress(d) + c.flush()
+open(sys.argv[2], "wb").write(b"\x0a\x51\xe5\xc0\x18\x00\x3f\x02" + struct.pack("<QQ", len(d), len(d)) + struct.pack("<I", len(z) + 2) + b"CK" + z)' "$1" "$2"
+}
+mkdir -p "$W/cdn/packages/Fake.App/0a1b2c3d" "$W/cdn/manifests/f/Fake/App/1.10.0"
+cp "$W/files/store-fake.exe" "$W/files/cdn-other.exe"
+cdnmf() { # installer file name -> the merged manifest, as the CDN keeps a version (keys in order, one file)
+    cat <<EOF
+Description: 'Fake App from winget''s CDN, its first line,
+  and its second.
+
+  A second paragraph.'
+InstallerSwitches:
+  Silent: /S /gate-silent
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerSha256: $SHA
+  InstallerUrl: http://127.0.0.1:$PORT/files/$1
+License: MIT
+ManifestType: merged
+PackageIdentifier: Fake.App
+PackageName: Fake App
+PackageVersion: 1.10.0
+PublisherUrl: https://fake.example/cdn
+Scope: machine
+ShortDescription: From winget's CDN.
+EOF
+}
+cdnmf store-fake.exe > "$W/cdn/manifests/f/Fake/App/1.10.0/77"
+MS=$(sha256sum "$W/cdn/manifests/f/Fake/App/1.10.0/77" | cut -c1-64)
+printf 'sV: 1.0\nvD:\n- v: 1.10.0\n  rP: manifests/f/Fake/App/1.10.0/77\n  s256H: %s\n- v: 1.0.0\n  rP: manifests/f/Fake/App/1.0.0/77\n  s256H: %s\n' \
+    "$MS" 0000000000000000000000000000000000000000000000000000000000000000 > "$T/vd.yaml"
+mkzyml "$T/vd.yaml" "$W/cdn/packages/Fake.App/0a1b2c3d/versionData.mszyml"
+printf 'Fake.App\t1.10.0\n' > "$W/latest.tsv"
+printf 'Fake.Other\t3.0\tffffffff\nFake.App\t1.10.0\t0a1b2c3d\n' > "$W/index.tsv"
+cdninstall() { # exe -> "ok|fail <file the installer came from> <raw manifests asked>"
+    : > "$T/http.log"
+    rm -f "$D" "$D.result"
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$1" --install 01 >/dev/null 2>&1
+    grep -q '^result 01 ok' "$D.result" 2>/dev/null && r=ok || r=fail
+    f=$(grep -a -o 'GET /files/[a-z-]*\.exe' "$T/http.log" | tail -1 | sed 's,.*/,,')
+    echo "$r ${f:-none} raw=$(grep -a -c 'GET /raw/f/Fake/App' "$T/http.log")"
+    SG_STORE_UNINSTALL_GRACE=1000 wine "$1" --uninstall 01 >/dev/null 2>&1
+    ununinstall FakeApp; find "$WINEPREFIX/drive_c" -iname '*Fake App.lnk' -delete 2>/dev/null; sleep 0.5
+}
+mv "$W/raw/f/Fake/App" "$W/raw-app.off"
+r=$(cdninstall "$EXE")
+[ "$r" = "ok store-fake.exe raw=0" ] && pass "a package's manifest from winget's CDN, GitHub not asked (SumatraPDF stopped at its 429)" || fail "CDN install: $r"
+r=$(cdninstall "$T/mut-nocdn.exe")
+case "$r" in fail*) pass "MUTANT NOCDN needs GitHub's copy (gate catches it)";; *) fail "NOCDN not detected: $r";; esac
+rm -f "$D"; wine "$EXE" --page 01 >/dev/null 2>&1 &
+waitfor "$D" '^detail 01 ready=1' 60
+[ "$(field detail-desc)" = "Fake App from winget's CDN, its first line, and its second.||A second paragraph." ] \
+    && pass "the details page from it too: a quoted description over lines, its paragraphs" || fail "CDN details: '$(field detail-desc)' ($(field detail-error))"
+wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
+mv "$W/raw-app.off" "$W/raw/f/Fake/App"
+# a manifest that is not the one winget's version data names (its SHA-256): not taken, GitHub's is
+cdnmf cdn-other.exe > "$W/cdn/manifests/f/Fake/App/1.10.0/77"
+r=$(cdninstall "$EXE")
+[ "$r" = "ok store-fake.exe raw=1" ] && pass "...a CDN manifest whose SHA-256 is not winget's: not taken, GitHub's instead" || fail "CDN hash: $r"
+r=$(cdninstall "$T/mut-nocdnhash.exe")
+case "$r" in *cdn-other.exe*) pass "MUTANT NOCDNHASH takes it (gate catches it)";; *) fail "NOCDNHASH not detected: $r";; esac
+rm -rf "$W/cdn" "$W/index.tsv" "$W/latest.tsv" "$W/files/cdn-other.exe"
 
 # --- M. several apps, one consent ------------------------------------------------------------------
 "$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"

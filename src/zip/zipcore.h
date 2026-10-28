@@ -42,6 +42,8 @@ typedef struct {
 DWORD crc32_update(DWORD crc, const BYTE *p, size_t n);
 
 int deflate_buf(const BYTE *in, size_t inn, BYTE **out, size_t *outn);
+/* the Compression API's MSZIP buffer (winget's .mszyml) whole, NUL-terminated past *outn; free() it */
+int mszip_decode(const BYTE *in, size_t n, BYTE **out, size_t *outn);
 
 int  zip_open(zarchive *z, const WCHAR *path);
 void zip_close(zarchive *z);

@@ -19,6 +19,8 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "browser.h"
+#include "../zip/zipcore.h"
+#include <ctype.h>
 #include <wininet.h>
 #include <bcrypt.h>
 #include <shellapi.h>
@@ -31,6 +33,10 @@
 /* every winget package's newest version, one "id<TAB>version" line each, made every hour on the
  * project server from winget's own index (its CDN, source2.msix) */
 #define DEFAULT_LATEST L"https://freesoft.page/winget/latest.tsv"
+/* winget's own copies of the manifests, on its CDN, as winget reads them: the project server's
+ * index.tsv ("id<TAB>version<TAB>hash", the same run's) names each package's folder there */
+#define DEFAULT_INDEX L"https://freesoft.page/winget/index.tsv"
+#define DEFAULT_CDN   L"https://cdn.winget.microsoft.com/cache/"
 #define MAX_MANIFEST (4 << 20)
 
 static void seterr(WCHAR *err, int cch, const WCHAR *fmt, ...)
@@ -47,7 +53,8 @@ static void source_url(const WCHAR *name, const WCHAR *def, WCHAR *out, int cch)
 {
     WCHAR env[64];
     DWORD cb = cch * sizeof(WCHAR);
-    swprintf(env, 64, L"SG_BROWSER_%ls_URL", !wcscmp(name, L"ListUrl") ? L"LIST" : !wcscmp(name, L"LatestUrl") ? L"LATEST" : L"RAW");
+    swprintf(env, 64, L"SG_BROWSER_%ls_URL", !wcscmp(name, L"ListUrl") ? L"LIST" : !wcscmp(name, L"LatestUrl") ? L"LATEST"
+             : !wcscmp(name, L"IndexUrl") ? L"INDEX" : !wcscmp(name, L"CdnUrl") ? L"CDN" : L"RAW");
     if (GetEnvironmentVariableW(env, out, cch) && out[0]) return;
     if (!RegGetValueW(HKEY_LOCAL_MACHINE, BROWSERS_KEY, name, RRF_RT_REG_SZ, NULL, out, &cb) && out[0]) return;
     lstrcpynW(out, def, cch);
@@ -129,8 +136,8 @@ static void status_err(WCHAR *err, int cch, const WCHAR *what, DWORD status)
     else seterr(err, cch, L"%ls answered %lu.", what, status);
 }
 
-/* the whole answer, NUL-terminated; NULL on failure. 404 is reported in *status. */
-static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
+/* the whole answer, NUL-terminated (its length in *len); NULL on failure. 404 is reported in *status. */
+static char *http_get_len(const WCHAR *url, DWORD *status, size_t *len, WCHAR *err, int cch)
 {
     HINTERNET h = open_url(url, L"Accept: application/vnd.github+json, text/plain, */*\r\n", status, err, cch);
     char *buf = NULL;
@@ -151,7 +158,13 @@ static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
     InternetCloseHandle(h);
     if (!buf) buf = calloc(1, 1);
     if (buf) buf[n] = 0;
+    if (len) *len = n;
     return buf;
+}
+
+static char *http_get(const WCHAR *url, DWORD *status, WCHAR *err, int cch)
+{
+    return http_get_len(url, status, NULL, err, cch);
 }
 
 /* Which scope's installer is taken when a package offers both: winget's own
@@ -208,6 +221,115 @@ static BOOL mirror_version(const WCHAR *id, char *ver, int cap)
     return FALSE;
 }
 
+/* ---- winget's CDN ---------------------------------------------------------------------------------
+ *
+ * raw.githubusercontent.com, where the manifests were read, answers 429 to a busy address (a walk
+ * of the Store; an office behind one address): SumatraPDF's install stopped there. winget reads
+ * them from its CDN instead: packages/<id>/<hash>/versionData.mszyml lists a package's versions,
+ * each with its manifest's path there and SHA-256; the manifest (all of a version in one file) is
+ * taken only when its SHA-256 is that one. Which <hash> is the project server's index.tsv, made
+ * from winget's index; it can only name a folder winget published for that package. Anything
+ * missing or not matching: GitHub, as before. */
+static char *index_list;
+static LONG index_tried;
+
+static BOOL index_hash(const WCHAR *id, char *hash, int cap)
+{
+    char id8[256], *line;
+    size_t n;
+    if (!InterlockedCompareExchange(&index_tried, 1, 0)) {
+        WCHAR url[1024], err[512];
+        DWORD status = 0;
+        source_url(L"IndexUrl", DEFAULT_INDEX, url, 1024);
+        InterlockedExchangePointer((void **)&index_list, http_get(url, &status, err, 512));
+    }
+    if (!index_list || !WideCharToMultiByte(CP_UTF8, 0, id, -1, id8, sizeof(id8), NULL, NULL)) return FALSE;
+    n = strlen(id8);
+    for (line = index_list; line && *line; line = strchr(line, '\n') ? strchr(line, '\n') + 1 : NULL) {
+        if (!_strnicmp(line, id8, n) && line[n] == '\t') {
+            const char *h = strchr(line + n + 1, '\t');
+            int k = 0;
+            if (!h) return FALSE;
+            for (h++; isxdigit((unsigned char)h[k]) && k < cap - 1; k++) hash[k] = h[k];
+            hash[k] = 0;
+            return k == 8;
+        }
+    }
+    return FALSE;
+}
+
+/* "key: value" of one versionData line, quotes taken off */
+static BOOL vd_field(const char *line, const char *key, char *out, int cap)
+{
+    size_t kl = strlen(key);
+    const char *v;
+    int k = 0;
+    while (*line == ' ' || *line == '-') line++;
+    if (strncmp(line, key, kl) || line[kl] != ':') return FALSE;
+    for (v = line + kl + 1; *v == ' '; v++) ;
+    if (*v == '\'' || *v == '"') v++;
+    while (v[k] && v[k] != '\n' && v[k] != '\r' && v[k] != '\'' && v[k] != '"' && k < cap - 1) { out[k] = v[k]; k++; }
+    out[k] = 0;
+    return k > 0;
+}
+
+static BOOL sha256_hex(const void *data, size_t n, char *hex)
+{
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_HASH_HANDLE hash = NULL;
+    BYTE d[32];
+    BOOL ok = FALSE;
+    int i;
+    if (!BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0)
+        && !BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0)
+        && !BCryptHashData(hash, (PUCHAR)data, (ULONG)n, 0)
+        && !BCryptFinishHash(hash, d, sizeof(d), 0)) {
+        for (i = 0; i < 32; i++) sprintf(hex + 2 * i, "%02x", d[i]);
+        ok = TRUE;
+    }
+    if (hash) BCryptDestroyHash(hash);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    return ok;
+}
+
+/* version ver's manifest from winget's CDN, checked; NULL when it cannot be had that way */
+static char *cdn_manifest(const WCHAR *id, const char *ver)
+{
+    WCHAR base[1024], url[2048], err[512];
+    char hash[16], v[64] = "", rp[512] = "", sha[80] = "", want[80] = "", got[65], *raw, *m = NULL, *line;
+    BYTE *vd = NULL;
+    size_t n = 0, vdn = 0, mn = 0;
+    DWORD status = 0;
+    const char *c;
+#ifdef SG_MUTANT_NOCDN
+    return NULL;
+#endif
+    if (!index_hash(id, hash, sizeof(hash))) return NULL;
+    source_url(L"CdnUrl", DEFAULT_CDN, base, 1024);
+    swprintf(url, 2048, L"%lspackages/%ls/%hs/versionData.mszyml", base, id, hash);
+    if (!(raw = http_get_len(url, &status, &n, err, 512))) return NULL;
+    if (mszip_decode((const BYTE *)raw, n, &vd, &vdn)) { free(raw); return NULL; }
+    free(raw);
+    /* "- v: 3.6.1" then its "rP:" and "s256H:" lines, until the next "- " */
+    for (line = (char *)vd; line && *line && !want[0]; line = strchr(line, '\n') ? strchr(line, '\n') + 1 : NULL) {
+        const char *t = line;
+        while (*t == ' ') t++;
+        if (*t == '-') { v[0] = rp[0] = sha[0] = 0; }
+        if (vd_field(line, "v", v, sizeof(v)) || vd_field(line, "rP", rp, sizeof(rp)) || vd_field(line, "s256H", sha, sizeof(sha))) {
+            if (v[0] && rp[0] && sha[0] && !strcmp(v, ver)) lstrcpynA(want, sha, sizeof(want));
+        }
+    }
+    free(vd);
+    if (!want[0] || strlen(want) != 64 || strncmp(rp, "manifests/", 10) || strstr(rp, "..")) return NULL;
+    for (c = rp; *c; c++) if (!isalnum((unsigned char)*c) && !strchr("._-+/", *c)) return NULL;
+    swprintf(url, 2048, L"%ls%hs", base, rp);
+    if (!(m = http_get_len(url, &status, &mn, err, 512))) return NULL;
+#ifndef SG_MUTANT_NOCDNHASH
+    if (!sha256_hex(m, mn, got) || _stricmp(got, want)) { free(m); return NULL; }
+#endif
+    return m;
+}
+
 /* A package's newest version: the project server's list, else GitHub's listing of its folder
  * (a package newer than the list, or the list out of reach). from_list says which. */
 static BOOL newest_version(const WCHAR *id, const WCHAR *path, BOOL use_list, char *ver, int cap,
@@ -251,6 +373,7 @@ BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR 
         if (pass && !from_list) break;
         if (!newest_version(id, path, !pass, ver, sizeof(ver), &from_list, err, cch)) { free(list); return FALSE; }
         MultiByteToWideChar(CP_UTF8, 0, ver, -1, p->version, 64);
+        if ((yaml = cdn_manifest(id, ver))) break;
         source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
         swprintf(url, 2048, L"%ls%ls/%ls/%ls.installer.yaml", base, path, p->version, id);
         if (!(yaml = http_get(url, &status, err, cch)) && status == 404) {
@@ -306,6 +429,7 @@ char *winget_locale_manifest(const WCHAR *id, WCHAR *version, int vcch, WCHAR *e
     if (!id_path(id, path, 512)) { seterr(err, cch, L"'%ls' is not a package name.", id); return NULL; }
     if (!newest_version(id, path, TRUE, ver, sizeof(ver), &from_list, err, cch)) return NULL;
     MultiByteToWideChar(CP_UTF8, 0, ver, -1, version, vcch);
+    if ((yaml = cdn_manifest(id, ver))) { err[0] = 0; return yaml; }
     source_url(L"RawUrl", DEFAULT_RAW, base, 1024);
     GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH);
     tries[0] = locale; tries[1] = L"en-US"; tries[2] = NULL;

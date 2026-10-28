@@ -103,6 +103,7 @@ export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDLLOVERRIDES='msco
 export PATH="$WINE_DIR/bin:$PATH"
 export SG_BROWSER_LIST_URL="http://127.0.0.1:$PORT/api/" SG_BROWSER_RAW_URL="http://127.0.0.1:$PORT/raw/"
 export SG_BROWSER_LATEST_URL="http://127.0.0.1:$PORT/latest.tsv"   # none: the fake API answers
+export SG_BROWSER_INDEX_URL="http://127.0.0.1:$PORT/index.tsv" SG_BROWSER_CDN_URL="http://127.0.0.1:$PORT/cdn/"   # none
 wine wineboot --init >/dev/null 2>&1; wineserver -w
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 reg 'HKCU\Software\Wine\Explorer' /v Desktop /d shell
@@ -254,7 +255,7 @@ else fail "winget: no Get a web browser ($(head -2 "$D" 2>/dev/null | tr '\n' ' 
 
 # --- the real thing -------------------------------------------------------------------------------------
 if [ "${SG_BROWSER_ONLINE:-0}" = 1 ]; then
-    unset SG_BROWSER_LIST_URL SG_BROWSER_RAW_URL SG_BROWSER_LATEST_URL
+    unset SG_BROWSER_LIST_URL SG_BROWSER_RAW_URL SG_BROWSER_LATEST_URL SG_BROWSER_INDEX_URL SG_BROWSER_CDN_URL
     wine reg delete 'HKLM\Software\Stained Glass\Web Browsers\Offers' /f >/dev/null 2>&1
     wine reg import "$(wine winepath -w "$T/browser.reg" | tr -d '\r')" >/dev/null 2>&1
     wine reg delete 'HKLM\Software\Clients\StartMenuInternet\FakeBrowser' /f >/dev/null 2>&1

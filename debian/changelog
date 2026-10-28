@@ -1,3 +1,18 @@
+sg-shell (0.1.0-230) unstable; urgency=medium
+
+  * SG Store: winget manifests from winget's own CDN, as winget reads them,
+    instead of raw.githubusercontent.com, which answers 429 to a busy
+    address (SumatraPDF's and Cursor's installs stopped there in a walk; 67
+    of 120 manifests in a row from the project server). The project
+    server's index.tsv names each package's folder there; its version data
+    (the Compression API's MSZIP, read by our own inflate) gives the
+    manifest's path and SHA-256, and the manifest is taken only when it
+    matches. Anything missing or not matching: GitHub, as before. The
+    details page reads it too, with descriptions in quotes over several
+    lines. Gates store-check (mutants NOCDN, NOCDNHASH), browser-check.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 05:58:57 -0700
+
 sg-shell (0.1.0-229) unstable; urgency=medium
 
   * SG Store: an app's first settings, written once after its install where

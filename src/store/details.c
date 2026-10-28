@@ -95,6 +95,23 @@ static void from_appinfo(details_t *d, const char *text)
 
 /* KEY's value: a plain or quoted scalar, or a block (| or >) of the lines
  * indented under it */
+/* a quoted value (from its opening quote) closed on this line: its last character the quote, not
+ * one of '' (a quote inside single quotes) */
+static BOOL quoted_ends(const char *v, const char *end)
+{
+    char qc = *v;
+    const char *p;
+    while (end > v + 1 && (end[-1] == '\r' || end[-1] == ' ')) end--;
+    for (p = v + 1; p < end; p++) {
+        if (qc == '"' && *p == '\\') { p++; continue; }
+        if (*p == qc) {
+            if (qc == '\'' && p + 1 < end && p[1] == '\'') { p++; continue; }
+            return p == end - 1;
+        }
+    }
+    return FALSE;
+}
+
 static void yaml_get(const char *y, const char *key, WCHAR *out, int cch)
 {
     size_t kl = strlen(key);
@@ -132,6 +149,37 @@ static void yaml_get(const char *y, const char *key, WCHAR *out, int cch)
                         if (n + (qe - t) < 65530) { memcpy(buf + n, t, qe - t); n += (int)(qe - t); }
                     }
                     q = qn ? qn + 1 : NULL;
+                }
+            } else if ((*v == '\'' || *v == '"') && !quoted_ends(v, end)) {
+                /* a quoted value over several lines (winget's CDN manifests write Description
+                 * so): its lines joined by a space, an empty line a newline; '' is ' */
+                char qc = *v;
+                const char *q = v + 1, *t;
+                BOOL done = FALSE, first = TRUE;
+                for (;;) {
+                    const char *le = nl ? nl : q + strlen(q);
+                    while (le > q && (le[-1] == '\r' || le[-1] == ' ')) le--;
+                    if (!first) while (q < le && *q == ' ') q++;
+                    if (q == le && !first) {       /* a paragraph: an empty line, as in a | block */
+                        if (n && buf[n - 1] != '\n' && n < 65530) buf[n++] = '\n';
+                        if (n < 65530) buf[n++] = '\n';
+                    }
+                    else {
+                        if (n && buf[n - 1] != '\n' && n < 65530) buf[n++] = ' ';
+                        for (t = q; t < le && n < 65530; t++) {
+                            if (qc == '\'' && *t == '\'') {
+                                if (t + 1 < le && t[1] == '\'') { buf[n++] = '\''; t++; continue; }
+                                done = TRUE; break;
+                            }
+                            if (qc == '"' && *t == '\\' && t + 1 < le) { t++; buf[n++] = *t == 'n' ? '\n' : *t; continue; }
+                            if (qc == '"' && *t == '"') { done = TRUE; break; }
+                            buf[n++] = *t;
+                        }
+                    }
+                    first = FALSE;
+                    if (done || !nl) break;
+                    q = nl + 1;
+                    nl = strchr(q, '\n');
                 }
             } else {
                 while (end > v && (end[-1] == '\r' || end[-1] == ' ')) end--;

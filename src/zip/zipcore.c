@@ -742,9 +742,46 @@ int zip_extract(zarchive *z, int i, zsink sink, void *ctx)
     return ZE_OK;
 }
 
+/* A buffer of the Compression API's MSZIP (winget's .mszyml): a 24-byte header (its signature,
+ * then the whole size at offset 8), then blocks, each its size and "CK" and raw DEFLATE; the
+ * blocks share one history, as they would in a cabinet folder. */
+typedef struct { BYTE *buf; size_t len, cap; } msink;
+static int mem_sink(void *ctx, const BYTE *p, size_t n);
+
+int mszip_decode(const BYTE *in, size_t n, BYTE **out, size_t *outn)
+{
+    static const BYTE sig[4] = { 0x0a, 0x51, 0xe5, 0xc0 };
+    msink m = { NULL, 0, 0 };
+    istate s;
+    ULONGLONG total;
+    size_t pos = 24;
+    int r = ZE_OK;
+
+    *out = NULL; *outn = 0;
+    if (n < 24 || memcmp(in, sig, 4)) return ZE_FORMAT;
+    total = (ULONGLONG)rd32(in + 8) | (ULONGLONG)rd32(in + 12) << 32;
+    if (total > (16u << 20)) return ZE_TOOBIG;
+    memset(&s, 0, sizeof(s));
+    m.cap = (size_t)total;
+    if (!(m.buf = malloc(m.cap + 1)) || !(s.ring = malloc(RING))) { free(m.buf); return ZE_NOMEM; }
+    s.limit = total; s.sink = mem_sink; s.ctx = &m;
+    while (pos + 4 <= n && !r) {
+        DWORD c = rd32(in + pos);
+        if (c < 2 || c > n - pos - 4 || in[pos + 4] != 'C' || in[pos + 5] != 'K') { r = ZE_DATA; break; }
+        s.in = in + pos + 6; s.inn = c - 2; s.pos = 0; s.bits = 0; s.nbits = 0;
+        r = inflate_stream(&s);
+        pos += 4 + c;
+    }
+    free(s.ring);
+    if (!r && (pos != n || m.len != total)) r = ZE_DATA;
+    if (r) { free(m.buf); return r; }
+    m.buf[m.len] = 0;   /* text: NUL-terminated past its length */
+    *out = m.buf; *outn = m.len;
+    return ZE_OK;
+}
+
 /* an entry gathered into memory, for the parts of a document or a small
  * installer (WordPad's .docx/.odt, SG Store) */
-typedef struct { BYTE *buf; size_t len, cap; } msink;
 
 static int mem_sink(void *ctx, const BYTE *p, size_t n)
 {
