@@ -527,6 +527,8 @@ BOOL dpkg_needed_by_system(const WCHAR *pkgw, WCHAR *by, int cch)
     return found;
 }
 
+static void forget_start_shortcut(const app_t *a);
+
 void app_detect(app_t *a)
 {
     a->installed_version[0] = 0;
@@ -543,6 +545,8 @@ void app_detect(app_t *a)
     }
     if (find_installed(a->detect_name, a->installed_version, 64))
         a->state = AST_INSTALLED;
+    else if (a->tier == TIER_WINDOWS)
+        forget_start_shortcut(a);   /* uninstalled elsewhere (Settings): no shortcut left to nothing */
 }
 
 /* ---- opening an installed program ------------------------------------------------------------------
@@ -605,20 +609,95 @@ static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, WCHAR *be
     FindClose(h);
 }
 
-BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
+static BOOL folder_program(const app_t *a, WCHAR *out, int cch);
+
+/* the app's shortcut in Start (all users' or the person's), "" when it has none */
+static void start_shortcut(const app_t *a, WCHAR *out, int cch)
 {
     static const int folders[] = { CSIDL_COMMON_PROGRAMS, CSIDL_PROGRAMS };
-    WCHAR version[64], icon[MAX_PATH], dir[MAX_PATH];
+    WCHAR dir[MAX_PATH];
     int best_len = 0;
     unsigned i;
+    out[0] = 0;
+    for (i = 0; i < ARRAYSIZE(folders); i++)
+        if (SUCCEEDED(SHGetFolderPathW(NULL, folders[i], NULL, 0, dir)))
+            find_shortcut(a, dir, 1, out, cch, &best_len);
+}
+
+BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
+{
+    WCHAR version[64], icon[MAX_PATH];
     out[0] = 0;
     if (a->tier == TIER_OURS || a->tier == TIER_LINUX) return FALSE;
     if (find_installed_entry(a->detect_name, version, ARRAYSIZE(version), icon, ARRAYSIZE(icon))
         && icon[0] && icon_program(icon, out, cch)) return TRUE;
-    for (i = 0; i < ARRAYSIZE(folders); i++)
-        if (SUCCEEDED(SHGetFolderPathW(NULL, folders[i], NULL, 0, dir)))
-            find_shortcut(a, dir, 1, out, cch, &best_len);
-    return out[0] != 0;
+    start_shortcut(a, out, cch);
+    if (out[0]) return TRUE;
+    /* neither: the program in its own folder (AIMP's entry shows no icon, and
+     * it makes no shortcut: Open showed Apps & features) */
+    return folder_program(a, out, cch);
+}
+
+/* ---- the app in Start ------------------------------------------------------------------------------
+ *
+ * An app installed here can be found in Start: where its installer made no
+ * shortcut there (Winamp's and AIMP's quiet installs make none; Trillian's,
+ * TeraCopy's), the store makes one in the person's Programs, named as the
+ * app, to the program Open starts -- Start's search said "No results" for an
+ * installed app. The store's record (HKCU ...\Store\Shortcuts, by ordinal)
+ * is how it takes it away again: when the app is uninstalled, or found gone. */
+#define SHORTCUTS_KEY STORE_KEY L"\\Shortcuts"
+
+static void ensure_start_shortcut(const app_t *a)
+{
+    WCHAR target[MAX_PATH], dir[MAX_PATH], lnk[MAX_PATH], name[128], *slash;
+    IShellLinkW *link;
+    IPersistFile *file;
+    HRESULT init;
+    int i;
+#ifdef SG_MUTANT_NOSTARTLINK
+    return;
+#endif
+    if (a->tier == TIER_OURS || a->tier == TIER_LINUX || app_is_runtime(a)) return;
+    start_shortcut(a, target, MAX_PATH);
+    if (target[0] || !app_launch_target(a, target, MAX_PATH)) return;   /* it has one; or no program */
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_PROGRAMS | CSIDL_FLAG_CREATE, NULL, 0, dir))) return;
+    lstrcpynW(name, a->name, ARRAYSIZE(name));
+    for (i = 0; name[i]; i++) if (wcschr(L"\\/:*?\"<>|", name[i])) name[i] = L'_';
+    if (lstrlenW(dir) + lstrlenW(name) + 6 >= MAX_PATH) return;
+    swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", dir, name);
+    init = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) {
+        link->lpVtbl->SetPath(link, target);
+        lstrcpynW(dir, target, MAX_PATH);
+        if ((slash = wcsrchr(dir, L'\\'))) *slash = 0;
+        link->lpVtbl->SetWorkingDirectory(link, dir);
+        link->lpVtbl->SetIconLocation(link, target, 0);
+        if (SUCCEEDED(link->lpVtbl->QueryInterface(link, &IID_IPersistFile, (void **)&file))) {
+            if (SUCCEEDED(file->lpVtbl->Save(file, lnk, TRUE))) {
+                HKEY h;
+                if (!RegCreateKeyExW(HKEY_CURRENT_USER, SHORTCUTS_KEY, 0, NULL, 0, KEY_WRITE, NULL, &h, NULL)) {
+                    RegSetValueExW(h, a->ord, 0, REG_SZ, (const BYTE *)lnk, (lstrlenW(lnk) + 1) * sizeof(WCHAR));
+                    RegCloseKey(h);
+                }
+            }
+            file->lpVtbl->Release(file);
+        }
+        link->lpVtbl->Release(link);
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+}
+
+/* the shortcut the store made for the app, taken away */
+static void forget_start_shortcut(const app_t *a)
+{
+    WCHAR lnk[MAX_PATH];
+    DWORD cb = sizeof(lnk);
+    HKEY h;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, SHORTCUTS_KEY, 0, KEY_READ | KEY_WRITE, &h)) return;
+    if (!RegGetValueW(h, NULL, a->ord, RRF_RT_REG_SZ, NULL, lnk, &cb) && lnk[0]) DeleteFileW(lnk);
+    RegDeleteValueW(h, a->ord);
+    RegCloseKey(h);
 }
 
 /* ---- checking for updates -------------------------------------------------------------------------- */
@@ -954,6 +1033,7 @@ int app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel
         rc = a->method == SRC_WINGET ? install_winget(a, progress, ctx, cancel, err, cch)
                                      : install_pin(a, progress, ctx, cancel, err, cch);
         if (rc && !(cancel && *cancel)) disk_hint(err, cch);
+        if (!rc) ensure_start_shortcut(a);
         return rc;
     case SRC_OURS_APT:
     case SRC_LINUX_APT:
@@ -1360,6 +1440,38 @@ static void app_folder(HKEY root, const WCHAR *entry, const WCHAR *file, WCHAR *
     while ((p = dir + lstrlenW(dir) - 1) >= dir + 3 && *p == L'\\') *p = 0;   /* "C:\X\" */
 }
 
+/* the program in the app's own folder: one named as the app (AIMP.exe), else
+ * the only program there that is not its uninstaller or setup */
+static BOOL folder_program(const app_t *a, WCHAR *out, int cch)
+{
+    WCHAR cmd[2048], entry[512], file[MAX_PATH], args[2048], dir[MAX_PATH], pat[MAX_PATH], base[MAX_PATH], only[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HKEY root = NULL;
+    HANDLE h;
+    int programs = 0;
+    out[0] = only[0] = 0;
+    if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd), &root, entry, ARRAYSIZE(entry)) || !root)
+        return FALSE;
+    split_command(cmd, file, args, MAX_PATH);
+    app_folder(root, entry, file, dir, ARRAYSIZE(dir));
+    if (!dir[0] || !own_folder(dir) || lstrlenW(dir) + 8 >= MAX_PATH) return FALSE;
+    swprintf(pat, MAX_PATH, L"%ls\\*.exe", dir);
+    if ((h = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return FALSE;
+    do {
+        int n = lstrlenW(fd.cFileName);
+        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || n < 5 || lstrlenW(dir) + n + 2 >= MAX_PATH) continue;
+        lstrcpynW(base, fd.cFileName, n - 3);
+        if (not_the_program(base)) continue;
+        programs++;
+        if (!out[0] && (name_matches(base, a->detect_name) || name_matches(base, a->name)))
+            swprintf(out, cch, L"%ls\\%ls", dir, fd.cFileName);
+        if (!only[0]) swprintf(only, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    if (!out[0] && programs == 1) lstrcpynW(out, only, cch);
+    return out[0] != 0;
+}
+
 /* still listed, under another part's uninstaller (not cmd's)? DYMO Connect
  * 1.6: an NSIS wrapper's entry (Uninstall.exe) and its MSI's, both "DYMO
  * Connect"; the wrapper's uninstaller took itself away and left the MSI, and
@@ -1413,7 +1525,8 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     HKEY root = NULL;
-    DWORD code = 0, start;
+    DWORD code = 0, start, gone_since = 0, gone_wait = 20000, tick;
+    BOOL left_up = FALSE;
     int attempt;
     err[0] = 0;
     if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd), &root, entry, ARRAYSIZE(entry))) {
@@ -1465,7 +1578,21 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     }
     a->ran_elevated = attempt != 0;
     tree[ntree++] = GetProcessId(sei.hProcess);
-    while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
+    /* its entry gone and the uninstaller still up some time later: its last
+     * message (CutePDF's "has been removed from your system ... restart"),
+     * waiting for OK -- the store said "Uninstalling..." for 20 minutes. The
+     * message is the person's to close. SG_STORE_UNINSTALL_GONE_WAIT (ms): the
+     * gate's shorter wait. */
+    if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GONE_WAIT", ver, ARRAYSIZE(ver))) gone_wait = _wtoi(ver);
+    for (tick = 0; WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT; tick++) {
+        tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
+#ifndef SG_MUTANT_WAITLASTMESSAGE
+        if (tick % 4) continue;
+        if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) gone_since = 0;
+        else if (!gone_since) gone_since = GetTickCount() | 1;
+        else if (GetTickCount() - gone_since >= gone_wait) { left_up = TRUE; break; }
+#endif
+    }
     GetExitCodeProcess(sei.hProcess, &code);
     CloseHandle(sei.hProcess);
     /* its entry goes when it is gone; a self-copying uninstaller, or one whose
@@ -1479,12 +1606,13 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
         Sleep(1000);
     }
 #ifndef SG_MUTANT_NOAFTERWAIT
+    /* (not for one left up at its last message: that is all that is left) */
     /* its entry is gone, but an NSIS uninstaller deletes that before its
      * Start-menu shortcuts: its copy in %TEMP% (Au_.exe) still works. The
      * store stopped watching and the elevated session's end took Au_ with it:
      * Wireshark.lnk and the IrfanView, Mp3tag, Zoom and DYMO folders stayed
      * in the all-users Start menu (qa4). Wait for the rest of it too. */
-    if (!find_installed(a->detect_name, ver, ARRAYSIZE(ver)))
+    if (!left_up && !find_installed(a->detect_name, ver, ARRAYSIZE(ver)))
         for (start = GetTickCount(); tree_alive(tree, &ntree, ARRAYSIZE(tree), &since) &&
                                      GetTickCount() - start < grace;) Sleep(500);
 #endif
@@ -1505,7 +1633,10 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
     err[0] = 0;
     if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
     for (round = 0; round < 3; round++)
-        if ((rc = uninstall_once(a, err, cch, ran, ARRAYSIZE(ran))) != UNINSTALL_NEXT) return rc;
+        if ((rc = uninstall_once(a, err, cch, ran, ARRAYSIZE(ran))) != UNINSTALL_NEXT) {
+            if (!rc) forget_start_shortcut(a);
+            return rc;
+        }
     swprintf(err, cch, L"%ls was not removed.", a->name);
     return 1;
 }

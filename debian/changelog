@@ -1,3 +1,20 @@
+sg-shell (0.1.0-228) unstable; urgency=medium
+
+  * SG Store: an app installed from the Store can be found in Start. Where
+    its installer made no Start shortcut (Winamp's and AIMP's quiet
+    installs, Trillian's, TeraCopy's), the Store makes one in the person's
+    Programs to the program Open starts, and takes it away when the app is
+    uninstalled or found gone. Open also finds a program in the app's own
+    folder when its entry shows none (AIMP: Open showed Apps & features).
+    Gate store-check, mutant NOSTARTLINK.
+  * SG Store: an uninstaller whose app is gone but which stays up at its
+    last message (CutePDF's "has been removed ... restart", waiting for
+    OK) no longer holds the Store at "Uninstalling..." -- 20 seconds after
+    the entry goes the app counts as removed and the message is the
+    person's to close (it waited 20 minutes). Mutant WAITLASTMESSAGE.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 27 Oct 2026 21:16:53 -0700
+
 sg-shell (0.1.0-227) unstable; urgency=medium
 
   * SG Store: an app offered for both scopes gets the person's installer,

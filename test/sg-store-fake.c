@@ -298,7 +298,7 @@ int wmain(int argc, WCHAR **argv)
         swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", programs, display);
         shortcut(lnk, exe, L"/from-shortcut");
         CoUninitialize();
-    } else {
+    } else if (!GetEnvironmentVariableW(L"SG_FAKE_NOICON", NULL, 0)) {   /* AIMP's: no icon, no shortcut */
         WCHAR icon[MAX_PATH];
         swprintf(icon, MAX_PATH, L"%ls,0", exe);
         sz(HKEY_LOCAL_MACHINE, sub, L"DisplayIcon", icon);

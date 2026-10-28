@@ -84,6 +84,8 @@
 #   SG_MUTANT_ADMINMACHINE  an administrator's session gets the machine's installer (Joplin's /allusers: code 2)
 #   SG_MUTANT_NOSCOPEPIN    the catalogue's Scope "machine" is ignored (Total Commander's user entry: code 3)
 #   SG_MUTANT_NOMIRROR      asks GitHub's API for every version, not the project server's list (403 after 60)
+#   SG_MUTANT_WAITLASTMESSAGE  waits for an uninstaller left up at its last message (CutePDF: 20 minutes)
+#   SG_MUTANT_NOSTARTLINK   an app whose installer made no Start shortcut is not found in Start (Winamp, AIMP)
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
@@ -164,7 +166,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1898,6 +1900,46 @@ afterwait() { # exe -> done|early
 }
 [ "$(afterwait "$EXE")" = done ] && pass "an uninstaller still at work after its entry goes is waited for (NSIS shortcuts)" || fail "uninstall done before the shortcuts went"
 [ "$(afterwait "$T/mut-noafterwait.exe")" = early ] && pass "MUTANT NOAFTERWAIT is done while its shortcuts are still there (gate catches it)" || fail "NOAFTERWAIT not detected"
+# its entry gone, the uninstaller stays up at its last message waiting for OK (CutePDF's "has been
+# removed from your system ... restart"): the store said "Uninstalling..." for 20 minutes
+lastmsg() { # exe -> ok|fail|stuck
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    rm -f "$D" "$D.result"
+    SG_FAKE_AFTER=120000 SG_STORE_UNINSTALL_GONE_WAIT=2000 SG_STORE_UNINSTALL_GRACE=1000 \
+        timeout 60 wine "$1" --uninstall 01 >/dev/null 2>&1
+    r=$(sed -n 's/^uninstall 01 \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null | head -1)
+    echo "${r:-stuck}"
+    wine taskkill /f /im uninst.exe >/dev/null 2>&1; sleep 1; ununinstall FakeApp; sleep 0.5
+}
+[ "$(lastmsg "$EXE")" = ok ] && pass "an uninstaller left up at its last message, its entry gone: uninstalled, the message left to the person (CutePDF)" \
+    || fail "last message: $(cat "$D.result" 2>/dev/null)"
+[ "$(lastmsg "$T/mut-waitlastmessage.exe")" = stuck ] && pass "MUTANT WAITLASTMESSAGE waits on it (gate catches it)" || fail "WAITLASTMESSAGE not detected"
+# an app whose installer made no Start shortcut (Winamp's and AIMP's quiet installs): the store makes one
+# in the person's Programs, to the program Open starts, and takes it away with the app -- Start's search
+# said "No results" for an installed app
+startlnk() { # exe [env...] -> what is in Start after the install; after the uninstall
+    exe=$1; shift
+    find "$WINEPREFIX/drive_c" -iname 'Fake App.lnk' -delete 2>/dev/null
+    rm -f "$D" "$D.result"
+    env "$@" SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$exe" --install 01 >/dev/null 2>&1
+    l=$(find "$WINEPREFIX/drive_c/users" "$WINEPREFIX/drive_c/ProgramData" -iname 'Fake App.lnk' 2>/dev/null | head -1)
+    case "$l" in
+        */users/*/Programs/*) grep -a -q 'app\.exe' "$l" && echo -n "mine-app.exe " || echo -n "mine-other " ;;
+        */ProgramData/*) echo -n "installer's " ;;
+        *) echo -n "none " ;;
+    esac
+    SG_STORE_UNINSTALL_GRACE=1000 wine "$exe" --uninstall 01 >/dev/null 2>&1
+    [ -n "$(find "$WINEPREFIX/drive_c/users" -iname 'Fake App.lnk' 2>/dev/null)" ] && echo "left" || echo "gone"
+    ununinstall FakeApp; find "$WINEPREFIX/drive_c" -iname '*Fake App.lnk' -delete 2>/dev/null; sleep 0.5
+}
+r=$(startlnk "$EXE")
+[ "$r" = "mine-app.exe gone" ] && pass "an app installed with no Start shortcut gets one (the person's, to its program), gone with it (Winamp)" || fail "Start shortcut: $r"
+r=$(startlnk "$EXE" SG_FAKE_NOICON=1)
+[ "$r" = "mine-app.exe gone" ] && pass "...its entry showing no program: the one in its folder (AIMP)" || fail "Start shortcut, no icon: $r"
+r=$(startlnk "$EXE" SG_FAKE_LINK=1)
+case "$r" in "installer's"*) pass "...not when its installer made one";; *) fail "an installer's own shortcut: $r";; esac
+r=$(startlnk "$T/mut-nostartlink.exe")
+case "$r" in none*) pass "MUTANT NOSTARTLINK leaves it out of Start (gate catches it)";; *) fail "NOSTARTLINK not detected: $r";; esac
 
 # --- M. several apps, one consent ------------------------------------------------------------------
 "$MINGW" -municode -O1 -o "$T/helperprobe.exe" "$HERE/test/sg-store-helperprobe.c" || fail "the helper probe does not build"
