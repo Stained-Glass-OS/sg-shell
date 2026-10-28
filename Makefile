@@ -85,7 +85,8 @@ BROWSER_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser3
 STORE_SRC  = src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
 STORE_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
-CONSOLE_TOOLS = sg-gpresult
+# sg-roots: the code signing and time stamping roots, each marked with its uses (crypt32)
+CONSOLE_TOOLS = sg-gpresult sg-roots
 
 .PHONY: all build test clean test-appmode lint
 all: build
@@ -257,8 +258,8 @@ build:
 	    $(STORE_SRC) $(BUILD)/sg-store-res64.o $(STORE_LIBS) && echo "built sg-store (64-bit)"
 	@$(MAKE) --no-print-directory office
 	@for p in $(CONSOLE_TOOLS); do \
-	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit, console)"; \
-	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit, console)"; \
+	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (64-bit, console)"; \
+	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (32-bit, console)"; \
 	done
 
 # SG Office (package sg-office, office/): its three programs (Windows
@@ -430,6 +431,7 @@ test: build
 	@sh test/terminal-settings-check.sh
 	@sh test/clock-check.sh
 	@sh test/gpresult-check.sh
+	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/roots-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/net-ui-check.sh
 	@sh test/office-check.sh
 	@sh test/office-native-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc

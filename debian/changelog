@@ -1,3 +1,13 @@
+sg-shell (0.1.0-233) unstable; urgency=medium
+
+  * sg-roots: Windows' code signing and time stamping roots (Microsoft's
+    root program, from CCADB's public report; the 94 Debian's store lacks)
+    in the machine's Root store, each marked for those uses only (wine-sg
+    7602: never a web server's). GOM Player's VSUtil.dll now verifies
+    (was CERT_E_CHAINING). Gate roots-check (mutants NOUSES, NOREMOVE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 13:20:37 -0700
+
 sg-shell (0.1.0-232) unstable; urgency=medium
 
   * SG Store and Get a web browser: a download not matching its manifest's
