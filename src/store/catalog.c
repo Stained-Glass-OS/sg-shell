@@ -283,17 +283,36 @@ static void set_sz(HKEY key, const WCHAR *name, const WCHAR *value)
     RegSetValueExW(key, name, 0, REG_SZ, (const BYTE *)value, (lstrlenW(value) + 1) * sizeof(WCHAR));
 }
 
-static void register_installed(const app_t *a, const WCHAR *version)
+/* where the catalogue says its program goes; FALSE when it says nothing */
+static BOOL reg_program_path(const app_t *a, WCHAR *dir, WCHAR *prog)
+{
+    if (!a->reg_dir[0] || !a->reg_program[0]) return FALSE;
+    ExpandEnvironmentStringsW(a->reg_dir, dir, MAX_PATH);
+    swprintf(prog, MAX_PATH, L"%ls\\%ls", dir, a->reg_program);
+    return TRUE;
+}
+
+/* wait: after an install. Dropbox's offline installer returns while its
+ * updater service still puts the client in place, in no process the store
+ * started: Dropbox.exe was not there yet, nothing was recorded, and the
+ * store offered no Uninstall (qa4, release 616). So wait for the program,
+ * two minutes at most (SG_STORE_REGISTER_WAIT, ms: the gate's); and
+ * app_detect records it whenever it turns up later. */
+static void register_installed_ex(const app_t *a, const WCHAR *version, BOOL wait)
 {
     WCHAR dir[MAX_PATH], prog[MAX_PATH], un[256], cmd[MAX_PATH + 300], sub[160], v[64], *args;
-    DWORD one = 1;
+    DWORD one = 1, start = GetTickCount(), limit = 120 * 1000;
     HKEY key;
 #ifdef SG_MUTANT_NOREGISTER
     return;
 #endif
-    if (!a->reg_dir[0] || !a->reg_program[0] || find_installed(a->detect_name, v, ARRAYSIZE(v))) return;
-    ExpandEnvironmentStringsW(a->reg_dir, dir, MAX_PATH);
-    swprintf(prog, MAX_PATH, L"%ls\\%ls", dir, a->reg_program);
+    if (!reg_program_path(a, dir, prog) || find_installed(a->detect_name, v, ARRAYSIZE(v))) return;
+#ifndef SG_MUTANT_NOREGISTERWAIT
+    if (wait && GetEnvironmentVariableW(L"SG_STORE_REGISTER_WAIT", v, ARRAYSIZE(v))) limit = _wtoi(v);
+    while (wait && GetFileAttributesW(prog) == INVALID_FILE_ATTRIBUTES && GetTickCount() - start < limit) Sleep(1000);
+#else
+    (void)start; (void)limit;
+#endif
     if (GetFileAttributesW(prog) == INVALID_FILE_ATTRIBUTES) return;
     entry_key(a, sub, ARRAYSIZE(sub));
     if (RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_WRITE, NULL, &key, NULL)) return;
@@ -310,6 +329,11 @@ static void register_installed(const app_t *a, const WCHAR *version)
     }
     RegSetValueExW(key, L"SgStoreEntry", 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
     RegCloseKey(key);
+}
+
+static void register_installed(const app_t *a, const WCHAR *version)
+{
+    register_installed_ex(a, version, TRUE);
 }
 
 static void unregister_gone(const app_t *a)
@@ -545,8 +569,18 @@ void app_detect(app_t *a)
     }
     if (find_installed(a->detect_name, a->installed_version, 64))
         a->state = AST_INSTALLED;
-    else if (a->tier == TIER_WINDOWS)
+    else if (a->tier == TIER_WINDOWS) {
+#ifndef SG_MUTANT_NODETECTREGISTER
+        /* a program the store records itself, there now though nothing was
+         * recorded when its install ended (Dropbox's client comes later) */
+        WCHAR dir[MAX_PATH], prog[MAX_PATH];
+        if (reg_program_path(a, dir, prog) && GetFileAttributesW(prog) != INVALID_FILE_ATTRIBUTES) {
+            register_installed_ex(a, NULL, FALSE);
+            if (find_installed(a->detect_name, a->installed_version, 64)) { a->state = AST_INSTALLED; return; }
+        }
+#endif
         forget_start_shortcut(a);   /* uninstalled elsewhere (Settings): no shortcut left to nothing */
+    }
 }
 
 /* ---- opening an installed program ------------------------------------------------------------------

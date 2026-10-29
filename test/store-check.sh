@@ -90,6 +90,8 @@
 #   SG_MUTANT_NOCDN         manifests only from raw.githubusercontent.com (429 to a busy address), not winget's CDN
 #   SG_MUTANT_NOCDNHASH     a CDN manifest taken without checking its SHA-256 against winget's version data
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
+#   SG_MUTANT_NOREGISTERWAIT  a program the store records, put in place after its installer returned, is not recorded
+#   SG_MUTANT_NODETECTREGISTER  ...nor when it turns up later (Dropbox: no Uninstall)
 #   SG_MUTANT_BATCH_PER_APP  asks for an administrator per app in a batch
 #   SG_MUTANT_HELPER_ANYONE  the batch's elevated helper runs anyone's request
 #   SG_MUTANT_NOICON      keeps the letter badges
@@ -169,7 +171,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1036,6 +1038,36 @@ run --list
     && [ "$(kv "$(appline 11)" state)" = not-installed ] \
     && pass "...Uninstall runs its uninstaller, and the store's entry goes with the program" \
     || fail "unregistered uninstall: exit $ec, $(cat "$D.result" 2>/dev/null); $(appline 11)"
+# Dropbox: its offline installer returns while its updater service still puts
+# the client in place. The store waits for the program, and records it
+# whenever it turns up later
+late() { # MUTANT-EXE WAIT-MS DELAY-S: install with app.exe arriving DELAY-S later
+    local app="$WINEPREFIX/drive_c/Program Files/Bare App/app.exe"
+    rm -f "$D.result"; rm -rf "$WINEPREFIX/drive_c/Program Files/Bare App"
+    ( sleep "$3"; cp "$WINEPREFIX/drive_c/Program Files/Bare App/uninst.exe" "$app" ) &
+    lp=$!
+    SG_FAKE_NOKEY=1 SG_FAKE_LATE=1 SG_FAKE_DIR='Bare App' SG_STORE_REGISTER_WAIT=$2 wine "$1" --install 11 >/dev/null 2>&1
+    wait "$lp"   # only it: the gate has helpers of its own in the background
+}
+late "$EXE" 30000 6; ec=$?
+run --list
+[ "$(kv "$(appline 11)" state)" = installed ] && wine reg query "$BK" /v UninstallString >/dev/null 2>&1 \
+    && pass "a program put in place after its installer returned is recorded: Uninstall offered (Dropbox)" \
+    || fail "late program: $(appline 11); $(wine reg query "$BK" 2>&1 | tr -d '\r' | tr '\n' '|')"
+wine reg delete "$BK" /f >/dev/null 2>&1
+late "$T/mut-noregisterwait.exe" 30000 6
+wine reg query "$BK" >/dev/null 2>&1 && fail "NOREGISTERWAIT not detected" \
+    || pass "MUTANT NOREGISTERWAIT records nothing (gate catches it)"
+# ...one that turns up after the store stopped waiting: recorded when the store looks again
+run --list
+[ "$(kv "$(appline 11)" state)" = installed ] && wine reg query "$BK" >/dev/null 2>&1 \
+    && pass "...and one that turned up later is recorded when the store looks again" \
+    || fail "later program: $(appline 11)"
+wine reg delete "$BK" /f >/dev/null 2>&1
+SG_MUT="$T/mut-nodetectregister.exe" run --list
+[ "$(kv "$(appline 11)" state)" = installed ] && fail "NODETECTREGISTER not detected" \
+    || pass "MUTANT NODETECTREGISTER leaves it unrecorded (gate catches it)"
+rm -rf "$WINEPREFIX/drive_c/Program Files/Bare App"; wineserver -w
 # ...and when the program is in the machine's folder, which the person cannot
 # change (DOSBox, installed as an administrator), its uninstaller runs as an
 # administrator: the record is the person's, the program the machine's
@@ -1051,7 +1083,7 @@ r=$(record_case "$EXE")
 r=$(record_case "$T/mut-recordasuser.exe")
 [ "$r" = "elevated 11 0" ] && pass "MUTANT RECORDASUSER runs DOSBox's uninstaller as the person (gate catches it)" || fail "RECORDASUSER not detected: '$r'"
 SG_MUT="$T/mut-noregister.exe" bare
-run --list
+SG_MUT="$T/mut-noregister.exe" run --list   # the store records it when it looks, too
 [ "$(kv "$(appline 11)" state)" != installed ] && pass "MUTANT NOREGISTER leaves it undetected (gate catches it)" || fail "NOREGISTER not detected"
 wine reg delete "$BK" /f >/dev/null 2>&1; rm -rf "$WINEPREFIX/drive_c/Program Files/Bare App"; wine reg delete "$K\\11" /f >/dev/null 2>&1; wineserver -w
 

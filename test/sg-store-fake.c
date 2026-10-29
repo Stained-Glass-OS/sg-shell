@@ -26,6 +26,7 @@
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
+ * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
  * <any> /stay                       a program left running (60 s; its process id
  *                                   to %SG_FAKE_PIDFILE%): the store
  *                                   closes the app's own before its uninstaller;
@@ -272,6 +273,9 @@ int wmain(int argc, WCHAR **argv)
         WCHAR un[MAX_PATH];
         swprintf(un, MAX_PATH, L"%ls\\uninst.exe", dest);
         CopyFileW(self, un, FALSE);
+        /* %SG_FAKE_LATE%: and no app.exe yet -- Dropbox's offline installer
+         * returns while its updater service still puts the client in place */
+        if (GetEnvironmentVariableW(L"SG_FAKE_LATE", NULL, 0)) DeleteFileW(exe);
         return 0;
     }
     swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", key);

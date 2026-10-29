@@ -1,3 +1,14 @@
+sg-shell (0.1.0-237) unstable; urgency=medium
+
+  * SG Store: a program the Store records itself (RegisterDir) is recorded
+    even when it is put in place after its installer returned. Dropbox's
+    offline installer leaves the client to its updater service: the Store
+    now waits for the program (two minutes at most), and records it
+    whenever it finds it later, so Uninstall is offered. store-check
+    (mutants NOREGISTERWAIT, NODETECTREGISTER).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 29 Oct 2026 11:49:02 -0700
+
 sg-shell (0.1.0-236) unstable; urgency=medium
 
   * SG Store: Dropbox is recorded by the Store once installed (RegisterDir,
