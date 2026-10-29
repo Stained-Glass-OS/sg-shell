@@ -436,6 +436,7 @@ test: build
 	@sh test/gpresult-check.sh
 	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/calendar-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/roots-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@SG_WINE_DIR=$(SG_WINE_DIR) sh test/qt-rendering-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/net-ui-check.sh
 	@sh test/office-check.sh
 	@sh test/office-native-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc

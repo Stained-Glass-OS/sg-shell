@@ -1,3 +1,13 @@
+sg-shell (0.1.0-235) unstable; urgency=medium
+
+  * Qt 6 programs draw Qt Quick with OpenGL (QSG_RHI_BACKEND=opengl, a
+    machine environment variable, defaults/44-sg-qt-rendering.reg): Qt
+    WebEngine hands its frames over as shared Direct3D 11 textures, which
+    our Direct3D 11 cannot share, so GOG GALAXY's window stayed blank
+    white. test/qt-rendering-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 28 Oct 2026 23:53:38 -0700
+
 sg-shell (0.1.0-234) unstable; urgency=medium
 
   * The taskbar clock's calendar flyout (sg-calendar), as on Windows 10:
