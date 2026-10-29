@@ -39,5 +39,18 @@ grep -q '"Source"="linux:apt:secrets"' "$CAT" && pass "GNOME Secrets is listed (
 awk '/^\[/ {sec=$0} sec ~ /Apps\\128\]/' "$CAT" | grep -q '"Source"="ours:apt:sg-mail"' \
   && awk '/^\[/ {sec=$0} sec ~ /Apps\\128\]/' "$CAT" | grep -q '"Run"="/usr/share/applications/sg-mail.desktop"' \
   && pass "SG Mail is listed as ours (sg-mail), opened by its desktop entry" || fail "SG Mail is not listed as ours:apt:sg-mail"
+# an installer that writes no Uninstall entry: the Store records it itself
+# from RegisterDir + RegisterProgram (and its uninstaller), all three or none
+badreg=$(awk 'function chk() {if (d + p + u && d + p + u < 3) {sub(/.*\\/, "", key); sub(/]$/, "", key); print key}}
+    /^\[/ {chk(); key=$0; d=0; p=0; u=0}
+    /^"RegisterDir"=/ {d=1} /^"RegisterProgram"=/ {p=1} /^"RegisterUninstall"=/ {u=1}
+    END {chk()}' "$CAT")
+[ -z "$badreg" ] && pass "every app the Store records itself has its folder, program and uninstaller" || fail "incomplete Register*: $badreg"
+# Dropbox's offline installer (DropboxUpdate) writes no Uninstall entry under
+# Wine: the Store said "done" and offered Install again, never Uninstall
+# (qa4 walks 605-615); its uninstaller takes Dropbox's own machine arguments
+db=$(awk '/^\[/ {sec=""} /"Name"="Dropbox"/ {sec=1} sec && /^"Register/' "$CAT")
+echo "$db" | grep -q '"RegisterProgram"="Dropbox.exe"' && echo "$db" | grep -q '"RegisterUninstall"="DropboxUninstaller.exe /InstallType:MACHINE /S"' \
+  && pass "Dropbox is recorded by the Store (Dropbox.exe, DropboxUninstaller.exe /InstallType:MACHINE /S)" || fail "Dropbox has no Store record: $db"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

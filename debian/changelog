@@ -1,3 +1,14 @@
+sg-shell (0.1.0-236) unstable; urgency=medium
+
+  * SG Store: Dropbox is recorded by the Store once installed (RegisterDir,
+    RegisterProgram, RegisterUninstall), as DOSBox is: its offline installer
+    writes no Uninstall entry here, so the Store offered Install again and
+    never Uninstall. Its uninstaller runs elevated with Dropbox's own
+    machine arguments (/InstallType:MACHINE /S). store-catalog-check: every
+    Register* entry is complete; Dropbox has one.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 29 Oct 2026 06:32:47 -0700
+
 sg-shell (0.1.0-235) unstable; urgency=medium
 
   * Qt 6 programs draw Qt Quick with OpenGL (QSG_RHI_BACKEND=opengl, a

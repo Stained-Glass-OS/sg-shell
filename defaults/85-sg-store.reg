@@ -3362,6 +3362,9 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Dropbox.Dropbox"
 "DetectName"="Dropbox"
+"RegisterDir"="%ProgramFiles(x86)%\\Dropbox\\Client"
+"RegisterProgram"="Dropbox.exe"
+"RegisterUninstall"="DropboxUninstaller.exe /InstallType:MACHINE /S"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.dropbox.Client.png"
 "InstallArgs"="--silent"
 
