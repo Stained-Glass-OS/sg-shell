@@ -1,3 +1,18 @@
+sg-shell (0.1.0-238) unstable; urgency=medium
+
+  * SG Store: an app's own Start shortcut is found in any folder Start
+    shows (three deep), so the Store makes no shortcut of its own beside
+    it. GOG GALAXY's is two folders down (GOG.com\GOG GALAXY); the Store
+    looked one deep, made "GOG GALAXY" in the person's Programs to the
+    program in its folder named as the app -- its notifications renderer,
+    which shuts itself down without the client -- and Start opened that.
+    A shortcut the Store made is taken away once the app has its own (on
+    the next look at the list), and of the programs in an app's folder
+    named as the app the best-named is taken. Gate store-check, mutants
+    SHALLOWSTART, KEEPSTORELINK.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 29 Oct 2026 15:03:43 -0700
+
 sg-shell (0.1.0-237) unstable; urgency=medium
 
   * SG Store: a program the Store records itself (RegisterDir) is recorded

@@ -86,6 +86,9 @@
 #   SG_MUTANT_NOMIRROR      asks GitHub's API for every version, not the project server's list (403 after 60)
 #   SG_MUTANT_WAITLASTMESSAGE  waits for an uninstaller left up at its last message (CutePDF: 20 minutes)
 #   SG_MUTANT_NOSTARTLINK   an app whose installer made no Start shortcut is not found in Start (Winamp, AIMP)
+#   SG_MUTANT_SHALLOWSTART  looks for the installer's Start shortcut a folder deep: GOG GALAXY's (two down) not
+#                           found, the store made its own, to the notifications renderer
+#   SG_MUTANT_KEEPSTORELINK the store's own shortcut stays when the app has its own in Start (two in Start)
 #   SG_MUTANT_NOSEED        an app's first settings (Everything's folders to index) are not written
 #   SG_MUTANT_NOCDN         manifests only from raw.githubusercontent.com (429 to a busy address), not winget's CDN
 #   SG_MUTANT_NOCDNHASH     a CDN manifest taken without checking its SHA-256 against winget's version data
@@ -171,7 +174,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1977,6 +1980,42 @@ r=$(startlnk "$EXE" SG_FAKE_LINK=1)
 case "$r" in "installer's"*) pass "...not when its installer made one";; *) fail "an installer's own shortcut: $r";; esac
 r=$(startlnk "$T/mut-nostartlink.exe")
 case "$r" in none*) pass "MUTANT NOSTARTLINK leaves it out of Start (gate catches it)";; *) fail "NOSTARTLINK not detected: $r";; esac
+# an installer's shortcut two folders down (GOG GALAXY's: GOG.com\GOG GALAXY\), and beside the program
+# another named as the app (its notifications renderer): the store makes no shortcut of its own -- it
+# made one to the renderer, Start opened that, and it shut itself down
+nested() { # exe -> "own" when only the installer's shortcut is in Start, else what else is there
+    exe=$1
+    find "$WINEPREFIX/drive_c" -iname 'Fake App.lnk' -delete 2>/dev/null
+    rm -f "$D" "$D.result"
+    SG_FAKE_LINK=1 SG_FAKE_LINKDIR='Vendor\Fake App' SG_FAKE_DECOY=1 SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' \
+        SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$exe" --install 01 >/dev/null 2>&1
+    l=$(find "$WINEPREFIX/drive_c/users" -iname 'Fake App.lnk' 2>/dev/null | head -1)
+    if [ -z "$l" ]; then echo own; elif grep -a -q 'Renderer' "$l"; then echo "mine-renderer"; else echo "mine-other"; fi
+}
+nested_clean() {
+    SG_STORE_UNINSTALL_GRACE=1000 wine "$EXE" --uninstall 01 >/dev/null 2>&1
+    ununinstall FakeApp; find "$WINEPREFIX/drive_c" -iname '*Fake App.lnk' -delete 2>/dev/null
+    rm -rf "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Vendor" "$WINEPREFIX/drive_c/Program Files/Fake App"
+    wine reg delete 'HKCU\Software\Stained Glass\Store\Shortcuts' /v 01 /f >/dev/null 2>&1; sleep 0.5
+}
+r=$(nested "$EXE"); nested_clean
+[ "$r" = own ] && pass "an installer's shortcut two folders down is found: the store makes none (GOG GALAXY)" || fail "nested shortcut: $r"
+r=$(nested "$T/mut-shallowstart.exe"); nested_clean
+[ "$r" = mine-renderer ] && pass "MUTANT SHALLOWSTART makes its own, to the renderer (gate catches it)" || fail "SHALLOWSTART not detected: $r"
+# one the store made before it looked that deep goes when the list is next shown: never two in Start
+extra() { # exe -> "gone" or "left": the store's own shortcut, the app having its own
+    nested "$EXE" >/dev/null
+    u=$(ls -d "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Microsoft/Windows/Start\ Menu/Programs | grep -v Public | head -1)
+    cp "$(find "$WINEPREFIX/drive_c/ProgramData" -iname 'Fake App.lnk' | head -1)" "$u/Fake App.lnk"
+    reg 'HKCU\Software\Stained Glass\Store\Shortcuts' /v 01 /d "C:\\users\\$(echo "$u" | sed 's,.*/users/\([^/]*\)/.*,\1,')\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Fake App.lnk"
+    rm -f "$D" "$D.result"; wine "$1" --list >/dev/null 2>&1
+    [ -e "$u/Fake App.lnk" ] && echo left || echo gone
+    nested_clean
+}
+r=$(extra "$EXE")
+[ "$r" = gone ] && pass "the store's own shortcut goes once the app has its own in Start" || fail "store's extra shortcut: $r"
+r=$(extra "$T/mut-keepstorelink.exe")
+[ "$r" = left ] && pass "MUTANT KEEPSTORELINK leaves two in Start (gate catches it)" || fail "KEEPSTORELINK not detected: $r"
 # the app's first settings (Everything: the folders to index), written once, never over the person's own
 reg "$K\\01" /v SettingsFile /d '%APPDATA%\Fake App\fake.ini'
 reg "$K\\01" /v SettingsLine1 /d '[Fake]'

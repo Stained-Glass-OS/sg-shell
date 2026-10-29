@@ -552,6 +552,7 @@ BOOL dpkg_needed_by_system(const WCHAR *pkgw, WCHAR *by, int cch)
 }
 
 static void forget_start_shortcut(const app_t *a);
+static void drop_extra_start_shortcut(const app_t *a);
 
 void app_detect(app_t *a)
 {
@@ -567,9 +568,10 @@ void app_detect(app_t *a)
 #endif
         return;
     }
-    if (find_installed(a->detect_name, a->installed_version, 64))
+    if (find_installed(a->detect_name, a->installed_version, 64)) {
         a->state = AST_INSTALLED;
-    else if (a->tier == TIER_WINDOWS) {
+        if (a->tier == TIER_WINDOWS) drop_extra_start_shortcut(a);
+    } else if (a->tier == TIER_WINDOWS) {
 #ifndef SG_MUTANT_NODETECTREGISTER
         /* a program the store records itself, there now though nothing was
          * recorded when its install ended (Dropbox's client comes later) */
@@ -588,7 +590,7 @@ void app_detect(app_t *a)
  * Open starts the program itself, as its Start menu entry would: the program
  * its Uninstall entry shows as its icon (DisplayIcon, "C:\...\app.exe,0") when
  * that is the program and not its uninstaller or setup; else its shortcut in
- * Start (all users' or the person's Programs, a folder deep), named as the
+ * Start (all users' or the person's Programs, three folders deep), named as the
  * app is. FALSE: neither -- the store shows Apps & features instead. */
 
 static BOOL not_the_program(const WCHAR *base)
@@ -613,8 +615,8 @@ static BOOL icon_program(const WCHAR *icon, WCHAR *out, int cch)
     return TRUE;
 }
 
-/* the best-named shortcut under dir (and its folders, depth levels down) */
-static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, WCHAR *best, int cch, int *best_len)
+/* the best-named shortcut under dir (and its folders, depth levels down), not skip */
+static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, const WCHAR *skip, WCHAR *best, int cch, int *best_len)
 {
     WCHAR pat[MAX_PATH], base[MAX_PATH];
     WIN32_FIND_DATAW fd;
@@ -627,7 +629,7 @@ static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, WCHAR *be
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             if (depth > 0 && lstrlenW(dir) + n + 2 < MAX_PATH) {
                 swprintf(base, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
-                find_shortcut(a, base, depth - 1, best, cch, best_len);
+                find_shortcut(a, base, depth - 1, skip, best, cch, best_len);
             }
             continue;
         }
@@ -637,25 +639,40 @@ static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, WCHAR *be
         if (!name_matches(base, a->detect_name) && !name_matches(base, a->name)) continue;
         if (*best_len && n >= *best_len) continue;      /* "OpenOffice" before "OpenOffice Calc" */
         if (lstrlenW(dir) + n + 2 >= cch) continue;
-        swprintf(best, cch, L"%ls\\%ls", dir, fd.cFileName);
+        swprintf(base, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+        if (skip && !lstrcmpiW(base, skip)) continue;
+        lstrcpynW(best, base, cch);
         *best_len = n;
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
 
 static BOOL folder_program(const app_t *a, WCHAR *out, int cch);
+static BOOL store_shortcut(const app_t *a, WCHAR *lnk, int cch);
 
-/* the app's shortcut in Start (all users' or the person's), "" when it has none */
+/* how deep in Start's Programs an app's shortcut is looked for: Start's search
+ * finds one in any folder, and GOG GALAXY's is two down (GOG.com\GOG GALAXY\);
+ * a folder deep, the store found none, made its own to the wrong program (the
+ * notifications renderer, which shut itself down) and Start opened that */
+#ifdef SG_MUTANT_SHALLOWSTART
+#define START_DEPTH 1
+#else
+#define START_DEPTH 3
+#endif
+
+/* the app's own shortcut in Start (all users' or the person's), not one the
+ * store made for it; "" when it has none */
 static void start_shortcut(const app_t *a, WCHAR *out, int cch)
 {
     static const int folders[] = { CSIDL_COMMON_PROGRAMS, CSIDL_PROGRAMS };
-    WCHAR dir[MAX_PATH];
+    WCHAR dir[MAX_PATH], mine[MAX_PATH];
     int best_len = 0;
     unsigned i;
     out[0] = 0;
+    if (!store_shortcut(a, mine, MAX_PATH)) mine[0] = 0;
     for (i = 0; i < ARRAYSIZE(folders); i++)
         if (SUCCEEDED(SHGetFolderPathW(NULL, folders[i], NULL, 0, dir)))
-            find_shortcut(a, dir, 1, out, cch, &best_len);
+            find_shortcut(a, dir, START_DEPTH, mine[0] ? mine : NULL, out, cch, &best_len);
 }
 
 BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
@@ -694,7 +711,9 @@ static void ensure_start_shortcut(const app_t *a)
 #endif
     if (a->tier == TIER_OURS || a->tier == TIER_LINUX || app_is_runtime(a)) return;
     start_shortcut(a, target, MAX_PATH);
-    if (target[0] || !app_launch_target(a, target, MAX_PATH)) return;   /* it has one; or no program */
+    if (target[0]) { forget_start_shortcut(a); return; }   /* it has its own: never two in Start */
+    if (store_shortcut(a, lnk, MAX_PATH) && GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES) return;   /* ours is there */
+    if (!app_launch_target(a, target, MAX_PATH)) return;   /* no program */
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_PROGRAMS | CSIDL_FLAG_CREATE, NULL, 0, dir))) return;
     lstrcpynW(name, a->name, ARRAYSIZE(name));
     for (i = 0; name[i]; i++) if (wcschr(L"\\/:*?\"<>|", name[i])) name[i] = L'_';
@@ -770,6 +789,28 @@ static void seed_settings(const app_t *a)
         CloseHandle(f);
     }
     free(buf);
+}
+
+/* the shortcut the store made for the app (its record), FALSE: none */
+static BOOL store_shortcut(const app_t *a, WCHAR *lnk, int cch)
+{
+    DWORD cb = cch * sizeof(WCHAR);
+    lnk[0] = 0;
+    return !RegGetValueW(HKEY_CURRENT_USER, SHORTCUTS_KEY, a->ord, RRF_RT_REG_SZ, NULL, lnk, &cb) && lnk[0];
+}
+
+/* an installed app's shortcut the store made, taken away once the app has its
+ * own in Start: one made before the store looked deep enough (GOG GALAXY's,
+ * to its notifications renderer) */
+static void drop_extra_start_shortcut(const app_t *a)
+{
+    WCHAR mine[MAX_PATH], own[MAX_PATH];
+#ifdef SG_MUTANT_KEEPSTORELINK
+    return;
+#endif
+    if (!store_shortcut(a, mine, MAX_PATH)) return;
+    start_shortcut(a, own, MAX_PATH);
+    if (own[0]) forget_start_shortcut(a);
 }
 
 /* the shortcut the store made for the app, taken away */
@@ -1532,7 +1573,7 @@ static BOOL folder_program(const app_t *a, WCHAR *out, int cch)
     WIN32_FIND_DATAW fd;
     HKEY root = NULL;
     HANDLE h;
-    int programs = 0;
+    int programs = 0, best_len = 0;
     out[0] = only[0] = 0;
     if (!uninstall_command(a->detect_name, a->uninstall_args, cmd, ARRAYSIZE(cmd), &root, entry, ARRAYSIZE(entry)) || !root)
         return FALSE;
@@ -1547,8 +1588,11 @@ static BOOL folder_program(const app_t *a, WCHAR *out, int cch)
         lstrcpynW(base, fd.cFileName, n - 3);
         if (not_the_program(base)) continue;
         programs++;
-        if (!out[0] && (name_matches(base, a->detect_name) || name_matches(base, a->name)))
+        /* the best-named: "GOG Galaxy.exe" before "GOG Galaxy Notifications Renderer.exe" */
+        if ((!best_len || n < best_len) && (name_matches(base, a->detect_name) || name_matches(base, a->name))) {
             swprintf(out, cch, L"%ls\\%ls", dir, fd.cFileName);
+            best_len = n;
+        }
         if (!only[0]) swprintf(only, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
     } while (FindNextFileW(h, &fd));
     FindClose(h);

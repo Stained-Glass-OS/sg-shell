@@ -27,6 +27,10 @@
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
  * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
+ * %SG_FAKE_LINKDIR%: with %SG_FAKE_LINK%, the program's shortcut is in that folder of all
+ *                                   users' Programs (GOG GALAXY's: GOG.com\GOG GALAXY)
+ * %SG_FAKE_DECOY%: a second program named as the app, "<name> Renderer.exe" (GOG GALAXY's
+ *                                   notifications renderer, which shuts down without its client)
  * <any> /stay                       a program left running (60 s; its process id
  *                                   to %SG_FAKE_PIDFILE%): the store
  *                                   closes the app's own before its uninstaller;
@@ -268,6 +272,11 @@ int wmain(int argc, WCHAR **argv)
     CreateDirectoryW(dest, NULL);
     swprintf(exe, MAX_PATH, L"%ls\\app.exe", dest);
     CopyFileW(self, exe, FALSE);
+    if (GetEnvironmentVariableW(L"SG_FAKE_DECOY", NULL, 0)) {
+        WCHAR decoy[MAX_PATH];
+        swprintf(decoy, MAX_PATH, L"%ls\\%ls Renderer.exe", dest, display);
+        CopyFileW(self, decoy, FALSE);
+    }
 
     if (GetEnvironmentVariableW(L"SG_FAKE_NOKEY", NULL, 0)) {   /* DOSBox 0.74-3's: files and an uninstaller, no entry */
         WCHAR un[MAX_PATH];
@@ -299,7 +308,14 @@ int wmain(int argc, WCHAR **argv)
         SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, 0, programs);
         swprintf(lnk, MAX_PATH, L"%ls\\Uninstall %ls.lnk", programs, display);
         shortcut(lnk, exe, L"/uninstall");
-        swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", programs, display);
+        {
+            WCHAR linkdir[MAX_PATH], folder[MAX_PATH];
+            if (GetEnvironmentVariableW(L"SG_FAKE_LINKDIR", linkdir, MAX_PATH)) {
+                swprintf(folder, MAX_PATH, L"%ls\\%ls", programs, linkdir);
+                SHCreateDirectoryExW(NULL, folder, NULL);
+            } else lstrcpyW(folder, programs);
+            swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", folder, display);
+        }
         shortcut(lnk, exe, L"/from-shortcut");
         CoUninitialize();
     } else if (!GetEnvironmentVariableW(L"SG_FAKE_NOICON", NULL, 0)) {   /* AIMP's: no icon, no shortcut */
