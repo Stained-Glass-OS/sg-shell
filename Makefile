@@ -95,15 +95,15 @@ build:
 	@mkdir -p $(BUILD)
 	@command -v $(MINGW64) >/dev/null 2>&1 || { echo "SKIP: $(MINGW64) not installed"; exit 0; }
 	@for p in $(PANELS); do \
-	    $(MINGW64) $(SG_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) && echo "built $$p (64-bit)"; \
-	    $(MINGW32) $(SG_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) && echo "built $$p (32-bit)"; \
+	    $(MINGW64) $(SG_CFLAGS) -o $(BUILD)/$$p'64'.exe $$(sh tools/sg-verres.sh $$p'64' $(BUILD) $(WINDRES64)) src/$$p.c $(LIBS) && echo "built $$p (64-bit)"; \
+	    $(MINGW32) $(SG_CFLAGS) -o $(BUILD)/$$p'32'.exe $$(sh tools/sg-verres.sh $$p'32' $(BUILD) $(WINDRES32)) src/$$p.c $(LIBS) && echo "built $$p (32-bit)"; \
 	done
 	@# Remote Desktop Connection: a panel with its own icon (src/sg-mstsc-icon.py)
 	@python3 src/sg-mstsc-icon.py $(BUILD)/sg-mstsc.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res64.o
 	@$(WINDRES32) -I src -I $(BUILD) src/sg-mstsc.rc -O coff -o $(BUILD)/sg-mstsc-res32.o
-	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (64-bit)"
-	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (32-bit)"
+	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc64.exe $$(sh tools/sg-verres.sh sg-mstsc64 $(BUILD) $(WINDRES64)) src/sg-mstsc.c $(BUILD)/sg-mstsc-res64.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (64-bit)"
+	@$(MINGW32) $(SG_CFLAGS) -o $(BUILD)/sg-mstsc32.exe $$(sh tools/sg-verres.sh sg-mstsc32 $(BUILD) $(WINDRES32)) src/sg-mstsc.c $(BUILD)/sg-mstsc-res32.o $(LIBS) -ladvapi32 && echo "built sg-mstsc (32-bit)"
 	@# Control Panel, with its own icon (src/control/gen-icon.py: smooth at every size)
 	@python3 src/control/gen-icon.py $(BUILD)/sg-control.ico
 	@$(WINDRES64) -I src/control -I $(BUILD) src/control/control.rc -O coff -o $(BUILD)/sg-control-res64.o
@@ -119,45 +119,45 @@ build:
 	@python3 src/sg-net-icon.py $(BUILD)/sg-net.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-net.rc -O coff -o $(BUILD)/sg-net-res64.o
 	@for p in $(NET_PANELS); do \
-	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
+	    $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/$$p'64'.exe $$(sh tools/sg-verres.sh $$p'64' $(BUILD) $(WINDRES64)) src/$$p.c $(BUILD)/sg-net-res64.o $(NET_LIBS) \
 	        && echo "built $$p (64-bit)"; \
 	done
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe src/sg-battery.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-battery64.exe $$(sh tools/sg-verres.sh sg-battery64 $(BUILD) $(WINDRES64)) src/sg-battery.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-battery (64-bit)"
 	@# the taskbar clock's calendar flyout (sg-calendar)
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calendar64.exe src/sg-calendar.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calendar64.exe $$(sh tools/sg-verres.sh sg-calendar64 $(BUILD) $(WINDRES64)) src/sg-calendar.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 && echo "built sg-calendar (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-defender-notice64.exe src/sg-defender-notice.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-defender-notice64.exe $$(sh tools/sg-verres.sh sg-defender-notice64 $(BUILD) $(WINDRES64)) src/sg-defender-notice.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-defender-notice (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-restart-notice64.exe src/sg-restart-notice.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-restart-notice64.exe $$(sh tools/sg-verres.sh sg-restart-notice64 $(BUILD) $(WINDRES64)) src/sg-restart-notice.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-restart-notice (64-bit)"
 	@# the kiosk app's launcher (Settings > Accounts > Kiosk; sg-session's sg-kiosk runs it)
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-kiosk64.exe src/sg-kiosk.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-kiosk64.exe $$(sh tools/sg-verres.sh sg-kiosk64 $(BUILD) $(WINDRES64)) src/sg-kiosk.c \
 	    -lshell32 -luser32 -lole32 -luuid -municode -mwindows && echo "built sg-kiosk (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe src/sg-volume.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-volume64.exe $$(sh tools/sg-verres.sh sg-volume64 $(BUILD) $(WINDRES64)) src/sg-volume.c \
 	    -lshell32 -luser32 -lgdi32 -municode -mwindows && echo "built sg-volume (64-bit)"
 	@# Linux programs' tray icons (sg-sni): sg-session's sg-sni-bridge feeds it
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sni64.exe src/sg-sni.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sni64.exe $$(sh tools/sg-verres.sh sg-sni64 $(BUILD) $(WINDRES64)) src/sg-sni.c \
 	    -lshell32 -luser32 -lgdi32 -lole32 -lwindowscodecs -luuid -municode -mwindows && echo "built sg-sni (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-notify64.exe src/sg-notify.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-notify64.exe $$(sh tools/sg-verres.sh sg-notify64 $(BUILD) $(WINDRES64)) src/sg-notify.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-notify (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe src/sg-dictate.c $(DICTATE_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe $$(sh tools/sg-verres.sh sg-dictate64 $(BUILD) $(WINDRES64)) src/sg-dictate.c $(DICTATE_LIBS) \
 	    && echo "built sg-dictate (64-bit)"
 	@python3 src/zip/gen-icon.py $(BUILD)/sg-zip.ico
 	@$(WINDRES64) -I src/zip -I $(BUILD) src/zip/sg-zip.rc -O coff -o $(BUILD)/sg-zip-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-zip64.exe $(ZIP_SRC) $(BUILD)/sg-zip-res64.o $(ZIP_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-zip64.exe $$(sh tools/sg-verres.sh sg-zip64 $(BUILD) $(WINDRES64)) $(ZIP_SRC) $(BUILD)/sg-zip-res64.o $(ZIP_LIBS) \
 	    && echo "built sg-zip (64-bit)"
 	@python3 src/sg-media-icon.py $(BUILD)/sg-media.ico
 	@$(WINDRES64) -I $(BUILD) src/sg-media.rc -O coff -o $(BUILD)/sg-media-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-media64.exe src/sg-media.c $(BUILD)/sg-media-res64.o $(MEDIA_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-media64.exe $$(sh tools/sg-verres.sh sg-media64 $(BUILD) $(WINDRES64)) src/sg-media.c $(BUILD)/sg-media-res64.o $(MEDIA_LIBS) \
 	    && echo "built sg-media (64-bit)"
 	@python3 src/sg-calc-icon.py $(BUILD)/sg-calc.ico
 	@$(WINDRES64) -I $(BUILD) src/sg-calc.rc -O coff -o $(BUILD)/sg-calc-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calc64.exe src/sg-calc.c $(BUILD)/sg-calc-res64.o $(CALC_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-calc64.exe $$(sh tools/sg-verres.sh sg-calc64 $(BUILD) $(WINDRES64)) src/sg-calc.c $(BUILD)/sg-calc-res64.o $(CALC_LIBS) \
 	    && echo "built sg-calc (64-bit)"
 	@python3 src/sg-photos-icon.py $(BUILD)/sg-photos.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-photos.rc -O coff -o $(BUILD)/sg-photos-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-photos64.exe src/sg-photos.c $(BUILD)/sg-photos-res64.o $(PHOTOS_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-photos64.exe $$(sh tools/sg-verres.sh sg-photos64 $(BUILD) $(WINDRES64)) src/sg-photos.c $(BUILD)/sg-photos-res64.o $(PHOTOS_LIBS) \
 	    && echo "built sg-photos (64-bit)"
 	@python3 src/taskmgr/gen-icon.py $(BUILD)/sg-taskmgr.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/taskmgr/taskmgr.rc -O coff -o $(BUILD)/sg-taskmgr-res64.o
@@ -165,15 +165,15 @@ build:
 	    $(BUILD)/sg-taskmgr-res64.o $(TASKMGR_LIBS) && echo "built sg-taskmgr (64-bit)"
 	@python3 src/paint/gen-icon.py $(BUILD)/sg-paint.ico
 	@$(WINDRES64) -I src/paint -I $(BUILD) src/paint/paint.rc -O coff -o $(BUILD)/sg-paint-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-paint64.exe $(PAINT_SRC) $(BUILD)/sg-paint-res64.o $(PAINT_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-paint64.exe $$(sh tools/sg-verres.sh sg-paint64 $(BUILD) $(WINDRES64)) $(PAINT_SRC) $(BUILD)/sg-paint-res64.o $(PAINT_LIBS) \
 	    && echo "built sg-paint (64-bit)"
 	@python3 src/sticky/gen-icon.py $(BUILD)/sg-sticky.ico
 	@$(WINDRES64) -I src/sticky -I $(BUILD) src/sticky/sg-sticky.rc -O coff -o $(BUILD)/sg-sticky-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sticky64.exe src/sticky/sg-sticky.c $(BUILD)/sg-sticky-res64.o $(STICKY_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-sticky64.exe $$(sh tools/sg-verres.sh sg-sticky64 $(BUILD) $(WINDRES64)) src/sticky/sg-sticky.c $(BUILD)/sg-sticky-res64.o $(STICKY_LIBS) \
 	    && echo "built sg-sticky (64-bit)"
 	@python3 src/sg-snip-icon.py $(BUILD)/sg-snip.ico
 	@$(WINDRES64) -I src -I $(BUILD) src/sg-snip.rc -O coff -o $(BUILD)/sg-snip-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-snip64.exe $$(sh tools/sg-verres.sh sg-snip64 $(BUILD) $(WINDRES64)) src/sg-snip.c $(BUILD)/sg-snip-res64.o $(SNIP_LIBS) \
 	    && echo "built sg-snip (64-bit)"
 	@python3 src/charmap/gen-names.py $(UNICODE_DATA) $(BUILD)/charmap-names.c
 	@# Report a problem: testers' reports, a program run with debug logging (src/bugreport)
@@ -182,26 +182,26 @@ build:
 	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-bugreport64.exe src/bugreport/sg-bugreport.c \
 	    $(BUILD)/sg-bugreport-res64.o -lcomdlg32 -lshlwapi -lversion $(LIBS) && echo "built sg-bugreport (64-bit)"
 	@# Linux apps in Start: shortcuts for the .desktop apps, and their launcher (src/linuxapps)
-	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-linuxapp64.exe src/linuxapps/sg-linuxapp.c -lshell32 -lole32 -luuid \
+	@$(MINGW64) $(SG_CFLAGS) -o $(BUILD)/sg-linuxapp64.exe $$(sh tools/sg-verres.sh sg-linuxapp64 $(BUILD) $(WINDRES64)) src/linuxapps/sg-linuxapp.c -lshell32 -lole32 -luuid \
 	    && echo "built sg-linuxapp (64-bit)"
 	@# Linux Terminal (Administrator): a root shell after the user's password (src/rootterm)
 	@python3 src/rootterm/gen-icon.py $(BUILD)/sg-rootterm.ico
 	@$(WINDRES64) -I src/rootterm -I $(BUILD) src/rootterm/sg-rootterm.rc -O coff -o $(BUILD)/sg-rootterm-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -municode -mwindows -o $(BUILD)/sg-rootterm64.exe src/rootterm/sg-rootterm.c \
+	@$(MINGW64) $(SG_CFLAGS) -municode -mwindows -o $(BUILD)/sg-rootterm64.exe $$(sh tools/sg-verres.sh sg-rootterm64 $(BUILD) $(WINDRES64)) src/rootterm/sg-rootterm.c \
 	    $(BUILD)/sg-rootterm-res64.o -luser32 -lshell32 -ladvapi32 && echo "built sg-rootterm (64-bit)"
 	@python3 src/charmap/gen-icon.py $(BUILD)/sg-charmap.ico
 	@$(WINDRES64) -I src/charmap -I $(BUILD) src/charmap/sg-charmap.rc -O coff -o $(BUILD)/sg-charmap-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe src/charmap/main.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-charmap64.exe $$(sh tools/sg-verres.sh sg-charmap64 $(BUILD) $(WINDRES64)) src/charmap/main.c \
 	    $(BUILD)/charmap-names.c $(BUILD)/sg-charmap-res64.o $(CHARMAP_LIBS) && echo "built sg-charmap (64-bit)"
 	@python3 src/magnify/gen-icon.py $(BUILD)/sg-magnify.ico
 	@$(WINDRES64) -I src/magnify -I $(BUILD) src/magnify/magnify.rc -O coff -o $(BUILD)/sg-magnify-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-magnify64.exe src/magnify/main.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-magnify64.exe $$(sh tools/sg-verres.sh sg-magnify64 $(BUILD) $(WINDRES64)) src/magnify/main.c \
 	    $(BUILD)/sg-magnify-res64.o $(MAGNIFY_LIBS) && echo "built sg-magnify (64-bit)"
 	@python3 src/osk/gen-icon.py $(BUILD)/sg-osk.ico
 	@$(WINDRES64) -I src/osk -I $(BUILD) src/osk/osk.rc -O coff -o $(BUILD)/sg-osk-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-osk64.exe src/osk/main.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-osk64.exe $$(sh tools/sg-verres.sh sg-osk64 $(BUILD) $(WINDRES64)) src/osk/main.c \
 	    $(BUILD)/sg-osk-res64.o $(OSK_LIBS) && echo "built sg-osk (64-bit)"
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-touchkbd64.exe src/touchkbd/main.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-touchkbd64.exe $$(sh tools/sg-verres.sh sg-touchkbd64 $(BUILD) $(WINDRES64)) src/touchkbd/main.c \
 	    $(TOUCHKBD_LIBS) && echo "built sg-touchkbd (64-bit)"
 	@python3 src/mmc/gen-icons.py $(BUILD)/mmc16.bmp $(BUILD)/mmc32.bmp $(BUILD)/sg-mmc.ico $(BUILD)/sg-eventvwr.ico $(BUILD)/sg-msinfo32.ico \
 	    $(BUILD)/sg-resmon.ico $(BUILD)/sg-cleanmgr.ico
@@ -222,15 +222,15 @@ build:
 	    && echo "built sg-resmon (64-bit)"
 	@python3 src/terminal/gen-icon.py $(BUILD)/sg-terminal.ico
 	@$(WINDRES64) -I src/terminal -I $(BUILD) src/terminal/terminal.rc -O coff -o $(BUILD)/sg-terminal-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-terminal64.exe $(TERMINAL_SRC) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-terminal64.exe $$(sh tools/sg-verres.sh sg-terminal64 $(BUILD) $(WINDRES64)) $(TERMINAL_SRC) \
 	    $(BUILD)/sg-terminal-res64.o $(TERMINAL_LIBS) && echo "built sg-terminal (64-bit)"
 	@python3 src/clock/gen-icon.py $(BUILD)/sg-clock.ico
 	@$(WINDRES64) -I src/clock -I $(BUILD) src/clock/clock.rc -O coff -o $(BUILD)/sg-clock-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-clock64.exe src/clock/main.c \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-clock64.exe $$(sh tools/sg-verres.sh sg-clock64 $(BUILD) $(WINDRES64)) src/clock/main.c \
 	    $(BUILD)/sg-clock-res64.o $(CLOCK_LIBS) && echo "built sg-clock (64-bit)"
 	@python3 src/wordpad/gen-icon.py $(BUILD)/sg-wordpad.ico
 	@$(WINDRES64) -I src/wordpad -I $(BUILD) src/wordpad/wordpad.rc -O coff -o $(BUILD)/sg-wordpad-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-wordpad64.exe $(WORDPAD_SRC) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-wordpad64.exe $$(sh tools/sg-verres.sh sg-wordpad64 $(BUILD) $(WINDRES64)) $(WORDPAD_SRC) \
 	    $(BUILD)/sg-wordpad-res64.o $(WORDPAD_LIBS) && echo "built sg-wordpad (64-bit)"
 	@python3 src/pdf/gen-icon.py $(BUILD)/sg-pdf.ico $(BUILD)/pdf-icons
 	@$(WINDRES64) -I src/pdf -I $(BUILD) src/pdf/pdf.rc -O coff -o $(BUILD)/sg-pdf-res64.o
@@ -249,7 +249,7 @@ build:
 	    -lole32 -luuid -lshell32 -lshlwapi && echo "built sglinuxicon (64-bit)"
 	@python3 src/fontview/gen-icon.py $(BUILD)/sg-fontview.ico $(BUILD)/sg-fonts.ico
 	@$(WINDRES64) -I src/fontview -I $(BUILD) src/fontview/fontview.rc -O coff -o $(BUILD)/sg-fontview-res64.o
-	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $(FONTVIEW_SRC) \
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-fontview64.exe $$(sh tools/sg-verres.sh sg-fontview64 $(BUILD) $(WINDRES64)) $(FONTVIEW_SRC) \
 	    $(BUILD)/sg-fontview-res64.o $(FONTVIEW_LIBS) && echo "built sg-fontview (64-bit)"
 	@python3 src/browser/gen-icon.py $(BUILD)/sg-browser.ico
 	@$(WINDRES64) -I src/browser -I $(BUILD) src/browser/browser.rc -O coff -o $(BUILD)/sg-browser-res64.o
@@ -261,8 +261,8 @@ build:
 	    $(STORE_SRC) $(BUILD)/sg-store-res64.o $(STORE_LIBS) && echo "built sg-store (64-bit)"
 	@$(MAKE) --no-print-directory office
 	@for p in $(CONSOLE_TOOLS); do \
-	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (64-bit, console)"; \
-	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (32-bit, console)"; \
+	    $(MINGW64) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'64'.exe $$(sh tools/sg-verres.sh $$p'64' $(BUILD) $(WINDRES64)) src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (64-bit, console)"; \
+	    $(MINGW32) $(SG_CON_CFLAGS) -o $(BUILD)/$$p'32'.exe $$(sh tools/sg-verres.sh $$p'32' $(BUILD) $(WINDRES32)) src/$$p.c $(LIBS) -lcrypt32 -ladvapi32 && echo "built $$p (32-bit, console)"; \
 	done
 
 # SG Office (package sg-office, office/): its three programs (Windows
@@ -397,6 +397,7 @@ test: build
 	@sh test/icon-sizes-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/smooth-shapes-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/render-check.sh
+	@sh test/version-check.sh
 	@sh test/start-check.sh
 	@sh test/taskbar-pins-check.sh
 	@sh test/round-check.sh

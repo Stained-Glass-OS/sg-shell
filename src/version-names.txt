@@ -1,0 +1,37 @@
+# The name each of our programs gives itself (its version resource's FileDescription),
+# as Open with, Task Manager and a program's Properties show it -- Windows' own
+# programs all carry one. tools/sg-verres.sh builds the resource at link time;
+# test/version-check.sh fails a program built without one. NAME<TAB>description.
+sg-battery	Battery
+sg-calc	Calculator
+sg-calendar	Calendar
+sg-charmap	Character Map
+sg-clock	Alarms & Clock
+sg-defender-notice	SG Defender
+sg-dictate	Voice Typing
+sg-fontview	Font Viewer
+sg-gpresult	Group Policy Results
+sg-kiosk	Kiosk
+sg-linuxapp	Linux App Launcher
+sg-magnify	Magnifier
+sg-media	Media Player
+sg-mstsc	Remote Desktop Connection
+sg-ncpa	Network Connections
+sg-netflyout	Network
+sg-notify	Notifications
+sg-osk	On-Screen Keyboard
+sg-paint	Paint
+sg-photos	Photos
+sg-restart-notice	Restart to Finish Updates
+sg-roots	Code Signing Roots
+sg-rootterm	Linux Terminal
+sg-sni	Linux Tray Icons
+sg-snip	Snipping Tool
+sg-start	Start
+sg-sticky	Sticky Notes
+sg-taskbar	Taskbar
+sg-terminal	Terminal
+sg-touchkbd	Touch Keyboard
+sg-volume	Volume
+sg-wordpad	WordPad
+sg-zip	Compressed Folders

@@ -1,3 +1,14 @@
+sg-shell (0.1.0-240) unstable; urgency=medium
+
+  * Every program of ours carries its name in a version resource
+    (FileDescription), as Windows' own do: Open with listed Paint as
+    "Sg-paint64", and Task Manager and Properties showed file names.
+    src/version-names.txt names them (as Start does), tools/sg-verres.sh
+    builds the resource at link time; gate version-check fails a program
+    built without one.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 29 Oct 2026 23:15:08 -0700
+
 sg-shell (0.1.0-239) unstable; urgency=medium
 
   * Start: Escape with a search typed closes Start, as Windows' does; it
