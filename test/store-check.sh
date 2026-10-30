@@ -110,6 +110,7 @@
 #   SG_MUTANT_NOINVOKER   runs a user-scope installer without __COMPAT_LAYER=RunAsInvoker (Kdenlive)
 #   SG_MUTANT_NOUNINVOKER runs a person's own (HKCU) uninstaller as its manifest asks (Kdenlive)
 #   SG_MUTANT_NOMACHINEELEVATE runs the machine's uninstaller the person cannot change as the person (NVDA)
+#   SG_MUTANT_NOMSIELEVATE runs a machine MSI's "MsiExec.exe /X{...}" as the person (Blender, 1627)
 #   SG_MUTANT_NOINSTALLARGS keeps the manifest's quiet switches over the catalogue's InstallArgs (Dropbox)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
@@ -174,7 +175,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1790,6 +1791,23 @@ r=$(machine_case "$EXE" 1)
 [ "$r" = "elevated 01 0" ] && pass "...one the person can change runs as them" || fail "writable machine uninstaller: '$r'"
 r=$(machine_case "$T/mut-nomachineelevate.exe" 0)
 [ "$r" = "elevated 01 0" ] && pass "MUTANT NOMACHINEELEVATE runs NVDA's uninstaller as the person (gate catches it)" || fail "NOMACHINEELEVATE not detected: '$r'"
+# the machine's Windows Installer product: its entry's uninstaller is the bare
+# "MsiExec.exe /X{...}", which the writable test above never found (it looked
+# in the store's folder), so it ran as the person and failed with 1627
+# (Blender, qa4 release 620); as Programs and Features does, it asks first
+msi_case() { # EXE -- the elevated line of the result
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString /f >/dev/null 2>&1
+    wine reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v UninstallString /d 'MsiExec.exe /X{0F4B6E2A-5A1D-4C3B-9E8F-1D2C3B4A5F60}' /f >/dev/null 2>&1
+    rm -f "$D.result"
+    SG_MUT="$1" run --uninstall 01
+    grep '^elevated 01' "$D.result" 2>/dev/null
+    ununinstall FakeApp; sleep 0.5
+}
+r=$(msi_case "$EXE")
+[ "$r" = "elevated 01 1" ] && pass "a machine MSI's uninstall (MsiExec.exe /X) runs as an administrator (Blender)" || fail "machine MSI case: '$r'"
+r=$(msi_case "$T/mut-nomsielevate.exe")
+[ "$r" = "elevated 01 0" ] && pass "MUTANT NOMSIELEVATE runs it as the person (gate catches it)" || fail "NOMSIELEVATE not detected: '$r'"
 # the catalogue's quiet switch for an uninstaller with none in its entry
 # (Total Commander's tcunin64.exe /7: its Uninstall/Repair/Cancel waited)
 reg "$K\\01" /v UninstallArgs /d '/7'

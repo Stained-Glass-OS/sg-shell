@@ -1628,7 +1628,18 @@ static BOOL uninstaller_needs_admin(HKEY root, const WCHAR *file)
 #ifdef SG_MUTANT_NOMACHINEELEVATE
     return FALSE;
 #endif
+    WCHAR full[MAX_PATH];
     if (root != HKEY_LOCAL_MACHINE) return FALSE;
+#ifndef SG_MUTANT_NOMSIELEVATE
+    /* the machine's Windows Installer product ("MsiExec.exe /X{...}"): only an
+     * administrator removes it, and Programs and Features asks first. The
+     * test below looked for "MsiExec.exe" in the store's own folder, found
+     * nothing and ran it as the person: Blender stayed, "its uninstaller
+     * stopped with 1627" (qa4, release 620). */
+    if (!lstrcmpiW(PathFindFileNameW(file), L"msiexec.exe") || !lstrcmpiW(PathFindFileNameW(file), L"msiexec")) return TRUE;
+#endif
+    /* a bare name is the program on the search path */
+    if (!wcschr(file, L'\\') && SearchPathW(NULL, file, L".exe", MAX_PATH, full, NULL)) file = full;
     h = CreateFileW(file, FILE_WRITE_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
     if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); return FALSE; }
     return GetLastError() == ERROR_ACCESS_DENIED;

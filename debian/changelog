@@ -1,3 +1,16 @@
+sg-shell (0.1.0-241) unstable; urgency=medium
+
+  * SG Store: a machine-wide Windows Installer app's uninstall
+    ("MsiExec.exe /X{...}" in HKLM) runs as an administrator, asking
+    first, as Programs and Features does. The Store checked whether the
+    person could change the uninstaller, looked for the bare name
+    "MsiExec.exe" in its own folder, found nothing and ran it as the
+    person: Blender and Audacity stayed ("its uninstaller stopped with
+    1627", qa4 walk on release 620). A bare program name is now the one
+    on the search path. Gate store-check (mutant NOMSIELEVATE).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 30 Oct 2026 04:53:36 -0700
+
 sg-shell (0.1.0-240) unstable; urgency=medium
 
   * Every program of ours carries its name in a version resource
