@@ -1,3 +1,13 @@
+sg-shell (0.1.0-239) unstable; urgency=medium
+
+  * Start: Escape with a search typed closes Start, as Windows' does; it
+    opens again with the search empty. Escape used to clear the search
+    and leave Start open, so the next click on the Start button closed
+    it and what was typed next went to the program behind (the SG Store
+    on qa4). Gate start-check, mutant START_ESC_CLEARS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 29 Oct 2026 20:40:18 -0700
+
 sg-shell (0.1.0-238) unstable; urgency=medium
 
   * SG Store: an app's own Start shortcut is found in any folder Start

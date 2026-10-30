@@ -9,7 +9,7 @@
 # shows to SG_START_DUMP after every paint, and the checks read that and the
 # screen: the layout above the taskbar, every app with its icon and letter
 # headers, "Recently added", the default pinned tiles, type-to-search (apps
-# and settings, Enter runs the best match, Escape clears then closes), the
+# and settings, Enter runs the best match, Escape closes), the
 # context menu pinning and unpinning, the power menu and machine policy,
 # the expanding rail, keyboard selection, click-away, and how fast it opens.
 # Start follows the Windows mode (SystemUsesLightTheme) and Settings >
@@ -187,7 +187,7 @@ xdotool key Escape; sleep 1
 xdotool type --delay 80 'Root Level'; sleep 1.5
 d | grep -qxE '(item|best) Root Level App' && pass "a search finds a shortcut at the top of the Start Menu folder, beside Programs (SumatraPDF's)" \
     || fail "the Start Menu folder's own shortcut is not found (mutant NOSTARTROOT: SG_START_EXE=<built with -DSG_MUTANT_NOSTARTROOT>)"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; [ "$(val visible)" = 1 ] || poke
 TBSTYLE 2; poke; poke; shot glass
 # Glass's Start is laid out as that era's was: programs on white at the
 # left with All Programs (in place) and a search box under them; the user's
@@ -246,34 +246,35 @@ xdotool type --delay 80 note; sleep 1.5
 has "item File Explorer" && fail "search results still list File Explorer" || pass "and only what matches is listed"
 shot search
 xdotool key Escape; sleep 1
-[ "$(val search)" = "" ] && [ "$(val visible)" = 1 ] && pass "Escape clears the search, and Start stays open" || fail "Escape: visible $(val visible) search '$(val search)'"
+[ "$(val visible)" = 0 ] && pass "Escape with a search typed closes Start, as Windows' does" || fail "Escape left Start open: search '$(val search)' (mutant START_ESC_CLEARS: SG_START_EXE=<built with -DSG_MUTANT_START_ESC_CLEARS>)"
+poke; [ "$(val visible)" = 1 ] && [ "$(val search)" = "" ] && pass "and Start opens again with the search empty" || fail "reopened: visible $(val visible) search '$(val search)'"
 xdotool type --delay 80 uninstall; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = "Apps & features" ] && pass "settings are found too: 'uninstall' -> Apps & features" || fail "settings search: $(d | grep '^best')"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; poke
 xdotool type --delay 80 environment; sleep 1.5
 d | sed -n 's/^best //p' | grep -q '^Edit .*environment variables' \
     && pass "'environment' finds the environment variables, as Windows' Start does ($(d | sed -n 's/^best //p'))" \
     || fail "environment search: $(d | grep '^best') $(d | grep '^item' | head -3 | tr '\n' ' ')"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; poke
 xdotool type --delay 80 txt; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = Notepad ] && pass "apps are found by what they open: 'txt' -> Notepad" || fail "keyword search: $(d | grep '^best')"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; poke
 xdotool type --delay 80 quill; sleep 1.5
 { [ "$(d | sed -n 's/^best //p')" = Quill64 ] && has "item Quill Manual"; } \
     && pass "as well matched, a program comes before a document: 'quill' -> Quill64, then Quill Manual (a document)" \
     || fail "program before document: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_DOCS_EQUAL: SG_START_EXE=<built with -DSG_MUTANT_START_DOCS_EQUAL>)"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; poke
 xdotool type --delay 80 gimp; sleep 1.5
 [ "$(d | sed -n 's/^best //p')" = "GNU Image Manipulation Program" ] \
     && pass "a Linux app is found by its .desktop file's name: 'gimp' -> GNU Image Manipulation Program" \
     || fail "Linux app words: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_NOLINUXWORDS)"
-xdotool key Escape; sleep 1
+xdotool key Escape; sleep 1; poke
 xdotool type --delay 80 quasar; sleep 1.5
 { [ "$(d | sed -n 's/^best //p')" = "Quasar Live" ] && ! d | grep -qxE '(item|best) Quasar'; } \
     && pass "a shortcut whose program is gone is not offered: 'quasar' -> Quasar Live only (Wireshark's leftover)" \
     || fail "dead shortcut: $(d | grep -E '^(best|item)' | head -3 | tr '\n' ' ') (mutant START_DEADLINKS)"
-xdotool key Escape; sleep 0.8; xdotool key Escape; sleep 1
-[ "$(val visible)" = 0 ] && pass "a second Escape closes Start" || fail "still open"
+xdotool key Escape; sleep 1
+[ "$(val visible)" = 0 ] && pass "and Escape closes Start" || fail "still open"
 
 poke; xdotool type --delay 80 note; sleep 1; xdotool key Return; sleep 3
 [ "$(val launched)" = Notepad ] && [ "$(val visible)" = 0 ] && pass "Enter runs the best match and closes Start" || fail "Enter: launched '$(val launched)' visible $(val visible)"
@@ -289,7 +290,7 @@ shot context
 xdotool key p; sleep 1.2
 has "tile Zeta Test App" && pass "Pin to Start adds a tile" || fail "not pinned: $(d | grep '^tile')"
 "$WINE" reg query 'HKCU\Software\Stained Glass\Start' /v Pinned 2>/dev/null | grep -q 'Zeta Test App' && pass "the pins are kept in HKCU\\Software\\Stained Glass\\Start" || fail "Pinned not in the registry"
-xdotool key Escape; sleep 0.8
+xdotool key Escape; sleep 0.8; [ "$(val visible)" = 1 ] || poke
 # the new tile: the fourth pinned (File Explorer, Control Panel, Notepad, RDC, Zeta) -> second row, second column
 n=$(d | grep -c '^tile')
 col=$(( (n - 1) % 3 )); row=$(( (n - 1) / 3 ))
@@ -353,7 +354,7 @@ xdotool key g; sleep 2
     && pass "and it turns it on again (its HKLM mark 02, no second shortcut)" \
     || fail "everyone's item not turned on: $("$WINE" reg query "HKLM\\$APPROVED" /v 'Zeta Test App.lnk' 2>&1 | tr -d '\r' | grep Zeta)"
 rm -f "$CSTARTUP/Zeta Test App.lnk"
-xdotool key Escape; sleep 0.8      # the search clears; Start stays open for the rail
+xdotool key Escape; sleep 0.8; [ "$(val visible)" = 1 ] || poke   # Escape closed it; the rail needs it open
 
 # --- the rail -----------------------------------------------------------------------
 click 24 $((panel_y + 28))

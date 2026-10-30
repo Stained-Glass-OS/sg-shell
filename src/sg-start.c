@@ -15,7 +15,7 @@
  *     (recursively, .lnk and .url), each with its own icon;
  *   - pinned tiles on the right (HKCU\Software\Stained Glass\Start\Pinned).
  * Typing searches apps and settings (Enter runs the best match, Escape
- * clears, then closes). Right-click: Pin/Unpin, Run as administrator (the
+ * closes Start, as Windows' does). Right-click: Pin/Unpin, Run as administrator (the
  * runas verb, which wine-sg 0022 hands to the elevation broker), Open file
  * location, Uninstall. Arrows, Tab and Enter work; clicking away closes it.
  *
@@ -3340,8 +3340,15 @@ static void key_down(WPARAM vk)
     switch (vk)
     {
     case VK_ESCAPE:
+        /* with a search typed, Escape closes Start, as Windows' does (it
+         * opens again with the search empty); clearing it first left Start
+         * open, and the next click on the Start button closed it instead
+         * (qa4, 2026-10-29) */
+#ifdef SG_MUTANT_START_ESC_CLEARS
         if (g_search[0]) { g_search[0] = 0; search_changed(); }
-        else if (g_centered && g_show_list) { show_list(FALSE); build_rows(); g_scroll = 0; InvalidateRect(g_panel, NULL, FALSE); }
+        else
+#endif
+        if (g_centered && g_show_list) { show_list(FALSE); build_rows(); g_scroll = 0; InvalidateRect(g_panel, NULL, FALSE); }
         else show_panel(FALSE);
         return;
     case VK_RETURN:
