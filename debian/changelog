@@ -1,3 +1,12 @@
+sg-shell (0.1.0-242) unstable; urgency=medium
+
+  * SG Store offers OneDrive (winget Microsoft.OneDrive). Verified on
+    qa4 with release 624 (wine-sg 766): installs from the Store, its
+    sign-in window comes up, a work account signs in through
+    sg-wam-msal and the browser, and its folder fills from the cloud.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 31 Oct 2026 00:14:14 -0700
+
 sg-shell (0.1.0-241) unstable; urgency=medium
 
   * SG Store: a machine-wide Windows Installer app's uninstall

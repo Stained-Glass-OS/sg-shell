@@ -3618,6 +3618,16 @@ Windows Registry Editor Version 5.00
 "Run"="/usr/bin/secrets"
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnome.World.Secrets.png"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\131]
+"Name"="OneDrive"
+"Publisher"="Microsoft"
+"Description"="Microsoft's cloud storage: your files on every device."
+"Category"="Internet"
+"Colour"=dword:000078d4
+"Tier"="windows"
+"Source"="winget:Microsoft.OneDrive"
+"DetectName"="Microsoft OneDrive"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

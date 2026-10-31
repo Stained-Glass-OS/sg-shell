@@ -7,3 +7,4 @@ admin/sg-admind	Windows Registry Editor Version 5\.00	the .reg file format heade
 src/store/main.c	Windows program	SG Store's choice of an app's build: a Windows program (run with Wine) or a Linux app -- what the system runs, not a name for our product
 src/store/details.c	Windows program	SG Store's details page: where a Windows program (run with Wine) comes from -- what the system runs, not a name for our product
 src/control/set_printers.c	Windows driver	a printer maker's driver for Windows, which the user installs from the maker -- what prints, not a name for our product
+defaults/85-sg-store.reg	^"?(Microsoft )?OneDrive"?$	the Store's catalogue naming Microsoft's own app, which the user installs from it (winget Microsoft.OneDrive) -- not a name for our product
