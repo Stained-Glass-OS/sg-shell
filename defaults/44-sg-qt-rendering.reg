@@ -1,14 +1,13 @@
 Windows Registry Editor Version 5.00
 
-; Stained Glass OS: Qt 6 programs draw their Qt Quick scenes with OpenGL, not
-; Direct3D 11. Qt WebEngine hands each web frame to Qt Quick as a shared
-; Direct3D 11 texture, and our Direct3D 11 (DXVK on Wine's Vulkan) cannot
-; share textures (no VK_KHR_external_memory_win32), so every Qt 6 WebEngine
-; window stayed blank white -- GOG GALAXY's (qa4, qa5), calibre's viewer.
-; With OpenGL the frames need no sharing. Qt 5 draws with OpenGL already and
-; reads this only with QSG_RHI set. A machine environment variable, as on
-; Windows: Settings > Environment Variables shows it; a program's own
-; Compatibility settings (Environment) can set it otherwise.
+; Stained Glass OS: Qt 6 programs draw their Qt Quick scenes with Direct3D 11,
+; their default on Windows. sg-shell 235-243 set QSG_RHI_BACKEND=opengl here,
+; machine-wide, because Qt WebEngine hands each web frame to Qt Quick as a
+; shared Direct3D 11 texture and our Direct3D 11 (DXVK on Wine's Vulkan) could
+; not share textures: GOG GALAXY's window stayed blank white. wine-sg 10.0-807
+; shares them (VK_KHR_external_memory_win32), so the override goes: this file
+; takes the value away again on machines that have it. A program's own
+; Compatibility settings (Environment) can still set it.
 
 [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment]
-"QSG_RHI_BACKEND"="opengl"
+"QSG_RHI_BACKEND"=-
