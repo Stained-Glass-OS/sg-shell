@@ -308,7 +308,7 @@ int look_whole(void)
 /* the taskbar in a look: Classic (labelled buttons at the left, Task View),
  * Rounded (taller, icons in the middle, a search box), Horizon (a bright blue
  * bar, labelled buttons combined when full) or Glass (a dark glass bar, icon
- * buttons with pins); neither older bar had Task View */
+ * buttons with pins) */
 const WCHAR *look_set_taskbar(int look)
 {
     BOOL rounded = look == LOOK_ROUNDED;
@@ -320,8 +320,9 @@ const WCHAR *look_set_taskbar(int look)
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarAl", rounded ? 1 : 0);
     reg_set_dword(HKEY_CURRENT_USER, ADV, L"TaskbarGlomLevel", glom);
     reg_set_dword(HKEY_CURRENT_USER, SEARCHKEY, L"SearchboxTaskbarMode", rounded ? 1 : 0);
-    reg_set_dword(HKEY_CURRENT_USER, ADV, L"ShowTaskViewButton", look == LOOK_HORIZON || look == LOOK_GLASS ? 0 : 1);
-    reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"ShowDesktops", 0);   /* off by default in every look; the Taskbar toggle turns it on */
+    /* Task View and the desktops pager are the person's (Settings > Taskbar),
+     * not the look's: a theme on Windows leaves the taskbar's buttons alone,
+     * and every look's taskbar draws both */
     reg_set_dword(HKEY_CURRENT_USER, TASKBAR, L"Color", 0);
     if (rounded || look == LOOK_GLASS) default_pins();
     broadcast(L"TraySettings");

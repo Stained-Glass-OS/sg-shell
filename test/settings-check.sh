@@ -443,12 +443,16 @@ else fail "no Task View switch on the Taskbar page"; fi
 sleep 0.5; shot taskbar-settings
 
 # --- the looks: Classic and Rounded, and the parts they set, each choosable after ------------------
-wine "$T/sg-settings64.exe" --set look rounded 2>/dev/null | tr -d '\r' | grep -q '^OK' && pass "--set look rounded" || fail "--set look rounded failed"
+# the person's own taskbar buttons, which no look may change (a user's report, 2026-11-06:
+# after a theme switch the desktops pager had gone, and with Horizon and Glass Task View too)
 ADVK='HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+wine reg add 'HKCU\Software\Stained Glass\Taskbar' /v ShowDesktops /t REG_DWORD /d 1 /f >/dev/null 2>&1
+wine reg add "$ADVK" /v ShowTaskViewButton /t REG_DWORD /d 1 /f >/dev/null 2>&1
+wine "$T/sg-settings64.exe" --set look rounded 2>/dev/null | tr -d '\r' | grep -q '^OK' && pass "--set look rounded" || fail "--set look rounded failed"
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x1 ] \
     && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x1 ] && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x0 ] \
-    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] \
-    && pass "Rounded: round corners, a centred taskbar of icons, centred Start, no desktops pager" \
+    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x1 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x1 ] \
+    && pass "Rounded: round corners, a centred taskbar of icons, centred Start; the desktops pager and Task View kept" \
     || fail "Rounded look: style $(regq 'HKCU\Software\Stained Glass\Style' Rounded) al $(regq "$ADVK" TaskbarAl) start $(regq 'HKCU\Software\Stained Glass\Start' Centered) glom $(regq "$ADVK" TaskbarGlomLevel) desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
 PINDIR="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar"
 [ -f "$PINDIR/File Explorer.lnk" ] && [ -f "$PINDIR/Settings.lnk" ] && wine reg query 'HKCU\Software\Stained Glass\Taskbar' /v PinOrder 2>/dev/null | grep -q 'File Explorer.lnk' \
@@ -473,18 +477,18 @@ sleep 0.5
 has ": Light blue" && has "Show virtual desktops on the taskbar" && pass "Taskbar: its color and the virtual desktops switch" \
     || fail "Taskbar color: $(tr -d '\r' < "$DUMP" | grep '^control' | grep -i 'combo\|desktops' | head -8)"
 wine "$T/sg-settings64.exe" --set look classic >/dev/null 2>&1
-# the virtual-desktops pager is off by default in every look (David 2026-09-29)
+# the desktops pager stays as the person set it
 [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
-    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x0 ] && pass "Classic sets it all back, desktops pager still off" || fail "Classic look: desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
+    && [ "$(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)" = 0x1 ] && pass "Classic sets it all back, the desktops pager kept" || fail "Classic look: desktops $(regq 'HKCU\Software\Stained Glass\Taskbar' ShowDesktops)"
 
 # --- the Horizon and Glass looks: the taskbar of older desktops (wine-sg 0600) ----------------------
 TBS() { regq 'HKCU\Software\Stained Glass\Taskbar' Style; }
 [ "$(TBS)" = 0x0 ] && pass "Classic: the flat taskbar (Taskbar Style 0)" || fail "Classic taskbar style: $(TBS)"
 wine "$T/sg-settings64.exe" --set look horizon 2>/dev/null | tr -d '\r' | grep -q '^OK' && [ "$(TBS)" = 0x1 ] \
     && [ "$(regq 'HKCU\Software\Stained Glass\Style' Rounded)" = 0x0 ] && [ "$(regq "$ADVK" TaskbarAl)" = 0x0 ] \
-    && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x1 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x0 ] \
+    && [ "$(regq "$ADVK" TaskbarGlomLevel)" = 0x1 ] && [ "$(regq "$ADVK" ShowTaskViewButton)" = 0x1 ] \
     && [ "$(regq 'HKCU\Software\Stained Glass\Start' Centered)" = 0x0 ] \
-    && pass "--set look horizon: Taskbar Style 1, square windows, labelled buttons at the left, no Task View" \
+    && pass "--set look horizon: Taskbar Style 1, square windows, labelled buttons at the left, Task View kept" \
     || fail "Horizon look: style $(TBS) rounded $(regq 'HKCU\Software\Stained Glass\Style' Rounded) glom $(regq "$ADVK" TaskbarGlomLevel) taskview $(regq "$ADVK" ShowTaskViewButton)"
 wine start ms-settings:themes >/dev/null 2>&1
 page_is Themes "ms-settings:themes (horizon)"

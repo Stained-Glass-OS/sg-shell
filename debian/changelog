@@ -1,3 +1,16 @@
+sg-shell (0.1.0-245) unstable; urgency=medium
+
+  * Themes keep the desktop switcher: choosing a look no longer turns off
+    the virtual-desktops pager, and Horizon and Glass no longer hide the
+    Task View button. Both stay as the person set them in Settings >
+    Taskbar, as a theme on Windows leaves the taskbar's buttons alone.
+    Settings' pager switch now reads the taskbar's own default (on); it
+    used to show off while the pager was shown. A user's report: after a
+    theme switch the desktop switcher had gone. test/settings-check.sh:
+    the looks keep both (the old code fails 3 checks).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 07 Nov 2026 08:20:00 -0800
+
 sg-shell (0.1.0-244) unstable; urgency=medium
 
   * Qt 6 programs draw with Direct3D 11 again, as on Windows:
