@@ -1,3 +1,12 @@
+sg-shell (0.1.0-246) unstable; urgency=medium
+
+  * Store: 14 more Windows apps, each walked on a test machine (install,
+    open from Start, window on screen, uninstall): Slack, Postman, Logseq,
+    Notion, Figma, Unity Hub, Ubisoft Connect, Minecraft Launcher, Plex,
+    ScreenToGif, AutoHotkey, ONLYOFFICE, GitHub Desktop, Nextcloud.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 07 Nov 2026 09:59:32 -0800
+
 sg-shell (0.1.0-245) unstable; urgency=medium
 
   * Themes keep the desktop switcher: choosing a look no longer turns off

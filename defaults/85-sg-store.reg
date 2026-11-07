@@ -3628,6 +3628,146 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Microsoft.OneDrive"
 "DetectName"="Microsoft OneDrive"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\132]
+"Name"="Slack"
+"Publisher"="Slack Technologies"
+"Description"="Team chat and channels."
+"Category"="Internet"
+"Colour"=dword:004a154b
+"Tier"="windows"
+"Source"="winget:SlackTechnologies.Slack"
+"DetectName"="Slack"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\133]
+"Name"="Postman"
+"Publisher"="Postman"
+"Description"="An API platform for building and testing APIs."
+"Category"="Development"
+"Colour"=dword:00ff6c37
+"Tier"="windows"
+"Source"="winget:Postman.Postman"
+"DetectName"="Postman"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\134]
+"Name"="Logseq"
+"Publisher"="Logseq"
+"Description"="A privacy-first outliner for notes."
+"Category"="Productivity"
+"Colour"=dword:00002b36
+"Tier"="windows"
+"Source"="winget:Logseq.Logseq"
+"DetectName"="Logseq"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\135]
+"Name"="Notion"
+"Publisher"="Notion Labs"
+"Description"="Notes, docs and projects in one workspace."
+"Category"="Productivity"
+"Colour"=dword:00000000
+"Tier"="windows"
+"Source"="winget:Notion.Notion"
+"DetectName"="Notion"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\136]
+"Name"="Figma"
+"Publisher"="Figma"
+"Description"="Collaborative interface design."
+"Category"="Graphics"
+"Colour"=dword:00a259ff
+"Tier"="windows"
+"Source"="winget:Figma.Figma"
+"DetectName"="Figma"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\137]
+"Name"="Unity Hub"
+"Publisher"="Unity Technologies"
+"Description"="Install and manage Unity editors and projects."
+"Category"="Development"
+"Colour"=dword:00222c37
+"Tier"="windows"
+"Source"="winget:Unity.UnityHub"
+"DetectName"="Unity Hub"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\138]
+"Name"="Ubisoft Connect"
+"Publisher"="Ubisoft"
+"Description"="Ubisoft's games launcher."
+"Category"="Games"
+"Colour"=dword:000070ff
+"Tier"="windows"
+"Source"="winget:Ubisoft.Connect"
+"DetectName"="Ubisoft Connect"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\139]
+"Name"="Minecraft Launcher"
+"Publisher"="Mojang Studios"
+"Description"="The official Minecraft launcher."
+"Category"="Games"
+"Colour"=dword:003c8527
+"Tier"="windows"
+"Source"="winget:Mojang.MinecraftLauncher"
+"DetectName"="Minecraft Launcher"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\140]
+"Name"="Plex"
+"Publisher"="Plex"
+"Description"="Stream your media and more."
+"Category"="Media"
+"Colour"=dword:00e5a00d
+"Tier"="windows"
+"Source"="winget:Plex.Plex"
+"DetectName"="Plex"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\141]
+"Name"="ScreenToGif"
+"Publisher"="Nicke Manarin"
+"Description"="Record the screen to a GIF or video."
+"Category"="Media"
+"Colour"=dword:002b5797
+"Tier"="windows"
+"Source"="winget:NickeManarin.ScreenToGif"
+"DetectName"="ScreenToGif"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\142]
+"Name"="AutoHotkey"
+"Publisher"="AutoHotkey"
+"Description"="Automate keystrokes and windows with scripts."
+"Category"="Utilities"
+"Colour"=dword:00334455
+"Tier"="windows"
+"Source"="winget:AutoHotkey.AutoHotkey"
+"DetectName"="AutoHotkey"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\143]
+"Name"="ONLYOFFICE"
+"Publisher"="Ascensio System"
+"Description"="Documents, spreadsheets and presentations."
+"Category"="Productivity"
+"Colour"=dword:00ff6f3d
+"Tier"="windows"
+"Source"="winget:ONLYOFFICE.DesktopEditors"
+"DetectName"="ONLYOFFICE"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\144]
+"Name"="GitHub Desktop"
+"Publisher"="GitHub"
+"Description"="Work with Git and GitHub."
+"Category"="Development"
+"Colour"=dword:006e40c9
+"Tier"="windows"
+"Source"="winget:GitHub.GitHubDesktop"
+"DetectName"="GitHub Desktop"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\145]
+"Name"="Nextcloud"
+"Publisher"="Nextcloud"
+"Description"="Sync files with your Nextcloud server."
+"Category"="Internet"
+"Colour"=dword:000082c9
+"Tier"="windows"
+"Source"="winget:Nextcloud.NextcloudDesktop"
+"DetectName"="Nextcloud"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\
