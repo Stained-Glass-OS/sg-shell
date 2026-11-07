@@ -60,6 +60,7 @@
 #   SG_MUTANT_NOUPDATE    never notices a newer version
 #   SG_MUTANT_ANYTYPE     picks a portable zip over a runnable installer
 #   SG_MUTANT_NOZIP       does not unpack a zipped installer
+#   SG_MUTANT_ONEFILE     takes a zipped installer out alone (MobaXterm's MSI: code 67, no .dat)
 #   SG_MUTANT_NOPORTABLE  cannot install a portable app (Godot: "can't be run here yet")
 #   SG_MUTANT_NOSEARCH    the search box filters nothing
 #   SG_MUTANT_STORE_ALWAYS_LIGHT  draws light in dark mode (David 2026-10-02: it switched only half)
@@ -177,7 +178,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -824,8 +825,10 @@ rm -f "$G/setup.log"; ununinstall PickApp
 rm -f "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/"*Pick\ App*.lnk
 
 # --- G. a zip holding the installer ---------------------------------------------------------------
+dlcount() { find "$WINEPREFIX/drive_c/users" -maxdepth 5 -type d -name 'StainedGlass-Browser-*' 2>/dev/null | wc -l; }
+DL0=$(dlcount)
 rm -f "$G/setup.log"
-SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' \
+SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' SG_FAKE_BESIDE=readme.txt \
     wine "$EXE" --install 09 >/dev/null 2>&1; ec=$?
 [ "$ec" = 0 ] && grep -q '/auto /from-zip' "$G/setup.log" 2>/dev/null \
     && pass "a zipped installer (checked by the zip's SHA-256) is unpacked and run" || fail "install 09 exit $ec: $(cat "$D.result" "$G/setup.log" 2>/dev/null)"
@@ -833,6 +836,11 @@ SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zi
 rm -f "$G/setup.log"; ununinstall ZipApp
 SG_MUT="$T/mut-nozip.exe" run --install 09
 [ ! -e "$G/setup.log" ] && pass "MUTANT NOZIP installs nothing (gate catches it)" || fail "NOZIP not detected"
+[ "$(dlcount)" = "$DL0" ] && pass "the unpacked zip is taken away after" \
+    || fail "the unpacked zip is left in Temp: $DL0 -> $(dlcount) download folders"
+rm -f "$G/setup.log"; ununinstall ZipApp
+SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' SG_FAKE_BESIDE=readme.txt SG_MUT="$T/mut-onefile.exe" run --install 09
+[ ! -e "$G/setup.log" ] && pass "MUTANT ONEFILE takes the installer out alone, without the file it reads (gate catches it)" || fail "ONEFILE not detected"
 rm -f "$G/setup.log"; ununinstall ZipApp
 SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' SG_MUT="$T/mut-nonestedfile.exe" run --install 09
 [ ! -e "$G/setup.log" ] && pass "MUTANT NONESTEDFILE cannot pick between two programs (gate catches it)" || fail "NONESTEDFILE not detected"

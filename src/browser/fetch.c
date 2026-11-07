@@ -571,13 +571,34 @@ int pkg_sweep_downloads(void)
     return gone;
 }
 
+/* a folder and all in it */
+static void remove_tree(const WCHAR *dir)
+{
+    WCHAR pat[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE find;
+    swprintf(pat, MAX_PATH, L"%ls\\*", dir);
+    if ((find = FindFirstFileW(pat, &fd)) != INVALID_HANDLE_VALUE) {
+        do {
+            if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+            if (swprintf(path, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName) < 0) continue;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) remove_tree(path);
+            else DeleteFileW(path);
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+    }
+    RemoveDirectoryW(dir);
+}
+
 void pkg_cleanup(package_t *p)
 {
-    WCHAR dir[MAX_PATH], *slash;
+    WCHAR dir[MAX_PATH], *slash, *own;
     if (!p->file[0]) return;
     DeleteFileW(p->file);
     lstrcpynW(dir, p->file, MAX_PATH);
-    if ((slash = wcsrchr(dir, '\\'))) { *slash = 0; RemoveDirectoryW(dir); }
+    /* the download's own folder, with a zip unpacked in it (unpack_nested) */
+    if ((own = wcsstr(dir, L"\\StainedGlass-Browser-")) && (slash = wcschr(own + 1, '\\'))) { *slash = 0; remove_tree(dir); }
+    else if ((slash = wcsrchr(dir, '\\'))) { *slash = 0; RemoveDirectoryW(dir); }
     p->file[0] = 0;
 }
 

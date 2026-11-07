@@ -24,6 +24,7 @@
  *   <any> /Q /T:"DIR" /C              an IExpress package, unpacking: copies
  *                                   the files of %SG_FAKE_MSIS% into DIR
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
+ * %SG_FAKE_BESIDE%: the installer stops with code 67 unless that file is in its folder (MobaXterm).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
  * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
@@ -121,6 +122,16 @@ int wmain(int argc, WCHAR **argv)
     if (!_wcsicmp(base, L"app.exe")) {
         logline(L"C:\\gate\\launch.log", args);
         return 0;
+    }
+
+    {   /* %SG_FAKE_BESIDE%: an installer that reads a file beside it (MobaXterm's MSI, its .dat) */
+        WCHAR beside[MAX_PATH], nextto[MAX_PATH];
+        if (GetEnvironmentVariableW(L"SG_FAKE_BESIDE", beside, MAX_PATH)) {
+            lstrcpynW(nextto, self, MAX_PATH);
+            if (wcsrchr(nextto, '\\')) wcsrchr(nextto, '\\')[1] = 0;
+            if (lstrlenW(nextto) + lstrlenW(beside) < MAX_PATH) lstrcatW(nextto, beside);
+            if (GetFileAttributesW(nextto) == INVALID_FILE_ATTRIBUTES) return 67;
+        }
     }
 
     /* msiexec.exe /X{GUID} ...: a stand-in Windows Installer (found in the store's own folder before

@@ -857,20 +857,28 @@ BOOL app_check_update(app_t *a, WCHAR *err, int cch)
 
 /* ---- installing (or updating) ---------------------------------------------------------------------- */
 
+/* where an unpacked file is written: zip_extract's sink */
+typedef struct { HANDLE h; } portable_sink_t;
+
+static int portable_sink(void *ctx, const BYTE *p, size_t n)
+{
+    DWORD put;
+    return WriteFile(((portable_sink_t *)ctx)->h, p, (DWORD)n, &put, NULL) && put == n ? 0 : ZE_WRITE;
+}
+
 /* A zip whose manifest names the installer inside it (NestedInstallerType:
- * Paint.NET's): the zip was checked against its SHA-256 as downloaded; take
- * out the one installer it holds, of that kind, and run it as that kind. */
+ * Paint.NET's): the zip was checked against its SHA-256 as downloaded. As
+ * winget does, all of it is unpacked, beside the download (pkg_cleanup takes
+ * the folder away), and the one installer it holds, of that kind, is run as
+ * that kind from among its files: MobaXterm's MSI reads the .dat beside it,
+ * and taken out alone it stopped with code 67. */
 static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
 {
     zarchive z;
     int i, pick = -1, r;
     BOOL msi = !_wcsicmp(p->nested, L"msi") || !_wcsicmp(p->nested, L"wix");
     const WCHAR *ext = msi ? L".msi" : L".exe";
-    WCHAR out[MAX_PATH], *slash;
-    BYTE *data;
-    size_t len;
-    HANDLE h;
-    DWORD put;
+    WCHAR base[MAX_PATH], rel[MAX_PATH], path[MAX_PATH], run[MAX_PATH], *slash;
     if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); return FALSE; }
     for (slash = p->nested_file; *slash; slash++) if (*slash == L'/') *slash = L'\\';
     for (i = 0; i < z.n; i++) {
@@ -891,25 +899,35 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
         pick = i;
     }
     if (pick < 0) { zip_close(&z); swprintf(err, cch, L"%ls holds no installer.", p->id); return FALSE; }
-    if ((r = zip_read(&z, pick, &data, &len))) { zip_close(&z); swprintf(err, cch, L"The installer could not be unpacked (%ls).", zip_strerror(r)); return FALSE; }
-    zip_close(&z);
-    /* beside the download, so pkg_cleanup takes both away */
-    lstrcpynW(out, p->file, MAX_PATH);
-    if ((slash = wcsrchr(out, L'\\'))) slash[1] = 0; else out[0] = 0;
-    if (lstrlenW(out) + 10 >= MAX_PATH) { free(data); lstrcpynW(err, L"The installer could not be unpacked.", cch); return FALSE; }
-    lstrcatW(out, L"setup");
-    lstrcatW(out, ext);
-    h = CreateFileW(out, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE || !WriteFile(h, data, (DWORD)len, &put, NULL) || put != len) {
-        if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-        free(data);
-        swprintf(err, cch, L"The installer could not be unpacked.");
-        return FALSE;
+    lstrcpynW(base, p->file, MAX_PATH);
+    if ((slash = wcsrchr(base, L'\\'))) *slash = 0; else base[0] = 0;
+    if (lstrlenW(base) + 10 >= MAX_PATH) { zip_close(&z); lstrcpynW(err, L"The installer could not be unpacked.", cch); return FALSE; }
+    lstrcatW(base, L"\\unpacked");
+    CreateDirectoryW(base, NULL);
+    run[0] = 0;
+    for (i = 0; i < z.n; i++) {
+        portable_sink_t s;
+#ifdef SG_MUTANT_ONEFILE
+        if (i != pick) continue;   /* the mutant takes the installer out alone */
+#endif
+        if (!zip_safe_path(z.e[i].name, rel, MAX_PATH) || lstrlenW(base) + lstrlenW(rel) + 2 >= MAX_PATH) continue;
+        swprintf(path, MAX_PATH, L"%ls\\%ls", base, rel);
+        if ((slash = wcsrchr(path, L'\\'))) { *slash = 0; SHCreateDirectoryExW(NULL, path, NULL); *slash = L'\\'; }
+        if (z.e[i].dir) { SHCreateDirectoryExW(NULL, path, NULL); continue; }
+        s.h = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+        if (s.h == INVALID_HANDLE_VALUE) r = ZE_WRITE;
+        else { r = zip_extract(&z, i, portable_sink, &s); CloseHandle(s.h); }
+        if (r) {
+            zip_close(&z);
+            swprintf(err, cch, L"The installer could not be unpacked (%ls).", zip_strerror(r));
+            return FALSE;
+        }
+        if (i == pick) lstrcpynW(run, path, MAX_PATH);
     }
-    CloseHandle(h);
-    free(data);
+    zip_close(&z);
+    if (!run[0]) { lstrcpynW(err, L"The installer could not be unpacked.", cch); return FALSE; }
     DeleteFileW(p->file);
-    lstrcpynW(p->file, out, MAX_PATH);
+    lstrcpynW(p->file, run, MAX_PATH);
     lstrcpynW(p->type, p->nested, ARRAYSIZE(p->type));
     return TRUE;
 }
@@ -923,14 +941,6 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
  * and given an Uninstall entry of its own (the program as its icon, so the
  * store's Start shortcut points at it), whose uninstaller takes the folder and
  * the entry away. Godot ended with "portable installers can't be run here yet". */
-
-typedef struct { HANDLE h; } portable_sink_t;
-
-static int portable_sink(void *ctx, const BYTE *p, size_t n)
-{
-    DWORD put;
-    return WriteFile(((portable_sink_t *)ctx)->h, p, (DWORD)n, &put, NULL) && put == n ? 0 : ZE_WRITE;
-}
 
 static BOOL portable_package(const package_t *p)
 {

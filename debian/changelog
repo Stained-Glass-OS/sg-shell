@@ -1,3 +1,17 @@
+sg-shell (0.1.0-248) unstable; urgency=medium
+
+  * Store: a zipped installer is unpacked whole, as winget does, and run
+    from among its files; MobaXterm's MSI reads the .dat beside it and,
+    taken out alone, stopped with code 67. The download folder (with the
+    unpacked zip) is taken away after. Gate store-check G, mutant ONEFILE.
+  * Store: 21 apps from the second walk (mRemoteNG, MuseScore, Zotero,
+    Mattermost, Rainmeter, Flow Launcher, TreeSize Free, HeidiSQL,
+    Insomnia, Tabby, WezTerm, Neovim, Vim, Playnite, PPSSPP, SuperTuxKart,
+    Steam, itch, MPC-BE, Todoist, Mailbird); icons for the new entries;
+    Steam, MuseScore and SuperTuxKart one card with their Linux builds.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 07 Nov 2026 13:12:06 -0800
+
 sg-shell (0.1.0-247) unstable; urgency=medium
 
   * Store: portable apps (a winget "portable" .exe, or a zip of the

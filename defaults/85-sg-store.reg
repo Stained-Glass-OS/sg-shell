@@ -3637,6 +3637,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:SlackTechnologies.Slack"
 "DetectName"="Slack"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.slack.Slack.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\133]
 "Name"="Postman"
@@ -3647,6 +3648,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Postman.Postman"
 "DetectName"="Postman"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.getpostman.Postman.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\134]
 "Name"="Logseq"
@@ -3657,6 +3659,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Logseq.Logseq"
 "DetectName"="Logseq"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.logseq.Logseq.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\135]
 "Name"="Notion"
@@ -3687,6 +3690,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Unity.UnityHub"
 "DetectName"="Unity Hub"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.unity.UnityHub.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\138]
 "Name"="Ubisoft Connect"
@@ -3707,6 +3711,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Mojang.MinecraftLauncher"
 "DetectName"="Minecraft Launcher"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.mojang.Minecraft.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\140]
 "Name"="Plex"
@@ -3717,6 +3722,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Plex.Plex"
 "DetectName"="Plex"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/tv.plex.PlexDesktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\141]
 "Name"="ScreenToGif"
@@ -3747,6 +3753,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:ONLYOFFICE.DesktopEditors"
 "DetectName"="ONLYOFFICE"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.onlyoffice.desktopeditors.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\144]
 "Name"="GitHub Desktop"
@@ -3757,6 +3764,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:GitHub.GitHubDesktop"
 "DetectName"="GitHub Desktop"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.shiftey.Desktop.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\145]
 "Name"="Nextcloud"
@@ -3767,6 +3775,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Nextcloud.NextcloudDesktop"
 "DetectName"="Nextcloud"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.nextcloud.desktopclient.nextcloud.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\146]
 "Name"="Signal"
@@ -3777,6 +3786,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:OpenWhisperSystems.Signal"
 "DetectName"="Signal"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.signal.Signal.png"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\147]
 "Name"="KiCad"
@@ -3787,6 +3797,232 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:KiCad.KiCad"
 "DetectName"="KiCad"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kicad.KiCad.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\148]
+"Name"="mRemoteNG"
+"Publisher"="mRemoteNG"
+"Description"="Remote connections manager: RDP, SSH, VNC in tabs."
+"Category"="Utilities"
+"Colour"=dword:002d6a4f
+"Tier"="windows"
+"Source"="winget:mRemoteNG.mRemoteNG"
+"DetectName"="mRemoteNG"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\149]
+"Name"="MuseScore"
+"Publisher"="MuseScore"
+"Description"="Music notation: write and play scores."
+"Category"="Media"
+"Colour"=dword:001a62d6
+"Tier"="windows"
+"Source"="winget:Musescore.Musescore"
+"DetectName"="MuseScore"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.musescore.MuseScore.png"
+"Linux"="L34"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\150]
+"Name"="Zotero"
+"Publisher"="Corporation for Digital Scholarship"
+"Description"="Collect, organise and cite research."
+"Category"="Productivity"
+"Colour"=dword:00cc2936
+"Tier"="windows"
+"Source"="winget:DigitalScholar.Zotero"
+"DetectName"="Zotero"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.zotero.Zotero.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\151]
+"Name"="Mattermost"
+"Publisher"="Mattermost"
+"Description"="Team chat, self-hostable."
+"Category"="Internet"
+"Colour"=dword:001e325c
+"Tier"="windows"
+"Source"="winget:Mattermost.MattermostDesktop"
+"DetectName"="Mattermost"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.mattermost.Desktop.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\152]
+"Name"="Rainmeter"
+"Publisher"="Rainmeter"
+"Description"="Desktop widgets and skins."
+"Category"="Utilities"
+"Colour"=dword:002b2b2b
+"Tier"="windows"
+"Source"="winget:Rainmeter.Rainmeter"
+"DetectName"="Rainmeter"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\153]
+"Name"="Flow Launcher"
+"Publisher"="Flow Launcher"
+"Description"="Quick launcher and search."
+"Category"="Utilities"
+"Colour"=dword:003a6ea5
+"Tier"="windows"
+"Source"="winget:Flow-Launcher.Flow-Launcher"
+"DetectName"="Flow Launcher"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\154]
+"Name"="TreeSize Free"
+"Publisher"="JAM Software"
+"Description"="See what fills your disk."
+"Category"="Utilities"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:JAMSoftware.TreeSize.Free"
+"DetectName"="TreeSize"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\155]
+"Name"="HeidiSQL"
+"Publisher"="Ansgar Becker"
+"Description"="MySQL, MariaDB, PostgreSQL and SQL Server client."
+"Category"="Development"
+"Colour"=dword:002f6f9f
+"Tier"="windows"
+"Source"="winget:HeidiSQL.HeidiSQL"
+"DetectName"="HeidiSQL"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\156]
+"Name"="Insomnia"
+"Publisher"="Kong"
+"Description"="API client for REST and GraphQL."
+"Category"="Development"
+"Colour"=dword:004000bf
+"Tier"="windows"
+"Source"="winget:Insomnia.Insomnia"
+"DetectName"="Insomnia"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/rest.insomnia.Insomnia.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\157]
+"Name"="Tabby"
+"Publisher"="Eugeny"
+"Description"="A modern terminal and SSH client."
+"Category"="Development"
+"Colour"=dword:008a3ffc
+"Tier"="windows"
+"Source"="winget:Eugeny.Tabby"
+"DetectName"="Tabby"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\158]
+"Name"="WezTerm"
+"Publisher"="Wez Furlong"
+"Description"="GPU-accelerated terminal."
+"Category"="Development"
+"Colour"=dword:004e49ee
+"Tier"="windows"
+"Source"="winget:wez.wezterm"
+"DetectName"="WezTerm"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.wezfurlong.wezterm.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\159]
+"Name"="Neovim"
+"Publisher"="Neovim"
+"Description"="The extensible text editor."
+"Category"="Development"
+"Colour"=dword:0057a143
+"Tier"="windows"
+"Source"="winget:Neovim.Neovim"
+"DetectName"="Neovim"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.neovim.nvim.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\160]
+"Name"="Vim"
+"Publisher"="Vim"
+"Description"="The text editor."
+"Category"="Development"
+"Colour"=dword:00019733
+"Tier"="windows"
+"Source"="winget:vim.vim"
+"DetectName"="Vim"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.vim.Vim.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\161]
+"Name"="Playnite"
+"Publisher"="Josef Nemec"
+"Description"="One library for all your games."
+"Category"="Games"
+"Colour"=dword:006c3fc4
+"Tier"="windows"
+"Source"="winget:Playnite.Playnite"
+"DetectName"="Playnite"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\162]
+"Name"="PPSSPP"
+"Publisher"="Henrik Rydgard"
+"Description"="PSP emulator."
+"Category"="Games"
+"Colour"=dword:002f8fdd
+"Tier"="windows"
+"Source"="winget:PPSSPPTeam.PPSSPP"
+"DetectName"="PPSSPP"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.ppsspp.PPSSPP.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\163]
+"Name"="SuperTuxKart"
+"Publisher"="SuperTuxKart Team"
+"Description"="Kart racing game."
+"Category"="Games"
+"Colour"=dword:00e36d0b
+"Tier"="windows"
+"Source"="winget:SuperTuxKart.SuperTuxKart"
+"DetectName"="SuperTuxKart"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/net.supertuxkart.SuperTuxKart.png"
+"Linux"="L97"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\164]
+"Name"="Steam"
+"Publisher"="Valve"
+"Description"="Valve's game store and launcher."
+"Category"="Games"
+"Colour"=dword:001b2838
+"Tier"="windows"
+"Source"="winget:Valve.Steam"
+"DetectName"="Steam"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.valvesoftware.Steam.png"
+"Linux"="L184"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\165]
+"Name"="itch"
+"Publisher"="itch corp"
+"Description"="Indie games store and launcher."
+"Category"="Games"
+"Colour"=dword:00fa5c5c
+"Tier"="windows"
+"Source"="winget:ItchIo.Itch"
+"DetectName"="itch"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.itch.itch.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\166]
+"Name"="MPC-BE"
+"Publisher"="MPC-BE Team"
+"Description"="Media player."
+"Category"="Media"
+"Colour"=dword:003c3c3c
+"Tier"="windows"
+"Source"="winget:MPC-BE.MPC-BE"
+"DetectName"="MPC-BE"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\167]
+"Name"="Todoist"
+"Publisher"="Doist"
+"Description"="To-do lists and tasks."
+"Category"="Productivity"
+"Colour"=dword:00e44332
+"Tier"="windows"
+"Source"="winget:Doist.Todoist"
+"DetectName"="Todoist"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.todoist.Todoist.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\168]
+"Name"="Mailbird"
+"Publisher"="Mailbird"
+"Description"="Mail client."
+"Category"="Productivity"
+"Colour"=dword:000b78e3
+"Tier"="windows"
+"Source"="winget:Mailbird.Mailbird"
+"DetectName"="Mailbird"
 
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
