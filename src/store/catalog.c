@@ -914,6 +914,98 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
     return TRUE;
 }
 
+/* ---- portable apps ----------------------------------------------------------------------------------
+ *
+ * A winget "portable" package is the program itself, no installer: a bare .exe,
+ * or a zip of the program's files (NestedInstallerType portable: Godot). As
+ * winget does, it is put in the person's %LOCALAPPDATA%\Microsoft\WinGet\
+ * Packages\<id>__SgStore -- a zip whole, an .exe under its download's name --
+ * and given an Uninstall entry of its own (the program as its icon, so the
+ * store's Start shortcut points at it), whose uninstaller takes the folder and
+ * the entry away. Godot ended with "portable installers can't be run here yet". */
+
+typedef struct { HANDLE h; } portable_sink_t;
+
+static int portable_sink(void *ctx, const BYTE *p, size_t n)
+{
+    DWORD put;
+    return WriteFile(((portable_sink_t *)ctx)->h, p, (DWORD)n, &put, NULL) && put == n ? 0 : ZE_WRITE;
+}
+
+static BOOL portable_package(const package_t *p)
+{
+    return !_wcsicmp(p->type, L"portable") || (!_wcsicmp(p->type, L"zip") && !_wcsicmp(p->nested, L"portable"));
+}
+
+static BOOL install_portable(package_t *p, const app_t *a, WCHAR *err, int cch)
+{
+    WCHAR base[MAX_PATH], prog[MAX_PATH], rel[MAX_PATH], path[MAX_PATH], sub[300], cmd[2048], sys[MAX_PATH], *c;
+    const WCHAR *name;
+    HKEY key;
+    int i, r;
+    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH) || lstrlenW(base) + lstrlenW(p->id) + 40 >= MAX_PATH) {
+        lstrcpynW(err, L"There is no folder to put the app in.", cch);
+        return FALSE;
+    }
+    lstrcatW(base, L"\\Microsoft\\WinGet\\Packages\\");
+    lstrcatW(base, p->id);
+    lstrcatW(base, L"__SgStore");
+    SHCreateDirectoryExW(NULL, base, NULL);
+    if (!_wcsicmp(p->type, L"zip")) {
+        zarchive z;
+        for (c = p->nested_file; *c; c++) if (*c == L'/') *c = L'\\';
+        if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); return FALSE; }
+        prog[0] = 0;
+        for (i = 0; i < z.n; i++) {
+            portable_sink_t s;
+            if (!zip_safe_path(z.e[i].name, rel, MAX_PATH) || lstrlenW(base) + lstrlenW(rel) + 2 >= MAX_PATH) continue;
+            swprintf(path, MAX_PATH, L"%ls\\%ls", base, rel);
+            if ((c = wcsrchr(path, L'\\'))) { *c = 0; SHCreateDirectoryExW(NULL, path, NULL); *c = L'\\'; }
+            if (z.e[i].dir) { SHCreateDirectoryExW(NULL, path, NULL); continue; }
+            s.h = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+            if (s.h == INVALID_HANDLE_VALUE) r = ZE_WRITE;
+            else { r = zip_extract(&z, i, portable_sink, &s); CloseHandle(s.h); }
+            if (r) {
+                zip_close(&z);
+                swprintf(err, cch, L"%ls could not be unpacked (%ls).", rel, zip_strerror(r));
+                return FALSE;
+            }
+            /* the program: the file the manifest names, else the zip's one .exe */
+            if (p->nested_file[0] ? (!_wcsicmp(rel, p->nested_file) ||
+                                     ((name = wcsrchr(rel, L'\\')) && !wcspbrk(p->nested_file, L"\\") && !_wcsicmp(name + 1, p->nested_file)))
+                                  : (lstrlenW(rel) > 4 && !_wcsicmp(rel + lstrlenW(rel) - 4, L".exe") && !prog[0]))
+                lstrcpynW(prog, path, MAX_PATH);
+        }
+        zip_close(&z);
+        if (!prog[0]) { swprintf(err, cch, L"%ls holds no program.", p->id); return FALSE; }
+    } else {
+        /* the .exe under its download's name (the address's last part) */
+        lstrcpynW(rel, p->url, MAX_PATH);
+        if ((c = wcspbrk(rel, L"?#"))) *c = 0;
+        name = wcsrchr(rel, L'/') ? wcsrchr(rel, L'/') + 1 : rel;
+        if (!name[0] || wcspbrk(name, L"\\:*\"<>|")) name = L"program.exe";
+        swprintf(prog, MAX_PATH, L"%ls\\%ls%ls", base, name,
+                 lstrlenW(name) > 4 && !_wcsicmp(name + lstrlenW(name) - 4, L".exe") ? L"" : L".exe");
+        if (!CopyFileW(p->file, prog, FALSE)) { swprintf(err, cch, L"The program could not be put in place (error %lu).", GetLastError()); return FALSE; }
+    }
+    swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls__SgStore", p->id);
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_WRITE, NULL, &key, NULL)) {
+        lstrcpynW(err, L"The app's Uninstall entry could not be written.", cch);
+        return FALSE;
+    }
+    GetSystemDirectoryW(sys, MAX_PATH);
+    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\cmd.exe\" /c rmdir /s /q \"%ls\" & reg delete \"HKCU\\%ls\" /f", sys, base, sub);
+    set_sz(key, L"DisplayName", a && a->detect_name[0] && !wcspbrk(a->detect_name, L"|!") ? a->detect_name : a ? a->name : p->id);
+    if (p->version[0]) set_sz(key, L"DisplayVersion", p->version);
+    if (a) set_sz(key, L"Publisher", a->publisher);
+    set_sz(key, L"InstallLocation", base);
+    set_sz(key, L"DisplayIcon", prog);
+    set_sz(key, L"UninstallString", cmd);
+    RegCloseKey(key);
+    p->exit_code = 0;
+    return TRUE;
+}
+
 /* What the system already provides, so a package's dependency on it is met:
  * the Visual C++ runtimes are Wine's own (msvcp140, vcruntime140...), and
  * installing Microsoft's over them would only replace them. */
@@ -1078,7 +1170,11 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     if (install_deps(&p, depth, progress, ctx, cancel, err, cch)) return 1;
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
 #ifndef SG_MUTANT_NOZIP
-    if (!_wcsicmp(p.type, L"zip") && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
+    if (!_wcsicmp(p.type, L"zip") && !portable_package(&p) && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
+#endif
+#ifndef SG_MUTANT_NOPORTABLE
+    if (portable_package(&p)) ok = install_portable(&p, a, err, cch);
+    else
 #endif
     ok = pkg_install(&p, err, cch);
     if (ok && a) settle_install(a, &p);

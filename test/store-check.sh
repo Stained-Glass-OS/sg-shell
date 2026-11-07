@@ -19,7 +19,8 @@
 #   D. a download whose SHA-256 is not the manifest's is refused, never run
 #   E. a winget manifest install; F. an installer we can run beats a portable
 #      zip of the same arch; G. a zip holding the installer (Paint.NET's) is
-#      unpacked and run; H. a pinned install; H2. an IExpress package of MSIs;
+#      unpacked and run; G3. a portable app (Godot's zip) put in the
+#      person's WinGet Packages folder with its own entry; H. a pinned install; H2. an IExpress package of MSIs;
 #      H3. a runtime DLL out of a self-extracting package's cabinet (the
 #      Visual Basic 6 runtime): installed, registered, detected, its page
 #      (--page) with its licence and no Open, Uninstall
@@ -59,6 +60,7 @@
 #   SG_MUTANT_NOUPDATE    never notices a newer version
 #   SG_MUTANT_ANYTYPE     picks a portable zip over a runnable installer
 #   SG_MUTANT_NOZIP       does not unpack a zipped installer
+#   SG_MUTANT_NOPORTABLE  cannot install a portable app (Godot: "can't be run here yet")
 #   SG_MUTANT_NOSEARCH    the search box filters nothing
 #   SG_MUTANT_STORE_ALWAYS_LIGHT  draws light in dark mode (David 2026-10-02: it switched only half)
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
@@ -175,7 +177,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -187,7 +189,8 @@ done
 W="$T/www"
 mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad/Hash/2.0" "$W/files" \
          "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0" \
-         "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0" "$W/raw/f/Fake/Scopes/1.0"
+         "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0" "$W/raw/f/Fake/Scopes/1.0" \
+         "$W/raw/f/Fake/Port/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
 SHA=$(sha256sum "$W/files/store-fake.exe" | cut -d' ' -f1)
 # a zip that holds the installer (and a readme), as Paint.NET's does
@@ -201,6 +204,14 @@ with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z:
     z.writestr("converter.exe", "MZ not the installer\n")
 EOF
 ZSHA=$(sha256sum "$W/files/zipped.zip" | cut -d' ' -f1)
+# a portable app: a zip of the program's own files, no installer (Godot's)
+python3 - "$W/files/port.zip" "$T/store-fake.exe" <<'EOF'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z:
+    z.write(sys.argv[2], "bin/port.exe")
+    z.writestr("data/readme.txt", "the program's own files\n")
+EOF
+PSHA=$(sha256sum "$W/files/port.zip" | cut -d' ' -f1)
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 printf '[{"name": "1.9.0", "type": "dir"}, {"name": "1.10.0", "type": "dir"}]' > "$W/api/f/Fake/App"
 printf '[{"name": "2.0", "type": "dir"}]' > "$W/api/b/Bad/Hash"
@@ -210,6 +221,21 @@ printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Plus++"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoM"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoU"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Scopes"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Port"
+cat > "$W/raw/f/Fake/Port/1.0/Fake.Port.installer.yaml" <<EOF
+PackageIdentifier: Fake.Port
+PackageVersion: 1.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: bin/port.exe
+  PortableCommandAlias: port
+Installers:
+- Architecture: x64
+  InstallerUrl: http://127.0.0.1:$PORT/files/port.zip
+  InstallerSha256: $PSHA
+ManifestType: installer
+EOF
 # one installer offered for both scopes, as Total Commander's (machine /AHN*, user /AH)
 cat > "$W/raw/f/Fake/Scopes/1.0/Fake.Scopes.installer.yaml" <<EOF
 PackageIdentifier: Fake.Scopes
@@ -434,6 +460,7 @@ app 09 'Zip App' Graphics windows 'winget:Fake.Zip' 'Zip App'
 app 0A 'Inno Machine' Graphics windows 'winget:Fake.InnoM' 'Inno Machine'
 app 0B 'Inno User' Graphics windows 'winget:Fake.InnoU' 'Inno User'
 app 0C 'Two Scopes' Utilities windows 'winget:Fake.Scopes' 'Two Scopes'
+app 0D 'Port App' Development windows 'winget:Fake.Port' 'Port App'
 app L1 'GIMP' Graphics linux 'linux:apt:gimp' 'GIMP'
 app L2 'Gate Tool' Utilities linux 'linux:apt:sg-gate-tool'
 wineserver -w
@@ -469,7 +496,7 @@ SG_MUT="$T/mut-nosweep.exe" run --list
 [ "$(sweep_check)" = kept ] && pass "MUTANT NOSWEEP leaves it (gate catches it)" || fail "NOSWEEP not detected"
 rm -rf "$TMPD/StainedGlass-Browser-0old" "$TMPD/StainedGlass-Browser-0new"
 run --list
-[ "$(field catalog)" = 13 ] && pass "the catalogue loads (13 apps)" || fail "catalog '$(field catalog)'"
+[ "$(field catalog)" = 14 ] && pass "the catalogue loads (14 apps)" || fail "catalog '$(field catalog)'"
 [ "$(kv "$(appline L1)" section)" = Linux ] && pass "a Linux app is in the Linux apps section" || fail "L1: $(appline L1)"
 [ "$(kv "$(appline 05)" section)" = Graphics ] && pass "a Windows program is in its category" || fail "05: $(appline 05)"
 [ -n "$(pos L1)" ] && [ "$(pos L1)" -gt "$(pos 09)" ] && [ "$(pos L1)" -gt "$(pos 02)" ] && [ "$(pos L2)" -gt "$(pos 02)" ] \
@@ -810,6 +837,21 @@ rm -f "$G/setup.log"; ununinstall ZipApp
 SG_FAKE_KEY=ZipApp SG_FAKE_DISPLAY='Zip App' SG_FAKE_VERSION=5.1 SG_FAKE_DIR='Zip App' SG_MUT="$T/mut-nonestedfile.exe" run --install 09
 [ ! -e "$G/setup.log" ] && pass "MUTANT NONESTEDFILE cannot pick between two programs (gate catches it)" || fail "NONESTEDFILE not detected"
 rm -f "$G/setup.log"; ununinstall ZipApp
+
+# --- G3. a portable app (a zip of its files: Godot) ------------------------------------------------
+portdir() { find "$WINEPREFIX/drive_c/users" -type d -path '*/AppData/Local/Microsoft/WinGet/Packages/Fake.Port__SgStore' 2>/dev/null | head -1; }
+PUN='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Fake.Port__SgStore'
+rm -f "$D.result"; wine "$EXE" --install 0D >/dev/null 2>&1; ec=$?
+P=$(portdir)
+[ "$ec" = 0 ] && [ -n "$P" ] && [ -f "$P/bin/port.exe" ] && [ -f "$P/data/readme.txt" ] \
+    && pass "a portable app's zip is put whole in the person's WinGet Packages folder" || fail "portable install 0D exit $ec: $(cat "$D.result" 2>/dev/null)"
+wine reg query "$PUN" /v DisplayIcon 2>/dev/null | grep -q 'bin.port\.exe' \
+    && pass "with an Uninstall entry of its own, the program as its icon" || fail "portable entry: $(wine reg query "$PUN" 2>&1 | tr -d '\r')"
+rm -f "$D.result"; wine "$EXE" --uninstall 0D >/dev/null 2>&1
+grep -q '^uninstall 0D ok' "$D.result" 2>/dev/null && [ ! -d "$P" ] && ! wine reg query "$PUN" >/dev/null 2>&1 \
+    && pass "Uninstall takes its folder and its entry away" || fail "portable uninstall: $(cat "$D.result" 2>/dev/null); dir $(ls "$P" 2>&1 | head -2)"
+rm -f "$D.result"; SG_MUT="$T/mut-noportable.exe" run --install 0D
+[ -z "$(portdir)" ] && pass "MUTANT NOPORTABLE installs nothing (gate catches it)" || fail "NOPORTABLE not detected"
 
 # --- G2. a package's dependencies first (TortoiseGit needs Git) ----------------------------------
 mkdir -p "$W/api/f/Fake" "$W/raw/f/Fake/Dep/1.0" "$W/raw/f/Fake/Needy/1.0"

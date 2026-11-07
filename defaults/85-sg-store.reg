@@ -3768,6 +3768,26 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Nextcloud.NextcloudDesktop"
 "DetectName"="Nextcloud"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\146]
+"Name"="Signal"
+"Publisher"="Signal Foundation"
+"Description"="Private messaging."
+"Category"="Internet"
+"Colour"=dword:003a76f0
+"Tier"="windows"
+"Source"="winget:OpenWhisperSystems.Signal"
+"DetectName"="Signal"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\147]
+"Name"="KiCad"
+"Publisher"="KiCad"
+"Description"="Electronics design: schematics and PCBs."
+"Category"="Graphics"
+"Colour"=dword:00314cb0
+"Tier"="windows"
+"Source"="winget:KiCad.KiCad"
+"DetectName"="KiCad"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

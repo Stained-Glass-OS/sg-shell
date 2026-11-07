@@ -1,3 +1,14 @@
+sg-shell (0.1.0-247) unstable; urgency=medium
+
+  * Store: portable apps (a winget "portable" .exe, or a zip of the
+    program's files: Godot) install as winget installs them, into the
+    person's WinGet Packages folder with an Uninstall entry of their own;
+    Godot ended with "portable installers can't be run here yet". Gate
+    store-check G3, mutant NOPORTABLE.
+  * Store: Signal and KiCad, walked on a test machine.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 07 Nov 2026 10:47:11 -0800
+
 sg-shell (0.1.0-246) unstable; urgency=medium
 
   * Store: 14 more Windows apps, each walked on a test machine (install,
