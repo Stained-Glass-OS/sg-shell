@@ -123,6 +123,8 @@
 #   SG_MUTANT_NOPARTS    stops after the first of an app's listed parts (DYMO Connect's MSI stayed)
 #   SG_MUTANT_PARTBYCMD  takes the same entry, its command read again without /S, for another part (Emacs)
 #   SG_MUTANT_NOMSIX     no app packages: winget's msix installers "can't be run here" (Teams)
+#   SG_MUTANT_PKGFIRST   removes a package past the installer that put it in (eM Client's MSI)
+#   SG_MUTANT_WRAPPEDLEAVE runs that installer's uninstaller and leaves its machine package
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -181,7 +183,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -932,6 +934,27 @@ rm -f "$D.result"; wine "$EXE" --uninstall 0E >/dev/null 2>&1; ec=$?
     && pass "Uninstall removes the package" || fail "package uninstall: exit $ec: $(cat "$D.result" 2>/dev/null); state $(pkgstate)"
 rm -f "$D.result"; SG_MUT="$T/mut-nomsix.exe" run --install 0E
 [ "$(SG_MUT="$T/mut-nomsix.exe" pkgstate)" != installed ] && pass "MUTANT NOMSIX can't install it (gate catches it)" || fail "NOMSIX not detected"
+# a package its own installer puts in (eM Client: an "Updater" MSI, run elevated, adds the app
+# package for the machine): found by its family, but Uninstall runs that installer's uninstaller,
+# as Settings would -- the person cannot remove the machine's package
+app 0F 'Wrapped Package' Productivity windows 'winget:Fake.Pkg' 'Wrapped Pkg'
+reg "$K\\0F" /v PackageFamily /d "$PFN"
+wineserver -w
+wrapped() { # exe -> "<uninstaller runs> <package state after>"
+    SG_FAKE_KEY=WrapPkg SG_FAKE_DISPLAY='Wrapped Pkg' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Wrapped Pkg' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine "$EXE" --install 0E >/dev/null 2>&1
+    rm -f "$G/uninstall.log" "$D.result"
+    wine "$1" --uninstall 0F >/dev/null 2>&1
+    echo "$([ -s "$G/uninstall.log" ] && echo ran || echo not-run) $(pkgstate)"
+    wine "$EXE" --uninstall 0E >/dev/null 2>&1; ununinstall WrapPkg; sleep 0.5
+}
+r=$(wrapped "$EXE")
+[ "$r" = "ran not-installed" ] && pass "a package its own installer put in: that installer's uninstaller, then the package, by one elevated copy (eM Client)" \
+    || fail "wrapped package uninstall: $r / $(cat "$D.result" 2>/dev/null)"
+r=$(wrapped "$T/mut-pkgfirst.exe")
+[ "$r" = "not-run not-installed" ] && pass "MUTANT PKGFIRST removes the package past its installer (gate catches it)" || fail "PKGFIRST not detected: $r"
+r=$(wrapped "$T/mut-wrappedleave.exe")
+[ "$r" = "ran installed" ] && pass "MUTANT WRAPPEDLEAVE leaves the machine's package behind (gate catches it)" || fail "WRAPPEDLEAVE not detected: $r"
 
 # --- G2. a package's dependencies first (TortoiseGit needs Git) ----------------------------------
 mkdir -p "$W/api/f/Fake" "$W/raw/f/Fake/Dep/1.0" "$W/raw/f/Fake/Needy/1.0"

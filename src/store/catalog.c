@@ -573,6 +573,9 @@ void app_detect(app_t *a)
     /* an app package: PackageManager knows it, there is no Uninstall entry */
     if (a->package_family[0]) {
         if (msix_installed(a->package_family, a->installed_version, 64)) a->state = AST_INSTALLED;
+        /* or by its installer's own entry (eM Client's MSI is an updater that puts the package
+         * in for the machine): there is something to uninstall */
+        else if (a->detect_name[0] && find_installed(a->detect_name, a->installed_version, 64)) a->state = AST_INSTALLED;
         return;
     }
 #endif
@@ -1892,15 +1895,10 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
 
 /* the app's uninstaller -- and, where it leaves another part listed under
  * the app's name (an MSI under its wrapper), that part's, up to three */
-int app_uninstall(app_t *a, WCHAR *err, int cch)
+static int uninstall_rounds(app_t *a, WCHAR *err, int cch)
 {
     WCHAR ran[2048];
     int round, rc = 1;
-    err[0] = 0;
-    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
-#ifndef SG_MUTANT_NOMSIX
-    if (a->package_family[0]) return msix_remove(a->package_family, a->name, err, cch);
-#endif
     for (round = 0; round < 3; round++)
         if ((rc = uninstall_once(a, err, cch, ran, ARRAYSIZE(ran))) != UNINSTALL_NEXT) {
             if (!rc) forget_start_shortcut(a);
@@ -1908,4 +1906,45 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
         }
     swprintf(err, cch, L"%ls was not removed.", a->name);
     return 1;
+}
+
+int app_uninstall(app_t *a, WCHAR *err, int cch)
+{
+    err[0] = 0;
+    if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
+#ifndef SG_MUTANT_NOMSIX
+    /* a package alone: RemovePackageAsync, for the person. One its own installer put in for the
+     * machine (eM Client's "Updater" MSI, run as SYSTEM) has that installer's Uninstall entry,
+     * whose uninstaller leaves the package: one elevated copy of the store runs that uninstaller
+     * and then takes the package away for everyone -- one consent */
+    if (a->package_family[0]) {
+        WCHAR v[64], args[64];
+        int code;
+#ifndef SG_MUTANT_PKGFIRST
+        if (!a->detect_name[0] || !find_installed(a->detect_name, v, ARRAYSIZE(v)))
+#else
+        (void)v;
+#endif
+            return msix_remove(a->package_family, a->name, err, cch);
+        swprintf(args, ARRAYSIZE(args), L"--elevated-uninstall %ls", a->ord);
+        if ((code = sys_elevate_wait(args)) == SYS_DENIED) {
+            swprintf(err, cch, L"%ls was not removed: an administrator's consent was not given.", a->name);
+            return 1;
+        }
+        if (code) { swprintf(err, cch, L"%ls was not removed.", a->name); return 1; }
+        forget_start_shortcut(a);
+        return 0;
+    }
+#endif
+    return uninstall_rounds(a, err, cch);
+}
+
+/* the elevated copy's part (--elevated-uninstall): the installer's uninstaller, then the package */
+int app_uninstall_wrapped(app_t *a, WCHAR *err, int cch)
+{
+    int rc = uninstall_rounds(a, err, cch);
+#ifndef SG_MUTANT_WRAPPEDLEAVE
+    if (!rc) rc = msix_remove_machine(a->package_family, a->name, err, cch);
+#endif
+    return rc;
 }

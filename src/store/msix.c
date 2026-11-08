@@ -36,8 +36,8 @@ typedef struct { insp_vtbl i;
                  HRESULT (WINAPI *RemovePackageAsync)(void *, HSTRING, void **);
                  void *StagePackageAsync, *RegisterPackageAsync, *FindPackages, *FindPackagesByUserSecurityId,
                       *FindPackagesByNamePublisher, *FindPackagesByUserSecurityIdNamePublisher, *FindUsers,
-                      *SetPackageState, *FindPackageByPackageFullName, *CleanupPackageForUserAsync,
-                      *FindPackagesByPackageFamilyName;
+                      *SetPackageState, *FindPackageByPackageFullName, *CleanupPackageForUserAsync;
+                 HRESULT (WINAPI *FindPackagesByPackageFamilyName)(void *, HSTRING, void **);
                  HRESULT (WINAPI *FindPackagesByUserSecurityIdPackageFamilyName)(void *, HSTRING, HSTRING, void **); } manager_vtbl;
 typedef struct { insp_vtbl i; void *put_Progress, *get_Progress, *put_Completed, *get_Completed;
                  HRESULT (WINAPI *GetResults)(void *, void **); } operation_vtbl;
@@ -217,6 +217,51 @@ int msix_remove(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch)
         rc = wait_op(op, L"It was not removed", err, cch);
     WindowsDeleteString(s);
     RELEASE(op); RELEASE(pm);
+    return rc;
+}
+
+/* every package of the family, whoever it is installed for -- the machine's too (eM Client's MSI,
+ * run as SYSTEM, adds its package for the machine and its own uninstall leaves it): as an
+ * administrator (the store's elevated copy), RemovePackageAsync takes each away for everyone.
+ * 0 when none is left */
+int msix_remove_machine(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch)
+{
+    WCHAR full[16][256];
+    void *pm, *list = NULL, *iter = NULL;
+    HSTRING fam;
+    boolean has = FALSE;
+    int n = 0, i, rc = 0;
+    if (!family || !family[0]) return 0;
+    ro_init();
+    if (!(pm = package_manager())) { swprintf(err, cch, L"%ls was not removed (no package manager).", name); return 1; }
+    fam = hs(family);
+    if (SUCCEEDED(VT(pm, manager_vtbl)->FindPackagesByPackageFamilyName(pm, fam, &list)) && list &&
+        SUCCEEDED(VT(list, iterable_vtbl)->First(list, &iter)) && iter)
+        for (VT(iter, iterator_vtbl)->get_HasCurrent(iter, &has); has && n < 16; VT(iter, iterator_vtbl)->MoveNext(iter, &has)) {
+            void *pkg = NULL, *id = NULL;
+            HSTRING str;
+            if (SUCCEEDED(VT(iter, iterator_vtbl)->get_Current(iter, &pkg)) && pkg &&
+                SUCCEEDED(VT(pkg, package_vtbl)->get_Id(pkg, &id)) && id &&
+                SUCCEEDED(VT(id, package_id_vtbl)->get_FullName(id, &str))) {
+                lstrcpynW(full[n++], WindowsGetStringRawBuffer(str, NULL), 256);
+                WindowsDeleteString(str);
+            }
+            RELEASE(id); RELEASE(pkg);
+        }
+    WindowsDeleteString(fam);
+    RELEASE(iter); RELEASE(list);
+    for (i = 0; i < n && !rc; i++) {
+        void *op = NULL;
+        HSTRING s = hs(full[i]);
+        HRESULT hr;
+        if (FAILED(hr = VT(pm, manager_vtbl)->RemovePackageAsync(pm, s, &op)) || !op)
+            swprintf(err, cch, L"%ls was not removed (0x%08lx).", name, (unsigned long)hr), rc = 1;
+        else
+            rc = wait_op(op, L"It was not removed", err, cch);
+        WindowsDeleteString(s);
+        RELEASE(op);
+    }
+    RELEASE(pm);
     return rc;
 }
 

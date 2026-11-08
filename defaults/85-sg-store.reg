@@ -4069,6 +4069,17 @@ Windows Registry Editor Version 5.00
 "DetectName"="JetBrains Toolbox"
 "UninstallArgs"="/S"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\173]
+"Name"="eM Client"
+"Publisher"="eM Client"
+"Description"="Mail, calendar and contacts."
+"Category"="Productivity"
+"Colour"=dword:00f05a28
+"Tier"="windows"
+"Source"="winget:eMClient.eMClient"
+"DetectName"="eM Client (Updater)"
+"PackageFamily"="eMClient.20054CA46072C_veq4nz3ze5v72"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

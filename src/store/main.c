@@ -1707,6 +1707,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             LocalFree(argv);
             return rc;
         }
+        if (!lstrcmpiW(argv[i], L"--elevated-uninstall") && i + 1 < argc) {
+            /* (runas) an app whose installer put in a package for the machine: that
+             * installer's uninstaller, then the package, for everyone (catalog.c) */
+            int k;
+            WCHAR err[512] = L"";
+            load_all(FALSE);
+            k = find_app(argv[i + 1]);
+            rc = k < 0 || !g_apps[k].package_family[0] ? SYS_FAILED : app_uninstall_wrapped(&g_apps[k], err, ARRAYSIZE(err)) ? SYS_FAILED : SYS_OK;
+            LocalFree(argv);
+            return rc;
+        }
         if (!lstrcmpiW(argv[i], L"--open") && i + 1 < argc) {
             int k;
             load_all(FALSE);

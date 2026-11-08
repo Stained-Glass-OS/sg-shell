@@ -123,6 +123,8 @@ int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cance
 BOOL msix_installed(const WCHAR *family, WCHAR *version, int cch);
 int  msix_remove(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* 0: gone */
 BOOL msix_aumid(const WCHAR *family, WCHAR *out, int cch);
+int  msix_remove_machine(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* every user's; 0: none left */
+int  app_uninstall_wrapped(app_t *a, WCHAR *err, int cch);  /* (elevated copy) its installer's uninstaller, then its package */
 BOOL msix_open(const WCHAR *family);
 int  app_uninstall(app_t *a, WCHAR *err, int cch);  /* 0: removed (as its uninstaller or apt says) */
 #define UNINSTALL_GONE 3                              /* app_uninstall: its uninstaller is not there */
@@ -143,6 +145,7 @@ enum { SYS_OK = 0, SYS_DENIED = 1, SYS_FAILED = 10, SYS_CANCELLED = 11 };
 int  sys_install_deb_url(const app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 int  sys_install_apt(const app_t *a, WCHAR *err, int cch);     /* from the store: elevate, wait */
 int  sys_remove_apt(const app_t *a, WCHAR *err, int cch);      /* Uninstall: elevate, wait */
+int  sys_elevate_wait(const WCHAR *args);                    /* this program again, elevated: its SYS_* code */
 int  sys_elevated_main(int argc, WCHAR **argv, int i);          /* --elevated-apt / -apt-remove / -deb */
 void sys_batch_begin(void);                                     /* several apps, one consent */
 void sys_batch_end(void);

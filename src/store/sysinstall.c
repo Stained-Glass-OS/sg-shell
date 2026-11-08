@@ -164,6 +164,11 @@ static int elevate_wait(const WCHAR *args)
     return (int)code;
 }
 
+int sys_elevate_wait(const WCHAR *args)
+{
+    return elevate_wait(args);
+}
+
 /* ---- several apps under one consent ----------------------------------------------------------------
  *
  * Installing the apps checked in the list (David 2026-10-03: "ask for the

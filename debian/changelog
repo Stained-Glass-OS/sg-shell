@@ -1,3 +1,16 @@
+sg-shell (0.1.0-251) unstable; urgency=medium
+
+  * Store: an app whose installer puts its package in for the machine
+    (eM Client's "Updater" MSI, run as SYSTEM) is found by the package and
+    by the installer's entry; Uninstall runs that installer's uninstaller
+    and then takes the package away for everyone, both in one elevated
+    copy of the store (one consent) -- the MSI leaves its package. Gate
+    store-check G4, mutants PKGFIRST and WRAPPEDLEAVE.
+  * Store: eM Client (needs wine-sg 10.0-818 for .NET's ICU and the
+    machine package's Start entry).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 08 Nov 2026 00:03:21 -0800
+
 sg-shell (0.1.0-250) unstable; urgency=medium
 
   * Store: app packages. A winget manifest whose installer is an MSIX or
