@@ -26,6 +26,7 @@
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_BESIDE%: the installer stops with code 67 unless that file is in its folder (MobaXterm).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
+ * %SG_FAKE_SELFGONE% (ms): uninst.exe's file goes at once, its entry that much later, from Unix (Emacs).
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
  * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
  * %SG_FAKE_LINKDIR%: with %SG_FAKE_LINK%, the program's shortcut is in that folder of all
@@ -189,11 +190,29 @@ int wmain(int argc, WCHAR **argv)
             DeleteFileW(app);
         }
         if (k) {
-            WCHAR name[128];
+            WCHAR name[128], ms2[16], wine[MAX_PATH];
             int n = 0;
             for (k += 5; *k && *k != L' ' && n < 127; k++) name[n++] = *k;
             name[n] = 0;
             swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", name);
+            /* %SG_FAKE_SELFGONE% (ms): like Emacs's NSIS uninstaller, run elevated
+             * (its copy in no process the store sees): the uninstaller file goes
+             * first, the entry that much later, from Unix (%SG_FAKE_WINE%) */
+            if (GetEnvironmentVariableW(L"SG_FAKE_SELFGONE", ms2, ARRAYSIZE(ms2)) &&
+                GetEnvironmentVariableW(L"SG_FAKE_WINE", wine, MAX_PATH)) {
+                char *(__cdecl *unix_name)(const WCHAR *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+                char *u = unix_name ? unix_name(self) : NULL;
+                WCHAR cl[2048];
+                STARTUPINFOW si = { sizeof(si) };
+                PROCESS_INFORMATION pi;
+                if (!u) return 7;
+                swprintf(cl, ARRAYSIZE(cl), L"sh -c \"( sleep 1; rm -f '%hs'; sleep %d; '%ls' reg delete 'HKLM\\%ls' /f ) >/dev/null 2>&1 &\"",
+                         u, _wtoi(ms2) / 1000, wine, sub);
+                if (!CreateProcessW(L"\\\\?\\unix\\bin\\sh", cl, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return 8;
+                WaitForSingleObject(pi.hProcess, 10000);
+                CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+                return 0;
+            }
             RegDeleteKeyW(HKEY_LOCAL_MACHINE, sub);
             RegDeleteKeyW(HKEY_CURRENT_USER, sub);
         }

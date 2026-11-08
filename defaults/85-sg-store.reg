@@ -4024,6 +4024,51 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Mailbird.Mailbird"
 "DetectName"="Mailbird"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\169]
+"Name"="Arduino IDE"
+"Publisher"="Arduino"
+"Description"="Write and upload Arduino sketches."
+"Category"="Development"
+"Colour"=dword:0000979d
+"Tier"="windows"
+"Source"="winget:ArduinoSA.IDE.stable"
+"DetectName"="Arduino IDE"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/cc.arduino.arduinoide.png"
+"Linux"="L82"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\170]
+"Name"="MobaXterm"
+"Publisher"="Mobatek"
+"Description"="Terminal with SSH, X server and tools."
+"Category"="Utilities"
+"Colour"=dword:001f5fa6
+"Tier"="windows"
+"Source"="winget:Mobatek.MobaXterm"
+"DetectName"="MobaXterm"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\171]
+"Name"="GNU Emacs"
+"Publisher"="GNU"
+"Description"="The extensible editor."
+"Category"="Development"
+"Colour"=dword:007f5ab6
+"Tier"="windows"
+"Source"="winget:GNU.Emacs"
+"DetectName"="GNU Emacs|Emacs"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.gnu.emacs.png"
+"Linux"="L75"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\172]
+"Name"="JetBrains Toolbox"
+"Publisher"="JetBrains"
+"Description"="Install and update JetBrains IDEs."
+"Category"="Development"
+"Colour"=dword:00000000
+"Tier"="windows"
+"Source"="winget:JetBrains.Toolbox"
+"DetectName"="JetBrains Toolbox"
+"UninstallArgs"="/S"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

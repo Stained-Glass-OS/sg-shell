@@ -120,6 +120,7 @@
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
 #   SG_MUTANT_NOCLOSEAPP runs the uninstaller while the app still runs
 #   SG_MUTANT_NOPARTS    stops after the first of an app's listed parts (DYMO Connect's MSI stayed)
+#   SG_MUTANT_PARTBYCMD  takes the same entry, its command read again without /S, for another part (Emacs)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -178,7 +179,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -2008,6 +2009,27 @@ afterwait() { # exe -> done|early
 }
 [ "$(afterwait "$EXE")" = done ] && pass "an uninstaller still at work after its entry goes is waited for (NSIS shortcuts)" || fail "uninstall done before the shortcuts went"
 [ "$(afterwait "$T/mut-noafterwait.exe")" = early ] && pass "MUTANT NOAFTERWAIT is done while its shortcuts are still there (gate catches it)" || fail "NOAFTERWAIT not detected"
+# an NSIS uninstaller (run elevated: its copy in no process the store sees)
+# deletes its own file first and its entry last: read again, the entry's
+# command had no /S (no NSIS file to see), the store took that for another
+# part, ran it again, found it gone and said "Taken off the list" (Emacs and
+# Kodi on qa4, release 648). The same entry is the same part: wait for it.
+selfgone() { # exe -> ok|fail|stuck
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    wine reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\FakeApp' /v QuietUninstallString /f >/dev/null 2>&1
+    printf '\357\276\255\336NullsoftInst' >> "$WINEPREFIX/drive_c/Program Files/Fake App/uninst.exe"
+    rm -f "$D" "$D.result" "$G/uninstall.log"
+    SG_FAKE_SELFGONE=5000 SG_FAKE_WINE="$WINE_DIR/bin/wine" SG_STORE_UNINSTALL_GRACE=30000 \
+        timeout 90 wine "$1" --uninstall 01 >/dev/null 2>&1
+    r=$(sed -n 's/^uninstall 01 \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null | head -1)
+    echo "${r:-stuck} $(grep -c . "$G/uninstall.log" 2>/dev/null)"
+    sleep 6; ununinstall FakeApp; sleep 0.5
+}
+r=$(selfgone "$EXE")
+[ "$r" = "ok 1" ] && pass "an NSIS uninstaller that deletes itself before its entry is run once and waited for (Emacs)" \
+    || fail "self-deleting uninstaller: $r / $(cat "$D.result" 2>/dev/null)"
+r=$(selfgone "$T/mut-partbycmd.exe")
+[ "$r" != "ok 1" ] && pass "MUTANT PARTBYCMD runs it again as another part (gate catches it)" || fail "PARTBYCMD not detected: $r"
 # its entry gone, the uninstaller stays up at its last message waiting for OK (CutePDF's "has been
 # removed from your system ... restart"): the store said "Uninstalling..." for 20 minutes
 lastmsg() { # exe -> ok|fail|stuck

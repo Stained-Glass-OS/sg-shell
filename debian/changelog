@@ -1,3 +1,16 @@
+sg-shell (0.1.0-249) unstable; urgency=medium
+
+  * Store: an app's other part is another uninstall entry, not the same
+    entry's command read again. Emacs's NSIS uninstaller deletes itself
+    first: read again, its command had no /S, the store ran it a second
+    time, found it gone and said "Taken off the list" (Kodi the same).
+    Gate store-check (SG_FAKE_SELFGONE), mutant PARTBYCMD.
+  * Store: Arduino IDE, MobaXterm, GNU Emacs (found by its "Emacs"
+    shortcut too) and JetBrains Toolbox (uninstalled with its /S), from
+    the second walk's recheck on 248.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 07 Nov 2026 17:44:39 -0800
+
 sg-shell (0.1.0-248) unstable; urgency=medium
 
   * Store: a zipped installer is unpacked whole, as winget does, and run

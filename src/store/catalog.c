@@ -1706,17 +1706,30 @@ static BOOL folder_program(const app_t *a, WCHAR *out, int cch)
     return out[0] != 0;
 }
 
-/* still listed, under another part's uninstaller (not cmd's)? DYMO Connect
- * 1.6: an NSIS wrapper's entry (Uninstall.exe) and its MSI's, both "DYMO
- * Connect"; the wrapper's uninstaller took itself away and left the MSI, and
- * the store said "not removed" after three minutes. */
-static BOOL another_part(const app_t *a, const WCHAR *cmd)
+/* still listed, under another part's entry (not the one whose uninstaller
+ * ran)? DYMO Connect 1.6: an NSIS wrapper's entry (Uninstall.exe) and its
+ * MSI's, both "DYMO Connect"; the wrapper's uninstaller took itself away and
+ * left the MSI, and the store said "not removed" after three minutes.
+ * The entry, not its command: the command read again differs while the same
+ * uninstaller is still at work -- Emacs's NSIS uninstaller deletes itself
+ * first, so no /S was added, the store ran it again, found it gone and said
+ * "Taken off the list" (qa4, release 648; Kodi's the same). */
+static BOOL another_part(const app_t *a, const WCHAR *cmd, const WCHAR *entry)
 {
-    WCHAR now[2048];
+    WCHAR now[2048], other[512];
+    HKEY root = NULL;
 #ifdef SG_MUTANT_NOPARTS
     return FALSE;
 #endif
-    return uninstall_command(a->detect_name, a->uninstall_args, now, ARRAYSIZE(now), NULL, NULL, 0) && lstrcmpiW(now, cmd);
+    if (!uninstall_command(a->detect_name, a->uninstall_args, now, ARRAYSIZE(now), &root, other, ARRAYSIZE(other)))
+        return FALSE;
+#ifdef SG_MUTANT_PARTBYCMD
+    (void)entry;
+    return lstrcmpiW(now, cmd) != 0;
+#else
+    if (!entry[0]) return lstrcmpiW(now, cmd) != 0;
+    return lstrcmpiW(other, entry) != 0;
+#endif
 }
 
 #define UNINSTALL_NEXT 4   /* uninstall_once: removed one part; another is left */
@@ -1847,7 +1860,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     for (start = GetTickCount(); (unregister_gone(a), find_installed(a->detect_name, ver, ARRAYSIZE(ver)));) {
         BOOL alive = tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
         if (alive) start = GetTickCount();                  /* 3 minutes after the last of them */
-        else if (another_part(a, cmd) || GetTickCount() - start >= grace) break;   /* its part is gone */
+        else if (another_part(a, cmd, entry) || GetTickCount() - start >= grace) break;   /* its part is gone */
         Sleep(1000);
     }
 #ifndef SG_MUTANT_NOAFTERWAIT
@@ -1862,7 +1875,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
                                      GetTickCount() - start < grace;) Sleep(500);
 #endif
     if (find_installed(a->detect_name, ver, ARRAYSIZE(ver))) {
-        if (another_part(a, cmd)) return UNINSTALL_NEXT;
+        if (another_part(a, cmd, entry)) return UNINSTALL_NEXT;
         swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);
         return 1;
     }
