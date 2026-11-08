@@ -4185,6 +4185,19 @@ Windows Registry Editor Version 5.00
 "Source"="winget:connect2xGmbH.Tammy"
 "PackageFamily"="de.connect2x.tammy_mdytxnrk2e0qw"
 
+; App package frameworks Windows comes with, which app packages' winget
+; manifests leave out: when PackageManager says one is missing (0x80073CF3,
+; "Provide the framework NAME"), the store installs its winget package and
+; adds the app again. Name -> winget id; a trailing * on the name matches by
+; its beginning, on the id it stands for the framework's own name.
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Frameworks]
+"Microsoft.VCLibs.140.00.UWPDesktop"="Microsoft.VCLibs.Desktop.14"
+"Microsoft.VCLibs.140.00"="Microsoft.VCLibs.14"
+"Microsoft.VCLibs.120.00"="Microsoft.VCLibs.12"
+"Microsoft.UI.Xaml.2.*"="*"
+"Microsoft.NET.Native.Runtime.2.2"="Microsoft.DotNet.Native.Runtime"
+"Microsoft.WindowsAppRuntime.1.*"="*"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

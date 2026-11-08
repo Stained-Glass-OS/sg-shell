@@ -1166,6 +1166,44 @@ static void settle_install(app_t *a, package_t *p)
         Sleep(1000);
 }
 
+/* PackageManager's "Provide the framework \"NAME\" ..." (0x80073CF3): NAME */
+static BOOL missing_framework(const WCHAR *err, WCHAR *name, int cch)
+{
+    static const WCHAR lead[] = L"Provide the framework \"";
+    const WCHAR *p = StrStrIW(err, lead), *q;
+    if (!p) return FALSE;
+    p += ARRAYSIZE(lead) - 1;
+    if (!(q = wcschr(p, L'"')) || q == p || q - p >= cch) return FALSE;
+    lstrcpynW(name, p, (int)(q - p) + 1);
+    return TRUE;
+}
+
+/* the winget package of a framework, from the catalogue's Frameworks (framework name -> winget id;
+ * a name ending in * matches by its beginning, an id ending in * is the framework's own name):
+ * the ones Windows comes with, which app packages' manifests leave out (VCLibs UWPDesktop:
+ * Keeper, TradingView) */
+static BOOL framework_package(const WCHAR *name, WCHAR *id, int cch)
+{
+    HKEY key;
+    WCHAR v[160], d[160];
+    DWORD i, vn, dn, type;
+    BOOL found = FALSE;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, STORE_KEY L"\\Frameworks", 0, KEY_READ, &key)) return FALSE;
+    for (i = 0; !found && (vn = ARRAYSIZE(v), dn = sizeof(d),
+                           !RegEnumValueW(key, i, v, &vn, NULL, &type, (BYTE *)d, &dn)); i++) {
+        int n = lstrlenW(v);
+        if (type != REG_SZ || !n) continue;
+        d[ARRAYSIZE(d) - 1] = 0;
+        if (v[n - 1] == L'*' ? !_wcsnicmp(name, v, n - 1) : !lstrcmpiW(name, v)) {
+            int k = lstrlenW(d);
+            lstrcpynW(id, k && d[k - 1] == L'*' ? name : d, cch);
+            found = id[0] != 0;
+        }
+    }
+    RegCloseKey(key);
+    return found;
+}
+
 static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel,
                       WCHAR *err, int cch)
 {
@@ -1198,6 +1236,16 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     else
 #endif
     ok = pkg_install(&p, err, cch);
+#ifndef SG_MUTANT_NOFRAMEWORK
+    /* an app package whose framework is not here: that framework's package, then it again --
+     * Windows has the common ones already, so manifests leave them out */
+    if (!ok && depth < 3 && (!_wcsicmp(p.type, L"msix") || !_wcsicmp(p.type, L"appx"))) {
+        WCHAR fw[160], fid[160];
+        if (missing_framework(err, fw, ARRAYSIZE(fw)) && framework_package(fw, fid, ARRAYSIZE(fid)) &&
+            !install_id(fid, depth + 1, NULL, progress, ctx, cancel, err, cch))
+            ok = pkg_install(&p, err, cch);
+    }
+#endif
     if (ok && a) settle_install(a, &p);
     if (a) a->ran_elevated = p.elevated;
     if (ok && a) register_installed(a, p.version);

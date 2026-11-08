@@ -125,6 +125,7 @@
 #   SG_MUTANT_NOMSIX     no app packages: winget's msix installers "can't be run here" (Teams)
 #   SG_MUTANT_PKGFIRST   removes a package past the installer that put it in (eM Client's MSI)
 #   SG_MUTANT_WRAPPEDLEAVE runs that installer's uninstaller and leaves its machine package
+#   SG_MUTANT_NOFRAMEWORK  no framework for an app package that needs one Windows comes with (Keeper)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -183,7 +184,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -934,6 +935,54 @@ rm -f "$D.result"; wine "$EXE" --uninstall 0E >/dev/null 2>&1; ec=$?
     && pass "Uninstall removes the package" || fail "package uninstall: exit $ec: $(cat "$D.result" 2>/dev/null); state $(pkgstate)"
 rm -f "$D.result"; SG_MUT="$T/mut-nomsix.exe" run --install 0E
 [ "$(SG_MUT="$T/mut-nomsix.exe" pkgstate)" != installed ] && pass "MUTANT NOMSIX can't install it (gate catches it)" || fail "NOMSIX not detected"
+# an app package whose framework Windows comes with and its manifest leaves out (Keeper and
+# TradingView: VCLibs UWPDesktop): PackageManager says which is missing, the store installs that
+# framework's winget package (the catalogue's Frameworks) and adds the app again
+python3 "$HERE/test/mkmsix.py" package "$MX/fw.msix" --name SG.GateFramework --version 1.0.0.0 --framework \
+    --publisher "$PUBL" --file "$T/store-fake.exe:fw.bin" >/dev/null \
+    && python3 "$HERE/test/mkmsix.py" package "$MX/needy.msix" --name SG.StoreGateNeedy --version 1.0.0.0 \
+        --publisher "$PUBL" --display-name 'Needy Package' --dep SG.GateFramework:1.0.0.0 \
+        --app 'App:app.exe::Needy Package' --file "$T/store-fake.exe:app.exe" >/dev/null \
+    && osslsigncode sign -certs "$MX/signer.pem" -key "$MX/signer.key" -h sha256 -in "$MX/fw.msix" -out "$W/files/fw.msix" >/dev/null 2>&1 \
+    && osslsigncode sign -certs "$MX/signer.pem" -key "$MX/signer.key" -h sha256 -in "$MX/needy.msix" -out "$W/files/needy.msix" >/dev/null 2>&1 \
+    || fail "G4 framework fixture could not be made"
+mkdir -p "$W/raw/f/Fake/Fw/1.0" "$W/raw/f/Fake/NeedyPkg/1.0"
+for pk in Fw:fw NeedyPkg:needy; do
+    printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/${pk%%:*}"
+    cat > "$W/raw/f/Fake/${pk%%:*}/1.0/Fake.${pk%%:*}.installer.yaml" <<EOF
+PackageIdentifier: Fake.${pk%%:*}
+PackageVersion: 1.0
+InstallerType: msix
+Installers:
+- Architecture: x64
+  InstallerUrl: http://127.0.0.1:$PORT/files/${pk#*:}.msix
+  InstallerSha256: $(sha256sum "$W/files/${pk#*:}.msix" | cut -d' ' -f1)
+ManifestType: installer
+EOF
+done
+NPFN=$(python3 -c '
+import hashlib, sys
+d = hashlib.sha256(sys.argv[2].encode("utf-16-le")).digest()[:8]
+n = int.from_bytes(d, "big") << 1
+a = "0123456789abcdefghjkmnpqrstvwxyz"
+print(sys.argv[1] + "_" + "".join(a[(n >> (60 - 5 * i)) & 31] for i in range(13)))' SG.StoreGateNeedy "$PUBL")
+app 0G 'Needy Package' Productivity windows 'winget:Fake.NeedyPkg'
+reg "$K\\0G" /v PackageFamily /d "$NPFN"
+reg 'HKLM\Software\Stained Glass\Store\Frameworks' /v 'SG.GateFramework' /d 'Fake.Fw'
+wineserver -w
+needypkg() { # exe -> the install's result line (kept in $T/needy.result)
+    rm -f "$D.result"; wine "$1" --install 0G >/dev/null 2>&1
+    cp "$D.result" "$T/needy.result" 2>/dev/null
+    sed -n 's/^result 0G \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null | head -1
+    pkgstate0G=$(rm -f "$D"; wine "$EXE" --list >/dev/null 2>&1; sed -n 's/^app 0G .*state=\([a-z-]*\).*/\1/p' "$D" | head -1)
+    [ "$pkgstate0G" = installed ] && wine "$EXE" --uninstall 0G >/dev/null 2>&1
+}
+r=$(needypkg "$T/mut-noframework.exe")
+[ "$r" = fail ] && grep -q 'Provide the framework' "$T/needy.result" 2>/dev/null \
+    && pass "MUTANT NOFRAMEWORK stops at the missing framework (gate catches it)" || fail "NOFRAMEWORK not detected: $r / $(cat "$T/needy.result" 2>/dev/null)"
+r=$(needypkg "$EXE")
+[ "$r" = ok ] && pass "an app package's missing framework (one Windows comes with) is installed from winget first" \
+    || fail "framework install: $r / $(cat "$T/needy.result" 2>/dev/null)"
 # a package its own installer puts in (eM Client: an "Updater" MSI, run elevated, adds the app
 # package for the machine): found by its family, but Uninstall runs that installer's uninstaller,
 # as Settings would -- the person cannot remove the machine's package

@@ -1,3 +1,13 @@
+sg-shell (0.1.0-253) unstable; urgency=medium
+
+  * Store: an app package whose framework Windows comes with (VCLibs
+    UWPDesktop: Keeper, TradingView) and its winget manifest leaves out:
+    PackageManager names it (0x80073CF3), the store installs that
+    framework's winget package from the catalogue's new Frameworks list
+    and adds the app again. Gate store-check G4, mutant NOFRAMEWORK.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 08 Nov 2026 07:09:52 -0800
+
 sg-shell (0.1.0-252) unstable; urgency=medium
 
   * Store: ten more apps, passed on qa4 (wine-sg 10.0-825): app packages
