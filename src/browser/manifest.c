@@ -285,6 +285,7 @@ int mf_type_rank(const char *type, const char *nested)
 {
     if (runnable(type)) return 2;
     if (!strcasecmp(type, "zip") && nested && runnable(nested)) return 1;
+    if (!strcasecmp(type, "msix") || !strcasecmp(type, "appx")) return 1;   /* PackageManager adds it */
     return 0;
 }
 

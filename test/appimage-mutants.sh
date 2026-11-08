@@ -26,8 +26,8 @@ cd "$HERE" || exit 1
 "$MINGW" $CF -DSG_MUTANT_NO_APPIMAGE_UNINSTALL -o "$T/sg-linuxapp64.exe" src/linuxapps/sg-linuxapp.c -lshell32 -lole32 -luuid
 run NO_APPIMAGE_UNINSTALL SG_LINUXAPP_EXE="$T/sg-linuxapp64.exe"
 "$MINGW" $CF -DSG_MUTANT_AI_NO_SYNC -Wno-missing-field-initializers -Isrc/browser -Isrc/store -Isrc/zip -o "$T/sg-store64.exe" \
-    src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/browser/fetch.c \
-    src/browser/manifest.c src/zip/zipcore.c build/sg-store-res64.o -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 \
+    src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/store/msix.c src/browser/fetch.c \
+    src/browser/manifest.c src/zip/zipcore.c build/sg-store-res64.o -lruntimeobject -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 \
     -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
 run AI_NO_SYNC SG_STORE_EXE="$T/sg-store64.exe"
 [ "$RC" = 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"

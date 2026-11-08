@@ -82,8 +82,8 @@ BROWSER_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser3
 # SG Store (sg-store): src/store/, reusing "Get a web browser"'s download/verify/
 # install engine (src/browser/fetch.c + manifest.c); its icon is drawn at build
 # time. See docs/decisions/0017-sg-store.md.
-STORE_SRC  = src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
-STORE_LIBS = -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
+STORE_SRC  = src/store/main.c src/store/details.c src/store/catalog.c src/store/sysinstall.c src/store/icons.c src/store/msix.c src/browser/fetch.c src/browser/manifest.c src/zip/zipcore.c
+STORE_LIBS = -lruntimeobject -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32
 # Console tools (subsystem console), built the same way but without -mwindows.
 # sg-roots: the code signing and time stamping roots, each marked with its uses (crypt32)
 CONSOLE_TOOLS = sg-gpresult sg-roots

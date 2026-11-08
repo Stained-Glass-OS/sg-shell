@@ -20,7 +20,8 @@
 #   E. a winget manifest install; F. an installer we can run beats a portable
 #      zip of the same arch; G. a zip holding the installer (Paint.NET's) is
 #      unpacked and run; G3. a portable app (Godot's zip) put in the
-#      person's WinGet Packages folder with its own entry; H. a pinned install; H2. an IExpress package of MSIs;
+#      person's WinGet Packages folder with its own entry; G4. an app package (MSIX)
+#      added by PackageManager, found, opened and removed by its family name; H. a pinned install; H2. an IExpress package of MSIs;
 #      H3. a runtime DLL out of a self-extracting package's cabinet (the
 #      Visual Basic 6 runtime): installed, registered, detected, its page
 #      (--page) with its licence and no Open, Uninstall
@@ -121,6 +122,7 @@
 #   SG_MUTANT_NOCLOSEAPP runs the uninstaller while the app still runs
 #   SG_MUTANT_NOPARTS    stops after the first of an app's listed parts (DYMO Connect's MSI stayed)
 #   SG_MUTANT_PARTBYCMD  takes the same entry, its command read again without /S, for another part (Emacs)
+#   SG_MUTANT_NOMSIX     no app packages: winget's msix installers "can't be run here" (Teams)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -157,7 +159,7 @@ bad=$(awk '/^\[/ { s = ""; r = "" } /^"Source"=/ { s = $0 } /^"Run"=/ { r = $0; 
     done)
 [ -z "$bad" ] && pass "our own apps' Open runs something they install" || fail "our apps' Run names nothing installed: $bad"
 
-for need in Xvfb xdotool import python3 dpkg-deb "$MINGW"; do command -v "$need" >/dev/null || { echo "SKIP: $need missing"; exit 77; }; done
+for need in Xvfb xdotool import python3 dpkg-deb openssl osslsigncode "$MINGW"; do command -v "$need" >/dev/null || { echo "SKIP: $need missing"; exit 77; }; done
 [ -x "$WINE_DIR/bin/wine" ] && [ -f "$EXE" ] || { echo "SKIP: wine-sg or $EXE missing"; exit 77; }
 
 T=$(mktemp -d /var/tmp/sg-store-check.XXXXXX); chmod 755 "$T"
@@ -172,14 +174,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-STORE_SRC="$HERE/src/store/main.c $HERE/src/store/details.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
-STORE_LIBS="-lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
+STORE_SRC="$HERE/src/store/main.c $HERE/src/store/details.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/store/msix.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
+STORE_LIBS="-lruntimeobject -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
 build_mut() { # define outfile
     # shellcheck disable=SC2086
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -861,6 +863,75 @@ grep -q '^uninstall 0D ok' "$D.result" 2>/dev/null && [ ! -d "$P" ] && ! wine re
     && pass "Uninstall takes its folder and its entry away" || fail "portable uninstall: $(cat "$D.result" 2>/dev/null); dir $(ls "$P" 2>&1 | head -2)"
 rm -f "$D.result"; SG_MUT="$T/mut-noportable.exe" run --install 0D
 [ -z "$(portdir)" ] && pass "MUTANT NOPORTABLE installs nothing (gate catches it)" || fail "NOPORTABLE not detected"
+
+# --- G4. an app package (MSIX: Teams, PowerToys' newer releases) ---------------------------------
+# winget's msix installer type: added for the person by PackageManager, found, opened (its
+# AppUserModelID, shell:AppsFolder) and removed by its family name (PackageFamily) -- it has no
+# Uninstall entry. Its signer's certificate is in the machine's TrustedPeople (a sideloaded
+# package, as on Windows); before that the package is refused and PackageManager's text shown.
+MX="$T/msix"; mkdir -p "$MX" "$W/raw/f/Fake/Pkg/1.0"
+PUBL='CN=Stained Glass Store Gate'
+python3 "$HERE/test/mkmsix.py" package "$MX/pkg.msix" --name SG.StoreGatePackage --version 1.2.3.0 \
+    --publisher "$PUBL" --display-name 'Package App' --app 'App:app.exe::Package App' \
+    --file "$T/store-fake.exe:app.exe" >/dev/null \
+    && openssl req -x509 -newkey rsa:2048 -nodes -keyout "$MX/signer.key" -out "$MX/signer.pem" -days 2 \
+        -subj '/CN=Stained Glass Store Gate' -addext 'basicConstraints=critical,CA:FALSE' \
+        -addext 'keyUsage=critical,digitalSignature' -addext 'extendedKeyUsage=codeSigning' 2>/dev/null \
+    && osslsigncode sign -certs "$MX/signer.pem" -key "$MX/signer.key" -h sha256 -in "$MX/pkg.msix" \
+        -out "$W/files/pkg.msix" >/dev/null 2>&1 \
+    || fail "G4 fixture: the package could not be made (mkmsix.py, openssl, osslsigncode)"
+MSHA=$(sha256sum "$W/files/pkg.msix" | cut -d' ' -f1)
+# its family name: the name, and the publisher's id (the first 8 bytes of SHA-256 of its UTF-16
+# name, in Crockford's base 32)
+PFN=$(python3 -c '
+import hashlib, sys
+d = hashlib.sha256(sys.argv[2].encode("utf-16-le")).digest()[:8]
+n = int.from_bytes(d, "big") << 1
+a = "0123456789abcdefghjkmnpqrstvwxyz"
+print(sys.argv[1] + "_" + "".join(a[(n >> (60 - 5 * i)) & 31] for i in range(13)))' SG.StoreGatePackage "$PUBL")
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Pkg"
+cat > "$W/raw/f/Fake/Pkg/1.0/Fake.Pkg.installer.yaml" <<EOF
+PackageIdentifier: Fake.Pkg
+PackageVersion: 1.0
+InstallerType: msix
+PackageFamilyName: $PFN
+Installers:
+- Architecture: x64
+  InstallerUrl: http://127.0.0.1:$PORT/files/pkg.msix
+  InstallerSha256: $MSHA
+ManifestType: installer
+EOF
+app 0E 'Package App' Productivity windows 'winget:Fake.Pkg'
+reg "$K\\0E" /v PackageFamily /d "$PFN"
+wineserver -w
+pkgstate() { rm -f "$D"; wine "${SG_MUT:-$EXE}" --list >/dev/null 2>&1; sed -n 's/^app 0E .*state=\([a-z-]*\).*/\1/p' "$D" | head -1; }
+# not trusted yet: refused, with what PackageManager said
+rm -f "$D.result"; wine "$EXE" --install 0E >/dev/null 2>&1; ec=$?
+[ "$ec" != 0 ] && grep -q '^result 0E fail .*not installed (0x800[bB]' "$D.result" 2>/dev/null \
+    && pass "an app package whose signer is not trusted is refused, PackageManager's error shown" \
+    || fail "untrusted package: exit $ec: $(cat "$D.result" 2>/dev/null)"
+# the signer's certificate in the machine's TrustedPeople (its registry store: the serialized
+# certificate under its SHA-1 thumbprint), as installing a sideloaded package's .cer puts it
+openssl x509 -in "$MX/signer.pem" -outform DER -out "$MX/signer.cer"
+TP=$(python3 -c '
+import hashlib, struct, sys
+der = open(sys.argv[1], "rb").read()
+print(hashlib.sha1(der).hexdigest().upper(), (struct.pack("<III", 32, 1, len(der)) + der).hex())' "$MX/signer.cer")
+wine reg add "HKLM\\Software\\Microsoft\\SystemCertificates\\TrustedPeople\\Certificates\\${TP% *}" /v Blob /t REG_BINARY \
+    /d "${TP#* }" /f >/dev/null 2>&1
+wineserver -w
+rm -f "$D.result"; wine "$EXE" --install 0E >/dev/null 2>&1; ec=$?
+[ "$ec" = 0 ] && grep -q '^result 0E ok' "$D.result" 2>/dev/null \
+    && pass "an app package (winget's msix) installs through PackageManager" || fail "package install: exit $ec: $(cat "$D.result" 2>/dev/null)"
+[ "$(pkgstate)" = installed ] && pass "...and is found by its family name (no Uninstall entry)" || fail "package state: $(grep '^app 0E ' "$D" 2>/dev/null)"
+rm -f "$G/launch.log"
+run --open 0E
+launched '' && pass "Open starts the package's app (its AppUserModelID)" || fail "package Open started nothing"
+rm -f "$D.result"; wine "$EXE" --uninstall 0E >/dev/null 2>&1; ec=$?
+[ "$ec" = 0 ] && grep -q '^uninstall 0E ok' "$D.result" 2>/dev/null && [ "$(pkgstate)" = not-installed ] \
+    && pass "Uninstall removes the package" || fail "package uninstall: exit $ec: $(cat "$D.result" 2>/dev/null); state $(pkgstate)"
+rm -f "$D.result"; SG_MUT="$T/mut-nomsix.exe" run --install 0E
+[ "$(SG_MUT="$T/mut-nomsix.exe" pkgstate)" != installed ] && pass "MUTANT NOMSIX can't install it (gate catches it)" || fail "NOMSIX not detected"
 
 # --- G2. a package's dependencies first (TortoiseGit needs Git) ----------------------------------
 mkdir -p "$W/api/f/Fake" "$W/raw/f/Fake/Dep/1.0" "$W/raw/f/Fake/Needy/1.0"

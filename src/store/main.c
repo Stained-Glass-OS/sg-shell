@@ -423,6 +423,10 @@ static void dump(void)
 static void open_app(app_t *a)
 {
     WCHAR target[MAX_PATH], dir[MAX_PATH], *slash;
+#ifndef SG_MUTANT_NOMSIX
+    /* an app package: its Start entry's AppUserModelID (shell:AppsFolder) */
+    if (a->package_family[0] && msix_open(a->package_family)) return;
+#endif
     if (a->tier == TIER_LINUX && a->run[0]) { sys_run_linux(a->run); return; }
 #ifndef SG_MUTANT_NOLAUNCH
     /* our own: its program, by its App Paths name (SG Office: sg-documents.exe) */
@@ -1666,6 +1670,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
     (void)prev; (void)cmdline; (void)show;
     GetEnvironmentVariableW(L"SG_STORE_DUMP", g_dump, MAX_PATH);
     InitializeCriticalSection(&g_qlock);
+    pkg_msix_add = msix_add;   /* the install engine adds app packages through PackageManager */
     /* what an ended Store or browser left of its downloads */
     pkg_sweep_downloads();
     /* drawn at the display scale (its sizes go by g_dpi), a new one too

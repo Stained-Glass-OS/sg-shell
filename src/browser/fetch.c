@@ -463,7 +463,8 @@ static void file_name_from_url(const WCHAR *url, const WCHAR *type, WCHAR *out, 
     out[k] = 0;
     while (k && (out[k - 1] == '.' || out[k - 1] == ' ')) out[--k] = 0;
     if (!k || out[0] == '.') lstrcpyW(out, L"setup"), k = 5;
-    if (!wcschr(out, '.')) lstrcatW(out, !_wcsicmp(type, L"msi") || !_wcsicmp(type, L"wix") ? L".msi" : L".exe");
+    if (!wcschr(out, '.')) lstrcatW(out, !_wcsicmp(type, L"msi") || !_wcsicmp(type, L"wix") ? L".msi" :
+                                        !_wcsicmp(type, L"msix") || !_wcsicmp(type, L"appx") ? L".msix" : L".exe");
 }
 
 BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
@@ -1013,6 +1014,8 @@ done:
     return ok;
 }
 
+BOOL (*pkg_msix_add)(const WCHAR *file, WCHAR *err, int cch);
+
 BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 {
     WCHAR args[1024], msi[MAX_PATH];
@@ -1032,6 +1035,11 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
 #endif
 #ifndef SG_MUTANT_NOCABDLL
     else if (!_wcsicmp(t, L"cab-dll")) return install_cab_dll(p, err, cch);
+#endif
+#ifndef SG_MUTANT_NOMSIX
+    /* an app package: added for the person, as winget adds it (Teams, PowerToys' and
+     * Windows Terminal's newer releases are only that) */
+    else if ((!_wcsicmp(t, L"msix") || !_wcsicmp(t, L"appx")) && pkg_msix_add) return pkg_msix_add(p->file, err, cch);
 #endif
     else { seterr(err, cch, L"%ls installers (%ls) can't be run here yet.", t, p->id); return FALSE; }
 #ifndef SG_MUTANT_NOCUSTOM

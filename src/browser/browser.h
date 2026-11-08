@@ -50,6 +50,10 @@ BOOL pkg_resolve(const WCHAR *id, package_t *p, WCHAR *err, int cch);
 BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR *err, int cch);
 BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
 BOOL pkg_install(package_t *p, WCHAR *err, int cch);
+/* an app package (msix, appx, their bundles): PackageManager.AddPackageAsync, for the person --
+ * the store's (store/msix.c) sets it; NULL elsewhere: "can't be run here" */
+extern BOOL (*pkg_msix_add)(const WCHAR *file, WCHAR *err, int cch);
+BOOL msix_add(const WCHAR *file, WCHAR *err, int cch);
 void pkg_take_tree(package_t *p);
 void pkg_note_installer(DWORD pid);
 BOOL pkg_born_since(DWORD pid, const FILETIME *since);

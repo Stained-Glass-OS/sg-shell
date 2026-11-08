@@ -27,8 +27,9 @@ int mf_newest_version(const char *json, char *out, int cap);
  * values filled in under it); returns how many installers. text is changed. */
 int mf_parse(char *text, mf_entry *root, mf_entry *list, int max);
 /* how well we can run an installer type: 2 = directly (msi, wix, nullsoft,
- * inno, burn, exe), 1 = a zip holding one of those (NestedInstallerType),
- * 0 = not at all (portable, msix, a zip of portable files...) */
+ * inno, burn, exe), 1 = a zip holding one of those (NestedInstallerType) or an
+ * app package (msix, appx: PackageManager), 0 = not at all (portable, a zip of
+ * portable files...) */
 int mf_type_rank(const char *type, const char *nested);
 /* the installer for this PC: one we can run first (mf_type_rank), then
  * 64-bit, the user's locale, the scope an administrator (machine) or a user

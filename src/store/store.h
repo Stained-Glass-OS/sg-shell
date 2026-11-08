@@ -67,6 +67,8 @@ typedef struct {
     WCHAR reg_dir[MAX_PATH];      /* RegisterDir: "%ProgramFiles(x86)%\DOSBox-0.74-3" */
     WCHAR reg_program[128];       /* RegisterProgram: "DOSBox.exe" */
     WCHAR reg_uninstall[256];     /* RegisterUninstall: "uninstall.exe /S" */
+    WCHAR package_family[128];    /* PackageFamily: an app package's family name (MSIX: msix.c);
+                                   * found, opened and removed by it, not by an Uninstall entry */
     WCHAR uninstall_args[64];     /* UninstallArgs: what makes its uninstaller quiet when its
                                    * entry has no quiet command (Total Commander's "/7") */
     WCHAR install_args[128];      /* InstallArgs: the installer's quiet switches in place of its
@@ -117,6 +119,11 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or 
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
+/* msix.c: app packages (winget's msix/appx) */
+BOOL msix_installed(const WCHAR *family, WCHAR *version, int cch);
+int  msix_remove(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* 0: gone */
+BOOL msix_aumid(const WCHAR *family, WCHAR *out, int cch);
+BOOL msix_open(const WCHAR *family);
 int  app_uninstall(app_t *a, WCHAR *err, int cch);  /* 0: removed (as its uninstaller or apt says) */
 #define UNINSTALL_GONE 3                              /* app_uninstall: its uninstaller is not there */
 int  app_forget(app_t *a, WCHAR *err, int cch);     /* 0: its entry is off the list */

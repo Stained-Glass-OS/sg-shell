@@ -125,6 +125,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"RegisterProgram", a->reg_program, ARRAYSIZE(a->reg_program));
         reg_str(item, L"RegisterUninstall", a->reg_uninstall, ARRAYSIZE(a->reg_uninstall));
         reg_str(item, L"UninstallArgs", a->uninstall_args, ARRAYSIZE(a->uninstall_args));
+        reg_str(item, L"PackageFamily", a->package_family, ARRAYSIZE(a->package_family));
         reg_str(item, L"InstallArgs", a->install_args, ARRAYSIZE(a->install_args));
         reg_str(item, L"Scope", a->scope, ARRAYSIZE(a->scope));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
@@ -568,6 +569,13 @@ void app_detect(app_t *a)
 #endif
         return;
     }
+#ifndef SG_MUTANT_NOMSIX
+    /* an app package: PackageManager knows it, there is no Uninstall entry */
+    if (a->package_family[0]) {
+        if (msix_installed(a->package_family, a->installed_version, 64)) a->state = AST_INSTALLED;
+        return;
+    }
+#endif
     if (find_installed(a->detect_name, a->installed_version, 64)) {
         a->state = AST_INSTALLED;
         if (a->tier == TIER_WINDOWS) drop_extra_start_shortcut(a);
@@ -709,7 +717,7 @@ static void ensure_start_shortcut(const app_t *a)
 #ifdef SG_MUTANT_NOSTARTLINK
     return;
 #endif
-    if (a->tier == TIER_OURS || a->tier == TIER_LINUX || app_is_runtime(a)) return;
+    if (a->tier == TIER_OURS || a->tier == TIER_LINUX || app_is_runtime(a) || a->package_family[0]) return;   /* a package's own entry is in Start */
     start_shortcut(a, target, MAX_PATH);
     if (target[0]) { forget_start_shortcut(a); return; }   /* it has its own: never two in Start */
     if (store_shortcut(a, lnk, MAX_PATH) && GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES) return;   /* ours is there */
@@ -1890,6 +1898,9 @@ int app_uninstall(app_t *a, WCHAR *err, int cch)
     int round, rc = 1;
     err[0] = 0;
     if (a->method == SRC_LINUX_APT || a->method == SRC_OURS_APT) return sys_remove_apt(a, err, cch);
+#ifndef SG_MUTANT_NOMSIX
+    if (a->package_family[0]) return msix_remove(a->package_family, a->name, err, cch);
+#endif
     for (round = 0; round < 3; round++)
         if ((rc = uninstall_once(a, err, cch, ran, ARRAYSIZE(ran))) != UNINSTALL_NEXT) {
             if (!rc) forget_start_shortcut(a);
