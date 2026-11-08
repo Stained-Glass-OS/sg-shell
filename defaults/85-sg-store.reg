@@ -4080,6 +4080,111 @@ Windows Registry Editor Version 5.00
 "DetectName"="eM Client (Updater)"
 "PackageFamily"="eMClient.20054CA46072C_veq4nz3ze5v72"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\174]
+"Name"="Simplenote"
+"Publisher"="Automattic"
+"Description"="Simple notes, synced."
+"Category"="Productivity"
+"Colour"=dword:003361cc
+"Tier"="windows"
+"Source"="winget:Automattic.Simplenote"
+"DetectName"="Simplenote"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.simplenote.Simplenote.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\175]
+"Name"="LocalSend"
+"Publisher"="Tien Do Nam"
+"Description"="Share files with devices nearby."
+"Category"="Utilities"
+"Colour"=dword:001a8f6f
+"Tier"="windows"
+"Source"="winget:LocalSend.LocalSend"
+"DetectName"="LocalSend"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.localsend.localsend_app.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\176]
+"Name"="Keet"
+"Publisher"="Holepunch"
+"Description"="Peer-to-peer chat and video calls."
+"Category"="Communication"
+"Colour"=dword:008c1d40
+"Tier"="windows"
+"Source"="winget:Holepunch.Keet"
+"PackageFamily"="Keet_k5xf9864y0668"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\177]
+"Name"="Kiwix JS"
+"Publisher"="Kiwix"
+"Description"="Read Wikipedia offline."
+"Category"="Education"
+"Colour"=dword:005e6a71
+"Tier"="windows"
+"Source"="winget:Kiwix.KiwixJS"
+"PackageFamily"="Kiwix.KiwixJS_5t57d9aw10jep"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kiwix.desktop.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\178]
+"Name"="Wikivoyage by Kiwix"
+"Publisher"="Kiwix"
+"Description"="The travel guide, offline."
+"Category"="Education"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:Kiwix.Wikivoyage"
+"PackageFamily"="Kiwix.WikivoyagebyKiwix_5t57d9aw10jep"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\179]
+"Name"="Proton Pass"
+"Publisher"="Proton"
+"Description"="Password manager."
+"Category"="Security"
+"Colour"=dword:006d4aff
+"Tier"="windows"
+"Source"="winget:Proton.ProtonPass"
+"PackageFamily"="ProtonPass_158qdr94jw63p"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/me.proton.Pass.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\180]
+"Name"="Threema"
+"Publisher"="Threema"
+"Description"="Private messenger."
+"Category"="Communication"
+"Colour"=dword:0005a63f
+"Tier"="windows"
+"Source"="winget:Threema.Threema.2"
+"PackageFamily"="Threema.Desktop.Consumer_cvh4qa9n1gk2r"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\181]
+"Name"="Nheko"
+"Publisher"="Nheko Reborn"
+"Description"="Matrix chat client."
+"Category"="Communication"
+"Colour"=dword:002b5797
+"Tier"="windows"
+"Source"="winget:NhekoReborn.Nheko"
+"PackageFamily"="im.nheko.Nheko_8abynq9dymw1p"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.NhekoReborn.Nheko.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\182]
+"Name"="NanaZip"
+"Publisher"="M2-Team"
+"Description"="Archive manager (7-Zip based)."
+"Category"="Utilities"
+"Colour"=dword:001f6feb
+"Tier"="windows"
+"Source"="winget:M2Team.NanaZip"
+"PackageFamily"="40174MouriNaruto.NanaZip_gnj4mf6z9tkrc"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\183]
+"Name"="Tammy"
+"Publisher"="connect2x"
+"Description"="Matrix messenger."
+"Category"="Communication"
+"Colour"=dword:007b2fbe
+"Tier"="windows"
+"Source"="winget:connect2xGmbH.Tammy"
+"PackageFamily"="de.connect2x.tammy_mdytxnrk2e0qw"
+
 ; Runtimes the store offers for programs that find them missing: a DLL's
 ; name (lower case) -> the app that provides it. wine-sg's loader (patch
 ; 0817) names a missing one of these in HKCU\Software\Stained Glass\Runtimes\

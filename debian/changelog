@@ -1,3 +1,12 @@
+sg-shell (0.1.0-252) unstable; urgency=medium
+
+  * Store: ten more apps, passed on qa4 (wine-sg 10.0-825): app packages
+    Keet, Kiwix JS, Wikivoyage by Kiwix, Proton Pass, Threema, Nheko,
+    NanaZip and Tammy (by PackageFamily), and Simplenote and LocalSend
+    (their installers); icons where Flathub has them.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 08 Nov 2026 05:03:04 -0800
+
 sg-shell (0.1.0-251) unstable; urgency=medium
 
   * Store: an app whose installer puts its package in for the machine
