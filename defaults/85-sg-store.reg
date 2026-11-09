@@ -4185,6 +4185,86 @@ Windows Registry Editor Version 5.00
 "Source"="winget:connect2xGmbH.Tammy"
 "PackageFamily"="de.connect2x.tammy_mdytxnrk2e0qw"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\184]
+"Name"="GpgFrontend"
+"Publisher"="Saturneric"
+"Description"="Encrypt and sign with OpenPGP keys."
+"Category"="Security"
+"Colour"=dword:0026a269
+"Tier"="windows"
+"Source"="winget:Saturneric.GpgFrontend"
+"PackageFamily"="com.bktus.GpgFrontend_02yyyzadb3ys8"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\185]
+"Name"="JASP"
+"Publisher"="JASP"
+"Description"="Statistics, point and click."
+"Category"="Education"
+"Colour"=dword:00287ab8
+"Tier"="windows"
+"Source"="winget:JASP.JASP"
+"PackageFamily"="JASP.STANDALONE_093qj5q4tr2cw"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\186]
+"Name"="XML Notepad"
+"Publisher"="Microsoft"
+"Description"="Browse and edit XML documents."
+"Category"="Development"
+"Colour"=dword:000063b1
+"Tier"="windows"
+"Source"="winget:Microsoft.XMLNotepad"
+"PackageFamily"="43906ChrisLovett.XmlNotepad_hndwmj480pefj"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\187]
+"Name"="DuckDuckGo"
+"Publisher"="DuckDuckGo"
+"Description"="Private web browser."
+"Category"="Browsers"
+"Colour"=dword:00de5833
+"Tier"="windows"
+"Source"="winget:DuckDuckGo.DesktopBrowser"
+"PackageFamily"="DuckDuckGo.DesktopBrowser_ya2fgkz3nks94"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\188]
+"Name"="MyMoney.Net"
+"Publisher"="Chris Lovett"
+"Description"="Personal finance."
+"Category"="Productivity"
+"Colour"=dword:00107c10
+"Tier"="windows"
+"Source"="winget:LovettSoftware.MyMoney.Net"
+"PackageFamily"="43906ChrisLovett.MyMoney.Net_hndwmj480pefj"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\189]
+"Name"="Keeper"
+"Publisher"="Keeper Security"
+"Description"="Password manager."
+"Category"="Security"
+"Colour"=dword:00f2b705
+"Tier"="windows"
+"Source"="winget:KeeperSecurity.KeeperDesktop"
+"PackageFamily"="KeeperSecurityInc.KeeperPasswordManager_zwgt23r867e2p"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\190]
+"Name"="TradingView"
+"Publisher"="TradingView"
+"Description"="Charts and markets."
+"Category"="Productivity"
+"Colour"=dword:00131722
+"Tier"="windows"
+"Source"="winget:TradingView.TradingViewDesktop"
+"PackageFamily"="TradingView.Desktop_n534cwy3pjxzj"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\191]
+"Name"="ChatGPT"
+"Publisher"="OpenAI"
+"Description"="The ChatGPT app."
+"Category"="Productivity"
+"Colour"=dword:00101010
+"Tier"="windows"
+"Source"="winget:OpenAI.ChatGPT"
+"PackageFamily"="OpenAI.Codex_2p2nqsd0c76g0"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

@@ -126,6 +126,7 @@
 #   SG_MUTANT_PKGFIRST   removes a package past the installer that put it in (eM Client's MSI)
 #   SG_MUTANT_WRAPPEDLEAVE runs that installer's uninstaller and leaves its machine package
 #   SG_MUTANT_NOFRAMEWORK  no framework for an app package that needs one Windows comes with (Keeper)
+#   SG_MUTANT_NOSHUTDOWN   an app package's update while it runs is refused (0x80073D02), not closed first
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -184,7 +185,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -933,6 +934,36 @@ launched '' && pass "Open starts the package's app (its AppUserModelID)" || fail
 rm -f "$D.result"; wine "$EXE" --uninstall 0E >/dev/null 2>&1; ec=$?
 [ "$ec" = 0 ] && grep -q '^uninstall 0E ok' "$D.result" 2>/dev/null && [ "$(pkgstate)" = not-installed ] \
     && pass "Uninstall removes the package" || fail "package uninstall: exit $ec: $(cat "$D.result" 2>/dev/null); state $(pkgstate)"
+# an update while the package's program runs (Windows refuses with 0x80073D02 unless told to
+# close it): the store closes it, as winget does (ForceTargetApplicationShutdown)
+python3 "$HERE/test/mkmsix.py" package "$MX/pkg2.msix" --name SG.StoreGatePackage --version 1.2.4.0 \
+    --publisher "$PUBL" --display-name 'Package App' --app 'App:app.exe::Package App' \
+    --file "$T/store-fake.exe:app.exe" >/dev/null \
+    && osslsigncode sign -certs "$MX/signer.pem" -key "$MX/signer.key" -h sha256 -in "$MX/pkg2.msix" \
+        -out "$W/files/pkg2.msix" >/dev/null 2>&1 || fail "G4 update fixture could not be made"
+pkgver() { rm -f "$D"; wine "$EXE" --list >/dev/null 2>&1; sed -n 's/^app 0E .*installed=\([0-9.]*\).*/\1/p' "$D" | head -1; }
+pkgv() { # VERSION: serve 1.2.3.0 (pkg.msix, winget 1.0) or 1.2.4.0 (pkg2.msix, winget 1.1) as the newest
+    if [ "$1" = 2 ]; then
+        printf '[{"name": "1.0", "type": "dir"}, {"name": "1.1", "type": "dir"}]' > "$W/api/f/Fake/Pkg"
+        mkdir -p "$W/raw/f/Fake/Pkg/1.1"
+        sed -e "s/PackageVersion: 1.0/PackageVersion: 1.1/; s/pkg.msix/pkg2.msix/; s/$MSHA/$(sha256sum "$W/files/pkg2.msix" | cut -d' ' -f1)/" \
+            "$W/raw/f/Fake/Pkg/1.0/Fake.Pkg.installer.yaml" > "$W/raw/f/Fake/Pkg/1.1/Fake.Pkg.installer.yaml"
+    else printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Pkg"; rm -rf "$W/raw/f/Fake/Pkg/1.1"; fi
+}
+updrun() { # EXE -> the update's result, and the version after
+    pkgv 1; wine "$EXE" --install 0E >/dev/null 2>&1
+    rm -f "$G/launch.log"; touch "$G/hold"; run --open 0E
+    i=0; until [ -s "$G/launch.log" ] || [ $i -ge 40 ]; do sleep 0.25; i=$((i + 1)); done
+    pkgv 2; rm -f "$D.result"; wine "$1" --install 0E >/dev/null 2>&1
+    echo "$(sed -n 's/^result 0E \([a-z]*\).*/\1/p' "$D.result" 2>/dev/null | head -1) $(pkgver)"
+    rm -f "$G/hold"; sleep 1; wine "$EXE" --uninstall 0E >/dev/null 2>&1; pkgv 1
+}
+r=$(updrun "$EXE")
+[ "$r" = "ok 1.2.4.0" ] && pass "an app package's update while its program runs closes it and installs (winget's way)" \
+    || fail "package update while running: $r / $(cat "$D.result" 2>/dev/null)"
+r=$(updrun "$T/mut-noshutdown.exe")
+case "$r" in "fail 1.2.3.0") pass "MUTANT NOSHUTDOWN is refused while the program runs (gate catches it)" ;;
+             *) fail "NOSHUTDOWN not detected: $r" ;; esac
 rm -f "$D.result"; SG_MUT="$T/mut-nomsix.exe" run --install 0E
 [ "$(SG_MUT="$T/mut-nomsix.exe" pkgstate)" != installed ] && pass "MUTANT NOMSIX can't install it (gate catches it)" || fail "NOMSIX not detected"
 # an app package whose framework Windows comes with and its manifest leaves out (Keeper and

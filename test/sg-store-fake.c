@@ -26,6 +26,7 @@
  * %SG_FAKE_SLEEP% (ms): the installer takes that long (the store's queue).
  * %SG_FAKE_BESIDE%: the installer stops with code 67 unless that file is in its folder (MobaXterm).
  * %SG_FAKE_HANDOFF% (ms): uninst.exe hands off to a child that removes the app that much later.
+ * C:\gate\hold: app.exe stays running while it exists (a minute at most).
  * %SG_FAKE_SELFGONE% (ms): uninst.exe's file goes at once, its entry that much later, from Unix (Emacs).
  * %SG_FAKE_NOKEY%: it writes no Uninstall entry (DOSBox 0.74-3); uninst.exe /rmfiles deletes app.exe.
  * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
@@ -122,6 +123,11 @@ int wmain(int argc, WCHAR **argv)
 
     if (!_wcsicmp(base, L"app.exe")) {
         logline(L"C:\\gate\\launch.log", args);
+        {   /* C:\gate\hold there: it keeps running while it is (a minute at most) -- an app
+             * package's program running under an update */
+            int i;
+            for (i = 0; i < 600 && GetFileAttributesW(L"C:\\gate\\hold") != INVALID_FILE_ATTRIBUTES; i++) Sleep(100);
+        }
         return 0;
     }
 

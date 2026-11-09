@@ -130,6 +130,10 @@ static int wait_op(void *op, const WCHAR *what, WCHAR *err, int cch)
     return 1;
 }
 
+/* DeploymentOptions.ForceTargetApplicationShutdown: an update while the app runs closes it, as
+ * winget's does (without it PackageManager refuses with 0x80073D02, the package in use) */
+#define FORCE_TARGET_APPLICATION_SHUTDOWN 0x40
+
 BOOL msix_add(const WCHAR *file, WCHAR *err, int cch)
 {
     void *pm, *f, *uf = NULL, *uri = NULL, *op = NULL;
@@ -148,7 +152,13 @@ BOOL msix_add(const WCHAR *file, WCHAR *err, int cch)
     s = hs(url);
     if (!uf || FAILED(VT(uf, uri_factory_vtbl)->CreateUri(uf, s, &uri)) || !uri)
         swprintf(err, cch, L"The package's path is not usable.");
-    else if (FAILED(hr = VT(pm, manager_vtbl)->AddPackageAsync(pm, uri, NULL, 0, &op)) || !op)
+    else if (FAILED(hr = VT(pm, manager_vtbl)->AddPackageAsync(pm, uri, NULL,
+#ifdef SG_MUTANT_NOSHUTDOWN
+                                                                   0,
+#else
+                                                                   FORCE_TARGET_APPLICATION_SHUTDOWN,
+#endif
+                                                                   &op)) || !op)
         swprintf(err, cch, L"The package was not installed (0x%08lx).", (unsigned long)hr);
     else
         rc = wait_op(op, L"The package was not installed", err, cch);

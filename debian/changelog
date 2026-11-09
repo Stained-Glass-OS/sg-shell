@@ -1,3 +1,14 @@
+sg-shell (0.1.0-254) unstable; urgency=medium
+
+  * Store: an app package's update while its program runs closes the
+    program first and installs (DeploymentOptions
+    ForceTargetApplicationShutdown, as winget does); before, PackageManager
+    refused with 0x80073D02. Gate store-check G4, mutant NOSHUTDOWN.
+  * Catalogue: GpgFrontend, JASP, XML Notepad, DuckDuckGo, MyMoney.Net,
+    Keeper, TradingView, ChatGPT (app packages; walked on qa4, rel 652).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 09 Nov 2026 14:58:08 -0800
+
 sg-shell (0.1.0-253) unstable; urgency=medium
 
   * Store: an app package whose framework Windows comes with (VCLibs
