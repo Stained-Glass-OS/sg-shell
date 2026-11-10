@@ -117,6 +117,7 @@
 #   SG_MUTANT_NOMSIELEVATE runs a machine MSI's "MsiExec.exe /X{...}" as the person (Blender, 1627)
 #   SG_MUTANT_NOINSTALLARGS keeps the manifest's quiet switches over the catalogue's InstallArgs (Dropbox)
 #   SG_MUTANT_NOUNINSTARGS leaves out the catalogue's UninstallArgs (Total Commander's /7)
+#   SG_MUTANT_NOREPLACEARGS keeps the entry's own quiet arguments over an "=ARGS" (Proton Mail)
 #   SG_MUTANT_NOMSIQUIET removes an MSI with its full UI (DYMO Connect's removed nothing)
 #   SG_MUTANT_NOFORGET   never offers to take an app whose uninstaller is gone off the list
 #   SG_MUTANT_NOCLOSEAPP runs the uninstaller while the app still runs
@@ -186,7 +187,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -2050,6 +2051,21 @@ r=$(nsis_case "$EXE" 1)
 case "$r" in *"/ui /7"*" /S"*|*"/ui /S"*) fail "UninstallArgs and /S both given: $r" ;; *"/ui /7"*) pass "...in place of NSIS's /S" ;; *) fail "UninstallArgs on NSIS: $r" ;; esac
 r=$(nsis_case "$T/mut-nouninstargs.exe" 0)
 case "$r" in *"/7"*) fail "NOUNINSTARGS not detected: $r" ;; *) pass "MUTANT NOUNINSTARGS leaves Total Commander's uninstaller asking (gate catches it)" ;; esac
+wine reg delete "$K\\01" /v UninstallArgs /f >/dev/null 2>&1
+# "=ARGS" replaces the entry's own quiet arguments (Proton Mail: Squirrel's
+# "Update.exe --uninstall -s" said "Missing required value for option '-s'")
+replace_case() { # EXE -- what the uninstaller was asked
+    SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
+    rm -f "$G/uninstall.log"
+    SG_MUT="$1" run --uninstall 01
+    tr '\n' ' ' < "$G/uninstall.log" 2>/dev/null
+    ununinstall FakeApp; sleep 0.5
+}
+reg "$K\\01" /v UninstallArgs /d '=/key=FakeApp --uninstall -s 1'
+r=$(replace_case "$EXE")
+case "$r" in *"/quiet"*) fail "=ARGS kept the entry's own: $r" ;; *"/key=FakeApp --uninstall -s 1"*) pass "an UninstallArgs of =ARGS runs the entry's quiet uninstaller with those arguments instead (Proton Mail)" ;; *) fail "=ARGS: $r" ;; esac
+r=$(replace_case "$T/mut-noreplaceargs.exe")
+case "$r" in *"-s 1"*) fail "NOREPLACEARGS not detected: $r" ;; *) pass "MUTANT NOREPLACEARGS runs Proton Mail's broken quiet command (gate catches it)" ;; esac
 wine reg delete "$K\\01" /v UninstallArgs /f >/dev/null 2>&1
 # an MSI's entry (MsiExec.exe /I{GUID}): removed with /X, quietly (/qn): DYMO
 # Connect's InstallShield-built MSI ended in 4 s with its full UI and

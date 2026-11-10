@@ -4475,6 +4475,27 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Deezer.Deezer"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\214]
+"Name"="Parsec"
+"Publisher"="Parsec"
+"Description"="Low-latency remote desktop for games."
+"Category"="Utilities"
+"Colour"=dword:00505050
+"Tier"="windows"
+"Source"="winget:Parsec.Parsec"
+"Scope"="machine"
+"DetectName"="Parsec|!Parsec Virtual Display"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\215]
+"Name"="Proton Mail"
+"Publisher"="Proton"
+"Description"="Encrypted email."
+"Category"="Communication"
+"Colour"=dword:006d4aff
+"Tier"="windows"
+"Source"="winget:Proton.ProtonMail"
+"UninstallArgs"="=--uninstall -s 1"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

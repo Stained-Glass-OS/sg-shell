@@ -1,0 +1,59 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS: what a script file does when it is opened, as on Windows.
+; Wine names the types (.js JSFile, .ps1 Microsoft.PowerShellScript.1) and
+; vbscript.dll gives VBSFile its verbs when it registers, but JSFile and the
+; PowerShell script had none: double-clicking either did nothing.
+; A JScript file runs in Windows Script Host (wscript; "Open in command
+; prompt" is cscript). A PowerShell script opens in Notepad -- Windows does
+; not run one on a double-click -- and runs from "Run with PowerShell", the
+; way Windows' own does (its process only, the policy set to Bypass unless
+; it is AllSigned).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell]
+@="Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Open\Command]
+@="\"C:\\windows\\system32\\wscript.exe\" \"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Open2]
+@="Open &with Command Prompt"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Open2\Command]
+@="\"C:\\windows\\system32\\cscript.exe\" \"%1\" %*"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Edit]
+@="&Edit"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Edit\Command]
+@="\"C:\\windows\\system32\\notepad.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Print]
+@="&Print"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\JSFile\Shell\Print\Command]
+@="\"C:\\windows\\system32\\notepad.exe\" /p \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell]
+@="Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\Open]
+@="&Open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\Open\Command]
+@="\"C:\\windows\\system32\\notepad.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\0]
+"MUIVerb"="Run with PowerShell"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\0\Command]
+@="\"C:\\windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe\" \"-Command\" \"if((Get-ExecutionPolicy ) -ne 'AllSigned') { Set-ExecutionPolicy -Scope Process Bypass }; & '%1'\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\Edit]
+@="&Edit"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Microsoft.PowerShellScript.1\Shell\Edit\Command]
+@="\"C:\\windows\\system32\\notepad.exe\" \"%1\""

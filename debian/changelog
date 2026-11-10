@@ -1,3 +1,20 @@
+sg-shell (0.1.0-257) unstable; urgency=medium
+
+  * Script files open as on Windows (defaults/45-sg-scripts.reg): a .js
+    file runs in Windows Script Host, with "Open with Command Prompt"
+    (cscript), Edit and Print; a .ps1 opens in Notepad and runs from "Run
+    with PowerShell". Neither had a verb, so double-clicking did nothing.
+    Gate test/scripts-verbs-check.sh (mutant: no file).
+  * Store: an UninstallArgs of "=ARGS" runs the entry's own uninstaller with
+    those arguments in place of its own. Proton Mail's quiet command,
+    Squirrel's "Update.exe --uninstall -s", stopped with "Missing required
+    value for option '-s'" and removed nothing. store-check case + mutant
+    NOREPLACEARGS.
+  * Catalogue: Parsec (machine-wide only; its installer ignores
+    /currentuser and stopped with 49 run as the person), Proton Mail.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 10 Nov 2026 15:00:00 -0800
+
 sg-shell (0.1.0-256) unstable; urgency=medium
 
   * Gates: store-consent-check, store-busy-check, appmode-check and

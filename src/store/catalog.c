@@ -1450,6 +1450,21 @@ static BOOL uninstall_command(const WCHAR *needle, const WCHAR *quiet_args, WCHA
     /* the catalogue's own quiet switch for an uninstaller that has none in
      * its entry and is not NSIS's: Total Commander's tcunin64.exe asked
      * Uninstall/Repair/Cancel and waited; /7 removes it without a word */
+    /* "=ARGS": the entry's own program with these arguments in place of its
+     * own -- Proton Mail's QuietUninstallString is Squirrel's "Update.exe
+     * --uninstall -s", but its Update.exe takes -s with a value, said
+     * "Missing required value for option '-s'" and removed nothing */
+    if (cmd[0] && quiet_args && quiet_args[0] == L'=') {
+#ifndef SG_MUTANT_NOREPLACEARGS
+        WCHAR file[MAX_PATH], args[MAX_PATH];
+        split_command(cmd, file, args, MAX_PATH);
+        if (lstrlenW(file) + lstrlenW(quiet_args) + 4 < cch) {
+            swprintf(cmd, cch, L"\"%ls\" %ls", file, quiet_args + 1);
+            quiet = TRUE;
+        }
+#endif
+        quiet_args = NULL;
+    }
 #ifndef SG_MUTANT_NOUNINSTARGS
     if (cmd[0] && !quiet && quiet_args && quiet_args[0] && lstrlenW(cmd) + lstrlenW(quiet_args) + 2 < cch) {
         add_switch(cmd, cch, quiet_args);
