@@ -4466,6 +4466,15 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Tencent.WeChat"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\213]
+"Name"="Deezer"
+"Publisher"="Deezer"
+"Description"="Music streaming."
+"Category"="Media"
+"Colour"=dword:00a238ff
+"Tier"="windows"
+"Source"="winget:Deezer.Deezer"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

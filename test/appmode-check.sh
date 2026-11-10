@@ -13,7 +13,7 @@
 # SG_APPMODE_ONLY="calc paint" runs only those apps.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-WINE="${SG_WINE:-/opt/wine-sg/bin/wine}"
+WINE="${SG_WINE:-${SG_WINE_DIR:-/opt/wine-sg}/bin/wine}"
 export WINESERVER="${SG_WINESERVER:-$(dirname "$WINE")/wineserver}"
 [ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
 OUT="$HERE/build"

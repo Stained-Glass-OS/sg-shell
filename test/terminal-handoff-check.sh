@@ -12,7 +12,7 @@
 #   SG_WINE=/path/to/wine (with 0787) test/terminal-handoff-check.sh
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-W="${SG_WINE:-/opt/wine-sg/bin/wine}"
+W="${SG_WINE:-${SG_WINE_DIR:-/opt/wine-sg}/bin/wine}"
 WS=$(dirname "$W")/wineserver; [ -x "$WS" ] || WS=$(dirname "$W")/server/wineserver
 EXE="${SG_TERMINAL_EXE:-$HERE/build/sg-terminal64.exe}"
 RC=0; XP=""

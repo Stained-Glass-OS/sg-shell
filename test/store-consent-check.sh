@@ -16,7 +16,7 @@
 #   SG_WINE=<wine> test/store-consent-check.sh
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-WINE="${SG_WINE:-/opt/wine-sg/bin/wine}"
+WINE="${SG_WINE:-${SG_WINE_DIR:-/opt/wine-sg}/bin/wine}"
 WINESERVER="${SG_WINESERVER:-$(dirname "$WINE")/wineserver}"
 [ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
 SG_OTHER=${SG_OTHER:-sgconf}

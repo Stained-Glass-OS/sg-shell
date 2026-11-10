@@ -21,7 +21,7 @@
 #   SG_WINE=<wine> sh test/store-busy-check.sh
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-WINE="${SG_WINE:-/opt/wine-sg/bin/wine}"
+WINE="${SG_WINE:-${SG_WINE_DIR:-/opt/wine-sg}/bin/wine}"
 WINESERVER="${SG_WINESERVER:-$(dirname "$WINE")/wineserver}"
 [ -x "$WINESERVER" ] || WINESERVER="$(dirname "$WINE")/server/wineserver"
 MINGW="${MINGW64:-x86_64-w64-mingw32-gcc}"
