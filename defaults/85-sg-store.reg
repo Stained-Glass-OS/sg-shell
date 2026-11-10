@@ -4265,6 +4265,207 @@ Windows Registry Editor Version 5.00
 "Source"="winget:OpenAI.ChatGPT"
 "PackageFamily"="OpenAI.Codex_2p2nqsd0c76g0"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\192]
+"Name"="Floorp"
+"Publisher"="Ablaze"
+"Description"="Firefox-based browser with vertical tabs."
+"Category"="Browsers"
+"Colour"=dword:001e88e5
+"Tier"="windows"
+"Source"="winget:Ablaze.Floorp"
+"DetectName"="Ablaze Floorp|Floorp"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\193]
+"Name"="Honeyview"
+"Publisher"="Bandisoft"
+"Description"="Fast image viewer."
+"Category"="Graphics"
+"Colour"=dword:00f2a900
+"Tier"="windows"
+"Source"="winget:Bandisoft.Honeyview"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\194]
+"Name"="Canva"
+"Publisher"="Canva"
+"Description"="Design graphics, slides and video."
+"Category"="Graphics"
+"Colour"=dword:0000c4cc
+"Tier"="windows"
+"Source"="winget:Canva.Canva"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\195]
+"Name"="Webex"
+"Publisher"="Cisco"
+"Description"="Video meetings and messaging."
+"Category"="Communication"
+"Colour"=dword:0007c160
+"Tier"="windows"
+"Source"="winget:Cisco.Webex"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\196]
+"Name"="Grammarly"
+"Publisher"="Grammarly"
+"Description"="Writing assistant."
+"Category"="Productivity"
+"Colour"=dword:0015c39a
+"Tier"="windows"
+"Source"="winget:Grammarly.Grammarly"
+"DetectName"="Grammarly"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\197]
+"Name"="Chromium"
+"Publisher"="The Chromium Authors"
+"Description"="The open-source browser Chrome is built on."
+"Category"="Browsers"
+"Colour"=dword:004285f4
+"Tier"="windows"
+"Source"="winget:Hibbiki.Chromium"
+"UninstallArgs"="--force-uninstall"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\198]
+"Name"="draw.io"
+"Publisher"="JGraph"
+"Description"="Diagrams and flowcharts."
+"Category"="Productivity"
+"Colour"=dword:00f08705
+"Tier"="windows"
+"Source"="winget:JGraph.Draw"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\199]
+"Name"="Jellyfin Media Player"
+"Publisher"="Jellyfin"
+"Description"="Client for your Jellyfin media server."
+"Category"="Media"
+"Colour"=dword:00aa5cc3
+"Tier"="windows"
+"Source"="winget:Jellyfin.JellyfinMediaPlayer"
+"DetectName"="Jellyfin Media Player"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\200]
+"Name"="KakaoTalk"
+"Publisher"="Kakao"
+"Description"="Messenger."
+"Category"="Communication"
+"Colour"=dword:00f9e000
+"Tier"="windows"
+"Source"="winget:Kakao.KakaoTalk"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\201]
+"Name"="Firefox Developer Edition"
+"Publisher"="Mozilla"
+"Description"="Firefox for web developers."
+"Category"="Development"
+"Colour"=dword:000060df
+"Tier"="windows"
+"Source"="winget:Mozilla.Firefox.DeveloperEdition"
+"DetectName"="Firefox Developer Edition"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\202]
+"Name"="Mumble"
+"Publisher"="Mumble"
+"Description"="Low-latency voice chat."
+"Category"="Communication"
+"Colour"=dword:00505050
+"Tier"="windows"
+"Source"="winget:Mumble.Mumble.Client"
+"DetectName"="Mumble"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\203]
+"Name"="NordPass"
+"Publisher"="Nord Security"
+"Description"="Password manager."
+"Category"="Security"
+"Colour"=dword:003e5fff
+"Tier"="windows"
+"Source"="winget:NordSecurity.NordPass"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\204]
+"Name"="Opera GX"
+"Publisher"="Opera Software"
+"Description"="Browser for gamers."
+"Category"="Browsers"
+"Colour"=dword:00fa1e4e
+"Tier"="windows"
+"Source"="winget:Opera.OperaGX"
+"DetectName"="Opera GX"
+"InstallArgs"="--silent --allusers=0"
+"UninstallArgs"="/runimmediately"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\205]
+"Name"="Java 8"
+"Publisher"="Oracle"
+"Description"="Java Runtime Environment for Java programs."
+"Category"="Development"
+"Colour"=dword:00e76f00
+"Tier"="windows"
+"Source"="winget:Oracle.JavaRuntimeEnvironment"
+"DetectName"="Java 8"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\206]
+"Name"="PDFgear"
+"Publisher"="PDFgear"
+"Description"="Read, edit and convert PDFs."
+"Category"="Productivity"
+"Colour"=dword:00e5343a
+"Tier"="windows"
+"Source"="winget:PDFgear.PDFgear"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\207]
+"Name"="PDFsam Basic"
+"Publisher"="Sober Lemur"
+"Description"="Split, merge and rotate PDFs."
+"Category"="Productivity"
+"Colour"=dword:00d32f2f
+"Tier"="windows"
+"Source"="winget:PDFsam.PDFsam"
+"DetectName"="PDFsam Basic"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\208]
+"Name"="Stremio"
+"Publisher"="Stremio"
+"Description"="Media center."
+"Category"="Media"
+"Colour"=dword:008a5aab
+"Tier"="windows"
+"Source"="winget:Stremio.Stremio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\209]
+"Name"="Sublime Merge"
+"Publisher"="Sublime HQ"
+"Description"="Git client."
+"Category"="Development"
+"Colour"=dword:00ff9800
+"Tier"="windows"
+"Source"="winget:SublimeHQ.SublimeMerge"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\210]
+"Name"="TIDAL"
+"Publisher"="TIDAL"
+"Description"="Music streaming."
+"Category"="Media"
+"Colour"=dword:00101010
+"Tier"="windows"
+"Source"="winget:TIDALMusicAS.TIDAL"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\211]
+"Name"="TeamSpeak 3"
+"Publisher"="TeamSpeak"
+"Description"="Voice chat."
+"Category"="Communication"
+"Colour"=dword:002580c3
+"Tier"="windows"
+"Source"="winget:TeamSpeakSystems.TeamSpeakClient"
+"DetectName"="TeamSpeak 3 Client"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\212]
+"Name"="WeChat"
+"Publisher"="Tencent"
+"Description"="Messaging."
+"Category"="Communication"
+"Colour"=dword:0007c160
+"Tier"="windows"
+"Source"="winget:Tencent.WeChat"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

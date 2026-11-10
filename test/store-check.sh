@@ -127,6 +127,7 @@
 #   SG_MUTANT_WRAPPEDLEAVE runs that installer's uninstaller and leaves its machine package
 #   SG_MUTANT_NOFRAMEWORK  no framework for an app package that needs one Windows comes with (Keeper)
 #   SG_MUTANT_NOSHUTDOWN   an app package's update while it runs is refused (0x80073D02), not closed first
+#   SG_MUTANT_DOTNAME      a download whose address has a dot but no installer extension keeps it (Deezer)
 #   SG_MUTANT_NOCABDLL    cannot take a runtime out of a package's cabinet (H3)
 #   SG_MUTANT_NOCAB64     leaves a runtime's 64-bit build out of system32 (H3)
 #   SG_MUTANT_WHOLEHIT    a card cut by the window's bottom edge has no buttons to click (W2)
@@ -185,7 +186,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -200,6 +201,8 @@ mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad
          "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0" "$W/raw/f/Fake/Scopes/1.0" \
          "$W/raw/f/Fake/Port/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
+# an address with a dot but no extension of an installer's (Deezer's .../artifact-win32-x86-8.0.10)
+cp "$T/store-fake.exe" "$W/files/artifact-win32-x86-1.0"
 SHA=$(sha256sum "$W/files/store-fake.exe" | cut -d' ' -f1)
 # a zip that holds the installer (and a readme), as Paint.NET's does
 python3 - "$W/files/zipped.zip" "$T/store-fake.exe" <<'EOF'
@@ -287,7 +290,7 @@ Installers:
 - Architecture: x64
   InstallerSwitches:
     Silent: /S /plus-id
-  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerUrl: http://127.0.0.1:$PORT/files/artifact-win32-x86-1.0
   InstallerSha256: $SHA
 EOF
 cat > "$W/raw/f/Fake/App/1.10.0/Fake.App.installer.yaml" <<EOF
@@ -1326,8 +1329,13 @@ SG_FAKE_KEY=PinnedApp SG_FAKE_DISPLAY='Pinned App' SG_FAKE_VERSION=3.0 SG_FAKE_D
 reg "$K\\04" /v Source /d 'winget:Fake.Plus++'
 rm -f "$G/setup.log"
 SG_FAKE_KEY=PlusApp SG_FAKE_DISPLAY='Bad' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Plus App' wine "$EXE" --install 04 >/dev/null 2>&1; ec=$?
-[ "$ec" = 0 ] && grep -q '/S /plus-id' "$G/setup.log" 2>/dev/null && pass "a winget id with + in it installs (Notepad++)" \
+[ "$ec" = 0 ] && grep -q '/S /plus-id' "$G/setup.log" 2>/dev/null && pass "a winget id with + in it installs (Notepad++), from an address with no .exe (Deezer)" \
     || fail "install of Fake.Plus++ exit $ec: $(cat "$D.result" "$G/setup.log" 2>/dev/null)"
+ununinstall PlusApp
+rm -f "$G/setup.log" "$D.result"
+SG_FAKE_KEY=PlusApp SG_FAKE_DISPLAY='Bad' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Plus App' wine "$T/mut-dotname.exe" --install 04 >/dev/null 2>&1
+grep -q '/S /plus-id' "$G/setup.log" 2>/dev/null && fail "DOTNAME not detected: the installer ran" \
+    || pass "MUTANT DOTNAME keeps the .1.0 name and cannot start it (gate catches it)"
 rm -f "$G/setup.log"
 SG_FAKE_KEY=PlusApp SG_FAKE_DISPLAY='Bad' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Plus App' wine "$T/mut-noplus.exe" --install 04 >/dev/null 2>&1
 grep -q 'not a package name' "$D.result" 2>/dev/null && [ ! -e "$G/setup.log" ] && pass "MUTANT NOPLUS refuses the id (gate catches it)" \

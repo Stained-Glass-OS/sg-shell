@@ -1,3 +1,16 @@
+sg-shell (0.1.0-255) unstable; urgency=medium
+
+  * Store: an installer whose address has a dot but no installer's file
+    extension (Deezer's .../artifact-win32-x86-8.0.10) is saved under its
+    installer type's extension, as winget does; before, it kept ".10" and
+    could not be started. Gate store-check, mutant DOTNAME.
+  * Catalogue 192-212: Floorp, Honeyview, Canva, Webex, Grammarly,
+    Chromium, draw.io, Jellyfin Media Player, KakaoTalk, Firefox Developer
+    Edition, Mumble, NordPass, Opera GX, Java 8, PDFgear, PDFsam Basic,
+    Stremio, Sublime Merge, TIDAL, TeamSpeak 3, WeChat (walked on qa4, rel 653).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 10 Nov 2026 07:33:45 -0800
+
 sg-shell (0.1.0-254) unstable; urgency=medium
 
   * Store: an app package's update while its program runs closes the

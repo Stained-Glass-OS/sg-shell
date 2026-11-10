@@ -463,8 +463,25 @@ static void file_name_from_url(const WCHAR *url, const WCHAR *type, WCHAR *out, 
     out[k] = 0;
     while (k && (out[k - 1] == '.' || out[k - 1] == ' ')) out[--k] = 0;
     if (!k || out[0] == '.') lstrcpyW(out, L"setup"), k = 5;
+#ifdef SG_MUTANT_DOTNAME
     if (!wcschr(out, '.')) lstrcatW(out, !_wcsicmp(type, L"msi") || !_wcsicmp(type, L"wix") ? L".msi" :
                                         !_wcsicmp(type, L"msix") || !_wcsicmp(type, L"appx") ? L".msix" : L".exe");
+#else
+    /* named for its installer type when the address has no file extension of an installer's,
+     * as winget does: Deezer's ".../artifact-win32-x86-8.0.10" was kept as a ".10" file, and
+     * it could not be started (error 0) */
+    {
+        static const WCHAR *const known[] = { L".exe", L".msi", L".msix", L".appx", L".msixbundle",
+                                              L".appxbundle", L".zip" };
+        const WCHAR *dot = wcsrchr(out, '.');
+        size_t j;
+        BOOL ok = FALSE;
+        for (j = 0; dot && j < ARRAYSIZE(known); j++) if (!_wcsicmp(dot, known[j])) ok = TRUE;
+        if (!ok) lstrcatW(out, !_wcsicmp(type, L"msi") || !_wcsicmp(type, L"wix") ? L".msi" :
+                               !_wcsicmp(type, L"msix") || !_wcsicmp(type, L"appx") ? L".msix" :
+                               !_wcsicmp(type, L"zip") ? L".zip" : L".exe");
+    }
+#endif
 }
 
 BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
