@@ -1,3 +1,11 @@
+sg-shell (0.1.0-259) unstable; urgency=medium
+
+  * Catalogue 217: Viber. Since wine-sg 852 (7732) the copy its elevated
+    installer starts paints its window; the Store installs it and Start
+    starts it (qa5, release 656).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 04:41:38 -0800
+
 sg-shell (0.1.0-258) unstable; urgency=medium
 
   * Catalogue 216: REAPER. Its installer ends with 1223, a success its

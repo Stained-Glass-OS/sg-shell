@@ -4507,6 +4507,16 @@ Windows Registry Editor Version 5.00
 "DetectName"="REAPER"
 "UninstallArgs"="/S"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\217]
+"Name"="Viber"
+"Publisher"="Rakuten"
+"Description"="Messaging and calls."
+"Category"="Communication"
+"Colour"=dword:007360f2
+"Tier"="windows"
+"Source"="winget:Rakuten.Viber"
+"DetectName"="Viber"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
