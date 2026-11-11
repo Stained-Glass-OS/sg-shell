@@ -17,6 +17,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "store.h"
+#include <ctype.h>
 
 extern app_t g_apps[];
 extern int g_napps;
@@ -112,6 +113,42 @@ static BOOL quoted_ends(const char *v, const char *end)
     return FALSE;
 }
 
+/* the escape after a backslash in a double-quoted value (T is at the backslash, before END), as UTF-8
+ * into BUF at *N; returns the escape's last character. winget manifests write – and the like. */
+static const char *yaml_escape(const char *t, const char *end, char *buf, int *n)
+{
+    unsigned cp = 0;
+    int digits = 0, i;
+    char c = *++t;
+    switch (c) {
+    case 'n': buf[(*n)++] = '\n'; return t;
+    case 't': buf[(*n)++] = '\t'; return t;
+    case 'r': buf[(*n)++] = '\r'; return t;
+    case '0': buf[(*n)++] = ' '; return t;      /* a NUL would end the text: a space */
+    case '_': cp = 0xa0; break;
+    case 'N': cp = 0x85; break;
+    case 'L': cp = 0x2028; break;
+    case 'P': cp = 0x2029; break;
+    case 'x': digits = 2; break;
+    case 'u': digits = 4; break;
+    case 'U': digits = 8; break;
+    default: buf[(*n)++] = c; return t;          /* \" \\ \/ \  and the rest: the character */
+    }
+    for (i = 0; i < digits; i++) {
+        char h = t + 1 < end ? t[1] : 0;
+        if (!isxdigit((unsigned char)h)) break;
+        cp = cp * 16 + (h <= '9' ? h - '0' : (h | 0x20) - 'a' + 10);
+        t++;
+    }
+    if (digits && i < digits) { buf[(*n)++] = c; return t; }
+    if (!cp || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) cp = 0xfffd;
+    if (cp < 0x80) buf[(*n)++] = (char)cp;
+    else if (cp < 0x800) { buf[(*n)++] = (char)(0xc0 | cp >> 6); buf[(*n)++] = (char)(0x80 | (cp & 0x3f)); }
+    else if (cp < 0x10000) { buf[(*n)++] = (char)(0xe0 | cp >> 12); buf[(*n)++] = (char)(0x80 | (cp >> 6 & 0x3f)); buf[(*n)++] = (char)(0x80 | (cp & 0x3f)); }
+    else { buf[(*n)++] = (char)(0xf0 | cp >> 18); buf[(*n)++] = (char)(0x80 | (cp >> 12 & 0x3f)); buf[(*n)++] = (char)(0x80 | (cp >> 6 & 0x3f)); buf[(*n)++] = (char)(0x80 | (cp & 0x3f)); }
+    return t;
+}
+
 static void yaml_get(const char *y, const char *key, WCHAR *out, int cch)
 {
     size_t kl = strlen(key);
@@ -171,7 +208,7 @@ static void yaml_get(const char *y, const char *key, WCHAR *out, int cch)
                                 if (t + 1 < le && t[1] == '\'') { buf[n++] = '\''; t++; continue; }
                                 done = TRUE; break;
                             }
-                            if (qc == '"' && *t == '\\' && t + 1 < le) { t++; buf[n++] = *t == 'n' ? '\n' : *t; continue; }
+                            if (qc == '"' && *t == '\\' && t + 1 < le) { t = yaml_escape(t, le, buf, &n); continue; }
                             if (qc == '"' && *t == '"') { done = TRUE; break; }
                             buf[n++] = *t;
                         }
@@ -186,7 +223,7 @@ static void yaml_get(const char *y, const char *key, WCHAR *out, int cch)
                 if (end - v >= 2 && (*v == '"' || *v == '\'') && end[-1] == *v) {
                     char qc = *v;
                     for (v++, end--; v < end && n < 65530; v++) {
-                        if (qc == '"' && *v == '\\' && v + 1 < end) { v++; buf[n++] = *v == 'n' ? '\n' : *v; }
+                        if (qc == '"' && *v == '\\' && v + 1 < end) v = yaml_escape(v, end, buf, &n);
                         else buf[n++] = *v;
                     }
                 } else if (end > v) { memcpy(buf, v, min(end - v, 65530)); n = (int)min(end - v, 65530); }

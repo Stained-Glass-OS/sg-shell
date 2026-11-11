@@ -2357,7 +2357,7 @@ PackageName: Fake App
 PackageVersion: 1.10.0
 PublisherUrl: https://fake.example/cdn
 Scope: machine
-ShortDescription: From winget's CDN.
+ShortDescription: "From winget\u2019s CDN \u2013 \"escaped\", caf\u00e9 \U0001F600\x21"
 EOF
 }
 cdnmf store-fake.exe > "$W/cdn/manifests/f/Fake/App/1.10.0/77"
@@ -2386,6 +2386,8 @@ rm -f "$D"; wine "$EXE" --page 01 >/dev/null 2>&1 &
 waitfor "$D" '^detail 01 ready=1' 60
 [ "$(field detail-desc)" = "Fake App from winget's CDN, its first line, and its second.||A second paragraph." ] \
     && pass "the details page from it too: a quoted description over lines, its paragraphs" || fail "CDN details: '$(field detail-desc)' ($(field detail-error))"
+[ "$(field detail-summary)" = "From winget’s CDN – \"escaped\", café 😀!" ] \
+    && pass "a double-quoted value's escapes (\\u2013, \\U, \\x, \\\"): the characters, not 'u2013' (FreeOffice's description)" || fail "escapes: '$(field detail-summary)'"
 wine taskkill /f /im sg-store64.exe >/dev/null 2>&1; sleep 0.5
 mv "$W/raw-app.off" "$W/raw/f/Fake/App"
 # a manifest that is not the one winget's version data names (its SHA-256): not taken, GitHub's is

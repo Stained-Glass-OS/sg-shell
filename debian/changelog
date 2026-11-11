@@ -1,3 +1,14 @@
+sg-shell (0.1.0-260) unstable; urgency=medium
+
+  * Store: a double-quoted manifest value's escapes (\u2013, \U, \x, \t,
+    \_ and the rest) become their characters. FreeOffice's description
+    showed "u2013" where its dash was. store-check gates it.
+  * Catalogue 218-221: MKVToolNix, GeoGebra Classic, FreeOffice (detected
+    as "SoftMaker FreeOffice", its uninstall entry's name) and Zulip. Each
+    installs, starts, shows its window and uninstalls (qa4, wine-sg 852).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 07:16:50 -0800
+
 sg-shell (0.1.0-259) unstable; urgency=medium
 
   * Catalogue 217: Viber. Since wine-sg 852 (7732) the copy its elevated

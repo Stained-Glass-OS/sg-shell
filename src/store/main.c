@@ -386,6 +386,7 @@ static void dump(void)
             for (k = 0; first[k]; k++) if (first[k] == '\n') first[k] = '|';
             dumpf(f, L"detail-desc %ls\n", first);
             dumpf(f, L"detail-desc-length %d\n", lstrlenW(d->desc));
+            dumpf(f, L"detail-summary %ls\n", d->summary[0] ? d->summary : L"-");
             dumpf(f, L"detail-version %ls\n", d->version[0] ? d->version : L"-");
             dumpf(f, L"detail-homepage %ls\n", d->homepage[0] ? d->homepage : L"-");
             dumpf(f, L"detail-license %ls\n", d->license[0] ? d->license : L"-");
