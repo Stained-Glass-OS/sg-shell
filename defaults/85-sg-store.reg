@@ -4517,6 +4517,46 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Rakuten.Viber"
 "DetectName"="Viber"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\218]
+"Name"="MKVToolNix"
+"Publisher"="Moritz Bunkus"
+"Description"="Create, edit and inspect Matroska video files."
+"Category"="Media"
+"Colour"=dword:0020a050
+"Tier"="windows"
+"Source"="winget:MoritzBunkus.MKVToolNix"
+"DetectName"="MKVToolNix"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\219]
+"Name"="GeoGebra Classic"
+"Publisher"="GeoGebra"
+"Description"="Graphing, geometry and algebra for maths classes."
+"Category"="Education"
+"Colour"=dword:006557d2
+"Tier"="windows"
+"Source"="winget:GeoGebra.Classic"
+"DetectName"="GeoGebra"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\220]
+"Name"="FreeOffice"
+"Publisher"="SoftMaker"
+"Description"="Word processor, spreadsheet and presentations."
+"Category"="Productivity"
+"Colour"=dword:00c03030
+"Tier"="windows"
+"Source"="winget:SoftMaker.FreeOffice.2024"
+"DetectName"="SoftMaker FreeOffice"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\221]
+"Name"="Zulip"
+"Publisher"="Kandra Labs"
+"Description"="Team chat organised by topic."
+"Category"="Communication"
+"Colour"=dword:006492fe
+"Tier"="windows"
+"Source"="winget:Zulip.Zulip"
+"DetectName"="Zulip"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
