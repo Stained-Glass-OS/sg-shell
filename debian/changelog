@@ -1,4 +1,13 @@
-sg-shell (0.1.0-261) unstable; urgency=medium
+sg-shell (0.1.0-262) unstable; urgency=medium
+
+  * Store: Open starts an app that is an uninstaller itself. Bulk Crap
+    Uninstaller's program, BCUninstaller.exe, was passed over as its own
+    uninstaller and Open showed Apps & features. A word like "uninst" no
+    longer rules out a program named as the app whose name has it too;
+    unins000.exe still is. store-check gates it (mutant UNINSTNAMED).
+  * Catalogue 222-223: Plexamp and Bulk Crap Uninstaller (qa4, wine-sg 852).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 08:32:07 -0800sg-shell (0.1.0-261) unstable; urgency=medium
 
   * Catalogue 218-221 (MKVToolNix, GeoGebra Classic, FreeOffice, Zulip):
     the entries -260 names but left out of its commit.

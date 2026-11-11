@@ -67,6 +67,7 @@
 #   SG_MUTANT_STORE_ALWAYS_LIGHT  draws light in dark mode (David 2026-10-02: it switched only half)
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
+#   SG_MUTANT_UNINSTNAMED an app named as an uninstaller (BCUninstaller.exe) is taken for its own uninstaller
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
@@ -187,7 +188,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -813,6 +814,23 @@ rm -f "$G/launch.log"
 wine "$T/mut-nolaunch.exe" --open 01 >/dev/null 2>&1; sleep 3
 [ ! -e "$G/launch.log" ] && pass "MUTANT NOLAUNCH opens Apps & features, never the program (gate catches it)" \
     || fail "NOLAUNCH not detected: $(cat "$G/launch.log" 2>/dev/null)"
+# An app that is an uninstaller itself: its program, GateUninstaller.exe, named as the app (Bulk Crap
+# Uninstaller's BCUninstaller.exe), is the program; its own unins000.exe is not
+UD="$WINEPREFIX/drive_c/Program Files/Gate Uninstaller"; UK='HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\GateUn_is1'
+mkdir -p "$UD"; cp "$W/files/store-fake.exe" "$UD/GateUninstaller.exe"; cp "$W/files/store-fake.exe" "$UD/unins000.exe"
+reg "$UK" /v DisplayName /d 'GateUninstaller 6.3'; reg "$UK" /v DisplayVersion /d '6.3'
+reg "$UK" /v DisplayIcon /d 'C:\Program Files\Gate Uninstaller\GateUninstaller.exe'
+reg "$UK" /v UninstallString /d '"C:\Program Files\Gate Uninstaller\unins000.exe"'
+app 0U 'Gate Uninstaller' Utilities windows 'winget:Fake.Unin' 'GateUninstaller'
+rm -f "$G/launch.log"
+run --open 0U
+launched 'GateUninstaller' && pass "an app that is an uninstaller itself opens its program (Bulk Crap Uninstaller), not Apps & features" \
+    || fail "Open 0U: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+wine "$T/mut-uninstnamed.exe" --open 0U >/dev/null 2>&1; sleep 3
+[ ! -e "$G/launch.log" ] && pass "MUTANT UNINSTNAMED takes it for an uninstaller and opens Apps & features (gate catches it)" \
+    || fail "UNINSTNAMED not detected: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"; wine reg delete "$K\\0U" /f >/dev/null 2>&1; ununinstall GateUn_is1; rm -rf "$UD"
 # A Linux app whose Run is its desktop entry: gio launch starts it (the
 # Store's newer Linux apps name their .desktop, not a guessed program path)
 if [ -x /usr/bin/gio ]; then

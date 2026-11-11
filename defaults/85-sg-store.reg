@@ -4557,6 +4557,26 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Zulip.Zulip"
 "DetectName"="Zulip"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\222]
+"Name"="Plexamp"
+"Publisher"="Plex"
+"Description"="Music player for your Plex library."
+"Category"="Media"
+"Colour"=dword:00e5a00d
+"Tier"="windows"
+"Source"="winget:Plex.Plexamp"
+"DetectName"="Plexamp"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\223]
+"Name"="Bulk Crap Uninstaller"
+"Publisher"="Marcin Szeniak"
+"Description"="Removes many programs at once, and their leftovers."
+"Category"="Utilities"
+"Colour"=dword:00406080
+"Tier"="windows"
+"Source"="winget:Klocman.BulkCrapUninstaller"
+"DetectName"="BCUninstaller"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

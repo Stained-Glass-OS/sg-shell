@@ -604,15 +604,23 @@ void app_detect(app_t *a)
  * Start (all users' or the person's Programs, three folders deep), named as the
  * app is. FALSE: neither -- the store shows Apps & features instead. */
 
-static BOOL not_the_program(const WCHAR *base)
+/* BASE names an uninstaller, a setup or an updater -- unless the app is one itself and BASE is named as
+ * the app: Bulk Crap Uninstaller's program is BCUninstaller.exe (its own unins000.exe still is not) */
+static BOOL not_the_program(const app_t *a, const WCHAR *base)
 {
     static const WCHAR *const words[] = { L"unins", L"uninst", L"setup", L"install", L"update", L"maintenance" };
+    BOOL named = FALSE;
     unsigned i;
-    for (i = 0; i < ARRAYSIZE(words); i++) if (StrStrIW(base, words[i])) return TRUE;
+#ifndef SG_MUTANT_UNINSTNAMED
+    named = a && (name_matches(base, a->detect_name) || name_matches(base, a->name));
+#endif
+    for (i = 0; i < ARRAYSIZE(words); i++)
+        if (StrStrIW(base, words[i]) && !(named && (StrStrIW(a->detect_name, words[i]) || StrStrIW(a->name, words[i]))))
+            return TRUE;
     return FALSE;
 }
 
-static BOOL icon_program(const WCHAR *icon, WCHAR *out, int cch)
+static BOOL icon_program(const app_t *a, const WCHAR *icon, WCHAR *out, int cch)
 {
     WCHAR path[MAX_PATH], *comma, *base;
     int n;
@@ -621,7 +629,7 @@ static BOOL icon_program(const WCHAR *icon, WCHAR *out, int cch)
     if ((n = lstrlenW(path)) && path[n - 1] == '"') path[--n] = 0;
     if (n < 5 || _wcsicmp(path + n - 4, L".exe")) return FALSE;
     base = wcsrchr(path, '\\') ? wcsrchr(path, '\\') + 1 : path;
-    if (not_the_program(base) || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return FALSE;
+    if (not_the_program(a, base) || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return FALSE;
     lstrcpynW(out, path, cch);
     return TRUE;
 }
@@ -646,7 +654,7 @@ static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, const WCH
         }
         if (n < 5 || _wcsicmp(fd.cFileName + n - 4, L".lnk")) continue;
         lstrcpynW(base, fd.cFileName, n - 3);
-        if (not_the_program(base)) continue;
+        if (not_the_program(a, base)) continue;
         if (!name_matches(base, a->detect_name) && !name_matches(base, a->name)) continue;
         if (*best_len && n >= *best_len) continue;      /* "OpenOffice" before "OpenOffice Calc" */
         if (lstrlenW(dir) + n + 2 >= cch) continue;
@@ -692,7 +700,7 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
     out[0] = 0;
     if (a->tier == TIER_OURS || a->tier == TIER_LINUX) return FALSE;
     if (find_installed_entry(a->detect_name, version, ARRAYSIZE(version), icon, ARRAYSIZE(icon))
-        && icon[0] && icon_program(icon, out, cch)) return TRUE;
+        && icon[0] && icon_program(a, icon, out, cch)) return TRUE;
     start_shortcut(a, out, cch);
     if (out[0]) return TRUE;
     /* neither: the program in its own folder (AIMP's entry shows no icon, and
@@ -1766,7 +1774,7 @@ static BOOL folder_program(const app_t *a, WCHAR *out, int cch)
         int n = lstrlenW(fd.cFileName);
         if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || n < 5 || lstrlenW(dir) + n + 2 >= MAX_PATH) continue;
         lstrcpynW(base, fd.cFileName, n - 3);
-        if (not_the_program(base)) continue;
+        if (not_the_program(a, base)) continue;
         programs++;
         /* the best-named: "GOG Galaxy.exe" before "GOG Galaxy Notifications Renderer.exe" */
         if ((!best_len || n < best_len) && (name_matches(base, a->detect_name) || name_matches(base, a->name))) {

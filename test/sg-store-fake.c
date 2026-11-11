@@ -121,7 +121,8 @@ int wmain(int argc, WCHAR **argv)
         return (int)code;
     }
 
-    if (!_wcsicmp(base, L"app.exe")) {
+    /* GateUninstaller.exe: an app that is an uninstaller itself (Bulk Crap Uninstaller) */
+    if (!_wcsicmp(base, L"app.exe") || !_wcsicmp(base, L"GateUninstaller.exe")) {
         logline(L"C:\\gate\\launch.log", args);
         {   /* C:\gate\hold there: it keeps running while it is (a minute at most) -- an app
              * package's program running under an update */
