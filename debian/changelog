@@ -1,3 +1,12 @@
+sg-shell (0.1.0-258) unstable; urgency=medium
+
+  * Catalogue 216: REAPER. Its installer ends with 1223, a success its
+    manifest lists; since sg-session 238 and wine-sg 849 the Store sees the
+    whole code (it saw 199) and installs, starts and uninstalls it (qa4,
+    release 655).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 10 Nov 2026 22:38:16 -0800
+
 sg-shell (0.1.0-257) unstable; urgency=medium
 
   * Script files open as on Windows (defaults/45-sg-scripts.reg): a .js

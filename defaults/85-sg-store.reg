@@ -4496,6 +4496,17 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Proton.ProtonMail"
 "UninstallArgs"="=--uninstall -s 1"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\216]
+"Name"="REAPER"
+"Publisher"="Cockos"
+"Description"="Digital audio workstation."
+"Category"="Media"
+"Colour"=dword:00505050
+"Tier"="windows"
+"Source"="winget:Cockos.REAPER"
+"DetectName"="REAPER"
+"UninstallArgs"="/S"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
