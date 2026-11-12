@@ -4577,6 +4577,36 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Klocman.BulkCrapUninstaller"
 "DetectName"="BCUninstaller"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\224]
+"Name"="FreeCAD"
+"Publisher"="FreeCAD"
+"Description"="Parametric 3D CAD modeller for real-world objects."
+"Category"="Graphics"
+"Colour"=dword:00d04040
+"Tier"="windows"
+"Source"="winget:FreeCAD.FreeCAD"
+"DetectName"="FreeCAD"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\225]
+"Name"="MusicBrainz Picard"
+"Publisher"="MetaBrainz"
+"Description"="Tags and renames your music files from MusicBrainz."
+"Category"="Media"
+"Colour"=dword:008a3f7a
+"Tier"="windows"
+"Source"="winget:MusicBrainz.Picard"
+"DetectName"="MusicBrainz Picard"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\226]
+"Name"="PCSX2"
+"Publisher"="PCSX2 Team"
+"Description"="PlayStation 2 emulator."
+"Category"="Games"
+"Colour"=dword:002050c0
+"Tier"="windows"
+"Source"="winget:PCSX2Team.PCSX2"
+"DetectName"="PCSX2"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

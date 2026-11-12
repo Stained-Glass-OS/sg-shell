@@ -1,3 +1,10 @@
+sg-shell (0.1.0-264) unstable; urgency=medium
+
+  * Catalogue: FreeCAD, MusicBrainz Picard and PCSX2 (each installed,
+    opened and uninstalled on qa4 with wine-sg 856).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 18:20:00 -0800
+
 sg-shell (0.1.0-263) unstable; urgency=medium
 
   * Store: Open finds a suite's program in the app's own Start folder.
