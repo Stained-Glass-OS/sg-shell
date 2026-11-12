@@ -62,7 +62,7 @@ void sgm_follow(HWND hwnd)
 #define C_HOVER (sgm_dark ? RGB(0x33,0x33,0x33) : RGB(0xEB, 0xEB, 0xEB))
 #define C_PRESS (sgm_dark ? RGB(0x44,0x44,0x44) : RGB(0xDD, 0xDD, 0xDD))
 #define C_ACCENT   (sg_accent())
-#define C_ACTIVE (sgm_dark ? RGB(0x3B,0x2E,0x4F) : RGB(0xEE, 0xE6, 0xF8))   /* a toggled button: the accent, faint */
+#define C_ACTIVE (sgm_dark ? sg_accent_shade(RGB(0x3B,0x2E,0x4F)) : sg_accent_shade(RGB(0xEE, 0xE6, 0xF8)))   /* a toggled button: the accent, faint */
 
 enum { B_OPEN, B_ZOOMIN, B_ZOOMOUT, B_ACTUAL, B_ROTATE, B_DELETE, B_EDIT, B_SLIDESHOW, B_INFO,
        B_FULLSCREEN, B_MORE, B_COUNT };
@@ -1130,7 +1130,7 @@ static void paint_empty(HDC dc, const RECT *c)
         draw_text(dc, g_font, C_SUBTEXT, L"It may be damaged, or in a format this PC can't read.", &e, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
     }
     SetRect(&g_open_button, (c->left + c->right) / 2 - S(60), cy + S(14), (c->left + c->right) / 2 + S(60), cy + S(46));
-    round_fill(dc, &g_open_button, S(8), g_hot == B_COUNT ? RGB(0x80, 0x44, 0xD0) : C_ACCENT, C_ACCENT);
+    round_fill(dc, &g_open_button, S(8), g_hot == B_COUNT ? sg_accent_shade(RGB(0x80, 0x44, 0xD0)) : C_ACCENT, C_ACCENT);
     draw_text(dc, g_font_bold, RGB(0xFF, 0xFF, 0xFF), L"Open a file", &g_open_button, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 }
 

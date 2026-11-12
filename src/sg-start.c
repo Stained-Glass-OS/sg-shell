@@ -1896,7 +1896,7 @@ static void draw_tiles(HDC dc)
         if (a < 0) continue;
         r = tile_rect(i);
         fill(dc, &r, i == g_hot_tile ? COL_ACCENT_HI : COL_ACCENT);
-        if (i == g_hot_tile || i == g_sel_tile) frame(dc, &r, i == g_sel_tile ? COL_TEXT : RGB(0xB8, 0x8C, 0xE8), S(2));
+        if (i == g_hot_tile || i == g_sel_tile) frame(dc, &r, i == g_sel_tile ? COL_TEXT : sg_accent_shade(RGB(0xB8, 0x8C, 0xE8)), S(2));
         /* Control Panel: its own icon (smooth at every size, sg-shell -112);
          * the drawn gear only where its program carries none */
         if (is_control_panel(&g_apps[a]) && !g_apps[a].icon)

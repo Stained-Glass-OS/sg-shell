@@ -89,10 +89,35 @@ void pers_read(struct pstate *s)
     s->system_light = reg_dword(HKEY_CURRENT_USER, PERSONALIZE, L"SystemUsesLightTheme", 0) != 0;
 }
 
-static void announce(const WCHAR *what)
+/* told from a thread of its own: the broadcast waits on every window in turn
+ * (up to 2 s on a slow one), and this window -- which repaints in the new
+ * colours when the broadcast reaches it -- kept its old ones until it ended */
+static DWORD WINAPI announce_thread(void *what)
 {
     DWORD_PTR r;
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)what, SMTO_ABORTIFHUNG, 2000, &r);
+    return 0;
+}
+static HANDLE g_announcing;   /* the last announcement's thread, until it is waited for */
+static void announce(const WCHAR *what)   /* what: a string that lives as long as the program */
+{
+    HANDLE t;
+    if ((t = CreateThread(NULL, 0, announce_thread, (void *)what, 0, NULL))) {
+        if (g_announcing) CloseHandle(g_announcing);
+        g_announcing = t;
+        return;
+    }
+    announce_thread((void *)what);
+}
+
+/* A program about to end (sg-settings --set) waits for its announcement:
+ * ending first took the thread with it, and nobody heard of the change. */
+void pers_announce_wait(void)
+{
+    if (!g_announcing) return;
+    WaitForSingleObject(g_announcing, 10000);
+    CloseHandle(g_announcing);
+    g_announcing = NULL;
 }
 
 /* ---- applying ------------------------------------------------------------------------ */

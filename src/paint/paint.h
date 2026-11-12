@@ -24,9 +24,9 @@ extern BOOL sgm_dark;               /* the app mode (sg-mode.h), in main.c */
 void sgm_follow(HWND hwnd);
 
 #define ACCENT      (sg_accent())
-#define ACCENT_HOT (sgm_dark ? RGB(58,48,74) : RGB(240, 234, 250))
-#define ACCENT_DOWN (sgm_dark ? RGB(74,58,98) : RGB(226, 212, 246))
-#define ACCENT_EDGE (sgm_dark ? RGB(120,90,170) : RGB(196, 172, 234))
+#define ACCENT_HOT (sgm_dark ? sg_accent_shade(RGB(58,48,74)) : sg_accent_shade(RGB(240, 234, 250)))
+#define ACCENT_DOWN (sgm_dark ? sg_accent_shade(RGB(74,58,98)) : sg_accent_shade(RGB(226, 212, 246)))
+#define ACCENT_EDGE (sgm_dark ? sg_accent_shade(RGB(120,90,170)) : sg_accent_shade(RGB(196, 172, 234)))
 #define RIBBON_BG (sgm_dark ? RGB(43,43,43) : RGB(249, 249, 251))
 #define WORKSPACE (sgm_dark ? RGB(24,24,24) : RGB(214, 211, 224))
 #define LINE_GREY (sgm_dark ? RGB(64,64,64) : RGB(218, 218, 222))

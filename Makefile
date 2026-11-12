@@ -493,6 +493,7 @@ test-notify: build
 	@sh test/zip-check.sh
 	@sh test/media-check.sh
 	@sh test/calc-check.sh
+	@sh test/accentshade-check.sh
 	@sh test/photos-check.sh
 	@sh test/taskmgr-check.sh
 	@sh test/paint-check.sh

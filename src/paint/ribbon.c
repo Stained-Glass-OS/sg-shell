@@ -192,7 +192,7 @@ static void draw_item(HDC dc, int idx)
     switch (it->kind)
     {
     case K_FILETAB:
-        fill(dc, &r, hot ? RGB(92, 34, 164) : ACCENT);
+        fill(dc, &r, hot ? sg_accent_shade(RGB(92, 34, 164)) : ACCENT);
         SetTextColor(dc, RGB(255, 255, 255));
         DrawTextW(dc, it->label, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         return;
@@ -205,7 +205,7 @@ static void draw_item(HDC dc, int idx)
             b.top = b.bottom - 1; b.left++; b.right--; fill(dc, &b, RIBBON_BG);
         }
         else if (hot) fill(dc, &r, ACCENT_HOT);
-        SetTextColor(dc, on ? (sgm_dark ? RGB(179, 139, 235) : ACCENT) : (sgm_dark ? RGB(235, 235, 240) : RGB(40, 40, 48)));
+        SetTextColor(dc, on ? (sgm_dark ? sg_accent_shade(RGB(179, 139, 235)) : ACCENT) : (sgm_dark ? RGB(235, 235, 240) : RGB(40, 40, 48)));
         DrawTextW(dc, it->label, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         return;
     case K_GROUP:

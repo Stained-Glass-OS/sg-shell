@@ -54,7 +54,7 @@ void sgm_follow(HWND hwnd)
 
 #define ACCENT      (sg_accent())
 #define ACCENT_DARK (sg_accent_dark(20))
-#define ACCENT_SOFT (sgm_dark ? RGB(62,46,86) : RGB(236, 226, 248))
+#define ACCENT_SOFT (sgm_dark ? sg_accent_shade(RGB(62,46,86)) : sg_accent_shade(RGB(236, 226, 248)))
 #define SURFACE (sgm_dark ? RGB(32,32,32) : RGB(243, 243, 243))
 #define BAR (sgm_dark ? RGB(43,43,43) : RGB(249, 249, 249))
 #define LINE (sgm_dark ? RGB(64,64,64) : RGB(224, 224, 224))
@@ -1181,7 +1181,7 @@ static void ed_button(HDC dc, int i)
     BOOL active = (i == B_PEN && ed.tool == T_PEN) || (i == B_HIGHLIGHTER && ed.tool == T_HIGHLIGHTER) ||
                   (i == B_ERASER && ed.tool == T_ERASER) || (i == B_CROP && ed.cropping);
     BOOL disabled = (i == B_UNDO && g_cur <= 0) || (i == B_REDO && g_cur >= g_nhist - 1);
-    COLORREF ink = disabled ? (sgm_dark ? RGB(100, 100, 100) : RGB(170, 170, 170)) : active ? (sgm_dark ? RGB(179, 139, 235) : ACCENT) : COL_TEXT;
+    COLORREF ink = disabled ? (sgm_dark ? RGB(100, 100, 100) : RGB(170, 170, 170)) : active ? (sgm_dark ? sg_accent_shade(RGB(179, 139, 235)) : ACCENT) : COL_TEXT;
     int gs = S(20), gy = (b.top + b.bottom - gs) / 2;
 
     if (i == B_NEW || i == B_APPLY)

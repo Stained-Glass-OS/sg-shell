@@ -26,9 +26,9 @@
 #include <limits.h>
 
 #define ACCENT      (sg_accent())
-#define ACCENT_HOT  RGB(240, 234, 250)
-#define ACCENT_DOWN RGB(226, 212, 246)
-#define ACCENT_EDGE RGB(196, 172, 234)
+#define ACCENT_HOT  sg_accent_shade(RGB(240, 234, 250))
+#define ACCENT_DOWN sg_accent_shade(RGB(226, 212, 246))
+#define ACCENT_EDGE sg_accent_shade(RGB(196, 172, 234))
 #define RIBBON_BG   RGB(249, 249, 251)
 #define WORKSPACE   RGB(228, 226, 234)
 #define LINE_GREY   RGB(218, 218, 222)

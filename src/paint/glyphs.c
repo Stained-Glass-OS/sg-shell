@@ -13,7 +13,7 @@
 #define KEY RGB(0xFF, 0x00, 0xFF)
 #define INK (sgm_dark ? RGB(215, 215, 225) : RGB(56, 56, 66))
 #define PURPLE ACCENT
-#define LILAC RGB(180, 150, 230)
+#define LILAC sg_accent_shade(RGB(180, 150, 230))
 #define PAPER RGB(255, 255, 255)
 #define WOOD RGB(232, 190, 120)
 
@@ -232,7 +232,7 @@ static void draw(HDC dc, int g)
           ellipse(dc, PURPLE, CLR_NONE, 0, 4, 50, 14, 60); }
         break;
     case G_MAGNIFIER:
-        ellipse(dc, RGB(236, 230, 250), INK, 5, 6, 6, 42, 42);
+        ellipse(dc, sg_accent_shade(RGB(236, 230, 250)), INK, 5, 6, 6, 42, 42);
         { int h[] = { 38, 38, 56, 56 }; lines(dc, INK, 8, h, 2); }
         break;
     case G_BRUSH: case G_CALLI1: case G_CALLI2: case G_AIRBRUSH: case G_MARKER: case G_CRAYON:
@@ -262,7 +262,7 @@ static void draw(HDC dc, int g)
           lines(dc, INK, 2, a, 2); lines(dc, INK, 5, b, 2); lines(dc, INK, 9, c, 2); }
         break;
     case G_EDITCOLORS:
-        ellipse(dc, RGB(236, 230, 250), INK, 3, 4, 8, 60, 56);
+        ellipse(dc, sg_accent_shade(RGB(236, 230, 250)), INK, 3, 4, 8, 60, 56);
         ellipse(dc, RGB(220, 60, 60), CLR_NONE, 0, 14, 16, 24, 26);
         ellipse(dc, RGB(240, 190, 40), CLR_NONE, 0, 28, 13, 38, 23);
         ellipse(dc, RGB(60, 170, 90), CLR_NONE, 0, 42, 18, 52, 28);

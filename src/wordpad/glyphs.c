@@ -14,7 +14,7 @@
 #define KEY RGB(0xFF, 0x00, 0xFF)
 #define INK RGB(56, 56, 66)
 #define PURPLE ACCENT
-#define LILAC RGB(180, 150, 230)
+#define LILAC sg_accent_shade(RGB(180, 150, 230))
 #define PAPER RGB(255, 255, 255)
 #define WOOD RGB(232, 190, 120)
 #define BLUE RGB(63, 72, 204)
@@ -209,7 +209,7 @@ static void draw(HDC dc, int g)
         { int a[] = { 16, 34, 16, 48, 26, 48 }; lines(dc, INK, 3, a, 3); int t[] = { 24, 42, 32, 48, 24, 54 }; poly(dc, INK, t, 3); }
         break;
     case G_SELECTALL:
-        for (int i = 0; i < 4; i++) rect(dc, RGB(214, 196, 240), CLR_NONE, 0, 6, 6 + i * 14, 58, 16 + i * 14, 0);
+        for (int i = 0; i < 4; i++) rect(dc, sg_accent_shade(RGB(214, 196, 240)), CLR_NONE, 0, 6, 6 + i * 14, 58, 16 + i * 14, 0);
         text_lines(dc, 10, 11, 54, 4, 14, INK);
         break;
     case G_ZOOMIN:

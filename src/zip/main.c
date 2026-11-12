@@ -54,8 +54,8 @@ void sgm_follow(HWND hwnd)
 #define COL_LINE (sgm_dark ? RGB(0x3A,0x3A,0x3A) : RGB(0xE5, 0xE5, 0xE5))
 #define COL_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1A, 0x1A, 0x1A))
 #define COL_SUBTLE (sgm_dark ? RGB(0xA8,0xA8,0xA8) : RGB(0x6D, 0x6D, 0x6D))
-#define COL_ACCENT   RGB(112, 48, 192)
-#define COL_HOT (sgm_dark ? RGB(0x3B,0x2E,0x4F) : RGB(0xEC, 0xE4, 0xF7))
+#define COL_ACCENT   sg_accent()
+#define COL_HOT (sgm_dark ? sg_accent_shade(RGB(0x3B,0x2E,0x4F)) : sg_accent_shade(RGB(0xEC, 0xE4, 0xF7)))
 /* the window's background in the app mode's colour: the DC's own brush */
 static HBRUSH bg_brush(HDC dc) { SetDCBrushColor(dc, COL_BG); return GetStockObject(DC_BRUSH); }
 /* a list view keeps the colours it was made with: give it the mode's */
@@ -71,7 +71,7 @@ static BOOL CALLBACK list_colours(HWND hwnd, LPARAM lp)
     }
     return TRUE;
 }
-#define COL_PRESSED (sgm_dark ? RGB(0x4A,0x38,0x66) : RGB(0xDD, 0xCE, 0xF1))
+#define COL_PRESSED (sgm_dark ? sg_accent_shade(RGB(0x4A,0x38,0x66)) : sg_accent_shade(RGB(0xDD, 0xCE, 0xF1)))
 
 #define WM_APP_PROGRESS (WM_APP + 1)
 #define WM_APP_DONE     (WM_APP + 2)

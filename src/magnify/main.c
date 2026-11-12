@@ -55,6 +55,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include "../sg-mode.h"
 
 #define CLASS_BAR  L"SgMagnifier"
 #define CLASS_VIEW L"SgMagnifierView"
@@ -491,7 +492,7 @@ static void paint_view(HDC dc)
     if (g_mode != MODE_FULL)
     {
         /* a frame in the accent colour, as Windows draws round the lens and under the dock */
-        HBRUSH b = CreateSolidBrush(RGB(112, 48, 192));
+        HBRUSH b = CreateSolidBrush(sg_accent());
         if (g_mode == MODE_LENS)
             FrameRect(dc, &cr, b), InflateRect(&cr, -1, -1), FrameRect(dc, &cr, b);
         else
@@ -641,7 +642,7 @@ static void paint_bar(HWND hwnd, HDC dc)
     int i;
     WCHAR level[16];
     COLORREF ink = RGB(32, 32, 36);
-    HBRUSH bg = CreateSolidBrush(RGB(243, 242, 246)), hot = CreateSolidBrush(RGB(226, 220, 238));
+    HBRUSH bg = CreateSolidBrush(RGB(243, 242, 246)), hot = CreateSolidBrush(sg_accent_shade(RGB(226, 220, 238)));
     GetClientRect(hwnd, &cr);
     FillRect(dc, &cr, bg);
     SetBkMode(dc, TRANSPARENT);

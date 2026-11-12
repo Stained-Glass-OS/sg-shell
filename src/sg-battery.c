@@ -180,7 +180,7 @@ static void fly_paint(HWND hwnd)
     describe(buf, ARRAYSIZE(buf));
     DrawTextW(dc, buf, -1, &r, DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(dc, g_font);
-    SetTextColor(dc, dark ? RGB(0xB9, 0x8C, 0xF0) : sg_accent());
+    SetTextColor(dc, dark ? sg_accent_shade(RGB(0xB9, 0x8C, 0xF0)) : sg_accent());
     r = link_rect();
     {
         LOGFONTW lf;

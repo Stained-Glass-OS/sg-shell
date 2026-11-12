@@ -46,11 +46,11 @@ void sgm_follow(HWND hwnd)
 
 #define C_BG (sgm_dark ? RGB(0x20,0x20,0x20) : RGB(0xF3, 0xF3, 0xF3))
 #define C_CARD (sgm_dark ? RGB(0x2B,0x2B,0x2B) : RGB(0xFF, 0xFF, 0xFF))
-#define C_CARD_HOT (sgm_dark ? RGB(0x36,0x31,0x3F) : RGB(0xF7, 0xF4, 0xFB))
-#define C_EDGE (sgm_dark ? RGB(0x3F,0x3C,0x46) : RGB(0xE3, 0xE0, 0xE8))
+#define C_CARD_HOT (sgm_dark ? sg_accent_shade(RGB(0x36,0x31,0x3F)) : RGB(0xF7, 0xF4, 0xFB))
+#define C_EDGE (sgm_dark ? sg_accent_shade(RGB(0x3F,0x3C,0x46)) : RGB(0xE3, 0xE0, 0xE8))
 #define C_TEXT (sgm_dark ? RGB(0xFF,0xFF,0xFF) : RGB(0x1A, 0x1A, 0x1A))
 #define C_TEXT2 (sgm_dark ? RGB(0xA8,0xA8,0xB0) : RGB(0x60, 0x60, 0x68))
-#define C_DIM (sgm_dark ? RGB(0x6E,0x6C,0x74) : RGB(0xA8, 0xA6, 0xAE))
+#define C_DIM (sgm_dark ? sg_accent_shade(RGB(0x6E,0x6C,0x74)) : RGB(0xA8, 0xA6, 0xAE))
 #define C_ACCENT   (sg_accent())
 #define C_ACCENT_HOT (sg_accent_light(15))
 #define REG_KEY L"Software\\Stained Glass\\Clock"
@@ -364,13 +364,13 @@ static LRESULT CALLBACK toast_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         RECT r, a, b, t;
         HBRUSH br;
         GetClientRect(hwnd, &r);
-        br = CreateSolidBrush(RGB(0x2B, 0x28, 0x33)); FillRect(dc, &r, br); DeleteObject(br);
+        br = CreateSolidBrush(sg_accent_shade(RGB(0x2B, 0x28, 0x33))); FillRect(dc, &r, br); DeleteObject(br);
         SetRect(&a, 0, 0, S(4), r.bottom);
         br = CreateSolidBrush(C_ACCENT); FillRect(dc, &a, br); DeleteObject(br);
         if (i >= 0) {
             struct toast *tt = &g_toasts[i];
             SetBkMode(dc, TRANSPARENT);
-            SelectObject(dc, g_f_small); SetTextColor(dc, RGB(0xC8, 0xC2, 0xD4));
+            SelectObject(dc, g_f_small); SetTextColor(dc, sg_accent_shade(RGB(0xC8, 0xC2, 0xD4)));
             SetRect(&t, S(16), S(10), r.right - S(16), S(30));
             DrawTextW(dc, L"Alarms & Clock", -1, &t, DT_SINGLELINE | DT_NOPREFIX);
             SelectObject(dc, g_f_head); SetTextColor(dc, RGB(0xFF, 0xFF, 0xFF));
@@ -380,10 +380,10 @@ static LRESULT CALLBACK toast_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             SetRect(&t, S(16), S(58), r.right - S(16), S(80));
             DrawTextW(dc, tt->body, -1, &t, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
             SetRect(&t, S(16), S(78), r.right - S(16), S(98));
-            SetTextColor(dc, RGB(0xC8, 0xC2, 0xD4));
+            SetTextColor(dc, sg_accent_shade(RGB(0xC8, 0xC2, 0xD4)));
             DrawTextW(dc, tt->sub, -1, &t, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
             toast_buttons(tt, &a, &b);
-            br = CreateSolidBrush(RGB(0x45, 0x40, 0x52));
+            br = CreateSolidBrush(sg_accent_shade(RGB(0x45, 0x40, 0x52)));
             if (tt->kind == TK_ALARM) { FillRect(dc, &a, br); SetTextColor(dc, RGB(0xFF, 0xFF, 0xFF)); DrawTextW(dc, L"Snooze", -1, &a, DT_CENTER | DT_VCENTER | DT_SINGLELINE); }
             DeleteObject(br);
             br = CreateSolidBrush(C_ACCENT); FillRect(dc, &b, br); DeleteObject(br);
@@ -652,7 +652,7 @@ static void glyph(HDC dc, const WCHAR *what, RECT r, COLORREF c)
 
 static void circle_button(HDC dc, RECT r, BOOL accent, BOOL hot, const WCHAR *g)
 {
-    HBRUSH br = CreateSolidBrush(accent ? (hot ? C_ACCENT_HOT : C_ACCENT) : (hot ? (sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC)) : (sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0))));
+    HBRUSH br = CreateSolidBrush(accent ? (hot ? C_ACCENT_HOT : C_ACCENT) : (hot ? (sgm_dark ? sg_accent_shade(RGB(0x48, 0x44, 0x50)) : sg_accent_shade(RGB(0xE6, 0xE2, 0xEC))) : (sgm_dark ? sg_accent_shade(RGB(0x3A, 0x38, 0x40)) : RGB(0xEC, 0xEA, 0xF0))));
     HGDIOBJ ob = SelectObject(dc, br), op = SelectObject(dc, GetStockObject(NULL_PEN));
     sg_ellipse(dc, r.left, r.top, r.right, r.bottom);
     SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br);
@@ -750,7 +750,7 @@ static void paint(HDC dc, RECT *c)
             break;
         }
         case B_CITY_REMOVE: case B_TIMER_REMOVE:
-            if (hot) round_fill(dc, b->r, S(6), sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0), sgm_dark ? RGB(0x3A, 0x38, 0x40) : RGB(0xEC, 0xEA, 0xF0));
+            if (hot) round_fill(dc, b->r, S(6), sgm_dark ? sg_accent_shade(RGB(0x3A, 0x38, 0x40)) : RGB(0xEC, 0xEA, 0xF0), sgm_dark ? sg_accent_shade(RGB(0x3A, 0x38, 0x40)) : RGB(0xEC, 0xEA, 0xF0));
             glyph(dc, L"x", b->r, C_TEXT2);
             break;
         case B_TIMER_CARD: {
@@ -791,7 +791,7 @@ static void paint(HDC dc, RECT *c)
         case B_SW_LAP: circle_button(dc, b->r, FALSE, hot, L"lap"); break;
         case B_ADD: {
             RECT r = b->r;
-            if (hot) round_fill(dc, r, S(6), sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC), sgm_dark ? RGB(0x48, 0x44, 0x50) : RGB(0xE6, 0xE2, 0xEC));
+            if (hot) round_fill(dc, r, S(6), sgm_dark ? sg_accent_shade(RGB(0x48, 0x44, 0x50)) : sg_accent_shade(RGB(0xE6, 0xE2, 0xEC)), sgm_dark ? sg_accent_shade(RGB(0x48, 0x44, 0x50)) : sg_accent_shade(RGB(0xE6, 0xE2, 0xEC)));
             glyph(dc, L"+", r, C_TEXT);
             break;
         }

@@ -343,6 +343,7 @@ void mic_meter_stop(void);
 int  mic_meter_poll(void);
 void dump_items(void);
 int  personalize_set(int argc, WCHAR **argv);
+void pers_announce_wait(void);
 int  programs_uninstall_cli(const WCHAR *name);   /* --uninstall NAME */   /* --set KIND VALUE...: non-interactive */
 
 /* page builders */

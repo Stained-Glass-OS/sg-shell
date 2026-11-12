@@ -220,7 +220,7 @@ static void fly_paint(HWND hwnd)
              subtle = dark ? RGB(0x80, 0x80, 0x80) : RGB(0x8A, 0x8A, 0x8A),
              line = dark ? RGB(0x40, 0x40, 0x40) : RGB(0xD6, 0xD6, 0xD6),
              hot = dark ? RGB(0x5A, 0x5A, 0x5A) : RGB(0xB8, 0xB8, 0xB8),
-             accent = sg_accent(), linkc = dark ? RGB(0xB9, 0x8C, 0xF0) : sg_accent();
+             accent = sg_accent(), linkc = dark ? sg_accent_shade(RGB(0xB9, 0x8C, 0xF0)) : sg_accent();
     RECT c, r;
     WCHAR buf[128];
     SYSTEMTIME st;

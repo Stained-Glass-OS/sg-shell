@@ -194,7 +194,7 @@ static void draw_item(HDC dc, const Item *it, int idx)
     switch (it->kind)
     {
     case K_FILETAB:
-        fill(dc, &r, hot ? RGB(130, 70, 206) : ACCENT);
+        fill(dc, &r, hot ? sg_accent_shade(RGB(130, 70, 206)) : ACCENT);
         draw_text(dc, it->label, r, DT_CENTER | DT_VCENTER | DT_SINGLELINE, RGB(255, 255, 255), g_font);
         return;
     case K_TAB:

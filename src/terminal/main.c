@@ -75,7 +75,7 @@
 #define SCHEME_MATCH  0x6A5320      /* a search match */
 #define SCHEME_CURMATCH 0xE7C564    /* the current one */
 #define STRIP_BG      RGB(0x12, 0x10, 0x18)
-#define STRIP_HOT     RGB(0x2A, 0x26, 0x35)
+#define STRIP_HOT     sg_accent_shade(RGB(0x2A, 0x26, 0x35))
 #define ACCENT        (sg_accent_light(30))
 #define PAD 6
 #define GAP 4                       /* between panes; the focused pane's frame is drawn in it */
@@ -1074,12 +1074,12 @@ static void paint_strip(HDC dc, RECT *client)
             SelectObject(dc, g_ui_font);
         }
         SetRect(&txt, r.left + S(34), r.top, r.right - S(32), r.bottom);
-        SetTextColor(dc, act ? RGB(0xFF, 0xFF, 0xFF) : RGB(0xB8, 0xB2, 0xC4));
+        SetTextColor(dc, act ? RGB(0xFF, 0xFF, 0xFF) : sg_accent_shade(RGB(0xB8, 0xB2, 0xC4)));
         DrawTextW(dc, tab_title(t), -1, &txt, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
         if (act || hot) {
             RECT c = close_rect(i);
-            if (g_hot_close == i) { b = CreateSolidBrush(RGB(0x44, 0x3F, 0x52)); FillRect(dc, &c, b); DeleteObject(b); }
-            draw_glyph_x(dc, c, RGB(0xE0, 0xDC, 0xE8));
+            if (g_hot_close == i) { b = CreateSolidBrush(sg_accent_shade(RGB(0x44, 0x3F, 0x52))); FillRect(dc, &c, b); DeleteObject(b); }
+            draw_glyph_x(dc, c, sg_accent_shade(RGB(0xE0, 0xDC, 0xE8)));
         }
         if (!p->alive && p->exit_code) {
             RECT dot = { r.right - S(40), (r.top + r.bottom) / 2 - S(3), r.right - S(34), (r.top + r.bottom) / 2 + S(3) };
@@ -1093,7 +1093,7 @@ static void paint_strip(HDC dc, RECT *client)
         HGDIOBJ o;
         int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
         if (g_hot_btn == i) { b = CreateSolidBrush(STRIP_HOT); FillRect(dc, &r, b); DeleteObject(b); }
-        p = CreatePen(PS_SOLID, 1, RGB(0xE0, 0xDC, 0xE8));
+        p = CreatePen(PS_SOLID, 1, sg_accent_shade(RGB(0xE0, 0xDC, 0xE8)));
         o = SelectObject(dc, p);
         if (i == 1) {
             MoveToEx(dc, cx - S(6), cy, NULL); LineTo(dc, cx + S(7), cy);
@@ -1301,7 +1301,7 @@ static LRESULT CALLBACK find_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             static const WCHAR *const labels[] = { L"Aa", L"\x2191", L"\x2193", L"" };
             if (i == FB_CASE && p->match_case) { b = CreateSolidBrush(ACCENT); FillRect(dc, &c, b); DeleteObject(b); }
             SetTextColor(dc, RGB(0xE8, 0xE4, 0xF0));
-            if (i == FB_CLOSE) draw_glyph_x(dc, c, RGB(0xE0, 0xDC, 0xE8));
+            if (i == FB_CLOSE) draw_glyph_x(dc, c, sg_accent_shade(RGB(0xE0, 0xDC, 0xE8)));
             else DrawTextW(dc, labels[i], -1, &c, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
         EndPaint(hwnd, &ps);

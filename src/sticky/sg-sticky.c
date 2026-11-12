@@ -1023,7 +1023,7 @@ static void draw_card(const DRAWITEMSTRUCT *di)
     fill(dc, &r, RGB(0xF3, 0xF3, 0xF3));
     if (di->itemID == (UINT)-1 || !is_note(n)) return;
     SetRect(&card, r.left + S(12), r.top + S(4), r.right - S(12), r.bottom - S(4));
-    fill(dc, &card, (di->itemState & ODS_SELECTED) ? RGB(0xEC, 0xE4, 0xF8) : RGB(0xFF, 0xFF, 0xFF));
+    fill(dc, &card, (di->itemState & ODS_SELECTED) ? sg_accent_shade(RGB(0xEC, 0xE4, 0xF8)) : RGB(0xFF, 0xFF, 0xFF));
     SetRect(&t, card.left, card.top, card.right, card.top + S(4));
     fill(dc, &t, COLORS[n->color].button);
     if (di->itemState & ODS_FOCUS)

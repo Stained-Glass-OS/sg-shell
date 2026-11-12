@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
+#include "../sg-mode.h"
 
 #define REPORTS_URL   L"https://freesoft.page/reports/"
 #define SHELL_DIR     "/usr/libexec/stained-glass/shell/"
@@ -511,7 +512,7 @@ static void paint_banner(HDC dc)
     band = rc;
     band.bottom = BANNER_H;
     {
-        HBRUSH b = CreateSolidBrush(RGB(0x2A, 0x16, 0x4C));
+        HBRUSH b = CreateSolidBrush(sg_accent_shade(RGB(0x2A, 0x16, 0x4C)));
         FillRect(dc, &band, b);
         DeleteObject(b);
     }
@@ -526,7 +527,7 @@ static void paint_banner(HDC dc)
         else _snwprintf(sub, ARRAYSIZE(sub), L"About %s", g_title);
     } else lstrcpynW(sub, L"About this PC", ARRAYSIZE(sub));
     SelectObject(dc, g_font);
-    SetTextColor(dc, RGB(0xD8, 0xCC, 0xF0));
+    SetTextColor(dc, sg_accent_shade(RGB(0xD8, 0xCC, 0xF0)));
     band.top = 38;
     DrawTextW(dc, sub, -1, &band, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS);
 }
@@ -558,7 +559,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CTLCOLORSTATIC:
         if ((HWND)lp == g_details) return DefWindowProcW(hwnd, msg, wp, lp);
         SetBkColor((HDC)wp, RGB(0xFF, 0xFF, 0xFF));
-        SetTextColor((HDC)wp, (HWND)lp == g_status ? RGB(0x5A, 0x2D, 0x91) : RGB(0x20, 0x20, 0x20));
+        SetTextColor((HDC)wp, (HWND)lp == g_status ? sg_accent_shade(RGB(0x5A, 0x2D, 0x91)) : RGB(0x20, 0x20, 0x20));
         return (LRESULT)g_white;
     case WM_COMMAND:
         switch (LOWORD(wp)) {

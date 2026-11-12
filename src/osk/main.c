@@ -66,6 +66,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include "../sg-mode.h"
 
 #define CLASS_NAME L"OSKMainClass"
 #define KEY L"Software\\Microsoft\\Osk"
@@ -259,7 +260,7 @@ static const struct { const WCHAR *name; WORD sc; } key_scans[] = {
 #define C_ACTION  RGB(40, 40, 40)
 #define C_TEXT    RGB(255, 255, 255)
 #define C_DIM     RGB(170, 170, 170)
-#define C_ACCENT  RGB(112, 48, 192)
+#define C_ACCENT  sg_accent()
 
 /* ---- settings ------------------------------------------------------------------------------- */
 static DWORD reg_get(const WCHAR *name, DWORD def)

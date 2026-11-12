@@ -61,6 +61,11 @@ void pal_load(void)
 {
     g_dark = sg_apps_dark();
     g_pal = g_dark ? dark_palette : light_palette;
+    /* the parts drawn in the default accent's shades take the accent's */
+    g_pal.nav_sel = sg_accent_shade(g_pal.nav_sel);
+    g_pal.title = sg_accent_shade(g_pal.title);
+    g_pal.link = sg_accent_shade(g_pal.link);
+    g_pal.link_hot = sg_accent_shade(g_pal.link_hot);
 }
 COLORREF g_col_link = RGB(0x00, 0x66, 0xCC), g_col_link_hot = RGB(0x33, 0x99, 0xFF);   /* pal_apply() */
 HWND g_keep_focus;              /* a page change leaves the focus here (Settings' search box) */
@@ -1090,7 +1095,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 
     if (argc >= 2) {
         if (!wcscmp(argv[1], L"--dump")) return dump(argc > 2 ? argv[2] : NULL);
-        if (!wcscmp(argv[1], L"--set")) return personalize_set(argc - 2, argv + 2);
+        if (!wcscmp(argv[1], L"--set")) {
+            int rc = personalize_set(argc - 2, argv + 2);
+            pers_announce_wait();
+            return rc;
+        }
         if (!wcscmp(argv[1], L"--uninstall") && argc > 2) return programs_uninstall_cli(argv[2]);
         if (!wcscmp(argv[1], L"--resolve") && argc > 2 && !settings) {
             /* what control.exe ARG would open, without opening it */

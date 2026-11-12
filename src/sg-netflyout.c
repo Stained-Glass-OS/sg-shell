@@ -67,7 +67,7 @@ static void load_mode(void) { g_pal = sg_system_dark() ? &fly_dark : &fly_light;
 #define COL_TEXT    (g_pal->text)
 #define COL_SUBTLE  (g_pal->subtle)
 #define COL_ACCENT  (sg_accent())
-#define COL_LINK    (g_pal->link)
+#define COL_LINK    (sg_accent_shade(g_pal->link))
 #define COL_BUTTON  (g_pal->button)
 #define COL_ERROR   (g_pal->error)
 #define COL_LINE    (g_pal->line)
@@ -471,7 +471,7 @@ static RECT button_rect(int right, int y, int w) { RECT r = { right - w, y, righ
 
 static void draw_button(HDC dc, RECT r, const WCHAR *text, BOOL accent, BOOL hot)
 {
-    HBRUSH b = CreateSolidBrush(accent ? (hot ? RGB(0x8E, 0x45, 0xD0) : COL_ACCENT) : (hot ? g_pal->button_hot : COL_BUTTON));
+    HBRUSH b = CreateSolidBrush(accent ? (hot ? sg_accent_shade(RGB(0x8E, 0x45, 0xD0)) : COL_ACCENT) : (hot ? g_pal->button_hot : COL_BUTTON));
     FillRect(dc, &r, b);
     DeleteObject(b);
     SetTextColor(dc, COL_TEXT);

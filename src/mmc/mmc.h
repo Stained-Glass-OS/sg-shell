@@ -35,10 +35,10 @@ void sgm_follow(HWND hwnd);
 #define C_LINE (sgm_dark ? RGB(60,60,60) : RGB(222, 222, 222))
 #define C_TEXT (sgm_dark ? RGB(255,255,255) : RGB(0, 0, 0))
 #define C_SUBTLE (sgm_dark ? RGB(168,168,168) : RGB(96, 96, 96))
-#define C_ACCENT    RGB(112, 48, 192)
-#define C_ACCENT_LT (sgm_dark ? RGB(74,46,110) : RGB(231, 222, 246))
-#define C_HOVER (sgm_dark ? RGB(52,44,64) : RGB(242, 237, 250))
-#define C_HEAD (sgm_dark ? RGB(190,150,240) : RGB(80, 30, 150))
+#define C_ACCENT    sg_accent()
+#define C_ACCENT_LT (sgm_dark ? sg_accent_shade(RGB(74,46,110)) : sg_accent_shade(RGB(231, 222, 246)))
+#define C_HOVER (sgm_dark ? sg_accent_shade(RGB(52,44,64)) : sg_accent_shade(RGB(242, 237, 250)))
+#define C_HEAD (sgm_dark ? sg_accent_shade(RGB(190,150,240)) : sg_accent_shade(RGB(80, 30, 150)))
 #define C_WARN_BG (sgm_dark ? RGB(70,60,20) : RGB(255, 244, 206))
 
 extern int g_dpi;

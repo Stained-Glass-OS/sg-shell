@@ -28,6 +28,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "pdf.h"
+#include "../sg-mode.h"
 #include "../sg-smooth.h"
 
 #define WM_APP_COMMIT (WM_APP + 10)
@@ -1179,7 +1180,7 @@ void tool_paint(HDC dc)
     RECT r, h[8];
     int i;
     HBRUSH white = GetStockObject(WHITE_BRUSH), acc = CreateSolidBrush(C_ACCENT);
-    COLORREF accent = RGB(112, 48, 192);
+    COLORREF accent = sg_accent();
     if (E.hwnd) editor_place();
     if (g.tool == TOOL_FORM) { form_paint(dc); DeleteObject(acc); return; }
     if (g.tool == TOOL_EDIT && g.npages) {

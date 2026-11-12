@@ -827,7 +827,11 @@ static LRESULT CALLBACK main_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             g_col_link_hot = dark ? RGB(0xE0, 0xE0, 0xE0) : RGB(0x33, 0x33, 0x33);
             /* the app mode: the palette, the title bar, the page */
             if (dark != g_dark) pal_apply(hwnd);
+            else pal_load();
             InvalidateRect(hwnd, NULL, TRUE);
+            /* it comes after the page was shown again (Settings tells everyone
+             * from a thread of its own): what it shows now */
+            write_dump();
             RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
         break;

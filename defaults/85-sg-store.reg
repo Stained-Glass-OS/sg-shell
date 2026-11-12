@@ -580,8 +580,8 @@ Windows Registry Editor Version 5.00
 "Category"="Media"
 "Colour"=dword:00f9a825
 "Tier"="windows"
-"Source"="pin:https://aimp.ru/files/desktop/builds/aimp_5.40.2727_w64.exe|cc6babde28777edcdf608d09d5abadb188c13a5fcbfe63740b53e76ea026c4cd|exe|/AUTO /SILENT"
-"PinVersion"="5.40.2727"
+"Source"="pin:https://aimp.ru/files/desktop/builds/aimp_5.40.2731_w64.exe|715b781bd09e08c059ce0495a3a3f2ba540f35168c95cc1ec928f93340140e4b|exe|/AUTO /SILENT"
+"PinVersion"="5.40.2731"
 "DetectName"="AIMP"
 "Icon"="https://www.aimp.ru/v2/theme/images/tile180.png"
 
@@ -3483,8 +3483,8 @@ Windows Registry Editor Version 5.00
 "Category"="Utilities"
 "Colour"=dword:00009688
 "Tier"="windows"
-"Source"="pin:https://bits.avcdn.net/productfamily_CCLEANER7/insttype_FREE/platform_WIN/installertype_FULL/build_RELEASE|d21aa015695bd5a2cd35dfe15c789697161ef4fea0f3bf5b83aaac200f7ee01c|exe|/SILENT"
-"PinVersion"="7.13.1573.2020"
+"Source"="pin:https://bits.avcdn.net/productfamily_CCLEANER7/insttype_FREE/platform_WIN/installertype_FULL/build_RELEASE|8f42238a98ad2058f03604c4adcf2e3c6475de4d894d5979b6e2ee9a0c574095|exe|/SILENT"
+"PinVersion"="7.13.1591.2041"
 "Depends"="Microsoft.EdgeWebView2Runtime"
 "DetectName"="CCleaner"
 "UninstallArgs"="/silent"

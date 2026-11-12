@@ -30,6 +30,7 @@
  */
 #include "browser.h"
 #include "../sg-smooth.h"
+#include "../sg-mode.h"
 #include <shellapi.h>
 #include <shlobj.h>
 
@@ -43,8 +44,8 @@
 #define C_LINE    RGB(0xE0, 0xE0, 0xE0)
 #define C_TEXT    RGB(0x1F, 0x1F, 0x1F)
 #define C_SUB     RGB(0x60, 0x60, 0x60)
-#define C_ACCENT  RGB(112, 48, 192)
-#define C_ACCENT2 RGB(0x8A, 0x4F, 0xD6)
+#define C_ACCENT  sg_accent()
+#define C_ACCENT2 sg_accent_shade(RGB(0x8A, 0x4F, 0xD6))
 #define C_HOVER   RGB(0xEB, 0xEB, 0xEB)
 #define C_ERROR   RGB(0xC4, 0x2B, 0x1C)
 #define C_OK      RGB(0x10, 0x7C, 0x10)
@@ -537,7 +538,7 @@ static void paint(HDC out)
         for (i = 0; i < g_ninst; i++) {
             int h = dpx(52), idx = g_nhits;
             add_hit(m, y, rc.right - m, y + h, CMD_PICK, i);
-            fill(dc, m, y, rc.right - m, y + h, i == g_pick ? RGB(0xEE, 0xE6, 0xF8) : idx == g_hover ? C_HOVER : C_CARD);
+            fill(dc, m, y, rc.right - m, y + h, i == g_pick ? sg_accent_shade(RGB(0xEE, 0xE6, 0xF8)) : idx == g_hover ? C_HOVER : C_CARD);
             if (i == g_pick) fill(dc, m, y + dpx(10), m + dpx(3), y + h - dpx(10), C_ACCENT);
             badge(dc, m + dpx(14), y + dpx(10), dpx(32), C_ACCENT, g_inst[i].name[0]);
             text(dc, g_f_bold, C_TEXT, m + dpx(58), y, rc.right - m, y + h, g_inst[i].name, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);

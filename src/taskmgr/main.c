@@ -837,9 +837,9 @@ static void fmt_rate(double kbps, WCHAR *out, int cch)
 
 static void graph(HDC dc, RECT r, const double *hist, double max, BOOL big)
 {
-    HPEN grid_pen = CreatePen(PS_SOLID, 1, sgm_dark ? RGB(70, 52, 100) : RGB(226, 214, 244)), line_pen = CreatePen(PS_SOLID, big ? S(1) : 1, C_ACCENT),
+    HPEN grid_pen = CreatePen(PS_SOLID, 1, sgm_dark ? sg_accent_shade(RGB(70, 52, 100)) : sg_accent_shade(RGB(226, 214, 244))), line_pen = CreatePen(PS_SOLID, big ? S(1) : 1, C_ACCENT),
          border = CreatePen(PS_SOLID, 1, C_ACCENT);
-    HBRUSH shade = CreateSolidBrush(sgm_dark ? RGB(52, 40, 72) : RGB(243, 237, 251));
+    HBRUSH shade = CreateSolidBrush(sgm_dark ? sg_accent_shade(RGB(52, 40, 72)) : sg_accent_shade(RGB(243, 237, 251)));
     POINT pts[62];
     int i, w = r.right - r.left, h = r.bottom - r.top;
     HGDIOBJ op, ob;

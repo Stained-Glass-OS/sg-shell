@@ -10,6 +10,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "control.h"
+#include "../sg-mode.h"
 #include <math.h>
 
 #define SS 4                            /* supersampling factor */
@@ -98,7 +99,7 @@ static void logo(HDC dc, int cx, int cy, int s)   /* the Stained Glass diamonds 
         t3[i] = a[i];         t3[i + 1] = a[i + 1] + d / 2 + 1;
     }
     brush_poly(dc, RGB(0x1F, 0xB5, 0xB0), t1, 4);
-    brush_poly(dc, RGB(0x9B, 0x3C, 0xC9), t2, 4);
+    brush_poly(dc, sg_accent_shade(RGB(0x9B, 0x3C, 0xC9)), t2, 4);
     brush_poly(dc, RGB(0xF2, 0xA0, 0x1F), t3, 4);
 }
 
@@ -319,7 +320,7 @@ static void paint_icon(HDC dc, int icon)
     case IC_APPEAR:
         monitor(dc, RGB(0x24, 0x70, 0x94));
         { int a[] = { 8, 42, 30, 12, 40, 42 }; brush_poly(dc, RGB(0x1F, 0xB5, 0xB0), a, 3); }
-        { int b[] = { 26, 42, 44, 18, 56, 42 }; brush_poly(dc, RGB(0x9B, 0x3C, 0xC9), b, 3); }
+        { int b[] = { 26, 42, 44, 18, 56, 42 }; brush_poly(dc, sg_accent_shade(RGB(0x9B, 0x3C, 0xC9)), b, 3); }
         { int c[] = { 40, 42, 56, 26, 56, 42 }; brush_poly(dc, RGB(0xF2, 0xA0, 0x1F), c, 3); }
         break;
     case IC_PERSONAL:                   /* a palette */
@@ -328,7 +329,7 @@ static void paint_icon(HDC dc, int icon)
         brush_ellipse(dc, RGB(0xE8, 0x4A, 0x3D), 14, 20, 24, 30);
         brush_ellipse(dc, RGB(0x1E, 0x6F, 0xD9), 28, 14, 38, 24);
         brush_ellipse(dc, RGB(0x10, 0x9E, 0x5A), 42, 18, 52, 28);
-        brush_ellipse(dc, RGB(0x9B, 0x3C, 0xC9), 14, 34, 24, 44);
+        brush_ellipse(dc, sg_accent_shade(RGB(0x9B, 0x3C, 0xC9)), 14, 34, 24, 44);
         break;
     case IC_CLOCK:
         brush_ellipse(dc, RGB(0x1E, 0x6F, 0xD9), 4, 4, 60, 60);
@@ -383,7 +384,7 @@ static void paint_icon(HDC dc, int icon)
         brush_rect(dc, RGB(0xEC, 0xBE, 0x50), 4, 22, 60, 56, 4);
         { int a[] = { 18, 50, 32, 16, 46, 50 }; line(dc, RGB(0x2E, 0x38, 0x48), 6, a, 3); }
         { int b[] = { 24, 38, 40, 38 }; line(dc, RGB(0x2E, 0x38, 0x48), 5, b, 2); }
-        { int u[] = { 14, 53, 50, 53 }; line(dc, RGB(0x70, 0x30, 0xC0), 3, u, 2); }
+        { int u[] = { 14, 53, 50, 53 }; line(dc, sg_accent_shade(RGB(0x70, 0x30, 0xC0)), 3, u, 2); }
         break;
     case IC_OK:
         brush_ellipse(dc, RGB(0x10, 0x7C, 0x10), 2, 2, 62, 62);
