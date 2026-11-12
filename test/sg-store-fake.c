@@ -34,6 +34,10 @@
  *                                   users' Programs (GOG GALAXY's: GOG.com\GOG GALAXY)
  * %SG_FAKE_LINKNAME%: with %SG_FAKE_LINK%, the program's shortcut is named that, not as the
  *                                   app (FreeOffice's TextMaker in "SoftMaker FreeOffice 2024")
+ * %SG_FAKE_DESKLINK%: the installer also puts on the Desktop "<that>.lnk" (to app.exe), "<that>
+ *                                   Tool.lnk" (to uninst.exe, which stays) and "<that> Other.lnk" (to
+ *                                   notepad.exe); uninst.exe deletes app.exe and leaves the shortcuts
+ *                                   (GeoGebra's, made by its own install hook)
  * %SG_FAKE_DECOY%: a second program named as the app, "<name> Renderer.exe" (GOG GALAXY's
  *                                   notifications renderer, which shuts down without its client)
  * <any> /stay                       a program left running (60 s; its process id
@@ -192,7 +196,7 @@ int wmain(int argc, WCHAR **argv)
             while (Process32NextW(snap, &pe));
             if (snap != INVALID_HANDLE_VALUE) CloseHandle(snap);
         }
-        if (wcsstr(args, L"/rmfiles")) {    /* DOSBox's: it removes its files, and has no entry to remove */
+        if (wcsstr(args, L"/rmfiles") || GetEnvironmentVariableW(L"SG_FAKE_DESKLINK", NULL, 0)) {    /* DOSBox's: it removes its files, and has no entry to remove */
             WCHAR app[MAX_PATH], *slash;
             lstrcpynW(app, self, MAX_PATH);
             if ((slash = wcsrchr(app, L'\\'))) lstrcpyW(slash + 1, L"app.exe");
@@ -362,6 +366,22 @@ int wmain(int argc, WCHAR **argv)
         WCHAR icon[MAX_PATH];
         swprintf(icon, MAX_PATH, L"%ls,0", exe);
         sz(HKEY_LOCAL_MACHINE, sub, L"DisplayIcon", icon);
+    }
+    {   /* %SG_FAKE_DESKLINK%: shortcuts of its own on the Desktop (GeoGebra's install hook) */
+        WCHAR name[96], desk[MAX_PATH], lnk[MAX_PATH], un[MAX_PATH], np[MAX_PATH];
+        if (GetEnvironmentVariableW(L"SG_FAKE_DESKLINK", name, ARRAYSIZE(name))) {
+            CoInitialize(NULL);
+            SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY | CSIDL_FLAG_CREATE, NULL, 0, desk);
+            swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", desk, name);
+            shortcut(lnk, exe, L"/from-desktop");
+            swprintf(un, MAX_PATH, L"%ls\\uninst.exe", dest);
+            swprintf(lnk, MAX_PATH, L"%ls\\%ls Tool.lnk", desk, name);
+            shortcut(lnk, un, L"");
+            ExpandEnvironmentStringsW(L"%SystemRoot%\\notepad.exe", np, MAX_PATH);
+            swprintf(lnk, MAX_PATH, L"%ls\\%ls Other.lnk", desk, name);
+            shortcut(lnk, np, L"");
+            CoUninitialize();
+        }
     }
     {   /* %SG_FAKE_EXIT%: installed, but ends with this code (WebView2's
          * 0x80040828, which its manifest lists as success) */

@@ -1824,6 +1824,87 @@ static BOOL another_part(const app_t *a, const WCHAR *cmd, const WCHAR *entry)
 #endif
 }
 
+/* ---- shortcuts left to nothing ------------------------------------------------------------------------
+ *
+ * An uninstalled app's shortcuts that point into its folder, now gone, are
+ * taken away: the person's Desktop and Start menu (and the machine's, where
+ * the store may). GeoGebra (Squirrel) makes its own "GeoGebra Classic"
+ * shortcuts in its install hook and its uninstall hook leaves them; Squirrel
+ * takes away only the ones it names itself ("GeoGebra"), so both stayed,
+ * pointing at a deleted Update.exe. Only a shortcut whose program was in the
+ * app's own folder and is no longer there; a Start-menu folder left empty
+ * goes too. The folder's last files can go a moment after the entry
+ * (Squirrel's Update.exe): up to ten seconds are given. */
+static BOOL link_target(IShellLinkW *link, const WCHAR *lnk, WCHAR *target, int cch)
+{
+    IPersistFile *file;
+    WCHAR raw[MAX_PATH];
+    BOOL ok = FALSE;
+    target[0] = 0;
+    if (FAILED(link->lpVtbl->QueryInterface(link, &IID_IPersistFile, (void **)&file))) return FALSE;
+    if (SUCCEEDED(file->lpVtbl->Load(file, lnk, STGM_READ)) &&
+        SUCCEEDED(link->lpVtbl->GetPath(link, raw, MAX_PATH, NULL, SLGP_RAWPATH)) && raw[0])
+        ok = ExpandEnvironmentStringsW(raw, target, cch) > 0 && target[0];
+    file->lpVtbl->Release(file);
+    return ok;
+}
+
+/* drop dir's dead shortcuts in folder (and its subfolders, depth levels down); *waited: ms spent */
+static void drop_dead_in(IShellLinkW *link, const WCHAR *folder, const WCHAR *dir, int depth, DWORD *waited)
+{
+    WCHAR pat[MAX_PATH], path[MAX_PATH], target[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    int dn = lstrlenW(dir);
+    if (lstrlenW(folder) + 3 >= MAX_PATH) return;
+    swprintf(pat, MAX_PATH, L"%ls\\*", folder);
+    if ((h = FindFirstFileW(pat, &fd)) == INVALID_HANDLE_VALUE) return;
+    do {
+        int n = lstrlenW(fd.cFileName);
+        if (fd.cFileName[0] == L'.' || lstrlenW(folder) + n + 2 >= MAX_PATH) continue;
+        swprintf(path, MAX_PATH, L"%ls\\%ls", folder, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (depth > 0) {
+                drop_dead_in(link, path, dir, depth - 1, waited);
+                RemoveDirectoryW(path);   /* only when that left it empty */
+            }
+            continue;
+        }
+        if (n < 5 || lstrcmpiW(fd.cFileName + n - 4, L".lnk")) continue;
+        if (!link_target(link, path, target, MAX_PATH)) continue;
+        if (lstrlenW(target) <= dn || _wcsnicmp(target, dir, dn) || target[dn] != L'\\') continue;
+        while (GetFileAttributesW(target) != INVALID_FILE_ATTRIBUTES && *waited < 10000) { Sleep(500); *waited += 500; }
+        if (GetFileAttributesW(target) != INVALID_FILE_ATTRIBUTES) continue;   /* still there: not dead */
+        DeleteFileW(path);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+static void drop_dead_shortcuts(const WCHAR *dir)
+{
+    static const struct { int csidl, depth; } places[] = {
+        { CSIDL_DESKTOPDIRECTORY, 0 }, { CSIDL_PROGRAMS, 2 },
+        { CSIDL_COMMON_DESKTOPDIRECTORY, 0 }, { CSIDL_COMMON_PROGRAMS, 2 },
+    };
+    WCHAR folder[MAX_PATH];
+    IShellLinkW *link;
+    HRESULT init;
+    DWORD waited = 0;
+    unsigned i;
+#ifdef SG_MUTANT_KEEPDEADLINKS
+    return;
+#endif
+    if (!dir[0] || !own_folder(dir)) return;
+    init = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) {
+        for (i = 0; i < ARRAYSIZE(places); i++)
+            if (SUCCEEDED(SHGetFolderPathW(NULL, places[i].csidl, NULL, 0, folder)))
+                drop_dead_in(link, folder, dir, places[i].depth, &waited);
+        link->lpVtbl->Release(link);
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+}
+
 #define UNINSTALL_NEXT 4   /* uninstall_once: removed one part; another is left */
 
 /* An uninstaller of the machine's (its entry in HKLM) that the person cannot
@@ -1872,7 +1953,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     DWORD tree[64], grace = 180000;
     FILETIME since;
     int ntree = 0;
-    WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH];
+    WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH] = L"";
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     HKEY root = NULL;
     DWORD code = 0, start, gone_since = 0, gone_wait = 20000, tick;
@@ -1971,6 +2052,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
         swprintf(err, cch, code ? L"%ls was not removed (its uninstaller stopped with %lu)." : L"%ls was not removed.", a->name, code);
         return 1;
     }
+    drop_dead_shortcuts(dir);
     return 0;
 }
 

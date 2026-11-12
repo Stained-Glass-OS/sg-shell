@@ -68,6 +68,7 @@
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_UNINSTNAMED an app named as an uninstaller (BCUninstaller.exe) is taken for its own uninstaller
+#   SG_MUTANT_KEEPDEADLINKS an uninstalled app's own Desktop shortcut into its removed folder stays (GeoGebra)
 #   SG_MUTANT_NOSUITEFOLDER a suite's shortcuts in its own Start folder (FreeOffice's TextMaker) are not its programs
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
@@ -189,7 +190,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -849,6 +850,31 @@ wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
 rm -f "$G/launch.log"; wine reg delete "$K\\0S" /f >/dev/null 2>&1; ununinstall PickSuite
 rm -rf "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Pick Suite 2024" \
     "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Uninstall Pick Suite 2024.lnk"
+# An app whose own install hook made Desktop shortcuts its uninstaller leaves (GeoGebra, Squirrel):
+# after the uninstall, the one to its removed program goes; one to a file still in its folder and
+# one to another program stay
+deskfind() { find "$WINEPREFIX/drive_c/users" "$HOME" -path '*/Desktop/*' -name "$1" 2>/dev/null | head -1; }
+app 0K 'Desk Gate' Utilities windows 'winget:Fake.Pick' 'Desk Gate'
+for round in real mutant; do
+    SG_FAKE_DESKLINK='Desk Gate' SG_FAKE_KEY=DeskGate SG_FAKE_DISPLAY='Desk Gate' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Desk Gate' \
+        wine "$EXE" --install 0K >/dev/null 2>&1
+    dl=$(deskfind 'Desk Gate.lnk')
+    [ -n "$dl" ] || { fail "0K: the stand-in made no Desktop shortcut"; break; }
+    if [ $round = real ]; then
+        rm -f "$D.result"; SG_FAKE_DESKLINK='Desk Gate' wine "$EXE" --uninstall 0K >/dev/null 2>&1
+        [ ! -e "$dl" ] && pass "after an uninstall, the app's own Desktop shortcut to its removed program is taken away (GeoGebra)" \
+            || fail "0K: dead Desktop shortcut stayed: $dl ($(cat "$D.result" 2>/dev/null))"
+        [ -n "$(deskfind 'Desk Gate Tool.lnk')" ] && [ -n "$(deskfind 'Desk Gate Other.lnk')" ] \
+            && pass "...one to a file still there, and one to another program, stay" || fail "0K: a live shortcut went"
+    else
+        rm -f "$D.result"; SG_FAKE_DESKLINK='Desk Gate' wine "$T/mut-keepdeadlinks.exe" --uninstall 0K >/dev/null 2>&1; ec=$?
+        [ -e "$dl" ] && pass "MUTANT KEEPDEADLINKS leaves it (gate catches it)" \
+            || fail "KEEPDEADLINKS not detected: exit $ec, $(cat "$D.result" 2>/dev/null), was $dl, now $(deskfind 'Desk Gate*.lnk')"
+    fi
+    for f in 'Desk Gate.lnk' 'Desk Gate Tool.lnk' 'Desk Gate Other.lnk'; do f=$(deskfind "$f"); [ -n "$f" ] && rm -f "$f"; done
+    ununinstall DeskGate; rm -rf "$WINEPREFIX/drive_c/Program Files/Desk Gate"
+done
+wine reg delete "$K\\0K" /f >/dev/null 2>&1
 # A Linux app whose Run is its desktop entry: gio launch starts it (the
 # Store's newer Linux apps name their .desktop, not a guessed program path)
 if [ -x /usr/bin/gio ]; then
@@ -2237,9 +2263,11 @@ handoff() { # exe -> ok|fail
 afterwait() { # exe -> done|early
     SG_FAKE_KEY=FakeApp SG_FAKE_DISPLAY='Fake App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Fake App' wine "$EXE" --install 01 >/dev/null 2>&1
     rm -f "$G/after.log"
-    SG_FAKE_HANDOFF=1 SG_FAKE_AFTER=5000 SG_STORE_UNINSTALL_GRACE=20000 SG_MUT="$1" run --uninstall 01
+    # 15 s: longer than the dead-shortcut step's own wait for the app's files (10 s),
+    # which would otherwise cover for a store that stopped waiting for the uninstaller
+    SG_FAKE_HANDOFF=1 SG_FAKE_AFTER=15000 SG_STORE_UNINSTALL_GRACE=30000 SG_MUT="$1" run --uninstall 01
     [ -s "$G/after.log" ] && echo done || echo early
-    sleep 6; ununinstall FakeApp; sleep 0.5
+    sleep 16; ununinstall FakeApp; sleep 0.5
 }
 [ "$(afterwait "$EXE")" = done ] && pass "an uninstaller still at work after its entry goes is waited for (NSIS shortcuts)" || fail "uninstall done before the shortcuts went"
 [ "$(afterwait "$T/mut-noafterwait.exe")" = early ] && pass "MUTANT NOAFTERWAIT is done while its shortcuts are still there (gate catches it)" || fail "NOAFTERWAIT not detected"
