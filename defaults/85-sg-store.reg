@@ -4607,6 +4607,36 @@ Windows Registry Editor Version 5.00
 "Source"="winget:PCSX2Team.PCSX2"
 "DetectName"="PCSX2"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\227]
+"Name"="Ditto"
+"Publisher"="Scott Brogden"
+"Description"="Clipboard history that sits in the notification area."
+"Category"="Utilities"
+"Colour"=dword:00303c8c
+"Tier"="windows"
+"Source"="winget:Ditto.Ditto"
+"DetectName"="Ditto"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\228]
+"Name"="PrusaSlicer"
+"Publisher"="Prusa Research"
+"Description"="Prepares 3D models for printing."
+"Category"="Graphics"
+"Colour"=dword:00e06a1a
+"Tier"="windows"
+"Source"="winget:Prusa3D.PrusaSlicer"
+"DetectName"="PrusaSlicer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\229]
+"Name"="DBeaver"
+"Publisher"="DBeaver Corp"
+"Description"="Universal database tool for developers."
+"Category"="Development"
+"Colour"=dword:00a0522d
+"Tier"="windows"
+"Source"="winget:DBeaver.DBeaver.Community"
+"DetectName"="DBeaver"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

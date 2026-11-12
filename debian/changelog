@@ -1,3 +1,11 @@
+sg-shell (0.1.0-265) unstable; urgency=medium
+
+  * Catalogue: Ditto (a notification-area app; no window is expected),
+    PrusaSlicer and DBeaver Community, each installed, opened and
+    uninstalled on qa4.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 18:50:00 -0800
+
 sg-shell (0.1.0-264) unstable; urgency=medium
 
   * Catalogue: FreeCAD, MusicBrainz Picard and PCSX2 (each installed,
