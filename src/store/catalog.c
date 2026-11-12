@@ -635,7 +635,11 @@ static BOOL icon_program(const app_t *a, const WCHAR *icon, WCHAR *out, int cch)
 }
 
 /* the best-named shortcut under dir (and its folders, depth levels down), not skip */
-static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, const WCHAR *skip, WCHAR *best, int cch, int *best_len)
+/* named: dir is a folder named as the app (FreeOffice's "SoftMaker FreeOffice 2024"); its shortcuts are
+ * the app's programs whatever they are called (TextMaker, PlanMaker), after any named as the app */
+#define SUITE_RANK 1000
+static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, const WCHAR *skip, WCHAR *best, int cch, int *best_len,
+                          BOOL named)
 {
     WCHAR pat[MAX_PATH], base[MAX_PATH];
     WIN32_FIND_DATAW fd;
@@ -647,17 +651,23 @@ static void find_shortcut(const app_t *a, const WCHAR *dir, int depth, const WCH
         if (fd.cFileName[0] == '.') continue;
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             if (depth > 0 && lstrlenW(dir) + n + 2 < MAX_PATH) {
+                BOOL sub_named = FALSE;
+#ifndef SG_MUTANT_NOSUITEFOLDER
+                sub_named = name_matches(fd.cFileName, a->detect_name) || name_matches(fd.cFileName, a->name);
+#endif
                 swprintf(base, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
-                find_shortcut(a, base, depth - 1, skip, best, cch, best_len);
+                find_shortcut(a, base, depth - 1, skip, best, cch, best_len, sub_named);
             }
             continue;
         }
         if (n < 5 || _wcsicmp(fd.cFileName + n - 4, L".lnk")) continue;
         lstrcpynW(base, fd.cFileName, n - 3);
         if (not_the_program(a, base)) continue;
-        if (!name_matches(base, a->detect_name) && !name_matches(base, a->name)) continue;
+        if (name_matches(base, a->detect_name) || name_matches(base, a->name)) ;
+        else if (named) n += SUITE_RANK;
+        else continue;
         if (*best_len && n >= *best_len) continue;      /* "OpenOffice" before "OpenOffice Calc" */
-        if (lstrlenW(dir) + n + 2 >= cch) continue;
+        if (lstrlenW(dir) + lstrlenW(fd.cFileName) + 2 >= cch) continue;
         swprintf(base, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
         if (skip && !lstrcmpiW(base, skip)) continue;
         lstrcpynW(best, base, cch);
@@ -691,7 +701,7 @@ static void start_shortcut(const app_t *a, WCHAR *out, int cch)
     if (!store_shortcut(a, mine, MAX_PATH)) mine[0] = 0;
     for (i = 0; i < ARRAYSIZE(folders); i++)
         if (SUCCEEDED(SHGetFolderPathW(NULL, folders[i], NULL, 0, dir)))
-            find_shortcut(a, dir, START_DEPTH, mine[0] ? mine : NULL, out, cch, &best_len);
+            find_shortcut(a, dir, START_DEPTH, mine[0] ? mine : NULL, out, cch, &best_len, FALSE);
 }
 
 BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)

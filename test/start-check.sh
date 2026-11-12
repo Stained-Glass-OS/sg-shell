@@ -212,6 +212,14 @@ m=$(convert "$HERE/build/start-glass.png" -crop "14x14+$mx+$my" +repage -format 
 [ "$(val acrylic)" = 72 ] && pass "and it is frosted more, as glass (72)" || fail "Glass acrylic: $(val acrylic)"
 click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
 [ "$(val list | cut -d' ' -f1)" = 1 ] && has "item Zeta Test App" && pass "All Programs lists the programs in place" || fail "Glass All Programs: $(val list)"
+# ...in dark text on the white column: in the glass palette's white only the
+# icons showed (a user's report, 2026-11-11). Mutant SG_MUTANT_SEVEN_WHITE_LIST.
+shot glass-list
+lt=$(geo gleft 2); lb=$(geo xall 2)
+dark=$(convert "$HERE/build/start-glass-list.png" -crop "160x$((lb - lt - 16))+$((gx + 70))+$((gy + lt + 8))" +repage \
+       -colorspace Gray -threshold 40% -format '%[fx:int((1-mean)*w*h+0.5)]' info: 2>/dev/null)
+[ "${dark:-0}" -ge 200 ] && pass "...their names in dark text on the white ($dark dark pixels)" \
+    || fail "Glass All Programs names do not show on the white: ${dark:-?} dark pixels (want 200 or more)"
 click $((gx + 60)) $((gy + ($(geo xall 2) + $(geo xall 4)) / 2))
 [ "$(val list | cut -d' ' -f1)" = 0 ] && pass "and Back returns" || fail "Glass Back: $(val list)"
 # Start's own look (Start\Look, David 2026-10-02: "select Rounded, then go to

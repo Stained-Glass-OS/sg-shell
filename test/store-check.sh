@@ -68,6 +68,7 @@
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_UNINSTNAMED an app named as an uninstaller (BCUninstaller.exe) is taken for its own uninstaller
+#   SG_MUTANT_NOSUITEFOLDER a suite's shortcuts in its own Start folder (FreeOffice's TextMaker) are not its programs
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
@@ -188,7 +189,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -831,6 +832,23 @@ wine "$T/mut-uninstnamed.exe" --open 0U >/dev/null 2>&1; sleep 3
 [ ! -e "$G/launch.log" ] && pass "MUTANT UNINSTNAMED takes it for an uninstaller and opens Apps & features (gate catches it)" \
     || fail "UNINSTNAMED not detected: $(cat "$G/launch.log" 2>/dev/null)"
 rm -f "$G/launch.log"; wine reg delete "$K\\0U" /f >/dev/null 2>&1; ununinstall GateUn_is1; rm -rf "$UD"
+# A suite whose programs are not named as it (FreeOffice: TextMaker, PlanMaker in "SoftMaker FreeOffice
+# 2024"), with no program for its icon (an MSI's entry has none): the shortcuts in its own Start folder
+app 0S 'Pick Suite' Productivity windows 'winget:Fake.Pick' 'Pick Suite'
+SG_FAKE_LINK=1 SG_FAKE_KEY=PickSuite SG_FAKE_DISPLAY='Pick Suite 2024' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Pick Suite' \
+    SG_FAKE_LINKDIR='Pick Suite 2024' SG_FAKE_LINKNAME='Writer' wine "$EXE" --install 0S >/dev/null 2>&1
+rm -f "$G/launch.log"
+run --open 0S
+launched 'from-shortcut' && pass "a suite's program is the shortcut in its own Start folder (FreeOffice's TextMaker), not Apps & features" \
+    || fail "Open 0S: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+wine "$T/mut-nosuitefolder.exe" --open 0S >/dev/null 2>&1; sleep 3
+! grep -q 'from-shortcut' "$G/launch.log" 2>/dev/null && pass "MUTANT NOSUITEFOLDER misses the suite's shortcut (gate catches it)" \
+    || fail "NOSUITEFOLDER not detected: $(cat "$G/launch.log" 2>/dev/null)"
+wine taskkill /f /im sg-settings64.exe >/dev/null 2>&1
+rm -f "$G/launch.log"; wine reg delete "$K\\0S" /f >/dev/null 2>&1; ununinstall PickSuite
+rm -rf "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Pick Suite 2024" \
+    "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Uninstall Pick Suite 2024.lnk"
 # A Linux app whose Run is its desktop entry: gio launch starts it (the
 # Store's newer Linux apps name their .desktop, not a guessed program path)
 if [ -x /usr/bin/gio ]; then

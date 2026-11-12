@@ -145,6 +145,15 @@ static const struct start_palette glass_palette = {
     RGB(0x24, 0x2F, 0x3C), RGB(0x3A, 0x4E, 0x66), RGB(0x44, 0x54, 0x6A), RGB(0x8A, 0x9A, 0xB0), RGB(0x2A, 0x38, 0x48),
 };
 static const struct start_palette *g_pal = &dark_palette;
+/* Glass's programs column is white whatever the mode: its list (All Programs,
+ * a search) is drawn in dark text there -- in the glass palette's white the
+ * names did not show, only their icons (a user's report, 2026-11-11) */
+static const struct start_palette seven_list_palette = {
+    RGB(0xFF, 0xFF, 0xFF), RGB(0xF4, 0xF6, 0xF9), RGB(0xEC, 0xF0, 0xF5), RGB(0xE4, 0xF2, 0xFC),
+    RGB(0xCC, 0xE4, 0xF7), RGB(0x00, 0x00, 0x00), RGB(0x5A, 0x64, 0x70), RGB(0xFF, 0xFF, 0xFF),
+    RGB(0xB0, 0xB8, 0xC4), RGB(0xA0, 0xA8, 0xB4),
+    RGB(0xF9, 0xFA, 0xFC), RGB(0xE0, 0xE8, 0xF0), RGB(0xC8, 0xD0, 0xDA), RGB(0x9C, 0xC8, 0xEC), RGB(0xE4, 0xF2, 0xFC),
+};
 static int g_look_frame;   /* the look's frame, px at 96 DPI (0: the flat look's 1 px edge) */
 #define COL_PANEL    (g_pal->panel)
 #define COL_RAIL     (g_pal->rail)
@@ -2888,7 +2897,15 @@ static void draw_seven(HDC dc)
 
     /* the programs, on white */
     g_round_fill(dc, left, S(6), RGB(0xFF, 0xFF, 0xFF), RGB(0x30, 0x48, 0x66));
-    if (g_show_list) draw_list(dc);
+    if (g_show_list)
+    {
+        const struct start_palette *glass = g_pal;
+#ifndef SG_MUTANT_SEVEN_WHITE_LIST
+        g_pal = &seven_list_palette;
+#endif
+        draw_list(dc);
+        g_pal = glass;
+    }
     else
     {
         for (i = 0; i < x_npins(); i++)

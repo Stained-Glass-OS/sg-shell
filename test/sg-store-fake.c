@@ -32,6 +32,8 @@
  * %SG_FAKE_LATE%: with %SG_FAKE_NOKEY%, no app.exe either (the gate puts it there later: Dropbox).
  * %SG_FAKE_LINKDIR%: with %SG_FAKE_LINK%, the program's shortcut is in that folder of all
  *                                   users' Programs (GOG GALAXY's: GOG.com\GOG GALAXY)
+ * %SG_FAKE_LINKNAME%: with %SG_FAKE_LINK%, the program's shortcut is named that, not as the
+ *                                   app (FreeOffice's TextMaker in "SoftMaker FreeOffice 2024")
  * %SG_FAKE_DECOY%: a second program named as the app, "<name> Renderer.exe" (GOG GALAXY's
  *                                   notifications renderer, which shuts down without its client)
  * <any> /stay                       a program left running (60 s; its process id
@@ -346,12 +348,13 @@ int wmain(int argc, WCHAR **argv)
         swprintf(lnk, MAX_PATH, L"%ls\\Uninstall %ls.lnk", programs, display);
         shortcut(lnk, exe, L"/uninstall");
         {
-            WCHAR linkdir[MAX_PATH], folder[MAX_PATH];
+            WCHAR linkdir[MAX_PATH], folder[MAX_PATH], linkname[128];
             if (GetEnvironmentVariableW(L"SG_FAKE_LINKDIR", linkdir, MAX_PATH)) {
                 swprintf(folder, MAX_PATH, L"%ls\\%ls", programs, linkdir);
                 SHCreateDirectoryExW(NULL, folder, NULL);
             } else lstrcpyW(folder, programs);
-            swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", folder, display);
+            if (!GetEnvironmentVariableW(L"SG_FAKE_LINKNAME", linkname, ARRAYSIZE(linkname))) lstrcpynW(linkname, display, ARRAYSIZE(linkname));
+            swprintf(lnk, MAX_PATH, L"%ls\\%ls.lnk", folder, linkname);
         }
         shortcut(lnk, exe, L"/from-shortcut");
         CoUninitialize();

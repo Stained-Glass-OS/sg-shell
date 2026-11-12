@@ -1,3 +1,18 @@
+sg-shell (0.1.0-263) unstable; urgency=medium
+
+  * Store: Open finds a suite's program in the app's own Start folder.
+    FreeOffice's entry has no icon program (an MSI's), and its shortcuts
+    are named TextMaker, PlanMaker and Presentations, inside "SoftMaker
+    FreeOffice 2024", so Open showed Apps & features. Shortcuts in a
+    folder named as the app now count, after any named as the app.
+    store-check: Pick Suite (0S), mutant NOSUITEFOLDER.
+  * Start, Glass look: All Programs and search results are drawn in dark
+    text on the white programs column. They used the glass palette's white,
+    so only the icons showed (a user's report). start-check counts the dark
+    text; mutant SEVEN_WHITE_LIST.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 11 Nov 2026 15:40:00 -0800
+
 sg-shell (0.1.0-262) unstable; urgency=medium
 
   * Store: Open starts an app that is an uninstaller itself. Bulk Crap
