@@ -3205,6 +3205,10 @@ static void query_taskbar(void)
     g_bar_known = TRUE;
 }
 
+/* the bar Start was opened from when it is another display's (wine-sg 7751's
+ * Shell_SecondaryTrayWnd): Start opens on that display, as on Windows */
+static HWND g_from_bar;
+
 static void layout_panel(void)
 {
     int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN), x, y;
@@ -3213,6 +3217,14 @@ static void layout_panel(void)
 
     if (!g_bar_known) query_taskbar();
     abd = g_bar;
+#ifndef SG_MUTANT_START_MAIN_DISPLAY_ONLY
+    if (g_from_bar && IsWindow(g_from_bar)) {
+        MONITORINFO mi = { sizeof(mi) };
+        if (GetWindowRect(g_from_bar, &abd.rc) &&
+            GetMonitorInfoW(MonitorFromWindow(g_from_bar, MONITOR_DEFAULTTONEAREST), &mi))
+            work = mi.rcMonitor;
+    }
+#endif
     switch (abd.uEdge)
     {
     case ABE_TOP:   work.top = abd.rc.bottom; break;
@@ -3616,7 +3628,19 @@ static LRESULT CALLBACK listener_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == SG_START_TOGGLE)
     {
-        /* wparam 1: the taskbar's search -- open, ready for typing */
+        /* wparam 1: the taskbar's search -- open, ready for typing; lparam:
+         * another display's taskbar, whose Start this was */
+        WCHAR cls[64] = L"";
+        HWND from = (HWND)lp;
+        if (!from || !IsWindow(from) || !GetClassNameW(from, cls, ARRAYSIZE(cls)) || lstrcmpW(cls, L"Shell_SecondaryTrayWnd"))
+            from = NULL;
+        if (IsWindowVisible(g_panel) && from != g_from_bar && wp != 1) {
+            /* open on one display, Start pressed on another: it moves there */
+            g_from_bar = from;
+            layout_panel();
+            return 0;
+        }
+        g_from_bar = from;
         if (wp == 1) { if (!IsWindowVisible(g_panel)) show_panel(TRUE); }
         else show_panel(!IsWindowVisible(g_panel));
         return 0;

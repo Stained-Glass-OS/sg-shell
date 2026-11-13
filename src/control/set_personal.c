@@ -425,7 +425,8 @@ BOOL set_cmd_start(int id, int code, HWND ctl)
  * auto-hide in our own key; every change is announced with WM_SETTINGCHANGE
  * "TraySettings", which the taskbar (wine-sg 0164) reads them again on. */
 enum { CMD_LOCKBAR = CMD_PAGE_FIRST + 1, CMD_AUTOHIDE, CMD_SMALL, CMD_ALIGN, CMD_PEEK, CMD_BADGES,
-       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH, CMD_TBCOLOR, CMD_DESKTOPS, CMD_TBSTYLE };
+       CMD_POSITION, CMD_COMBINE, CMD_TASKVIEW, CMD_SEARCH, CMD_TBCOLOR, CMD_DESKTOPS, CMD_TBSTYLE,
+       CMD_MM_ALL, CMD_MM_MODE };
 #define SG_TASKBAR L"Software\\Stained Glass\\Taskbar"
 #define SEARCH_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Search"
 
@@ -462,6 +463,23 @@ void set_build_taskbar(void)
      * colours replace Taskbar color; choosing one sets its alignment,
      * combining and buttons, which can be changed after */
     st_combo(&y, L"Taskbar style", styles, 4, look_taskbar_look(), CMD_TBSTYLE);
+
+    /* several displays (wine-sg 7751), as Windows has them: a bar on every
+     * display, and where a window's button is. The main taskbar is on the
+     * main display (Settings > System > Display: "Make this my main display") */
+    y = st_head(y, L"Multiple displays");
+    {
+        static const WCHAR *const mm[] = { L"All taskbars", L"Main taskbar and taskbar where window is open",
+                                           L"Taskbar where window is open" };
+        BOOL all = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"MMTaskbarEnabled", 1) != 0;
+        DWORD mode = reg_dword(HKEY_CURRENT_USER, ADVANCED, L"MMTaskbarMode", 0);
+        HWND c;
+        st_toggle(&y, L"Show taskbar on all displays", all, CMD_MM_ALL);
+        c = st_combo(&y, L"Show taskbar buttons on", mm, 3, mode <= 2 ? (int)mode : 0, CMD_MM_MODE);
+        EnableWindow(c, all && GetSystemMetrics(SM_CMONITORS) > 1);
+        if (GetSystemMetrics(SM_CMONITORS) < 2)
+            y = st_para(y - S(6), L"These apply when more than one display is connected.");
+    }
 }
 
 static void tray_settings_changed(void)
@@ -481,6 +499,15 @@ BOOL set_cmd_taskbar(int id, int code, HWND ctl)
     case CMD_PEEK: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"DisablePreviewDesktop", !st_checked(ctl)); break;
     case CMD_TASKVIEW: reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"ShowTaskViewButton", st_checked(ctl)); break;
     case CMD_DESKTOPS: reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"ShowDesktops", st_checked(ctl)); break;
+    case CMD_MM_ALL:
+        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"MMTaskbarEnabled", st_checked(ctl));
+        tray_settings_changed();
+        refresh_page();   /* "Show taskbar buttons on" follows it */
+        return TRUE;
+    case CMD_MM_MODE:
+        if (code != CBN_SELCHANGE || sel < 0) return TRUE;
+        reg_set_dword(HKEY_CURRENT_USER, ADVANCED, L"MMTaskbarMode", sel);
+        break;
     case CMD_TBCOLOR:
         if (code != CBN_SELCHANGE || sel < 0) return TRUE;
         reg_set_dword(HKEY_CURRENT_USER, SG_TASKBAR, L"Color", sel);

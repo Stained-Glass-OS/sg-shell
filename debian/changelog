@@ -1,3 +1,20 @@
+sg-shell (0.1.0-268) unstable; urgency=medium
+
+  * Settings > System > Display, for several displays as on Windows:
+    "Rearrange your displays" -- each display drawn where it is, numbered,
+    selected with a click and dragged (it snaps against the nearest edge of
+    another, never over one), Identify (each display's number on it) and
+    Apply; the resolution, the new "Refresh rate" list and the orientation
+    are the selected display's, each display at its own rate; "Multiple
+    displays" (Duplicate, Extend, Show only on N) and "Make this my main
+    display", through sg-settingsctl (sg-session 243). Over every monitor
+    the page no longer resizes Wine's desktop to one display's mode.
+  * Settings > Personalization > Taskbar > Multiple displays: "Show taskbar
+    on all displays" and "Show taskbar buttons on" (wine-sg 7751).
+  * Start opens on the display whose taskbar's Start was pressed.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 12 Nov 2026 19:05:00 -0800
+
 sg-shell (0.1.0-267) unstable; urgency=medium
 
   * The accent colour reaches our apps' purple: what was drawn in the

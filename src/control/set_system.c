@@ -18,10 +18,327 @@ static const WCHAR DESKTOP[] = L"Control Panel\\Desktop";
 /* ---- Display ------------------------------------------------------------------------------- */
 enum {
     CMD_NIGHT = CMD_PAGE_FIRST + 1, CMD_NIGHT_STRENGTH, CMD_SCALE, CMD_RES, CMD_OUTPUT, CMD_KEEP, CMD_REVERT,
-    CMD_ADVANCED, CMD_ORIENT, CMD_RLOCK,
+    CMD_ADVANCED, CMD_ORIENT, CMD_RLOCK, CMD_RATE, CMD_IDENTIFY, CMD_APPLY_LAYOUT, CMD_MAKEMAIN, CMD_PROJECT,
+    CMD_ARRANGE,
 };
 
-struct mode { int w, h; WCHAR text[48]; char spec[48]; };
+/* ---- several displays (David 2026-11-12: "many monitors, more than two even, be able to
+ * adjust where they are"): each one where the compositor has it (sg-settingsctl display:
+ * PLACE), dragged in the box as on Windows and applied with Apply; the main display; extend /
+ * duplicate / only one; the resolution, refresh rate and orientation of the one selected ---- */
+struct disp {
+    char name[64];
+    WCHAR desc[128];
+    int x, y, w, h;             /* in the layout (dragged: not applied yet) */
+    BOOL on, main;
+};
+static struct disp g_disps[16];
+static int g_ndisps, g_sel;
+static BOOL g_layout_dirty;     /* dragged, not applied: kept over the page being built again */
+static char g_project[80];      /* extend, duplicate, only<TAB>NAME */
+
+static BOOL span_mode(void)
+{
+    /* the desktop over every monitor (wine-sg 7749): Wine follows the monitors itself */
+    WCHAR v[8] = L"";
+    DWORD size = sizeof(v);
+    return !RegGetValueW(HKEY_CURRENT_USER, L"Software\\Wine\\Explorer", L"HostMonitors", RRF_RT_REG_SZ, NULL, v, &size) &&
+           (v[0] == 'Y' || v[0] == 'y' || v[0] == '1');
+}
+
+/* names in their natural order: DP-2 before DP-10 -- the displays' numbers */
+static int natcmp(const char *a, const char *b)
+{
+    while (*a && *b) {
+        if (isdigit((unsigned char)*a) && isdigit((unsigned char)*b)) {
+            long x = strtol(a, (char **)&a, 10), y = strtol(b, (char **)&b, 10);
+            if (x != y) return x < y ? -1 : 1;
+            continue;
+        }
+        if (*a != *b) return (unsigned char)*a - (unsigned char)*b;
+        a++; b++;
+    }
+    return (unsigned char)*a - (unsigned char)*b;
+}
+
+static int disp_order(const void *a, const void *b)
+{
+    return natcmp(((const struct disp *)a)->name, ((const struct disp *)b)->name);
+}
+
+static void load_displays(const char *ans)
+{
+    const char *pos = NULL;
+    char buf[512], keep[64] = "";
+    struct disp old[16];
+    int nold = g_ndisps, i;
+
+    if (g_sel >= 0 && g_sel < g_ndisps) lstrcpynA(keep, g_disps[g_sel].name, sizeof(keep));
+    memcpy(old, g_disps, sizeof(old));
+    g_ndisps = 0;
+    while (g_ndisps < (int)ARRAYSIZE(g_disps) && ctl_line(ans, "PLACE", &pos, buf, sizeof(buf))) {
+        struct disp *d = &g_disps[g_ndisps];
+        WCHAR f[64];
+        ctl_field(buf, 0, f, ARRAYSIZE(f));
+        WideCharToMultiByte(CP_UTF8, 0, f, -1, d->name, sizeof(d->name), NULL, NULL);
+        ctl_field(buf, 1, f, ARRAYSIZE(f)); d->x = _wtoi(f);
+        ctl_field(buf, 2, f, ARRAYSIZE(f)); d->y = _wtoi(f);
+        ctl_field(buf, 3, f, ARRAYSIZE(f)); d->w = _wtoi(f);
+        ctl_field(buf, 4, f, ARRAYSIZE(f)); d->h = _wtoi(f);
+        ctl_field(buf, 5, f, ARRAYSIZE(f)); d->on = !lstrcmpW(f, L"yes");
+        ctl_field(buf, 6, f, ARRAYSIZE(f)); d->main = !lstrcmpW(f, L"yes");
+        if (d->w <= 0 || d->h <= 0) { d->w = 1280; d->h = 720; }
+        d->desc[0] = 0;
+        g_ndisps++;
+    }
+    qsort(g_disps, g_ndisps, sizeof(g_disps[0]), disp_order);
+    /* each one's description (OUTPUT name<TAB>mode<TAB>scale<TAB>description) */
+    pos = NULL;
+    while (ctl_line(ans, "OUTPUT", &pos, buf, sizeof(buf))) {
+        WCHAR f[64];
+        char name[64];
+        ctl_field(buf, 0, f, ARRAYSIZE(f));
+        WideCharToMultiByte(CP_UTF8, 0, f, -1, name, sizeof(name), NULL, NULL);
+        for (i = 0; i < g_ndisps; i++)
+            if (!strcmp(g_disps[i].name, name)) ctl_field(buf, 3, g_disps[i].desc, ARRAYSIZE(g_disps[i].desc));
+    }
+    g_project[0] = 0;
+    if (ctl_line(ans, "PROJECT", NULL, buf, sizeof(buf))) lstrcpynA(g_project, buf, sizeof(g_project));
+    /* dragged and not applied: those places stay */
+    if (g_layout_dirty)
+        for (i = 0; i < g_ndisps; i++) {
+            int j;
+            for (j = 0; j < nold; j++)
+                if (!strcmp(old[j].name, g_disps[i].name)) { g_disps[i].x = old[j].x; g_disps[i].y = old[j].y; }
+        }
+    g_sel = -1;
+    for (i = 0; i < g_ndisps; i++) if (keep[0] && !strcmp(g_disps[i].name, keep)) g_sel = i;
+    if (g_sel < 0) for (i = 0; i < g_ndisps; i++) if (g_disps[i].main) g_sel = i;
+    if (g_sel < 0 && g_ndisps) g_sel = 0;
+}
+
+/* the box the displays are drawn in, and dragged */
+static double g_ar_scale;
+static int g_ar_ox, g_ar_oy, g_drag = -1, g_drag_dx, g_drag_dy;
+
+static void arrange_geometry(const RECT *rc)
+{
+    int minx = INT_MAX, miny = INT_MAX, maxx = INT_MIN, maxy = INT_MIN, i;
+    double sx, sy;
+    for (i = 0; i < g_ndisps; i++) {
+        minx = min(minx, g_disps[i].x); miny = min(miny, g_disps[i].y);
+        maxx = max(maxx, g_disps[i].x + g_disps[i].w); maxy = max(maxy, g_disps[i].y + g_disps[i].h);
+    }
+    if (!g_ndisps) return;
+    /* room around them to drag one past the others' edges */
+    sx = (rc->right - S(40)) / (double)(maxx - minx + (maxx - minx) / 3);
+    sy = (rc->bottom - S(30)) / (double)(maxy - miny + (maxy - miny) / 3);
+    g_ar_scale = min(sx, sy);
+    g_ar_ox = (rc->right - (int)((maxx - minx) * g_ar_scale)) / 2 - (int)(minx * g_ar_scale);
+    g_ar_oy = (rc->bottom - (int)((maxy - miny) * g_ar_scale)) / 2 - (int)(miny * g_ar_scale);
+}
+
+static RECT disp_box(int i)
+{
+    RECT r;
+    r.left = g_ar_ox + (int)(g_disps[i].x * g_ar_scale);
+    r.top = g_ar_oy + (int)(g_disps[i].y * g_ar_scale);
+    r.right = g_ar_ox + (int)((g_disps[i].x + g_disps[i].w) * g_ar_scale);
+    r.bottom = g_ar_oy + (int)((g_disps[i].y + g_disps[i].h) * g_ar_scale);
+    InflateRect(&r, -1, -1);
+    return r;
+}
+
+static BOOL disp_overlaps(int i, int x, int y)
+{
+    int j;
+    for (j = 0; j < g_ndisps; j++) {
+        if (j == i || !g_disps[j].on) continue;
+        if (x < g_disps[j].x + g_disps[j].w && g_disps[j].x < x + g_disps[i].w &&
+            y < g_disps[j].y + g_disps[j].h && g_disps[j].y < y + g_disps[i].h) return TRUE;
+    }
+    return FALSE;
+}
+
+/* a display let go: against the nearest edge of another, not over any, as
+ * Windows puts it (a display not touching the others has nowhere to be) */
+static void disp_snap(int i)
+{
+    struct disp *d = &g_disps[i];
+    int j, bx = d->x, by = d->y;
+    long long best = -1;
+#ifdef SG_MUTANT_ARRANGE_NO_SNAP
+    return;
+#endif
+    for (j = 0; j < g_ndisps; j++) {
+        struct disp *o = &g_disps[j];
+        int cand[4][2], k;
+        if (j == i || !o->on) continue;
+        cand[0][0] = o->x - d->w;  cand[0][1] = max(o->y - d->h + 1, min(d->y, o->y + o->h - 1));
+        cand[1][0] = o->x + o->w;  cand[1][1] = cand[0][1];
+        cand[2][1] = o->y - d->h;  cand[2][0] = max(o->x - d->w + 1, min(d->x, o->x + o->w - 1));
+        cand[3][1] = o->y + o->h;  cand[3][0] = cand[2][0];
+        for (k = 0; k < 4; k++) {
+            long long dx = cand[k][0] - d->x, dy = cand[k][1] - d->y, dist = dx * dx + dy * dy;
+            /* lined up with the other's edge when it is close (tops, bottoms, lefts, rights) */
+            if (k < 2) {
+                if (abs(cand[k][1] - o->y) < d->h / 10) cand[k][1] = o->y;
+                else if (abs(cand[k][1] + d->h - o->y - o->h) < d->h / 10) cand[k][1] = o->y + o->h - d->h;
+            } else {
+                if (abs(cand[k][0] - o->x) < d->w / 10) cand[k][0] = o->x;
+                else if (abs(cand[k][0] + d->w - o->x - o->w) < d->w / 10) cand[k][0] = o->x + o->w - d->w;
+            }
+            if (disp_overlaps(i, cand[k][0], cand[k][1])) continue;
+            if (best < 0 || dist < best) { best = dist; bx = cand[k][0]; by = cand[k][1]; }
+        }
+    }
+    if (best >= 0) { d->x = bx; d->y = by; }
+}
+
+static LRESULT CALLBACK arrange_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+    RECT rc;
+    int i;
+    GetClientRect(hwnd, &rc);
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps), mem = CreateCompatibleDC(hdc);
+        HBITMAP bmp = CreateCompatibleBitmap(hdc, rc.right, rc.bottom), oldbmp = SelectObject(mem, bmp);
+        HBRUSH b = CreateSolidBrush(COL_PANE);
+        HFONT big = CreateFontW(-S(28), 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+        HFONT oldf;
+        FillRect(mem, &rc, b);
+        DeleteObject(b);
+        if (g_drag < 0) arrange_geometry(&rc);
+        oldf = SelectObject(mem, big);
+        SetBkMode(mem, TRANSPARENT);
+        for (i = 0; i < g_ndisps; i++) {
+            RECT r = disp_box(i);
+            WCHAR num[8];
+            BOOL sel = i == g_sel;
+            COLORREF fill = sel ? st_accent() : (g_dark ? RGB(0x5A, 0x5A, 0x5A) : RGB(0xB4, 0xB4, 0xB4));
+            if (!g_disps[i].on) fill = g_dark ? RGB(0x3A, 0x3A, 0x3A) : RGB(0xDC, 0xDC, 0xDC);
+            b = CreateSolidBrush(fill);
+            FillRect(mem, &r, b);
+            DeleteObject(b);
+            if (sel) { b = CreateSolidBrush(COL_TEXT); FrameRect(mem, &r, b); DeleteObject(b); }
+            _snwprintf(num, ARRAYSIZE(num), L"%d", i + 1);
+            SetTextColor(mem, sel ? RGB(0xFF, 0xFF, 0xFF) : COL_TEXT);
+            DrawTextW(mem, num, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+        SelectObject(mem, oldf);
+        DeleteObject(big);
+        BitBlt(hdc, 0, 0, rc.right, rc.bottom, mem, 0, 0, SRCCOPY);
+        SelectObject(mem, oldbmp);
+        DeleteObject(bmp);
+        DeleteDC(mem);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+        for (i = g_ndisps - 1; i >= 0; i--) {
+            RECT r = disp_box(i);
+            if (!PtInRect(&r, pt)) continue;
+            g_sel = i;
+            if (g_ndisps > 1 && g_disps[i].on && strncmp(g_project, "duplicate", 9)) {
+                g_drag = i;
+                g_drag_dx = pt.x - r.left;
+                g_drag_dy = pt.y - r.top;
+                SetCapture(hwnd);
+            }
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+        return 0;
+    case WM_MOUSEMOVE:
+        if (g_drag >= 0 && g_ar_scale > 0) {
+            g_disps[g_drag].x = (int)((pt.x - g_drag_dx - g_ar_ox) / g_ar_scale);
+            g_disps[g_drag].y = (int)((pt.y - g_drag_dy - g_ar_oy) / g_ar_scale);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    case WM_LBUTTONUP:
+        if (g_drag >= 0) {
+            int was_x = g_disps[g_drag].x, was_y = g_disps[g_drag].y;
+            ReleaseCapture();
+            disp_snap(g_drag);
+            (void)was_x; (void)was_y;
+            g_drag = -1;
+            g_layout_dirty = TRUE;
+        }
+        /* the page again: the selected display's resolution, orientation,
+         * main display, and Apply for the new places */
+        PostMessageW(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(CMD_ARRANGE, 0), (LPARAM)hwnd);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/* Identify: each display's number on it, for three seconds */
+static LRESULT CALLBACK ident_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        RECT rc;
+        WCHAR num[8];
+        HDC hdc = BeginPaint(hwnd, &ps);
+        HFONT f = CreateFontW(-S(110), 0, 0, 0, FW_LIGHT, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+        HFONT old = SelectObject(hdc, f);
+        HBRUSH b = CreateSolidBrush(RGB(0x20, 0x20, 0x20));
+        GetClientRect(hwnd, &rc);
+        FillRect(hdc, &rc, b);
+        DeleteObject(b);
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, RGB(0xFF, 0xFF, 0xFF));
+        _snwprintf(num, ARRAYSIZE(num), L"%d", (int)GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        DrawTextW(hdc, num, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, old);
+        DeleteObject(f);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_TIMER:
+    case WM_LBUTTONDOWN:
+        DestroyWindow(hwnd);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static void identify_displays(void)
+{
+    static BOOL reg;
+    int i, mx = 0, my = 0;
+    if (!reg) {
+        WNDCLASSW wc = { 0 };
+        wc.lpfnWndProc = ident_proc;
+        wc.hInstance = g_inst;
+        wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+        wc.lpszClassName = L"SgDisplayIdentify";
+        reg = RegisterClassW(&wc) != 0;
+    }
+    /* the layout's places, from the main display's: Windows' screen
+     * coordinates have the main display at 0,0 (as Wine has them) */
+    for (i = 0; i < g_ndisps; i++) if (g_disps[i].main) { mx = g_disps[i].x; my = g_disps[i].y; }
+    for (i = 0; i < g_ndisps; i++) {
+        HWND w;
+        if (!g_disps[i].on) continue;
+        w = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"SgDisplayIdentify", L"", WS_POPUP,
+                            g_disps[i].x - mx + S(32), g_disps[i].y - my + g_disps[i].h - S(232), S(160), S(200),
+                            NULL, NULL, g_inst, NULL);
+        if (!w) continue;
+        SetWindowLongPtrW(w, GWLP_USERDATA, i + 1);
+        ShowWindow(w, SW_SHOWNOACTIVATE);
+        SetTimer(w, 1, 3000, NULL);
+    }
+}
+
+struct mode { int w, h; double hz; BOOL pref; WCHAR text[48]; char spec[48]; };
 static struct mode g_modes[64];
 static int g_nmodes, g_cur_mode = -1;
 static BOOL g_modes_ctl;                    /* the compositor's modes, through sg-settingsctl */
@@ -33,6 +350,9 @@ static WCHAR g_output_desc[128];
 static const char *const TRANSFORMS[] = { "normal", "90", "180", "270" };
 static int g_orient;
 static int g_revert_left;                   /* > 0: "keep these display settings?" is counting */
+static int g_res_mode[64], g_nres;          /* each resolution's mode (its recommended one, else its first) */
+static int g_rate_mode[64], g_nrate;        /* the refresh rates of the resolution in use */
+static WCHAR g_rate_text[64][24];
 static char g_prev_spec[48];
 static DEVMODEW g_prev_dm;
 
@@ -43,11 +363,18 @@ static void load_modes(void)
     char *ans = ctl_run(L"display", &ok, err, ARRAYSIZE(err), 6000), buf[512];
     const char *pos = NULL;
     g_nmodes = 0; g_cur_mode = -1; g_modes_ctl = FALSE; g_output[0] = 0; g_output_desc[0] = 0;
+    if (ans && ok) load_displays(ans);
+    else g_ndisps = 0;
     if (ans && ok && ctl_line(ans, "OUTPUT", &pos, buf, sizeof(buf))) {
         char *tab = strchr(buf, '\t');
         if (tab) *tab = 0;
         lstrcpynA(g_output, buf, sizeof(g_output));
         if (tab) { *tab = '\t'; ctl_field(buf, 3, g_output_desc, ARRAYSIZE(g_output_desc)); }
+        /* the display selected in the box, not the first */
+        if (g_sel >= 0 && g_sel < g_ndisps) {
+            lstrcpynA(g_output, g_disps[g_sel].name, sizeof(g_output));
+            lstrcpynW(g_output_desc, g_disps[g_sel].desc, ARRAYSIZE(g_output_desc));
+        }
         pos = NULL;
         while (g_nmodes < (int)ARRAYSIZE(g_modes) && ctl_line(ans, "MODE", &pos, buf, sizeof(buf))) {
             WCHAR name[64], spec[48], cur[8], pref[8];
@@ -59,6 +386,8 @@ static void load_modes(void)
             ctl_field(buf, 3, pref, ARRAYSIZE(pref));
             if (lstrcmpA(g_output, "") && WideCharToMultiByte(CP_UTF8, 0, name, -1, buf, sizeof(buf), NULL, NULL) && strcmp(buf, g_output)) continue;
             if (swscanf(spec, L"%dx%d@%lf", &m->w, &m->h, &hz) < 2) continue;
+            m->hz = hz;
+            m->pref = !lstrcmpW(pref, L"yes");
             WideCharToMultiByte(CP_UTF8, 0, spec, -1, m->spec, sizeof(m->spec), NULL, NULL);
             _snwprintf(m->text, ARRAYSIZE(m->text), L"%d \x00D7 %d%ls%ls", m->w, m->h,
                        hz > 0 ? L"" : L"", !lstrcmpW(pref, L"yes") ? L" (Recommended)" : L"");
@@ -126,6 +455,31 @@ void set_build_display(void)
     char *ans, buf[256];
     HWND c;
 
+    /* the displays, to select one and rearrange them (two or more) */
+    load_modes();
+    if (g_ndisps > 1) {
+        static BOOL reg;
+        HWND box;
+        if (!reg) {
+            WNDCLASSW wc = { 0 };
+            wc.lpfnWndProc = arrange_proc;
+            wc.hInstance = g_inst;
+            wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+            wc.lpszClassName = L"SgDisplayArrange";
+            reg = RegisterClassW(&wc) != 0;
+        }
+        y = st_head(y, L"Rearrange your displays");
+        y = st_para(y, L"Select a display below to change the settings for it. Press and hold (or select) a display, "
+                       L"then drag to rearrange it.");
+        box = pg_control(L"SgDisplayArrange", L"", WS_TABSTOP, st_x(), y, min(st_w(), S(560)), S(200), CMD_ARRANGE);
+        (void)box;
+        y += S(212);
+        pg_control(L"BUTTON", L"Identify", WS_TABSTOP | BS_PUSHBUTTON, st_x(), y, S(110), S(32), CMD_IDENTIFY);
+        c = pg_control(L"BUTTON", L"Apply", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(122), y, S(110), S(32), CMD_APPLY_LAYOUT);
+        EnableWindow(c, g_layout_dirty);
+        y += S(46);
+    }
+
     if (g_revert_left > 0) {
         WCHAR line[160];
         y = st_head(y, L"Keep these display settings?");
@@ -170,10 +524,46 @@ void set_build_display(void)
     }
     st_combo(&y, L"Change the size of text, apps, and other items", sitems, nscales, sel, CMD_SCALE);
 
-    load_modes();
-    for (i = 0; i < g_nmodes; i++) items[i] = g_modes[i].text;
-    c = st_combo(&y, L"Display resolution", items, g_nmodes, g_cur_mode, CMD_RES);
-    if (!g_nmodes) EnableWindow(c, FALSE);
+    if (g_modes_ctl) {
+        /* the resolutions, each once, and the refresh rates of the one in use
+         * (David 2026-11-12: displays at different refresh rates -- each its own) */
+        WCHAR rtext[ARRAYSIZE(g_modes)][32];
+        const WCHAR *ritems[ARRAYSIZE(g_modes)];
+        int nres = 0, nrate = 0, rsel = -1, csel = -1, j;
+        for (i = 0; i < g_nmodes; i++) {
+            for (j = 0; j < nres; j++)
+                if (g_modes[g_res_mode[j]].w == g_modes[i].w && g_modes[g_res_mode[j]].h == g_modes[i].h) break;
+            if (j < nres) { if (g_modes[i].pref) g_res_mode[j] = i; continue; }
+            g_res_mode[nres++] = i;
+        }
+        for (i = 0; i < nres; i++) {
+            struct mode *m = &g_modes[g_res_mode[i]];
+            BOOL rec = FALSE;
+            for (j = 0; j < g_nmodes; j++) if (g_modes[j].pref && g_modes[j].w == m->w && g_modes[j].h == m->h) rec = TRUE;
+            _snwprintf(rtext[i], ARRAYSIZE(rtext[i]), L"%d \x00D7 %d%ls", m->w, m->h, rec ? L" (Recommended)" : L"");
+            ritems[i] = rtext[i];
+            if (g_cur_mode >= 0 && m->w == g_modes[g_cur_mode].w && m->h == g_modes[g_cur_mode].h) rsel = i;
+        }
+        g_nres = nres;
+        c = st_combo(&y, L"Display resolution", ritems, nres, rsel, CMD_RES);
+        for (i = 0; i < g_nmodes && g_cur_mode >= 0; i++) {
+            if (g_modes[i].w != g_modes[g_cur_mode].w || g_modes[i].h != g_modes[g_cur_mode].h || g_modes[i].hz <= 0) continue;
+            _snwprintf(g_rate_text[nrate], ARRAYSIZE(g_rate_text[0]), L"%.3g Hz", g_modes[i].hz);
+            if (g_modes[i].hz >= 100) _snwprintf(g_rate_text[nrate], ARRAYSIZE(g_rate_text[0]), L"%.0f Hz", g_modes[i].hz);
+            items[nrate] = g_rate_text[nrate];
+            if (i == g_cur_mode) csel = nrate;
+            g_rate_mode[nrate++] = i;
+        }
+        g_nrate = nrate;
+        if (nrate) {
+            c = st_combo(&y, L"Refresh rate", items, nrate, csel, CMD_RATE);
+            if (nrate < 2) EnableWindow(c, FALSE);
+        }
+    } else {
+        for (i = 0; i < g_nmodes; i++) items[i] = g_modes[i].text;
+        c = st_combo(&y, L"Display resolution", items, g_nmodes, g_cur_mode, CMD_RES);
+        if (!g_nmodes) EnableWindow(c, FALSE);
+    }
     if (g_modes_ctl && g_output_desc[0]) {
         WCHAR line[200];
         _snwprintf(line, ARRAYSIZE(line), L"Display: %ls", g_output_desc);
@@ -204,8 +594,28 @@ void set_build_display(void)
         }
     }
     y = st_head(y, L"Multiple displays");
-    y = st_para(y, L"Older displays might not always connect automatically. The displays this PC has are arranged by the "
-                   L"compositor, in the order they were connected.");
+    if (g_ndisps > 1) {
+        WCHAR ptext[2 + ARRAYSIZE(g_disps)][40];
+        const WCHAR *pitems[2 + ARRAYSIZE(g_disps)];
+        int np = 0, psel = 1;
+        lstrcpyW(ptext[np], L"Duplicate these displays"); pitems[np] = ptext[np]; np++;
+        lstrcpyW(ptext[np], L"Extend these displays"); pitems[np] = ptext[np]; np++;
+        if (!strncmp(g_project, "duplicate", 9)) psel = 0;
+        for (i = 0; i < g_ndisps; i++) {
+            _snwprintf(ptext[np], ARRAYSIZE(ptext[np]), L"Show only on %d", i + 1);
+            pitems[np] = ptext[np];
+            if (!strncmp(g_project, "only\t", 5) && !strcmp(g_project + 5, g_disps[i].name)) psel = np;
+            np++;
+        }
+        st_combo(&y, L"Multiple displays", pitems, np, psel, CMD_PROJECT);
+        if (g_sel >= 0 && g_sel < g_ndisps) {
+            st_checkbox(&y, L"Make this my main display", g_disps[g_sel].main, CMD_MAKEMAIN);
+            if (g_disps[g_sel].main) EnableWindow(GetDlgItem(g_page, CMD_MAKEMAIN), FALSE);
+        }
+        y = st_para(y, L"The taskbar is on the main display; Settings > Personalization > Taskbar shows it on all displays.");
+    } else
+        y = st_para(y, L"Older displays might not always connect automatically. Connect another display and it is added "
+                       L"to the right of this one.");
     st_link(&y, L"Advanced display settings", CMD_ADVANCED);
 }
 
@@ -217,6 +627,9 @@ void desktop_follow(int w, int h)
     DEVMODEW dm = { .dmSize = sizeof(dm) };
     int tries;
     if (w <= 0 || h <= 0) return;
+    /* over every monitor Wine follows the compositor's outputs itself: one
+     * mode the size of this one would make the main display that size */
+    if (span_mode()) return;
     dm.dmPelsWidth = w; dm.dmPelsHeight = h;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
     /* Wine learns the screen's new size a moment later (the X server's
@@ -307,7 +720,67 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
     case CMD_RES:
         if (code == CBN_SELCHANGE) {
             int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            if (g_modes_ctl) {
+                /* that resolution at the rate in use when it has it, else its recommended one */
+                int j, m;
+                if (i < 0 || i >= g_nres) return TRUE;
+                m = g_res_mode[i];
+                for (j = 0; j < g_nmodes && g_cur_mode >= 0; j++)
+                    if (g_modes[j].w == g_modes[m].w && g_modes[j].h == g_modes[m].h &&
+                        (int)(g_modes[j].hz + 0.5) == (int)(g_modes[g_cur_mode].hz + 0.5)) m = j;
+                i = m;
+            }
             if (i != g_cur_mode && apply_mode(i, TRUE)) { g_revert_left = 15; refresh_page(); }
+        }
+        return TRUE;
+    case CMD_RATE:
+        if (code == CBN_SELCHANGE) {
+            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            if (i >= 0 && i < g_nrate && g_rate_mode[i] != g_cur_mode && apply_mode(g_rate_mode[i], TRUE)) {
+                g_revert_left = 15;
+                refresh_page();
+            }
+        }
+        return TRUE;
+    case CMD_ARRANGE:
+        refresh_page();
+        return TRUE;
+    case CMD_IDENTIFY:
+        identify_displays();
+        return TRUE;
+    case CMD_APPLY_LAYOUT: {
+        WCHAR a[1024], err[256];
+        int i, n;
+        n = _snwprintf(a, ARRAYSIZE(a), L"display layout");
+        for (i = 0; i < g_ndisps && n > 0 && n < (int)ARRAYSIZE(a) - 100; i++)
+            if (g_disps[i].on) n += _snwprintf(a + n, ARRAYSIZE(a) - n, L" %S %d %d", g_disps[i].name, g_disps[i].x, g_disps[i].y);
+        free(ctl_run(a, &ok, err, ARRAYSIZE(err), 10000));
+        if (!ok) st_status(err[0] ? err : L"The displays could not be rearranged.");
+        g_layout_dirty = FALSE;
+        refresh_page();
+        return TRUE;
+    }
+    case CMD_MAKEMAIN:
+        if (g_sel >= 0 && g_sel < g_ndisps && st_checked(ctl)) {
+            WCHAR err[256];
+            _snwprintf(args, ARRAYSIZE(args), L"display primary %S", g_disps[g_sel].name);
+            free(ctl_run(args, &ok, err, ARRAYSIZE(err), 10000));
+            if (!ok) st_status(err[0] ? err : L"That display could not be made the main display.");
+            refresh_page();
+        }
+        return TRUE;
+    case CMD_PROJECT:
+        if (code == CBN_SELCHANGE) {
+            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
+            WCHAR err[256];
+            if (i == 0) lstrcpyW(args, L"display project duplicate");
+            else if (i == 1) lstrcpyW(args, L"display project extend");
+            else if (i - 2 < g_ndisps) _snwprintf(args, ARRAYSIZE(args), L"display project only %S", g_disps[i - 2].name);
+            else return TRUE;
+            g_layout_dirty = FALSE;
+            free(ctl_run(args, &ok, err, ARRAYSIZE(err), 10000));
+            if (!ok) st_status(err[0] ? err : L"The displays could not be changed.");
+            refresh_page();
         }
         return TRUE;
     case CMD_ORIENT:
