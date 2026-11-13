@@ -17,6 +17,25 @@ static WCHAR g_bt_mac[MAX_BT][24], g_bt_name[MAX_BT][128];
 static BOOL g_bt_conn[MAX_BT], g_bt_paired[MAX_BT];
 static int g_nbt, g_bt_sel = -1;
 static BOOL g_bt_scan;          /* "Add a device": search, then list what was found */
+/* A device being paired, in the background as on Windows: the page shows what
+ * the device asks for -- a PIN to type on a keyboard -- while it waits
+ * (David 2026-11-13: a Bluetooth keyboard and mouse would not pair; the PIN
+ * a keyboard wanted typed was never shown) */
+static int g_pair_i = -1;
+static HANDLE g_pair_thread;
+static volatile LONG g_pair_done;
+static BOOL g_pair_ok;
+static WCHAR g_pair_err[256], g_pair_args[80], g_pair_pin[16], g_pair_name[128];
+static BOOL g_pair_confirm;
+
+static DWORD WINAPI pair_thread(void *arg)
+{
+    (void)arg;
+    g_pair_err[0] = 0;
+    free(ctl_run(g_pair_args, &g_pair_ok, g_pair_err, ARRAYSIZE(g_pair_err), 120000));
+    InterlockedExchange(&g_pair_done, 1);
+    return 0;
+}
 
 void set_build_bluetooth(void)
 {
@@ -25,6 +44,21 @@ void set_build_bluetooth(void)
     char *ans = ctl_run(g_bt_scan ? L"bluetooth scan 8" : L"bluetooth", &ok, err, ARRAYSIZE(err), g_bt_scan ? 30000 : 15000), buf[512];
     const char *pos = NULL;
     int y = st_title(L"Bluetooth & other devices"), i, shown = 0;
+    if (g_pair_i >= 0) {
+        /* pairing: what the device asks for, until it is done */
+        _snwprintf(line, ARRAYSIZE(line), L"Pairing with %ls", g_pair_name);
+        y = st_head(y, line);
+        if (g_pair_pin[0] && !g_pair_confirm) {
+            y = st_para(y, L"Type this PIN on the keyboard, then press Enter:");
+            y = st_head(y, g_pair_pin);
+        } else if (g_pair_pin[0]) {
+            y = st_para(y, L"Check that this PIN matches the one shown on the device:");
+            y = st_head(y, g_pair_pin);
+        } else
+            y = st_para(y, L"Connecting... Follow any instructions on your device.");
+        pg_timer(700);
+        return;
+    }
     g_nbt = 0;
     if (ans && ctl_line(ans, "BLUETOOTH", NULL, buf, sizeof(buf))) present = !strcmp(buf, "yes");
     if (ans && ctl_line(ans, "POWERED", NULL, buf, sizeof(buf))) powered = !strcmp(buf, "yes");
@@ -116,6 +150,21 @@ BOOL set_cmd_bluetooth(int id, int code, HWND ctl)
         if (what == 2) { g_bt_sel = i; refresh_page(); return TRUE; }
         if (what == 1 && MessageBoxW(g_main, L"Are you sure you want to remove this device?", L"Remove device",
                                      MB_YESNO | MB_ICONQUESTION) != IDYES) return TRUE;
+        if (what == 3) {
+            if (g_pair_i >= 0) return TRUE;
+            _snwprintf(g_pair_args, ARRAYSIZE(g_pair_args), L"bluetooth pair %ls", g_bt_mac[i]);
+            lstrcpynW(g_pair_name, g_bt_name[i], ARRAYSIZE(g_pair_name));
+            g_pair_pin[0] = 0;
+            g_pair_confirm = FALSE;
+            g_pair_done = 0;
+#ifndef SG_MUTANT_PAIR_BLOCKS
+            if ((g_pair_thread = CreateThread(NULL, 0, pair_thread, NULL, 0, NULL))) {
+                g_pair_i = i;
+                refresh_page();
+                return TRUE;
+            }
+#endif
+        }
         verb = what == 3 ? L"pair" : what == 1 ? L"remove" : g_bt_conn[i] ? L"disconnect" : L"connect";
         _snwprintf(args, ARRAYSIZE(args), L"bluetooth %ls %ls", verb, g_bt_mac[i]);
         free(ctl_run(args, &ok, err, ARRAYSIZE(err), 90000));
@@ -125,6 +174,39 @@ BOOL set_cmd_bluetooth(int id, int code, HWND ctl)
         return TRUE;
     }
     return FALSE;
+}
+
+void set_timer_bluetooth(void)
+{
+    WCHAR err[64];
+    BOOL ok;
+    char *ans, buf[64];
+    WCHAR pin[16] = L"";
+    BOOL confirm = FALSE;
+
+    if (g_pair_i < 0) return;
+    if (g_pair_done) {
+        WaitForSingleObject(g_pair_thread, 5000);
+        CloseHandle(g_pair_thread);
+        g_pair_thread = NULL;
+        g_pair_i = -1;
+        g_bt_sel = -1;
+        refresh_page();
+        if (!g_pair_ok) st_status(g_pair_err[0] ? g_pair_err : L"The device could not be paired. Try again.");
+        return;
+    }
+    ans = ctl_run(L"bluetooth pairing", &ok, err, ARRAYSIZE(err), 5000);
+    if (ans && ctl_line(ans, "PIN", NULL, buf, sizeof(buf))) MultiByteToWideChar(CP_UTF8, 0, buf, -1, pin, ARRAYSIZE(pin));
+    else if (ans && ctl_line(ans, "CONFIRM", NULL, buf, sizeof(buf))) {
+        MultiByteToWideChar(CP_UTF8, 0, buf, -1, pin, ARRAYSIZE(pin));
+        confirm = TRUE;
+    }
+    free(ans);
+    if (lstrcmpW(pin, g_pair_pin) || confirm != g_pair_confirm) {
+        lstrcpynW(g_pair_pin, pin, ARRAYSIZE(g_pair_pin));
+        g_pair_confirm = confirm;
+        refresh_page();
+    }
 }
 
 /* ---- Mouse ---------------------------------------------------------------------------------------- */

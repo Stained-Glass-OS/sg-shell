@@ -104,8 +104,12 @@ updates) st=\$(cat "$T/upd-state" 2>/dev/null)
     staged) printf 'DOWNLOAD libfoo1\t1000\t1000\nDOWNLOAD wine-sg\t4000000\t4000000\nDOWNLOADING no\nSTAGED yes\n' ;;
     *) printf 'STAGED no\n' ;;
     esac; echo OK ;;
-bluetooth) printf 'BLUETOOTH yes\nPOWERED yes\nDEVICE AA:BB:CC:DD:EE:01\tyes\tyes\tTravel Mouse\n'
-    [ "\${2:-}" = scan ] && printf 'DEVICE AA:BB:CC:DD:EE:02\tno\tno\tKeyboard K2\n'
+bluetooth) case "\${2:-}" in
+    pair) sleep 5; echo "PAIRED \$3" ;;      # the keyboard waiting for its PIN to be typed
+    pairing) [ -n "\$(grep '^bluetooth pair ' "$LOG")" ] && printf 'PAIRING AA:BB:CC:DD:EE:02\nPIN 004321\n' ;;
+    *) printf 'BLUETOOTH yes\nPOWERED yes\nDEVICE AA:BB:CC:DD:EE:01\tyes\tyes\tTravel Mouse\n'
+       [ "\${2:-}" = scan ] && printf 'DEVICE AA:BB:CC:DD:EE:02\tno\tno\tKeyboard K2\n' ;;
+    esac
     echo OK ;;
 *) echo 'ERROR invalid usage' ;;
 esac
@@ -373,8 +377,16 @@ if [ $# -eq 2 ]; then
     : > "$LOG"; click_at "$1" "$2"; sleep 1.5
     grep -q '^bluetooth scan 8' "$LOG" && has "text Keyboard K2" && pass "Add a device searches and lists what it found" || fail "scan: $(cat "$LOG")"
     set -- $(ctl_at SgCplLink Pair)
-    if [ $# -eq 2 ]; then click_at "$1" "$2"; sleep 1
+    if [ $# -eq 2 ]; then click_at "$1" "$2"; sleep 2.5
         grep -q '^bluetooth pair AA:BB:CC:DD:EE:02' "$LOG" && pass "Pair pairs that device" || fail "pair: $(cat "$LOG")"
+        # in the background, the PIN the keyboard wants typed shown meanwhile
+        # (David 2026-11-13: a Bluetooth keyboard would not pair)
+        has "text Pairing with Keyboard K2" && has "text 004321" && has "Type this PIN on the keyboard" \
+            && pass "while it pairs, the PIN to type on the keyboard is shown" \
+            || fail "while pairing: $(tr -d '\r' < "$DUMP" | grep '^text' | head -6 | tr '\n' '|')"
+        shot bluetooth-pin
+        i=0; while has "text Pairing with" && [ $i -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+        has "text Travel Mouse" && ! has "text Pairing with" && pass "and when it is done, the devices again" || fail "after pairing: $(D page)"
     else fail "no Pair link"; fi
     shot bluetooth-add
 else fail "no Add Bluetooth or other device button"; fi
