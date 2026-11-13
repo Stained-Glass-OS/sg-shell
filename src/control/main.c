@@ -202,11 +202,35 @@ void pg_title(int x, int y, const WCHAR *s)
 int pg_width(void) { RECT r; GetClientRect(g_page, &r); return r.right; }
 int pg_height(void) { RECT r; GetClientRect(g_page, &r); return r.bottom; }
 
+/* The mouse wheel over a closed drop-down list or a slider scrolls the page,
+ * as in Windows 11's Settings: scrolling down past one changed its value
+ * (David 2026-11-13). An open list still scrolls itself. */
+static WNDPROC g_combo_proc, g_slider_proc;
+static LRESULT CALLBACK wheel_to_page_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    WCHAR cls[32];
+    BOOL combo;
+    GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+    combo = !lstrcmpiW(cls, L"ComboBox");
+#ifndef SG_MUTANT_WHEEL_EDITS
+    if ((msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL) && !(combo && SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0)))
+        return SendMessageW(GetParent(hwnd), msg, wp, lp);
+#endif
+    return CallWindowProcW(combo ? g_combo_proc : g_slider_proc, hwnd, msg, wp, lp);
+}
+
 HWND pg_control(const WCHAR *cls, const WCHAR *text, DWORD style, int x, int y, int w, int h, int id)
 {
     HWND c = CreateWindowExW(0, cls, text, WS_CHILD | WS_VISIBLE | style, x, y - g_scroll, w, h,
                              g_page, (HMENU)(INT_PTR)id, g_inst, NULL);
     SendMessageW(c, WM_SETFONT, (WPARAM)g_font_body, TRUE);
+    if (c && !lstrcmpiW(cls, L"COMBOBOX")) {
+        WNDPROC old = (WNDPROC)SetWindowLongPtrW(c, GWLP_WNDPROC, (LONG_PTR)wheel_to_page_proc);
+        if (!g_combo_proc) g_combo_proc = old;
+    } else if (c && !lstrcmpiW(cls, TRACKBAR_CLASSW)) {
+        WNDPROC old = (WNDPROC)SetWindowLongPtrW(c, GWLP_WNDPROC, (LONG_PTR)wheel_to_page_proc);
+        if (!g_slider_proc) g_slider_proc = old;
+    }
     /* a drop-down list's height is its list's: the page ends at its edit box */
     if (!lstrcmpiW(cls, L"COMBOBOX")) { RECT r; GetWindowRect(c, &r); h = r.bottom - r.top; if (h > S(40)) h = S(30); }
     if (y + h > g_content_h) g_content_h = y + h;

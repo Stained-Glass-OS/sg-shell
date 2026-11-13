@@ -245,8 +245,24 @@ wine start ms-settings:colors >/dev/null 2>&1
 page_is Colors "ms-settings:colors"
 sleep 0.5
 # the accent tiles are below the fold: wheel down over the page until the dump says they are on screen
+# the wheel over a closed list scrolls the page and leaves the list as it was
+# (David 2026-11-13: scrolling down past a list changed it)
+c0=$(tr -d '\r' < "$DUMP" | grep '^control ComboBox ' | head -1)
+set -- $(echo "$c0" | sed -n 's/.* at=\([0-9-]*\),\([0-9-]*\).*/\1 \2/p')
+if [ $# -eq 2 ]; then
+    y0=$2
+    xdotool mousemove "$1" "$2"; sleep 0.3
+    for n in 1 2; do xdotool click 5; sleep 0.4; done
+    sleep 1
+    c1=$(tr -d '\r' < "$DUMP" | grep '^control ComboBox ' | head -1)
+    y1=$(echo "$c1" | sed -n 's/.* at=[0-9-]*,\([0-9-]*\).*/\1/p')
+    [ "${c0##*: }" = "${c1##*: }" ] && [ "${y1:-$y0}" -lt "$y0" ] \
+        && pass "the wheel over a closed list scrolls the page ($y0 -> $y1), the list still '${c1##*: }'" \
+        || fail "the wheel over a closed list: '${c0##*: }' -> '${c1##*: }', at $y0 -> ${y1:-?}"
+    for n in 1 2; do xdotool click 4; sleep 0.3; done
+else fail "no list on the Colors page"; fi
 set -- $(D rect)
-xdotool mousemove $(( $3 - 60 )) 400   # clear of the page's boxes, which take the wheel themselves
+xdotool mousemove $(( $3 - 60 )) 400   # clear of the page's boxes
 for n in 1 2 3 4 5 6 7 8 9 10; do xdotool click 5; sleep 0.3; done
 sleep 0.5
 set -- $(ctl_at SgCplTile '#107C41')

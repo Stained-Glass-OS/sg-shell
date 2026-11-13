@@ -1,3 +1,12 @@
+sg-shell (0.1.0-269) unstable; urgency=medium
+
+  * Settings and the Control Panel: the mouse wheel over a closed drop-down
+    list or a slider scrolls the page, as in Windows 11's Settings --
+    scrolling down past a list changed its value. An open list still
+    scrolls itself.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 13 Nov 2026 17:10:00 -0800
+
 sg-shell (0.1.0-268) unstable; urgency=medium
 
   * Settings > System > Display, for several displays as on Windows:
