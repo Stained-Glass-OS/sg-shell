@@ -210,7 +210,8 @@ void set_timer_bluetooth(void)
 }
 
 /* ---- Mouse ---------------------------------------------------------------------------------------- */
-enum { CMD_PRIMARY = CMD_PAGE_FIRST + 1, CMD_WHEEL, CMD_LINES, CMD_SPEED, CMD_DBLCLICK, CMD_HOVERSCROLL };
+enum { CMD_PRIMARY = CMD_PAGE_FIRST + 1, CMD_WHEEL, CMD_LINES, CMD_SPEED, CMD_DBLCLICK, CMD_HOVERSCROLL,
+       CMD_SCROLL_MOUSE, CMD_SCROLL_PAD };
 
 void set_build_mouse(void)
 {
@@ -227,6 +228,26 @@ void set_build_mouse(void)
     st_slider(&y, L"Double-click speed", 200, 900, 1100 - (int)GetDoubleClickTime(), CMD_DBLCLICK);
     st_toggle(&y, L"Scroll inactive windows when I hover over them",
               reg_dword(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"MouseWheelRouting", 2) != 0, CMD_HOVERSCROLL);
+    /* the scrolling direction, the compositor's (sg-settingsctl input):
+     * "down motion scrolls down" unless natural scrolling is chosen
+     * (David 2026-11-13: natural scrolling should not be the default) */
+    {
+        static const WCHAR *const dir[] = { L"Down motion scrolls down", L"Down motion scrolls up (natural)" };
+        WCHAR err[64];
+        BOOL ok;
+        char *ans = ctl_run(L"input", &ok, err, ARRAYSIZE(err), 5000), buf[64];
+        const char *pos = NULL;
+        int mouse = 0, pad = 0;
+        while (ans && ctl_line(ans, "SCROLL", &pos, buf, sizeof(buf))) {
+            if (!strncmp(buf, "mouse\tyes", 9)) mouse = 1;
+            if (!strncmp(buf, "touchpad\tyes", 12)) pad = 1;
+        }
+        free(ans);
+        if (ok) {
+            st_combo(&y, L"Mouse wheel scrolling direction", dir, 2, mouse, CMD_SCROLL_MOUSE);
+            st_combo(&y, L"Touchpad scrolling direction", dir, 2, pad, CMD_SCROLL_PAD);
+        }
+    }
 }
 
 BOOL set_cmd_mouse(int id, int code, HWND ctl)
@@ -252,6 +273,17 @@ BOOL set_cmd_mouse(int id, int code, HWND ctl)
     case CMD_DBLCLICK:
         if (code == (PG_SCROLL_CODE | TB_ENDTRACK))
             SystemParametersInfoW(SPI_SETDOUBLECLICKTIME, 1100 - (UINT)SendMessageW(ctl, TBM_GETPOS, 0, 0), NULL, F);
+        return TRUE;
+    case CMD_SCROLL_MOUSE:
+    case CMD_SCROLL_PAD:
+        if (code == CBN_SELCHANGE) {
+            WCHAR args[64], err[128];
+            BOOL ok;
+            _snwprintf(args, ARRAYSIZE(args), L"input natural %ls %ls", id == CMD_SCROLL_MOUSE ? L"mouse" : L"touchpad",
+                       SendMessageW(ctl, CB_GETCURSEL, 0, 0) == 1 ? L"yes" : L"no");
+            free(ctl_run(args, &ok, err, ARRAYSIZE(err), 5000));
+            if (!ok) st_status(err[0] ? err : L"The scrolling direction could not be changed.");
+        }
         return TRUE;
     case CMD_HOVERSCROLL:
         reg_set_dword(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"MouseWheelRouting", st_checked(ctl) ? 2 : 0);

@@ -104,6 +104,7 @@ updates) st=\$(cat "$T/upd-state" 2>/dev/null)
     staged) printf 'DOWNLOAD libfoo1\t1000\t1000\nDOWNLOAD wine-sg\t4000000\t4000000\nDOWNLOADING no\nSTAGED yes\n' ;;
     *) printf 'STAGED no\n' ;;
     esac; echo OK ;;
+input) [ \$# -eq 1 ] && printf 'SCROLL mouse\tno\nSCROLL touchpad\tno\n'; echo OK ;;
 bluetooth) case "\${2:-}" in
     pair) sleep 5; echo "PAIRED \$3" ;;      # the keyboard waiting for its PIN to be typed
     pairing) [ -n "\$(grep '^bluetooth pair ' "$LOG")" ] && printf 'PAIRING AA:BB:CC:DD:EE:02\nPIN 004321\n' ;;
@@ -390,6 +391,21 @@ if [ $# -eq 2 ]; then
     else fail "no Pair link"; fi
     shot bluetooth-add
 else fail "no Add Bluetooth or other device button"; fi
+
+# --- Mouse: the scrolling direction, natural only when chosen (David 2026-11-13) ---
+wine start ms-settings:mousetouchpad >/dev/null 2>&1
+page_is Mouse "ms-settings:mousetouchpad"
+sleep 0.5
+has "control ComboBox" && tr -d '\r' < "$DUMP" | grep -c '^control ComboBox .*: Down motion scrolls down$' | grep -qx 2 \
+    && pass "Mouse: the wheel and the touchpad scroll down with a down motion (not natural) by default" \
+    || fail "Mouse scrolling direction: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox' | tr '\n' '|')"
+set -- $(tr -d '\r' < "$DUMP" | grep '^control ComboBox .*: Down motion scrolls down$' | tail -1 | sed -n 's/.* at=\([0-9-]*\),\([0-9-]*\).*/\1 \2/p')
+if [ $# -eq 2 ]; then
+    : > "$LOG"; click_at "$1" "$2"; xdotool key Down Return; sleep 1.5
+    grep -q '^input natural touchpad yes' "$LOG" && pass "choosing natural for the touchpad tells sg-settingsctl (input natural touchpad yes)" \
+        || fail "touchpad natural: $(cat "$LOG")"
+else fail "no touchpad scrolling direction list"; fi
+shot mouse
 
 wine start ms-settings:windowsupdate >/dev/null 2>&1
 page_is "Updates" "ms-settings:windowsupdate"
