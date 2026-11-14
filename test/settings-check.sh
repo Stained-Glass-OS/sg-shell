@@ -94,7 +94,13 @@ sound) if [ \$# -eq 1 ] && [ -e "$T/second-mic" ]; then printf 'SINK spk.0\tyes\
        elif [ \$# -eq 1 ]; then printf 'SINK spk.0\tyes\t40\tno\tSpeakers (Stand-in)\nSOURCE mic.0\tyes\t70\tno\tMicrophone (Stand-in)\n'; fi; echo OK ;;
 nightlight) printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
 device-sounds) [ -n "\${2:-}" ] && echo "\$2" > "$T/devsounds"; printf 'DEVICESOUNDS %s\nOK\n' "\$(cat "$T/devsounds" 2>/dev/null || echo on)" ;;
-display) echo 'ERROR unsupported the display is not the compositor' ;;
+display) if [ -e "$T/multi" ] && [ \$# -eq 1 ]; then
+        for d in "DP-1 0 yes" "DP-2 1920 no"; do set -- \$d
+            printf 'OUTPUT %s\t1920x1080@60\t1.0\tMonitor %s\nMODE %s\t1920x1080@60\tyes\tyes\nTRANSFORM %s\tnormal\n' "\$1" "\$1" "\$1" "\$1"
+        done
+        printf 'PLACE DP-1\t0\t0\t1920\t1080\tyes\tyes\nPLACE DP-2\t1920\t0\t1920\t1080\tyes\tno\nPROJECT extend\nOK\n'
+    elif [ -e "$T/multi" ]; then echo OK
+    else echo 'ERROR unsupported the display is not the compositor'; fi ;;
 power) printf 'POWER 10\t0\tyes\tno\nOK\n' ;;
 lockscreen) printf 'LOCKSCREEN yes\tyes\nOK\n' ;;
 updates) st=\$(cat "$T/upd-state" 2>/dev/null)
@@ -391,6 +397,29 @@ if [ $# -eq 2 ]; then
     else fail "no Pair link"; fi
     shot bluetooth-add
 else fail "no Add Bluetooth or other device button"; fi
+
+# --- Display, two displays: the selected one disconnected, the other as it is (David 2026-11-13) ---
+touch "$T/multi"
+wine start ms-settings:display >/dev/null 2>&1
+page_is Display "ms-settings:display (two displays)"
+sleep 1
+# the list is below the fold: the page scrolled until it shows
+set -- $(D rect); bottom=$4
+xdotool mousemove $(( $3 - 60 )) 400
+n=0; while [ $n -lt 15 ]; do
+    set -- $(ctl_at ComboBox 'Extend these displays')
+    [ $# -eq 2 ] && [ "$2" -lt $(( bottom - 40 )) ] && break
+    xdotool click 5; sleep 0.4; n=$((n + 1))
+done
+sleep 0.5
+set -- $(ctl_at ComboBox 'Extend these displays')
+if [ $# -eq 2 ]; then
+    : > "$LOG"; click_at "$1" "$2"; xdotool key Down Return; sleep 1.5
+    grep -q '^display power DP-[12] off' "$LOG" && pass "Multiple displays > Disconnect this display turns the selected display off ($(grep '^display power' "$LOG"))" \
+        || fail "Disconnect this display: $(cat "$LOG")"
+else fail "no Multiple displays list: $(tr -d '\r' < "$DUMP" | grep '^control ComboBox' | tr '\n' '|')"; fi
+shot display-two
+rm -f "$T/multi"
 
 # --- Mouse: the scrolling direction, natural only when chosen (David 2026-11-13) ---
 wine start ms-settings:mousetouchpad >/dev/null 2>&1

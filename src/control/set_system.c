@@ -595,11 +595,16 @@ void set_build_display(void)
     }
     y = st_head(y, L"Multiple displays");
     if (g_ndisps > 1) {
-        WCHAR ptext[2 + ARRAYSIZE(g_disps)][40];
-        const WCHAR *pitems[2 + ARRAYSIZE(g_disps)];
+        WCHAR ptext[3 + ARRAYSIZE(g_disps)][40];
+        const WCHAR *pitems[3 + ARRAYSIZE(g_disps)];
         int np = 0, psel = 1;
         lstrcpyW(ptext[np], L"Duplicate these displays"); pitems[np] = ptext[np]; np++;
         lstrcpyW(ptext[np], L"Extend these displays"); pitems[np] = ptext[np]; np++;
+        /* the selected display off, or on again, the others as they are, as on Windows
+         * (David 2026-11-13: a laptop's own screen off, only the monitors on) */
+        lstrcpyW(ptext[np], g_sel >= 0 && g_sel < g_ndisps && !g_disps[g_sel].on ? L"Connect this display"
+                                                                                : L"Disconnect this display");
+        pitems[np] = ptext[np]; np++;
         if (!strncmp(g_project, "duplicate", 9)) psel = 0;
         for (i = 0; i < g_ndisps; i++) {
             _snwprintf(ptext[np], ARRAYSIZE(ptext[np]), L"Show only on %d", i + 1);
@@ -775,7 +780,11 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
             WCHAR err[256];
             if (i == 0) lstrcpyW(args, L"display project duplicate");
             else if (i == 1) lstrcpyW(args, L"display project extend");
-            else if (i - 2 < g_ndisps) _snwprintf(args, ARRAYSIZE(args), L"display project only %S", g_disps[i - 2].name);
+            else if (i == 2) {
+                if (g_sel < 0 || g_sel >= g_ndisps) return TRUE;
+                _snwprintf(args, ARRAYSIZE(args), L"display power %S %ls", g_disps[g_sel].name, g_disps[g_sel].on ? L"off" : L"on");
+            }
+            else if (i - 3 < g_ndisps) _snwprintf(args, ARRAYSIZE(args), L"display project only %S", g_disps[i - 3].name);
             else return TRUE;
             g_layout_dirty = FALSE;
             free(ctl_run(args, &ok, err, ARRAYSIZE(err), 10000));

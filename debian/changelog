@@ -1,3 +1,11 @@
+sg-shell (0.1.0-272) unstable; urgency=medium
+
+  * Settings > Display, several displays: "Disconnect this display" in the
+    Multiple displays list turns the selected display off, the others
+    left as they are ("Connect this display" turns it on again).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 14 Nov 2026 00:35:00 -0800
+
 sg-shell (0.1.0-271) unstable; urgency=medium
 
   * Settings > Mouse: "Mouse wheel scrolling direction" and "Touchpad
