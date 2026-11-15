@@ -1,3 +1,13 @@
+sg-shell (0.1.0-280) unstable; urgency=medium
+
+  * Linux apps: an entry whose program (an absolute Exec path) is gone gives
+    way to the next folder's copy, as GLib's lookup does. Steam's own
+    steam.desktop in ~/.local said /usr/games/steam, the old package's path;
+    gio launch refused it, so Steam did not start from Start, though
+    /usr/share's entry (/usr/bin/steam) was right. linuxapps-check.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 14:40:00 -0800
+
 sg-shell (0.1.0-279) unstable; urgency=medium
 
   * Linux apps: a launcher keeps its own icon. The taskbar copies of an

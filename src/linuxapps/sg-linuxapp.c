@@ -288,6 +288,20 @@ static void add_desktop_file(const char *unix_file, const char *id)
     }
     if (entry_value(text, "OnlyShowIn", v, sizeof(v)) && v[0]) goto out;
     if (!entry_value(text, "Exec", v, sizeof(v)) || !v[0]) goto out;
+#ifndef SG_MUTANT_EXEC_MISSING_OK
+    {
+        /* its program must be there, as GLib requires (gio launch refuses
+         * the entry otherwise, and Start could not start it): an entry left
+         * behind -- Steam's own copy in ~/.local saying /usr/games/steam, the
+         * old package's path -- gives way to the next folder's (/usr/share's
+         * /usr/bin/steam) */
+        char prog[512], *p = v, *e;
+        if (*p == '"') { p++; e = strchr(p, '"'); } else e = p + strcspn(p, " \t");
+        lstrcpynA(prog, p, (int)min(sizeof(prog), (size_t)((e ? e : p + strlen(p)) - p) + 1));
+        /* an absolute path only: a bare name may be on a PATH we do not know */
+        if (prog[0] == '/' && !exists(prog)) goto out;
+    }
+#endif
     if (entry_value(text, "TryExec", v, sizeof(v)) && v[0] && !try_exec_ok(v)) goto out;
     if (!entry_value(text, "Name", v, sizeof(v)) || !v[0]) goto out;
     a = &g_apps[g_napps];

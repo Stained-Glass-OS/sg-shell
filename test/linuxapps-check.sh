@@ -57,14 +57,19 @@ printf '# plumbing\ndebian-gate*\n' > "$T/hidden"
 app gate-dep 'Type=Application' 'Name=Came Along' 'Exec=true'
 printf '#!/bin/sh\nprintf "gate-dep\\n" > "$1"\n' > "$T/deps"; chmod 755 "$T/deps"
 export SG_LINUXAPP_DEPS="$T/deps"
+# a user's copy whose program is gone (Steam's own steam.desktop saying
+# /usr/games/steam, the old package's path) gives way to the system's
+{ echo '[Desktop Entry]'; echo 'Type=Application'; echo 'Name=Stale Launcher'; echo 'Exec=/usr/games/no-such-launcher %U'; } > "$XDG_DATA_HOME/applications/gate-stale.desktop"
+app gate-stale 'Type=Application' 'Name=Fresh Launcher' 'Exec=true'
 # the user's own copy of an app wins over the system's
 { echo '[Desktop Entry]'; echo 'Type=Application'; echo 'Name=Plain Tool (mine)'; echo 'Exec=true'; } > "$XDG_DATA_HOME/applications/gate-plain.desktop"
 
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
 PROGS="$T/pfx/drive_c/users/$(id -un)/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Linux apps"
 list=$(ls "$PROGS" 2>/dev/null | sort | tr '\n' '|')
-[ "$list" = "Gate Game.lnk|Plain Tool (mine).lnk|" ] && pass "shown apps get shortcuts; NoDisplay, OnlyShowIn, a missing TryExec, links, the hidden list and what came with something else do not; the user's copy wins" \
+[ "$list" = "Fresh Launcher.lnk|Gate Game.lnk|Plain Tool (mine).lnk|" ] && pass "shown apps get shortcuts; NoDisplay, OnlyShowIn, a missing TryExec, links, the hidden list and what came with something else do not; the user's copy wins, unless its program is gone (then the system's)" \
     || fail "shortcuts: $list"
+rm -f "$XDG_DATA_HOME/applications/gate-stale.desktop" "$T/share/applications/gate-stale.desktop"
 ico="$T/pfx/drive_c/users/$(id -un)/AppData/Local/Stained Glass/Linux app icons/gate-game.ico"
 if [ -f "$ico" ] && python3 - "$ico" <<'EOF'
 import struct, sys
@@ -99,7 +104,7 @@ if [ -x /usr/bin/rsvg-convert ]; then
     cat > "$T/share/icons/hicolor/scalable/apps/gate-svg.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="12" fill="#2080e0"/></svg>
 EOF
-    app gate-svg 'Type=Application' 'Name=Svg App' 'Icon=gate-svg' 'Exec=/usr/bin/gate-svg-prog --new' 'StartupWMClass=GateSvgClass'
+    app gate-svg 'Type=Application' 'Name=Svg App' 'Icon=gate-svg' 'Exec=gate-svg-prog --new' 'StartupWMClass=GateSvgClass'
     "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
     icons="$T/pfx/drive_c/users/$(id -un)/AppData/Local/Stained Glass/Linux app icons"
     if python3 - "$icons/gate-svg.ico" <<'EOF'
@@ -118,7 +123,7 @@ EOF
     # steam.ico, the dev box's Steam showing a game's)
     printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#103060"/></svg>\n' > "$T/share/icons/hicolor/scalable/apps/gate-launcher.svg"
     printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="#c02020"/></svg>\n' > "$T/share/icons/hicolor/scalable/apps/gate-launcher-game.svg"
-    app gate-launcher 'Type=Application' 'Name=Launcher' 'Icon=gate-launcher' 'Exec=/usr/bin/gate-launcher %U'
+    app gate-launcher 'Type=Application' 'Name=Launcher' 'Icon=gate-launcher' 'Exec=gate-launcher %U'
     "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
     cp "$icons/gate-launcher.ico" "$T/launcher-own.ico" 2>/dev/null
     app zgate-game-a 'Type=Application' 'Name=Game A' 'Icon=gate-launcher-game' 'Exec=gate-launcher run://1'
@@ -259,6 +264,7 @@ fi
 # Office's sg-office.desktop) still answers to its name, with no Start entry;
 # another package's hidden entry gets nothing (Win+R sg-office, regression
 # walk 2026-10-06)
+mkdir -p "$T/bin"; printf '#!/bin/sh\n' > "$T/bin/sg-gatehidden"; chmod 755 "$T/bin/sg-gatehidden"
 app sg-gatehidden 'Type=Application' 'Name=SG Gate Hidden' 'NoDisplay=true' "Exec=$T/bin/sg-gatehidden %F"
 app gate-plumbing 'Type=Application' 'Name=Gate Plumbing' 'NoDisplay=true' "Exec=$T/bin/gate-plumbing"
 "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
