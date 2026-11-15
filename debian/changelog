@@ -1,3 +1,14 @@
+sg-shell (0.1.0-275) unstable; urgency=medium
+
+  * Settings, "Find a setting": the text and caret sit in the middle of the
+    box (a one-line EDIT draws at the top of its client area, which is now
+    one line high, centred), and typing in Home's box keeps every letter
+    in order: the hand-off to the navigation's box put the caret at 0 (it
+    used g_search_text's length after the page change had emptied it), so
+    "display" came out "isplayd". settings-check types in both boxes.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 11:05:00 -0800
+
 sg-shell (0.1.0-274) unstable; urgency=medium
 
   * Media Player: with NVIDIA's driver it plays video through the GDI

@@ -439,9 +439,40 @@ static LRESULT CALLBACK tile_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 static WNDPROC g_edit_proc;
+static int g_search_line_h;    /* the search font's line: the box's client area, centred in it */
 static LRESULT CALLBACK search_edit_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     LRESULT r;
+    /* A one-line EDIT draws its text (and caret) at the top of its client
+     * area: in the 32-pixel box they sat high. The client area is made one
+     * line high, centred; the band around it is painted as the field. */
+    if (msg == WM_NCCALCSIZE && g_search_line_h) {
+        RECT *rc = wp ? &((NCCALCSIZE_PARAMS *)lp)->rgrc[0] : (RECT *)lp;
+        int extra;
+        r = CallWindowProcW(g_edit_proc, hwnd, msg, wp, lp);
+        extra = (rc->bottom - rc->top) - g_search_line_h;
+        if (extra > 1) { rc->top += extra / 2; rc->bottom -= extra - extra / 2; }
+        return r;
+    }
+    if (msg == WM_NCPAINT && g_search_line_h) {
+        RECT wr, cr, band;
+        POINT o = { 0, 0 };
+        HDC dc;
+        HBRUSH br;
+        r = CallWindowProcW(g_edit_proc, hwnd, msg, wp, lp);
+        GetWindowRect(hwnd, &wr);
+        GetClientRect(hwnd, &cr);
+        ClientToScreen(hwnd, &o);
+        OffsetRect(&cr, o.x - wr.left, o.y - wr.top);
+        if ((dc = GetWindowDC(hwnd))) {
+            br = CreateSolidBrush(g_pal.field);
+            SetRect(&band, cr.left, 1, cr.right, cr.top); FillRect(dc, &band, br);
+            SetRect(&band, cr.left, cr.bottom, cr.right, (wr.bottom - wr.top) - 1); FillRect(dc, &band, br);
+            DeleteObject(br);
+            ReleaseDC(hwnd, dc);
+        }
+        return r;
+    }
     if (msg == WM_KEYDOWN && wp == VK_RETURN) {     /* Enter: the first result */
         WCHAR text[128];
         GetWindowTextW(hwnd, text, ARRAYSIZE(text));
@@ -473,7 +504,17 @@ static HWND make_search(HWND parent, int x, int y, int w, int id)
                              x, y, w, S(32), parent, (HMENU)(INT_PTR)id, g_inst, NULL);
     SendMessageW(e, WM_SETFONT, (WPARAM)g_font_body, TRUE);
     SendMessageW(e, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(S(6), S(28)));
+    if (!g_search_line_h) {
+        HDC dc = GetDC(e);
+        TEXTMETRICW tm;
+        HGDIOBJ old = SelectObject(dc, g_font_body);
+        if (GetTextMetricsW(dc, &tm)) g_search_line_h = tm.tmHeight + S(2);
+        SelectObject(dc, old);
+        ReleaseDC(e, dc);
+    }
     g_edit_proc = (WNDPROC)SetWindowLongPtrW(e, GWLP_WNDPROC, (LONG_PTR)search_edit_proc);
+    /* the centred client area (WM_NCCALCSIZE above) */
+    SetWindowPos(e, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     return e;
 }
 
@@ -560,10 +601,16 @@ BOOL set_cmd_home(int id, int code, HWND ctl)
         return TRUE;
     }
     if (id == CMD_HOMESEARCH && code == 0xFFFE && g_search_text[0]) {
+        int len;
         SetWindowTextW(g_nav_search, g_search_text);    /* EN_CHANGE there navigates */
         SetFocus(g_nav_search);
-        SendMessageW(g_nav_search, EM_SETSEL, lstrlenW(g_search_text), lstrlenW(g_search_text));
         if (current_page() != PG_S_SEARCH) { g_keep_focus = g_nav_search; navigate(PG_S_SEARCH); }
+        /* The caret after the text -- the box's own length: the page change
+         * above (the EN_CHANGE of SetWindowTextW) empties g_search_text, and
+         * EM_SETSEL(0, 0) put the next letters before the first ("isplayd",
+         * the dev box). */
+        len = GetWindowTextLengthW(g_nav_search);
+        SendMessageW(g_nav_search, EM_SETSEL, len, len);
         return TRUE;
     }
     return FALSE;
@@ -766,6 +813,22 @@ static void write_dump(void)
             POINT pt = { S(NAV_W) / 2, S(NAV_SEARCH_Y) + S(16) };
             ClientToScreen(g_nav, &pt);
             fwprintf(f, L"navsearch %ld %ld\n", pt.x, pt.y);
+        }
+        {
+            WCHAR t[128] = L"";
+            DWORD a = 0, b = 0;
+            GetWindowTextW(g_nav_search, t, ARRAYSIZE(t));
+            SendMessageW(g_nav_search, EM_GETSEL, (WPARAM)&a, (LPARAM)&b);
+            fwprintf(f, L"navsearchtext %lu [%ls]\n", (unsigned long)a, t);
+        }
+        {
+            /* where the text line sits in the box: its client area, in it */
+            RECT wr, cr;
+            POINT o = { 0, 0 };
+            GetWindowRect(g_nav_search, &wr);
+            GetClientRect(g_nav_search, &cr);
+            ClientToScreen(g_nav_search, &o);
+            fwprintf(f, L"navsearchline %ld %ld %ld\n", o.y - wr.top, cr.bottom, wr.bottom - wr.top);
         }
     }
     page_dump(f);

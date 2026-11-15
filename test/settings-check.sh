@@ -374,6 +374,12 @@ click_at "$1" "$2"
 xdotool type --delay 80 bluetooth; sleep 1
 page_is "Search results" "typing in the search box"
 has "Bluetooth & other devices" && pass "search finds Bluetooth & other devices" || fail "search results: $(tr -d '\r' < "$DUMP" | grep '^text' | head -5)"
+[ "$(D navsearchtext)" = "9 [bluetooth]" ] && pass "the search box holds what was typed, the caret after it" \
+    || fail "search box: '$(D navsearchtext)', want '9 [bluetooth]'"
+set -- $(D navsearchline)
+# (one line high, not the whole box: an EDIT draws its text at the top of its client area)
+[ -n "${3:-}" ] && [ $(( $1 * 2 + $2 - $3 )) -ge -2 ] && [ $(( $1 * 2 + $2 - $3 )) -le 2 ] && [ "$2" -le $(( $3 - 8 )) ] \
+    && pass "the text line is centred in the search box (at $1, $2 high, in $3)" || fail "search box text line: ${*:-none}"
 shot search
 xdotool key Return
 page_is "Bluetooth & other devices" "Enter opens the first result"
@@ -462,6 +468,17 @@ page_is Home "SystemSettings.exe (App Paths)"
 [ "$(D nav)" = hidden ] && pass "Home has no navigation pane" || fail "nav on Home: $(D nav)"
 has ": System" && has ": Update & Security" && pass "Home shows the categories" || fail "Home tiles"
 sleep 0.5; shot home
+# Home's search box: the first letter starts the search (the box moves to the
+# navigation's); every letter typed lands there in order (the dev box had the
+# first one at the end)
+set -- $(tr -d '\r' < "$DUMP" | grep '^control Edit id=2900 ' | head -1 | sed -n 's/.* at=\([0-9-]*\),\([0-9-]*\).*/\1 \2/p')
+if [ -n "${2:-}" ]; then
+    click_at "$1" "$2"
+    xdotool type --delay 60 display; sleep 1.5
+    page_is "Search results" "typing in Home's search box"
+    [ "$(D navsearchtext)" = "7 [display]" ] && pass "Home's search: every letter in order, the caret after them" \
+        || fail "Home's search: '$(D navsearchtext)', want '7 [display]'"
+else fail "no search box on Home"; fi
 
 wine start ms-settings:no-such-page >/dev/null 2>&1
 wine start ms-settings:dateandtime >/dev/null 2>&1
