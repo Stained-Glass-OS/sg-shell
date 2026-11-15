@@ -1,3 +1,14 @@
+sg-shell (0.1.0-278) unstable; urgency=medium
+
+  * Notifications: Clear all (and a notification's x) also removes an entry
+    named without the leading zeros. sg-restart-notice named its history
+    entry "0" where wine-sg's toasts are "00000000", so its "Restart to
+    finish updating" stayed in the centre for good; it now names it as the
+    toasts are, with its link as a toast's (Protocol 1, Launch), so clicking
+    it opens Update & Security. notify-check has such an entry.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 12:50:00 -0800
+
 sg-shell (0.1.0-277) unstable; urgency=medium
 
   * Media Player: video goes to the renderer as RGB32, made by GStreamer

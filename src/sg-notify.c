@@ -164,6 +164,11 @@ static void dismiss(DWORD seq)
     WCHAR path[128];
     _snwprintf(path, ARRAYSIZE(path), L"%ls\\%08lu", HISTORY_KEY, (unsigned long)seq);
     path[ARRAYSIZE(path) - 1] = 0;
+    if (!RegDeleteKeyW(HKEY_CURRENT_USER, path)) return;
+    /* an entry named without the leading zeros (sg-restart-notice before
+     * 0.1.0-278 wrote "0"): Clear all left it there for good */
+    _snwprintf(path, ARRAYSIZE(path), L"%ls\\%lu", HISTORY_KEY, (unsigned long)seq);
+    path[ARRAYSIZE(path) - 1] = 0;
     RegDeleteKeyW(HKEY_CURRENT_USER, path);
 }
 

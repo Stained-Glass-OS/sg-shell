@@ -49,14 +49,17 @@ add() {
 add 00000000 Firefox "New message from Alex" "Are we still on for lunch tomorrow?"
 add 00000001 Backup "Backup finished" "Your files were copied."
 add 00000002 Thunderbird "3 new emails" ""
-"$WINE" reg add 'HKCU\Software\Stained Glass\Notifications\History' /v Next /t REG_DWORD /d 3 /f >/dev/null 2>&1
+# named without the leading zeros, as sg-restart-notice wrote it before
+# 0.1.0-278: Clear all left it for good (the dev box's NVIDIA restart notice)
+add 3 "Stained Glass OS" "Restart to finish updating" "NVIDIA's driver was installed."
+"$WINE" reg add 'HKCU\Software\Stained Glass\Notifications\History' /v Next /t REG_DWORD /d 4 /f >/dev/null 2>&1
 "$WINESERVER" -w
 mkdir -p "$T/run"; export XDG_RUNTIME_DIR="$T/run" SG_LOCK_CONTROL=/nonexistent
 
 out=$("$WINE" "$T/sg-notify64.exe" --dump 2>&1 | tr -d '\r' | grep -E '^(NOTIFICATIONS|ENTRY)')
 echo "$out" | sed 's/^/      /'
-[ "$(echo "$out" | head -1)" = "NOTIFICATIONS 3 unread 3" ] && [ "$(echo "$out" | sed -n 2p)" = "ENTRY 2|Thunderbird|3 new emails|" ] \
-    && pass "--dump: the three, newest first, all new" || fail "--dump: $out"
+[ "$(echo "$out" | head -1)" = "NOTIFICATIONS 4 unread 4" ] && [ "$(echo "$out" | sed -n 3p)" = "ENTRY 2|Thunderbird|3 new emails|" ] \
+    && pass "--dump: the four, newest first, all new" || fail "--dump: $out"
 
 "$WINE" explorer /desktop=shell,1280x800 >/dev/null 2>&1 &
 sleep 8
@@ -69,7 +72,7 @@ set -- $(val rect | tr ',' ' ')
 [ "$(val visible)" = 1 ] && [ $# = 4 ] && [ "$3" = 1280 ] && [ "$2" = 0 ] && [ $(( $4 - $2 )) -ge 700 ] \
     && pass "/toggle (Win+A) opens the panel at the right, the work area's height: $(val rect)" || fail "panel: visible $(val visible) rect $(val rect)"
 px=$1 py=$2
-[ "$(d | grep '^entry' | awk '{print $2}' | tr '\n' ' ')" = "2 1 0 " ] && pass "it lists them newest first" \
+[ "$(d | grep '^entry' | awk '{print $2}' | tr '\n' ' ')" = "3 2 1 0 " ] && pass "it lists them newest first" \
     || fail "order: $(d | grep '^entry' | awk '{print $2}' | tr '\n' ' ')"
 [ "$(val unread)" = 0 ] && pass "opening it marks them seen" || fail "unread after opening: $(val unread)"
 
@@ -80,14 +83,15 @@ if [ $# = 4 ]; then
     xdotool mousemove $(( cx - 30 )) "$cy"; sleep 0.4; xdotool mousemove "$cx" "$cy"; sleep 0.4; xdotool click 1; sleep 1.2
 fi
 hist=$("$WINE" reg query 'HKCU\Software\Stained Glass\Notifications\History' 2>/dev/null | tr -d '\r')
-[ "$(val count)" = 2 ] && ! printf '%s\n' "$hist" | grep -q '\\00000001$' \
+[ "$(val count)" = 3 ] && ! printf '%s\n' "$hist" | grep -q '\\00000001$' \
     && pass "a notification's x dismisses it, from the history too" || fail "dismiss: count $(val count); $(printf '%s\n' "$hist" | grep -c '\\0000')"
 
 set -- $(val clear | tr ',' ' ')
 [ $# = 4 ] && { xdotool mousemove $(( px + ($1 + $3) / 2 )) $(( py + ($2 + $4) / 2 )); sleep 0.4; xdotool click 1; sleep 1.2; }
 hist=$("$WINE" reg query 'HKCU\Software\Stained Glass\Notifications\History' 2>/dev/null | tr -d '\r')
-[ "$(val count)" = 0 ] && ! printf '%s\n' "$hist" | grep -q '\\0000' \
-    && pass "Clear all dismisses the rest" || fail "clear all: count $(val count); $(printf '%s\n' "$hist" | grep -c '\\0000') left"
+[ "$(val count)" = 0 ] && ! printf '%s\n' "$hist" | grep -q 'History\\[0-9]' \
+    && pass "Clear all dismisses the rest (the one named without leading zeros too)" \
+    || fail "clear all: count $(val count); left: $(printf '%s\n' "$hist" | grep 'History\\[0-9]' | tr '\n' ' ')"
 
 "$WINE" "$T/sg-notify64.exe" /toggle >/dev/null 2>&1; sleep 1.5
 [ "$(val visible)" = 0 ] && pass "/toggle again closes it" || fail "still open: $(val visible)"

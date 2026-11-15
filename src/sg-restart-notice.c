@@ -103,15 +103,22 @@ static void remember(void)
     ULONGLONG now;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, HISTORY_KEY, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hist, NULL)) return;
     RegQueryValueExW(hist, L"Next", NULL, NULL, (BYTE *)&next, &size);
-    _snwprintf(name, ARRAYSIZE(name), L"%lu", next);
+    /* named as wine-sg's toasts are (eight digits): the centre and windows.ui
+     * find an entry by its number in that form -- "0" was never cleared */
+    _snwprintf(name, ARRAYSIZE(name), L"%08lu", next);
     if (!RegCreateKeyExW(hist, name, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &item, NULL)) {
         GetSystemTimeAsFileTime(&ft);
         now = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
         RegSetValueExW(item, L"App", 0, REG_SZ, (const BYTE *)L"Stained Glass OS", sizeof(L"Stained Glass OS"));
         RegSetValueExW(item, L"Title", 0, REG_SZ, (const BYTE *)g_title, (lstrlenW(g_title) + 1) * sizeof(WCHAR));
         RegSetValueExW(item, L"Body", 0, REG_SZ, (const BYTE *)g_body, (lstrlenW(g_body) + 1) * sizeof(WCHAR));
-        RegSetValueExW(item, L"Protocol", 0, REG_SZ, (const BYTE *)L"ms-settings:windowsupdate",
+        /* a link: Protocol 1 and the link in Launch, as a toast's */
+        RegSetValueExW(item, L"Launch", 0, REG_SZ, (const BYTE *)L"ms-settings:windowsupdate",
                        sizeof(L"ms-settings:windowsupdate"));
+        {
+            DWORD one = 1;
+            RegSetValueExW(item, L"Protocol", 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
+        }
         RegSetValueExW(item, L"Time", 0, REG_QWORD, (const BYTE *)&now, sizeof(now));
         RegCloseKey(item);
         next++;
