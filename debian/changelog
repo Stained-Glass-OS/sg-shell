@@ -1,3 +1,13 @@
+sg-shell (0.1.0-279) unstable; urgency=medium
+
+  * Linux apps: a launcher keeps its own icon. The taskbar copies of an
+    app's icon (named after its window class and program) skip a name
+    another app owns, and a program several apps start: each Steam game
+    runs "steam steam://rungameid/N", so every game copied its icon over
+    steam.ico and Steam showed a game's (a red hood). linuxapps-check.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 14:30:00 -0800
+
 sg-shell (0.1.0-278) unstable; urgency=medium
 
   * Notifications: Clear all (and a notification's x) also removes an entry

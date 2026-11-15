@@ -538,6 +538,20 @@ static BOOL make_icon(const struct app *a, const WCHAR *dir, WCHAR *ico, int len
 /* copies of an app's .ico named after its windows' class (StartupWMClass,
  * and Exec's program name: GTK's default class), for the taskbar: it shows a
  * Linux window with the icon named after the window's class */
+/* Never another app's own icon, and never a program several apps start
+ * (Steam's games each run "steam steam://rungameid/N": every game copied its
+ * icon over steam.ico, and Steam showed the last game's) */
+static BOOL alias_taken(const struct app *a, const char *name, BOOL is_exe)
+{
+    int i, users = 0;
+    for (i = 0; i < g_napps; i++) {
+        if (&g_apps[i] == a) continue;
+        if (!_stricmp(g_apps[i].id, name)) return TRUE;
+        if (is_exe && !_stricmp(g_apps[i].exe, name)) users++;
+    }
+    return users > 0;
+}
+
 static void icon_aliases(const struct app *a, const WCHAR *dir, const WCHAR *ico)
 {
     const char *names[2] = { a->wmclass, a->exe };
@@ -546,6 +560,9 @@ static void icon_aliases(const struct app *a, const WCHAR *dir, const WCHAR *ico
         WCHAR alias[MAX_PATH];
         if (!names[i][0] || !_stricmp(names[i], a->id) || strpbrk(names[i], "\\/:*?\"<>|")) continue;
         if (i == 1 && !_stricmp(names[1], a->wmclass)) continue;
+#ifndef SG_MUTANT_ALIAS_ANY
+        if (alias_taken(a, names[i], i == 1)) continue;
+#endif
         _snwprintf(alias, MAX_PATH, L"%ls\\%hs.ico", dir, names[i]);
         alias[MAX_PATH - 1] = 0;
         CopyFileW(ico, alias, FALSE);

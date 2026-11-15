@@ -113,6 +113,21 @@ EOF
     cmp -s "$icons/gate-svg.ico" "$icons/GateSvgClass.ico" && cmp -s "$icons/gate-svg.ico" "$icons/gate-svg-prog.ico" \
         && pass "copies named after its window class and program, for the taskbar" || fail "class copies: $(ls "$icons" | tr '\n' ' ')"
     rm "$T/share/applications/gate-svg.desktop"
+    # a launcher (Steam) and games that run it ("steam steam://rungameid/N"):
+    # the launcher keeps its own icon (every game had copied its icon over
+    # steam.ico, the dev box's Steam showing a game's)
+    printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#103060"/></svg>\n' > "$T/share/icons/hicolor/scalable/apps/gate-launcher.svg"
+    printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="#c02020"/></svg>\n' > "$T/share/icons/hicolor/scalable/apps/gate-launcher-game.svg"
+    app gate-launcher 'Type=Application' 'Name=Launcher' 'Icon=gate-launcher' 'Exec=/usr/bin/gate-launcher %U'
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    cp "$icons/gate-launcher.ico" "$T/launcher-own.ico" 2>/dev/null
+    app zgate-game-a 'Type=Application' 'Name=Game A' 'Icon=gate-launcher-game' 'Exec=gate-launcher run://1'
+    app zgate-game-b 'Type=Application' 'Name=Game B' 'Icon=gate-launcher-game' 'Exec=gate-launcher run://2'
+    "$WINE" "$EXE" --sync; "${WINESERVER:-wineserver}" -w
+    [ -s "$T/launcher-own.ico" ] && cmp -s "$icons/gate-launcher.ico" "$T/launcher-own.ico" \
+        && pass "a launcher keeps its own icon beside apps that run it (Steam and its games)" \
+        || fail "launcher icon replaced: $(ls -la "$icons" | grep gate-launcher | tr '\n' ' ')"
+    rm -f "$T/share/applications/gate-launcher.desktop" "$T/share/applications/zgate-game-a.desktop" "$T/share/applications/zgate-game-b.desktop"
 else
     echo "SKIP  SVG icons (no /usr/bin/rsvg-convert here)"
 fi
