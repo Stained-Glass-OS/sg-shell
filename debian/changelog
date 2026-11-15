@@ -1,3 +1,13 @@
+sg-shell (0.1.0-273) unstable; urgency=medium
+
+  * Linux apps in Start: what a task or metapackage the person installed
+    recommends counts as chosen, as its dependencies did. Firefox ESR,
+    which Debian's desktop task brings as a recommendation, was left out
+    as "came with something else" on a Debian machine turned into a
+    Stained Glass one.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 09:50:00 -0800
+
 sg-shell (0.1.0-272) unstable; urgency=medium
 
   * Settings > Display, several displays: "Disconnect this display" in the

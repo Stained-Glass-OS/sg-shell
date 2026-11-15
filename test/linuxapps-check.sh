@@ -131,10 +131,11 @@ fi
 # sg-session's dependency (auto, yet shown: SG Mail, David 2026-10-05).
 D="$T/dpkg"; A="$T/deps-apps"
 mkdir -p "$D/info" "$D/updates" "$A"
-for id in kapp kplumb wrapped alone sg-mail sgsess; do app2="$A/$id.desktop"; printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true\n' "$id" > "$app2"; done
-pkg() { # NAME DEPENDS [DESKTOP]
+for id in kapp kplumb wrapped alone sg-mail sgsess browser krec; do app2="$A/$id.desktop"; printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true\n' "$id" > "$app2"; done
+pkg() { # NAME DEPENDS [DESKTOP [RECOMMENDS]]
     printf 'Package: %s\nStatus: install ok installed\nPriority: optional\nSection: misc\nMaintainer: gate\nArchitecture: all\nVersion: 1\n' "$1" >> "$D/status"
     [ -n "$2" ] && printf 'Depends: %s\n' "$2" >> "$D/status"
+    [ -n "${4:-}" ] && printf 'Recommends: %s\n' "$4" >> "$D/status"
     printf 'Description: gate\n\n' >> "$D/status"
     if [ -n "${3:-}" ]; then printf '/.\n%s\n' "$A/$3.desktop" > "$D/info/$1.list"; else printf '/.\n' > "$D/info/$1.list"; fi
 }
@@ -146,12 +147,16 @@ pkg wrapped '' wrapped
 pkg alone '' alone
 pkg sg-session 'sg-mail' sgsess
 pkg sg-mail '' sg-mail
-printf 'Package: kplumb\nArchitecture: all\nAuto-Installed: 1\n\nPackage: wrapped\nArchitecture: all\nAuto-Installed: 1\n\nPackage: alone\nArchitecture: all\nAuto-Installed: 1\n\nPackage: sg-mail\nArchitecture: all\nAuto-Installed: 1\n' > "$T/extended_states"
+pkg task-desktop '' '' 'browser | other-browser'
+pkg browser '' browser
+pkg kapp2 '' kapp 'krec'
+pkg krec '' krec
+printf 'Package: browser\nArchitecture: all\nAuto-Installed: 1\n\nPackage: krec\nArchitecture: all\nAuto-Installed: 1\n\nPackage: kplumb\nArchitecture: all\nAuto-Installed: 1\n\nPackage: wrapped\nArchitecture: all\nAuto-Installed: 1\n\nPackage: alone\nArchitecture: all\nAuto-Installed: 1\n\nPackage: sg-mail\nArchitecture: all\nAuto-Installed: 1\n' > "$T/extended_states"
 if command -v dpkg-query >/dev/null; then
     SG_DPKG_ADMINDIR="$D" SG_LINUXAPP_APPS="$A" SG_APT_EXTENDED_STATES="$T/extended_states" \
         sh "$HERE/src/linuxapps/sg-linuxapp-deps" "$T/deps.out"
     got=$(tr '\n' ' ' < "$T/deps.out" 2>/dev/null)
-    [ "$got" = "alone kplumb " ] && pass "sg-linuxapp-deps: a dependency's entries are left out; an app the person's wrapper package is for, and our own (sg-mail) stay" \
+    [ "$got" = "alone kplumb krec " ] && pass "sg-linuxapp-deps: a dependency's entries are left out (and an app's recommendation); an app the person's wrapper package is for, what their task recommends (a browser), and our own (sg-mail) stay" \
         || fail "sg-linuxapp-deps: [$got]"
 else
     echo "SKIP  sg-linuxapp-deps (no dpkg-query here)"
