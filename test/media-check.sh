@@ -137,6 +137,8 @@ xdotool key m; sleep 0.4
 xdotool key m; sleep 0.3
 shot audio-seek
 
+# (the clip is 32 160 96: within 8, so a studio-range or BT.601 conversion of it,
+# 42 154 99, fails -- every film looked washed out, 2026-11-15)
 # --- video: a second launch hands its file to this window -----------------------------------
 wine "$winexe" "$(wine winepath -w "$T/clip.mp4" | tr -d '\r')" >/dev/null 2>&1 &
 i=0; while ! D FILE | grep -q 'clip.mp4' && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
@@ -148,7 +150,7 @@ n=$(xdotool search --name ' - Media Player$' 2>/dev/null | wc -l)
 sleep 1.5; shot video
 set -- $(centre VIDEORECT); vx=$1; vy=$2
 px=$(pixel video "$vx" "$vy")
-near "$px" "32 160 96" 40 && pass "the video pane shows the clip ($px at $vx,$vy)" || fail "video pane pixel is '$px', not the clip's 32 160 96"
+near "$px" "32 160 96" 8 && pass "the video pane shows the clip ($px at $vx,$vy)" || fail "video pane pixel is '$px', not the clip's 32 160 96"
 focus_player
 xdotool key F11; sleep 1.5
 [ "$(D FULLSCREEN)" = 1 ] && pass "F11: full screen" || fail "F11 did not go full screen"
@@ -156,7 +158,7 @@ set -- $(D VIDEORECT)
 [ "$1" -le 0 ] && [ "$2" -le 0 ] && [ "$3" -ge 1024 ] && [ "$4" -ge 768 ] && pass "the video fills the screen ($*)" || fail "full-screen video rect: $*"
 shot fullscreen
 px=$(pixel fullscreen 512 384)
-near "$px" "32 160 96" 40 && pass "full screen shows the clip ($px)" || fail "full screen centre is '$px'"
+near "$px" "32 160 96" 8 && pass "full screen shows the clip ($px)" || fail "full screen centre is '$px'"
 # the controls over the film at first; still for a while, they go and the
 # pointer with them; the pointer moves, they are back (David, 2026-10-17)
 c0=$(D FSCONTROLS); sleep 4.5
@@ -206,7 +208,7 @@ wait_for STATE Playing 30
     || fail "GDI renderer: renderer '$(D RENDERER)' video '$(D VIDEO)' $(D STATE) $(D ERROR)"
 sleep 1.5; shot gdi
 set -- $(centre VIDEORECT); px=$(pixel gdi "$1" "$2")
-near "$px" "32 160 96" 40 && pass "GDI renderer: the video pane shows the clip ($px)" || fail "GDI renderer: video pane pixel is '$px'"
+near "$px" "32 160 96" 8 && pass "GDI renderer: the video pane shows the clip ($px)" || fail "GDI renderer: video pane pixel is '$px'"
 n=$(xdotool search --name 'ActiveMovie Window' 2>/dev/null | wc -l)
 [ "$n" = 0 ] && pass "GDI renderer: in the player, no 'ActiveMovie Window' of its own" || fail "GDI renderer: $n ActiveMovie windows"
 wine taskkill /f /im sg-media64.exe >/dev/null 2>&1; sleep 2; rm -f "$SG_MEDIA_DUMP"

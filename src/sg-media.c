@@ -952,6 +952,68 @@ static void close_media(void)
     ShowWindow(g_video, SW_HIDE);
 }
 
+/* A video stream goes to the renderer as RGB32 when the splitter offers it:
+ * GStreamer's videoconvert makes it with the film's own colorimetry. Given
+ * YUV, the renderer converted it as studio-range BT.601 -- whites at 226 in
+ * place of 242, blacks at 45 in place of 31, greens shifted: every film
+ * looked washed out next to VLC's (the dev box, 2026-11-15). FALSE: render
+ * it as before. */
+static BOOL render_video_rgb(IPin *out)
+{
+    IEnumMediaTypes *types;
+    AM_MEDIA_TYPE *mt, *rgb = NULL;
+    IBaseFilter *ren = NULL;
+    IEnumPins *e;
+    IPin *pin, *in = NULL;
+    BOOL ok = FALSE;
+
+    if (FAILED(IPin_EnumMediaTypes(out, &types))) return FALSE;
+    while (IEnumMediaTypes_Next(types, 1, &mt, NULL) == S_OK)
+    {
+        if (!rgb && IsEqualGUID(&mt->majortype, &MEDIATYPE_Video) && IsEqualGUID(&mt->subtype, &MEDIASUBTYPE_RGB32) &&
+            IsEqualGUID(&mt->formattype, &FORMAT_VideoInfo))
+            rgb = mt;
+        else
+        {
+            CoTaskMemFree(mt->pbFormat);
+            if (mt->pUnk) IUnknown_Release(mt->pUnk);
+            CoTaskMemFree(mt);
+        }
+    }
+    IEnumMediaTypes_Release(types);
+    if (!rgb) return FALSE;
+
+    if (g_gdi_renderer) { ren = g_gdi_renderer; IBaseFilter_AddRef(ren); }
+    else if (SUCCEEDED(CoCreateInstance(&CLSID_VideoRendererDefault, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&ren)) &&
+             FAILED(IGraphBuilder_AddFilter(g_graph, ren, L"Video Renderer")))
+    {
+        IBaseFilter_Release(ren);
+        ren = NULL;
+    }
+    if (ren && SUCCEEDED(IBaseFilter_EnumPins(ren, &e)))
+    {
+        while (!in && IEnumPins_Next(e, 1, &pin, NULL) == S_OK)
+        {
+            PIN_DIRECTION d;
+            IPin *peer;
+            if (SUCCEEDED(IPin_QueryDirection(pin, &d)) && d == PINDIR_INPUT && FAILED(IPin_ConnectedTo(pin, &peer))) in = pin;
+            else { if (d == PINDIR_INPUT && SUCCEEDED(IPin_ConnectedTo(pin, &peer))) IPin_Release(peer); IPin_Release(pin); }
+        }
+        IEnumPins_Release(e);
+    }
+    if (in)
+    {
+        ok = SUCCEEDED(IGraphBuilder_ConnectDirect(g_graph, out, in, rgb));
+        IPin_Release(in);
+    }
+    if (!ok && ren && ren != g_gdi_renderer) IGraphBuilder_RemoveFilter(g_graph, ren);
+    if (ren) IBaseFilter_Release(ren);
+    CoTaskMemFree(rgb->pbFormat);
+    if (rgb->pUnk) IUnknown_Release(rgb->pUnk);
+    CoTaskMemFree(rgb);
+    return ok;
+}
+
 /* source -> winegstreamer's decodebin splitter -> render each stream */
 static HRESULT build_with_gstreamer(const WCHAR *path, int *streams)
 {
@@ -990,7 +1052,7 @@ static HRESULT build_with_gstreamer(const WCHAR *path, int *streams)
         {
             PIN_DIRECTION d;
             if (SUCCEEDED(IPin_QueryDirection(pin, &d)) && d == PINDIR_OUTPUT &&
-                SUCCEEDED(IGraphBuilder_Render(g_graph, pin)))
+                (render_video_rgb(pin) || SUCCEEDED(IGraphBuilder_Render(g_graph, pin))))
                 (*streams)++;
             IPin_Release(pin);
         }

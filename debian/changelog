@@ -1,3 +1,13 @@
+sg-shell (0.1.0-277) unstable; urgency=medium
+
+  * Media Player: video goes to the renderer as RGB32, made by GStreamer
+    with the film's own colorimetry. Given YUV, the renderer converted it as
+    studio-range BT.601: whites at 226 in place of 242, blacks at 45 in
+    place of 31, greens shifted -- every film looked washed out next to
+    VLC. media-check holds the clip's colour to within 8 (it allowed 40).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 12:45:00 -0800
+
 sg-shell (0.1.0-276) unstable; urgency=medium
 
   * Media Player: the GDI Video Renderer only with NVIDIA's driver before
