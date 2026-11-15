@@ -1,3 +1,13 @@
+sg-shell (0.1.0-276) unstable; urgency=medium
+
+  * Media Player: the GDI Video Renderer only with NVIDIA's driver before
+    555. With 555 and later (NVIDIA's own driver, which sg-drivers now
+    offers) and the compositor's explicit sync, the default renderer shows
+    the film, smoothly scaled; the GDI one made it look coarse (the dev
+    box on NVIDIA 620).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 12:30:00 -0800
+
 sg-shell (0.1.0-275) unstable; urgency=medium
 
   * Settings, "Find a setting": the text and caret sit in the middle of the

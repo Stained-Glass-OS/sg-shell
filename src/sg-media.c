@@ -31,6 +31,7 @@
 #include <dvdmedia.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <wchar.h>
 #include <initguid.h>
 #define WIDL_using_Windows_Foundation
@@ -1006,14 +1007,35 @@ static HRESULT build_with_gstreamer(const WCHAR *path, int *streams)
 /* The video renderer. Wine's default one (the VMR) draws with Direct3D 9
  * into our child window, which comes out black with NVIDIA's driver under
  * Xwayland (David's RTX 3090, driver 550): every video showed a black
- * pane. The GDI Video Renderer (StretchDIBits) shows it there; it goes in
- * the graph first, so Render takes it, and out again when nothing used it
+ * pane -- with drivers before 555 (nvidia_before_555 below). The GDI
+ * Video Renderer (StretchDIBits) shows it there; it goes in the graph first, so Render takes it, and out again when nothing used it
  * (an audio file). SG_MEDIA_RENDERER=gdi or vmr chooses (the gate). */
+/* NVIDIA's driver older than 555: no explicit synchronization under
+ * Xwayland, and the VMR's pane stays black. With 555 and later (and the
+ * compositor's linux-drm-syncobj-v1) the VMR shows the film, and scales it
+ * smoothly, where the GDI renderer's StretchDIBits made it look coarse. */
+static BOOL nvidia_before_555(void)
+{
+    HANDLE h = CreateFileW(L"Z:\\proc\\driver\\nvidia\\version", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    char buf[512] = "", *p;
+    DWORD got = 0;
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    ReadFile(h, buf, sizeof(buf) - 1, &got, NULL);
+    CloseHandle(h);
+    buf[got] = 0;
+    /* "NVRM version: NVIDIA UNIX ... Kernel Module  550.163.01  ..." */
+    for (p = buf; *p; p++)
+        if (p[0] >= '1' && p[0] <= '9' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] == '.' &&
+            (p == buf || p[-1] == ' '))
+            return atoi(p) < 555;
+    return FALSE;
+}
+
 static BOOL want_gdi_renderer(void)
 {
     WCHAR v[16];
     if (GetEnvironmentVariableW(L"SG_MEDIA_RENDERER", v, ARRAYSIZE(v))) return !lstrcmpiW(v, L"gdi");
-    return GetFileAttributesW(L"Z:\\proc\\driver\\nvidia\\version") != INVALID_FILE_ATTRIBUTES;
+    return nvidia_before_555();
 }
 
 static void drop_unused_gdi_renderer(void)
