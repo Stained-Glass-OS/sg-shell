@@ -1,3 +1,14 @@
+sg-shell (0.1.0-274) unstable; urgency=medium
+
+  * Media Player: with NVIDIA's driver it plays video through the GDI
+    Video Renderer. Wine's default (the VMR) draws with Direct3D 9 into the
+    player's pane, which stayed black under Xwayland on an RTX 3090
+    (driver 550): every video, the dev box's OBS recordings among them,
+    played as a black pane. SG_MEDIA_RENDERER=gdi|vmr chooses; the dump
+    says which (RENDERER); media-check plays a clip and a sound through it.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 15 Nov 2026 10:45:00 -0800
+
 sg-shell (0.1.0-273) unstable; urgency=medium
 
   * Linux apps in Start: what a task or metapackage the person installed

@@ -196,6 +196,25 @@ wait_for STATE Playing 10
     || fail "third.avi: $(D QUEUE) $(D STATE) video '$(D VIDEO)' $(D ERROR)"
 sleep 1; shot avi
 
+# --- the GDI Video Renderer (sg-media takes it with NVIDIA's driver, whose
+# Direct3D 9 path showed a black pane under Xwayland; SG_MEDIA_RENDERER=gdi
+# takes it here) -----------------------------------------------------------------------------
+wine taskkill /f /im sg-media64.exe >/dev/null 2>&1; sleep 2; rm -f "$SG_MEDIA_DUMP"
+SG_MEDIA_RENDERER=gdi wine "$winexe" "$(wine winepath -w "$T/clip.mp4" | tr -d '\r')" >/dev/null 2>&1 &
+wait_for STATE Playing 30
+[ "$(D RENDERER)" = gdi ] && [ "$(D VIDEO)" = "1 320 240" ] && pass "GDI renderer: clip.mp4 plays through it" \
+    || fail "GDI renderer: renderer '$(D RENDERER)' video '$(D VIDEO)' $(D STATE) $(D ERROR)"
+sleep 1.5; shot gdi
+set -- $(centre VIDEORECT); px=$(pixel gdi "$1" "$2")
+near "$px" "32 160 96" 40 && pass "GDI renderer: the video pane shows the clip ($px)" || fail "GDI renderer: video pane pixel is '$px'"
+n=$(xdotool search --name 'ActiveMovie Window' 2>/dev/null | wc -l)
+[ "$n" = 0 ] && pass "GDI renderer: in the player, no 'ActiveMovie Window' of its own" || fail "GDI renderer: $n ActiveMovie windows"
+wine taskkill /f /im sg-media64.exe >/dev/null 2>&1; sleep 2; rm -f "$SG_MEDIA_DUMP"
+SG_MEDIA_RENDERER=gdi wine "$winexe" "$(wine winepath -w "$T/tone.wav" | tr -d '\r')" >/dev/null 2>&1 &
+wait_for STATE Playing 30
+[ "$(D VIDEO | cut -d' ' -f1)" = 0 ] && [ "$(D RENDERER)" = default ] && pass "GDI renderer: an audio file leaves it out (no video pane)" \
+    || fail "GDI renderer, audio: video '$(D VIDEO)' renderer '$(D RENDERER)'"
+
 echo
 [ $RC = 0 ] && echo "media-check: all passed" || echo "media-check: FAILED"
 exit $RC
