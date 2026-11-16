@@ -42,6 +42,7 @@
 #   SG_MUTANT_KEEP_FILE=1           uninstall leaves the AppImage behind
 #   SG_MUTANT_NO_EXTRACT_FALLBACK=1 no APPIMAGE_EXTRACT_AND_RUN without FUSE
 #   SG_MUTANT_ANY_MACHINE=1         another processor's AppImage accepted
+#   SG_MUTANT_MOVE_COPIES=1         --move copies the file even on one filesystem
 #   C: SG_MUTANT_NO_APPIMAGE_UNINSTALL (sg-linuxapp.c) no Uninstall entry;
 #      SG_MUTANT_AI_NO_SYNC (sysinstall.c) Start not brought up to date
 #
@@ -172,8 +173,13 @@ n=$(ls "$DATA/applications"/appimage-*.desktop 2>/dev/null | wc -l)
 [ ! -e "$F2" ] && [ ! -e "$ENTRY" ] && [ ! -e "$ICON" ] && grep -q '^OK' "$T/un" \
     && pass "uninstall removes the AppImage, its entry and its icon" || fail "uninstall: $(ls -R "$HOME/Applications" "$DATA" 2>&1 | tr '\n' ' ')"
 cp "$V1" "$T/move.AppImage"
+moveino=$(stat -c %i "$T/move.AppImage")
 "$HELPER" install --move "$T/move.AppImage" >/dev/null 2>&1
 [ ! -e "$T/move.AppImage" ] && [ -x "$HOME/Applications/move.AppImage" ] && pass "--move takes the download away" || fail "--move: $(ls "$T" "$HOME/Applications" | tr '\n' ' ')"
+if [ "$(stat -c %d "$T")" = "$(stat -c %d "$HOME/Applications")" ]; then
+    [ "$(stat -c %i "$HOME/Applications/move.AppImage" 2>/dev/null)" = "$moveino" ] \
+        && pass "--move on one filesystem is a rename (the same inode), not a copy" || fail "--move copied the file (another inode)"
+fi
 "$HELPER" uninstall "$ENTRY" >/dev/null 2>&1
 [ ! -e "$HOME/Applications/move.AppImage" ] && [ ! -e "$ENTRY" ] && pass "uninstall by its entry's path" || fail "uninstall by path"
 

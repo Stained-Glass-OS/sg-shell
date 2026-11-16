@@ -488,7 +488,17 @@ def install(src, move=False):
         fd, tmp = tempfile.mkstemp(dir=folder, prefix=".sg-appimage.")
         os.close(fd)
         try:
-            shutil.copyfile(src, tmp)
+            # taking the download away: a rename where the two are on one filesystem (a large AppImage
+            # was copied, then deleted); else a copy
+            renamed = False
+            if move and not mutant("MOVE_COPIES"):
+                try:
+                    os.rename(src, tmp)
+                    renamed = True
+                except OSError:
+                    pass
+            if not renamed:
+                shutil.copyfile(src, tmp)
             os.chmod(tmp, 0o755)
             os.replace(tmp, dest)
         except BaseException:

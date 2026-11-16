@@ -1,3 +1,11 @@
+sg-shell (0.1.0-281) unstable; urgency=medium
+
+  * AppImages: "move" renames the download into Applications when the two
+    are on one filesystem; it copied the whole file and then deleted it.
+    test/appimage-check.sh (mutant MOVE_COPIES).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 16 Nov 2026 13:52:45 -0800
+
 sg-shell (0.1.0-280) unstable; urgency=medium
 
   * Linux apps: an entry whose program (an absolute Exec path) is gone gives

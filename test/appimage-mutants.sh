@@ -2,7 +2,7 @@
 . "$(dirname "$0")/scratch-home.sh"
 # The mutants of test/appimage-check.sh: each must make it FAIL.
 #   sg-appimage (environment): KEEP_EXEC, NO_REPLACE, KEEP_FILE,
-#     NO_EXTRACT_FALLBACK, ANY_MACHINE
+#     NO_EXTRACT_FALLBACK, ANY_MACHINE, MOVE_COPIES
 #   C (built here with -DSG_MUTANT_...): NO_APPIMAGE_UNINSTALL
 #     (sg-linuxapp64.exe), AI_NO_SYNC (sg-store64.exe)
 # Needs what the gate needs, and mingw (make build first: the store's
@@ -19,7 +19,7 @@ run() {   # NAME, then the environment for the gate
     if grep -q '^RESULT: FAIL' "$T/$name.log"; then echo "PASS  MUTANT $name caught: $(grep -m1 '^FAIL' "$T/$name.log" | cut -c7-90)"
     else echo "FAIL  MUTANT $name not caught ($(tail -1 "$T/$name.log"))"; RC=1; fi
 }
-for m in KEEP_EXEC NO_REPLACE KEEP_FILE NO_EXTRACT_FALLBACK ANY_MACHINE; do run "$m" "SG_MUTANT_$m=1"; done
+for m in KEEP_EXEC NO_REPLACE KEEP_FILE NO_EXTRACT_FALLBACK ANY_MACHINE MOVE_COPIES; do run "$m" "SG_MUTANT_$m=1"; done
 command -v "$MINGW" >/dev/null && [ -f "$HERE/build/sg-store-res64.o" ] || { echo "SKIP  the C mutants (mingw, or make build first)"; exit "$RC"; }
 CF="-O2 -municode -mwindows -Wall -Wextra"
 cd "$HERE" || exit 1
