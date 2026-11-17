@@ -402,6 +402,7 @@ test: build
 	@sh test/taskbar-pins-check.sh
 	@sh test/round-check.sh
 	@sh test/mstsc-check.sh
+	@sh test/mstsc-span-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/rootterm-check.sh
 	@sh test/xterm-copypaste-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/linux-terminal-tabs-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

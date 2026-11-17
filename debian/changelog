@@ -1,3 +1,22 @@
+sg-shell (0.1.0-282) unstable; urgency=medium
+
+  * Remote Desktop Connection: mstsc's /span, /multimon, /admin,
+    /restrictedAdmin, /public, /prompt, /edit and /l; from .rdp files the
+    monitors (use multimon, span monitors, selectedmonitors), the
+    administrative session, smart sizing, the clipboard, printers, audio and
+    the RD Gateway. Switches override the file. Drives, smart cards, ports
+    and USB devices are still not shared from a file.
+  * Remote Desktop Connection uses an entry's saved credentials as Remote
+    Desktop Manager saves them (a generic TERMSRV/<computer> credential).
+  * A connection from the command line lasts as long as its session, as
+    mstsc's: Remote Desktop Manager's "Open (external)" watches it.
+    sg-rdp-connect --session.
+  * test/mstsc-check.sh extended; test/mstsc-span-check.sh: /span and
+    /multimon cover both outputs of a two-output compositor (mutant
+    SG_MUTANT_MSTSC_NO_MULTIMON).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 17 Nov 2026 09:00:00 -0800
+
 sg-shell (0.1.0-281) unstable; urgency=medium
 
   * AppImages: "move" renames the download into Applications when the two

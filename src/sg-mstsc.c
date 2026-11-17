@@ -54,7 +54,28 @@ struct conn {
     WCHAR domain[MAX_FIELD];
     int   fullscreen;
     int   width, height;        /* 0 = client default */
+    /* mstsc's switches and the .rdp keys beyond where to connect (sg-shell -282) */
+    int   multimon;             /* /multimon, use multimon:i:1: every monitor, the server sees each */
+    int   span;                 /* /span, span monitors:i:1: one desktop across the monitors */
+    WCHAR monitors[64];         /* selectedmonitors:s: monitor ids, digits and commas */
+    int   admin;                /* /admin, administrative session:i:1 */
+    int   restricted_admin;     /* /restrictedAdmin */
+    int   public_mode;          /* /public: nothing remembered, no saved credentials used */
+    int   prompt;               /* /prompt: always ask for credentials */
+    int   smart_sizing;         /* smart sizing:i:1 */
+    int   clipboard;            /* redirectclipboard: 1 (mstsc's default) or 0 */
+    int   printers;             /* redirectprinters:i:1 */
+    int   audio;                /* audiomode: -1 unset, 0 here, 1 on the server, 2 none */
+    WCHAR gateway[MAX_FIELD];   /* gatewayhostname:s: with gatewayusagemethod 1 or 2 */
+    int   gateway_use;
 };
+
+static void conn_init(struct conn *c)
+{
+    memset(c, 0, sizeof(*c));
+    c->clipboard = 1;
+    c->audio = -1;
+}
 
 /* --- validation ------------------------------------------------------------ */
 
@@ -65,6 +86,14 @@ static BOOL valid_host(const WCHAR *s)
     for (; *s; s++)
         if (!(iswalnum(*s) || *s == '.' || *s == '-' || *s == ':' || *s == '_'))
             return FALSE;
+    return TRUE;
+}
+
+/* Monitor ids: digits and commas only. */
+static BOOL valid_monitors(const WCHAR *s)
+{
+    if (!*s || *s == ',') return FALSE;
+    for (; *s; s++) if (!(iswdigit(*s) || *s == ',')) return FALSE;
     return TRUE;
 }
 
@@ -185,6 +214,18 @@ static BOOL load_rdp_file(struct conn *c, const WCHAR *path)
         else if (!lstrcmpiW(name, L"screen mode id") && !lstrcmpiW(type, L"i")) c->fullscreen = (_wtoi(value) == 2);
         else if (!lstrcmpiW(name, L"desktopwidth") && !lstrcmpiW(type, L"i")) c->width = _wtoi(value);
         else if (!lstrcmpiW(name, L"desktopheight") && !lstrcmpiW(type, L"i")) c->height = _wtoi(value);
+        /* the monitors, the session and the redirections that cannot share this machine's
+         * disks or devices: still nothing of drives, smart cards, ports or USB devices */
+        else if (!lstrcmpiW(name, L"use multimon") && !lstrcmpiW(type, L"i")) c->multimon = _wtoi(value) == 1;
+        else if (!lstrcmpiW(name, L"span monitors") && !lstrcmpiW(type, L"i")) c->span = _wtoi(value) == 1;
+        else if (!lstrcmpiW(name, L"selectedmonitors") && !lstrcmpiW(type, L"s")) lstrcpynW(c->monitors, value, ARRAYSIZE(c->monitors));
+        else if (!lstrcmpiW(name, L"administrative session") && !lstrcmpiW(type, L"i")) c->admin = _wtoi(value) == 1;
+        else if (!lstrcmpiW(name, L"smart sizing") && !lstrcmpiW(type, L"i")) c->smart_sizing = _wtoi(value) == 1;
+        else if (!lstrcmpiW(name, L"redirectclipboard") && !lstrcmpiW(type, L"i")) c->clipboard = _wtoi(value) != 0;
+        else if (!lstrcmpiW(name, L"redirectprinters") && !lstrcmpiW(type, L"i")) c->printers = _wtoi(value) == 1;
+        else if (!lstrcmpiW(name, L"audiomode") && !lstrcmpiW(type, L"i")) c->audio = _wtoi(value);
+        else if (!lstrcmpiW(name, L"gatewayhostname") && !lstrcmpiW(type, L"s")) lstrcpynW(c->gateway, value, MAX_FIELD);
+        else if (!lstrcmpiW(name, L"gatewayusagemethod") && !lstrcmpiW(type, L"i")) c->gateway_use = _wtoi(value);
     }
     HeapFree(GetProcessHeap(), 0, text);
     return TRUE;
@@ -256,6 +297,9 @@ static BOOL build_command(const struct conn *c, const WCHAR *client, WCHAR *cmd,
     if (c->user[0] && !valid_name(c->user)) { *why = L"The user name is not valid."; return FALSE; }
     if (c->domain[0] && !valid_name(c->domain)) { *why = L"The domain name is not valid."; return FALSE; }
     if (c->port < 0 || c->port > 65535) { *why = L"The port is not valid."; return FALSE; }
+    if (c->monitors[0] && !valid_monitors(c->monitors)) { *why = L"The selected monitors are not valid."; return FALSE; }
+    if (c->gateway[0] && (c->gateway_use == 1 || c->gateway_use == 2) && !valid_host(c->gateway))
+    { *why = L"The RD Gateway server name is not valid."; return FALSE; }
 
     cmd[0] = 0;
     append_arg(cmd, cap, client);
@@ -268,14 +312,35 @@ static BOOL build_command(const struct conn *c, const WCHAR *client, WCHAR *cmd,
     }
     if (c->user[0]) append_opt(cmd, cap, L"/u:", c->user);
     if (c->domain[0]) append_opt(cmd, cap, L"/d:", c->domain);
-    if (c->fullscreen) append_arg(cmd, cap, L"/f");
+    /* mstsc's /span and /multimon are full screen across the monitors: sdl-freerdp3's +span (one
+     * desktop over them) and /multimon (the server sees each), /monitors: for selectedmonitors */
+#ifndef SG_MUTANT_MSTSC_NO_MULTIMON
+    if (c->span || c->multimon)
+#else
+    if (0)
+#endif
+    {
+        append_arg(cmd, cap, c->span ? L"+span" : L"/multimon");
+        if (c->multimon && !c->span && c->monitors[0]) append_opt(cmd, cap, L"/monitors:", c->monitors);
+        append_arg(cmd, cap, L"/f");
+    }
+    else if (c->fullscreen) append_arg(cmd, cap, L"/f");
     else if (c->width > 0 && c->height > 0)
     {
         swprintf(buf, ARRAYSIZE(buf), L"/size:%dx%d", c->width, c->height);
         append_arg(cmd, cap, buf);
     }
     else append_arg(cmd, cap, L"/dynamic-resolution");
-    append_arg(cmd, cap, L"+clipboard");
+    if (c->smart_sizing && !c->span && !c->multimon) append_arg(cmd, cap, L"/smart-sizing");
+    if (c->admin) append_arg(cmd, cap, L"+admin");
+    if (c->restricted_admin) append_arg(cmd, cap, L"+restricted-admin");
+    if (c->gateway[0] && (c->gateway_use == 1 || c->gateway_use == 2)) append_opt(cmd, cap, L"/gateway:g:", c->gateway);
+    append_arg(cmd, cap, c->clipboard ? L"+clipboard" : L"-clipboard");
+    if (c->printers) append_arg(cmd, cap, L"/printer");
+    if (c->audio == 0) append_arg(cmd, cap, L"/sound");
+    else if (c->audio == 1) append_arg(cmd, cap, L"/audio-mode:1");
+    else if (c->audio == 2) append_arg(cmd, cap, L"/audio-mode:2");
+    if (c->public_mode) append_arg(cmd, cap, L"/cache:bitmap:off");
     if (g_first_use) append_arg(cmd, cap, L"/cert:tofu");
     return TRUE;
 }
@@ -338,6 +403,45 @@ static BOOL write_password(const WCHAR *password, WCHAR *unix_path, size_t cap)
     return TRUE;
 }
 
+/* Like mstsc, a connection from the command line lasts as long as its session: programs that start
+ * mstsc (Remote Desktop Manager's "Open (external)") watch the process to know when it ends. Wine
+ * gives no handle for a native program (and its pipes break when this end's handle closes, though
+ * the native side holds the descriptor), so sg-rdp-connect keeps a file in the user's private
+ * runtime directory while the client runs, and this waits for it to come and to go. */
+static BOOL g_wait;
+
+static const WCHAR *connect_helper(void)
+{
+    static WCHAR helper[MAX_PATH];
+    WCHAR flag[4] = { 0 };
+    /* the gate's own copy of the helper (SG_MSTSC_TEST=1 only) */
+    if (GetEnvironmentVariableW(L"SG_MSTSC_TEST", flag, ARRAYSIZE(flag)) && !lstrcmpW(flag, L"1") &&
+        GetEnvironmentVariableW(L"SG_RDP_CONNECT", helper, ARRAYSIZE(helper)) && helper[0])
+        return helper;
+    return CONNECT_HELPER;
+}
+
+static BOOL session_file(WCHAR *unix_path, size_t cap, WCHAR *win_path, size_t wcap)
+{
+    WCHAR dir[MAX_PATH];
+    size_t n;
+
+    if (!GetEnvironmentVariableW(L"XDG_RUNTIME_DIR", dir, ARRAYSIZE(dir)) || dir[0] != '/') return FALSE;
+    swprintf(unix_path, cap, L"%ls/sg-rdp-session-%lu-%lu", dir, GetCurrentProcessId(), GetTickCount());
+    swprintf(win_path, wcap, L"\\\\?\\unix%ls", unix_path);
+    for (n = 8; win_path[n]; n++) if (win_path[n] == '/') win_path[n] = '\\';
+    return TRUE;
+}
+
+static void wait_session(const WCHAR *win_path)
+{
+    int i;
+
+    /* the helper makes the file when it starts the client; then it lasts as long as the client */
+    for (i = 0; i < 100 && GetFileAttributesW(win_path) == INVALID_FILE_ATTRIBUTES; i++) Sleep(100);
+    while (GetFileAttributesW(win_path) != INVALID_FILE_ATTRIBUTES) Sleep(500);
+}
+
 static BOOL launch_with(const struct conn *c, const WCHAR *client, BOOL dry_run, const WCHAR *password)
 {
     static WCHAR cmd[4096], args[4096];
@@ -346,20 +450,24 @@ static BOOL launch_with(const struct conn *c, const WCHAR *client, BOOL dry_run,
     STARTUPINFOW si = { .cb = sizeof(si) };
     PROCESS_INFORMATION pi;
 
-    if (!dry_run && password && password[0] && GetFileAttributesW(CONNECT_HELPER) != INVALID_FILE_ATTRIBUTES)
+    if (!dry_run && password && password[0] && GetFileAttributesW(connect_helper()) != INVALID_FILE_ATTRIBUTES)
     {
         unix_spelling(client, unix_client, ARRAYSIZE(unix_client));
         if (build_command(c, unix_client, args, ARRAYSIZE(args), &why) &&
             write_password(password, pwfile, ARRAYSIZE(pwfile)))
         {
+            WCHAR sess_unix[MAX_PATH + 64], sess_win[MAX_PATH + 80];
+            BOOL wait = g_wait && session_file(sess_unix, ARRAYSIZE(sess_unix), sess_win, ARRAYSIZE(sess_win));
             cmd[0] = 0;
-            append_arg(cmd, ARRAYSIZE(cmd), CONNECT_HELPER);
+            append_arg(cmd, ARRAYSIZE(cmd), connect_helper());
+            if (wait) { append_arg(cmd, ARRAYSIZE(cmd), L"--session"); append_arg(cmd, ARRAYSIZE(cmd), sess_unix); }
             append_arg(cmd, ARRAYSIZE(cmd), pwfile);
             if (wcslen(cmd) + 1 + wcslen(args) < ARRAYSIZE(cmd)) { wcscat(cmd, L" "); wcscat(cmd, args); }
             if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
             {
-                CloseHandle(pi.hThread);
-                CloseHandle(pi.hProcess);
+                if (pi.hThread) CloseHandle(pi.hThread);
+                if (pi.hProcess) CloseHandle(pi.hProcess);
+                if (wait) wait_session(sess_win);
                 return TRUE;
             }
         }
@@ -373,6 +481,7 @@ static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
     const WCHAR *why = NULL;
     STARTUPINFOW si = { .cb = sizeof(si) };
     PROCESS_INFORMATION pi;
+    WCHAR sess_unix[MAX_PATH + 64], sess_win[MAX_PATH + 80];
 
     if (!build_command(c, client, cmd, ARRAYSIZE(cmd), &why))
     {
@@ -399,6 +508,31 @@ static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
         return TRUE;
     }
 
+    if (g_wait && GetFileAttributesW(connect_helper()) != INVALID_FILE_ATTRIBUTES &&
+        session_file(sess_unix, ARRAYSIZE(sess_unix), sess_win, ARRAYSIZE(sess_win)))
+    {
+        /* the client through the helper, which marks the session (no password: "-") */
+        static WCHAR full[4096 + MAX_PATH * 2];
+        WCHAR unix_client[MAX_PATH];
+        full[0] = 0;
+        append_arg(full, ARRAYSIZE(full), connect_helper());
+        append_arg(full, ARRAYSIZE(full), L"--session");
+        append_arg(full, ARRAYSIZE(full), sess_unix);
+        append_arg(full, ARRAYSIZE(full), L"-");
+        unix_spelling(client, unix_client, ARRAYSIZE(unix_client));
+        if (build_command(c, unix_client, cmd, ARRAYSIZE(cmd), &why) && wcslen(full) + 1 + wcslen(cmd) < ARRAYSIZE(full))
+        {
+            wcscat(full, L" "); wcscat(full, cmd);
+            if (CreateProcessW(NULL, full, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+            {
+                if (pi.hThread) CloseHandle(pi.hThread);
+                if (pi.hProcess) CloseHandle(pi.hProcess);
+                wait_session(sess_win);
+                return TRUE;
+            }
+        }
+        build_command(c, client, cmd, ARRAYSIZE(cmd), &why);
+    }
     if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
     {
         WCHAR msg[512];
@@ -408,8 +542,8 @@ static BOOL launch(const struct conn *c, const WCHAR *client, BOOL dry_run)
         MessageBoxW(NULL, msg, L"Remote Desktop Connection", MB_ICONERROR);
         return FALSE;
     }
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    if (pi.hThread) CloseHandle(pi.hThread);
+    if (pi.hProcess) CloseHandle(pi.hProcess);
     return TRUE;
 }
 
@@ -532,9 +666,12 @@ static BOOL saved_credentials(const struct conn *c, WCHAR *user, size_t ucch, WC
     DWORD n;
     BOOL ok = FALSE;
 
-    if (!c->host[0]) return FALSE;
+    if (!c->host[0] || c->public_mode || c->prompt) return FALSE;
     cred_target(c->host, target, ARRAYSIZE(target));
-    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred)) return FALSE;
+    /* as mstsc's own; also a generic credential of that name, as Remote Desktop Manager saves
+     * the entry's credentials before it starts mstsc for "Open (external)" */
+    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred) && !CredReadW(target, CRED_TYPE_GENERIC, 0, &cred))
+        return FALSE;
     if (c->domain[0]) swprintf(typed, ARRAYSIZE(typed), L"%ls\\%ls", c->domain, c->user);
     else lstrcpynW(typed, c->user, ARRAYSIZE(typed));
     n = cred->CredentialBlobSize / sizeof(WCHAR);
@@ -557,7 +694,8 @@ static BOOL has_saved_credentials(const WCHAR *host)
     CREDENTIALW *cred;
     if (!host[0]) return FALSE;
     cred_target(host, target, ARRAYSIZE(target));
-    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred)) return FALSE;
+    if (!CredReadW(target, CRED_TYPE_DOMAIN_PASSWORD, 0, &cred) && !CredReadW(target, CRED_TYPE_GENERIC, 0, &cred))
+        return FALSE;
     CredFree(cred);
     return TRUE;
 }
@@ -710,7 +848,7 @@ static BOOL connect_to(HWND owner, struct conn *c)
         else
         {
             if (!ask_credentials(owner, c, pw, ARRAYSIZE(pw), &keep)) return FALSE;
-            if (keep && pw[0] && !remember_credentials(c, pw))
+            if (keep && pw[0] && !c->public_mode && !remember_credentials(c, pw))
                 MessageBoxW(owner, L"Your credentials could not be saved.", L"Remote Desktop Connection", MB_ICONWARNING);
         }
     }
@@ -829,11 +967,44 @@ static int run_dialog(HINSTANCE inst)
 
 /* --- entry point ------------------------------------------------------------------- */
 
+static BOOL have_dry_run(int argc, WCHAR **argv)
+{
+    int i;
+    for (i = 1; i < argc; i++) if (!lstrcmpiW(argv[i], L"/sg-dry-run")) return TRUE;
+    return FALSE;
+}
+
+/* mstsc /l: the monitors and their ids, as selectedmonitors takes them */
+static BOOL CALLBACK add_monitor(HMONITOR mon, HDC dc, RECT *r, LPARAM lp)
+{
+    WCHAR *text = (WCHAR *)lp, line[128];
+    MONITORINFO mi = { .cbSize = sizeof(mi) };
+    int id = 0;
+    const WCHAR *p;
+
+    (void)dc;
+    for (p = text; (p = wcschr(p, '\n')); p++) id++;
+    GetMonitorInfoW(mon, &mi);
+    swprintf(line, ARRAYSIZE(line), L"%d: %ld x %ld; (%ld, %ld, %ld, %ld)%ls\n", id,
+             r->right - r->left, r->bottom - r->top, r->left, r->top, r->right - 1, r->bottom - 1,
+             (mi.dwFlags & MONITORINFOF_PRIMARY) ? L" primary" : L"");
+    if (wcslen(text) + wcslen(line) < 2048) wcscat(text, line);
+    return TRUE;
+}
+
+static void show_monitors(void)
+{
+    static WCHAR text[2048];
+    text[0] = 0;
+    EnumDisplayMonitors(NULL, NULL, add_monitor, (LPARAM)text);
+    MessageBoxW(NULL, text, L"Remote Desktop Connection", MB_OK | MB_ICONINFORMATION);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
 {
     int argc, i;
     WCHAR **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    BOOL dry_run = FALSE, have_target = FALSE;
+    BOOL dry_run = FALSE, have_target = FALSE, edit = FALSE, list_monitors = FALSE;
     static WCHAR client[MAX_PATH];
     DWORD n;
 
@@ -842,6 +1013,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     n = GetEnvironmentVariableW(L"SG_RDP_CLIENT", client, ARRAYSIZE(client));
     g_client = (n && n < ARRAYSIZE(client)) ? client : DEFAULT_CLIENT;
 
+    conn_init(&g_conn);
     load_last(&g_conn);
 
     /* Test only: pass every following argument through append_arg to the
@@ -873,7 +1045,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
      * /sg-saved /v:HOST prints "SAVED <user> <password length>" or "NONE",
      * as a connection would find them. */
     if (argv && argc > 2 && !lstrcmpW(test_flag, L"1") && !_wcsnicmp(argv[2], L"/v:", 3) &&
-        (!lstrcmpiW(argv[1], L"/sg-remember") || !lstrcmpiW(argv[1], L"/sg-saved")))
+        (!lstrcmpiW(argv[1], L"/sg-remember") || !lstrcmpiW(argv[1], L"/sg-remember-generic") ||
+         !lstrcmpiW(argv[1], L"/sg-saved")))
     {
         WCHAR user[MAX_FIELD * 2], pw[MAX_FIELD];
         char line[MAX_FIELD * 3];
@@ -885,6 +1058,21 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
             if (argc < 5) return 2;
             set_user(&c, argv[3]);
             return remember_credentials(&c, argv[4]) ? 0 : 1;
+        }
+        if (!lstrcmpiW(argv[1], L"/sg-remember-generic"))
+        {
+            /* as Remote Desktop Manager saves an entry's credentials for mstsc */
+            WCHAR target[MAX_FIELD + 16];
+            CREDENTIALW gen = { 0 };
+            if (argc < 5) return 2;
+            cred_target(c.host, target, ARRAYSIZE(target));
+            gen.Type = CRED_TYPE_GENERIC;
+            gen.TargetName = target;
+            gen.UserName = argv[3];
+            gen.CredentialBlob = (BYTE *)argv[4];
+            gen.CredentialBlobSize = (DWORD)(wcslen(argv[4]) * sizeof(WCHAR));
+            gen.Persist = CRED_PERSIST_LOCAL_MACHINE;
+            return CredWriteW(&gen, 0) ? 0 : 1;
         }
         if (argc > 3) set_user(&c, argv[3]);
         if (saved_credentials(&c, user, ARRAYSIZE(user), pw, ARRAYSIZE(pw)))
@@ -899,25 +1087,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
         return 0;
     }
 
+    /* The connection file first (an argument that is not a switch, or /edit's), then the
+     * switches, which override what it says, as mstsc's do. */
     for (i = 1; argv && i < argc; i++)
     {
         const WCHAR *a = argv[i];
-        if (!lstrcmpiW(a, L"/sg-dry-run")) dry_run = TRUE;
-        else if (!_wcsnicmp(a, L"/v:", 3))
-        {
-            g_conn.host[0] = 0; g_conn.port = 0;
-            set_address(&g_conn, a + 3);
-            have_target = TRUE;
-        }
-        else if (!lstrcmpiW(a, L"/f")) g_conn.fullscreen = 1;
-        else if (!_wcsnicmp(a, L"/w:", 3)) g_conn.width = _wtoi(a + 3);
-        else if (!_wcsnicmp(a, L"/h:", 3)) g_conn.height = _wtoi(a + 3);
-        else if (a[0] != '/')
+        if (!lstrcmpiW(a, L"/edit") && i + 1 < argc) { edit = TRUE; a = argv[++i]; }
+        else if (a[0] == '/') continue;
         {
             /* An .rdp file: what it says replaces anything remembered. */
-            struct conn fresh = { 0 };
+            struct conn fresh;
+            conn_init(&fresh);
             if (load_rdp_file(&fresh, a)) { g_conn = fresh; have_target = g_conn.host[0] != 0; }
-            else if (!dry_run)
+            else if (!dry_run && !have_dry_run(argc, argv))
             {
                 MessageBoxW(NULL, L"The connection file could not be read.",
                             L"Remote Desktop Connection", MB_ICONERROR);
@@ -930,15 +1112,43 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
                 return 1;
             }
         }
-        /* other mstsc switches (/admin, /public, /span, /multimon, ...) are
-         * accepted and ignored */
     }
+    for (i = 1; argv && i < argc; i++)
+    {
+        const WCHAR *a = argv[i];
+        if (!lstrcmpiW(a, L"/sg-dry-run")) dry_run = TRUE;
+        else if (!lstrcmpiW(a, L"/edit")) i++;
+        else if (!_wcsnicmp(a, L"/v:", 3))
+        {
+            g_conn.host[0] = 0; g_conn.port = 0;
+            set_address(&g_conn, a + 3);
+            have_target = TRUE;
+        }
+        else if (!lstrcmpiW(a, L"/f")) g_conn.fullscreen = 1;
+        else if (!_wcsnicmp(a, L"/w:", 3)) g_conn.width = _wtoi(a + 3);
+        else if (!_wcsnicmp(a, L"/h:", 3)) g_conn.height = _wtoi(a + 3);
+        else if (!lstrcmpiW(a, L"/span")) g_conn.span = 1;
+        else if (!lstrcmpiW(a, L"/multimon")) g_conn.multimon = 1;
+        else if (!lstrcmpiW(a, L"/admin")) g_conn.admin = 1;
+        else if (!lstrcmpiW(a, L"/restrictedAdmin")) g_conn.restricted_admin = 1;
+        else if (!lstrcmpiW(a, L"/public")) g_conn.public_mode = 1;
+        else if (!lstrcmpiW(a, L"/prompt")) g_conn.prompt = 1;
+        else if (!lstrcmpiW(a, L"/l")) list_monitors = TRUE;
+        /* other mstsc switches (/control, /shadow:, /remoteGuard, ...) are accepted and ignored */
+    }
+
+    if (list_monitors && !dry_run) { show_monitors(); return 0; }
+    if (edit) have_target = FALSE;     /* /edit: the file in the dialog, not a connection */
 
     /* Like mstsc: with a target on the command line, connect straight away
      * (after the certificate question and the credentials). */
     if (dry_run) return launch(&g_conn, g_client, TRUE) ? 0 : 1;
     init_look(inst);
-    if (have_target) return connect_to(NULL, &g_conn) ? 0 : 1;
+    if (have_target)
+    {
+        g_wait = TRUE;
+        return connect_to(NULL, &g_conn) ? 0 : 1;
+    }
 
     return run_dialog(inst);
 }

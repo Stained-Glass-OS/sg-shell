@@ -1,22 +1,49 @@
 #!/bin/sh
-# sg-rdp-connect PASSWORDFILE CLIENT ARG...
+# sg-rdp-connect [--session FILE] PASSWORDFILE|- CLIENT ARG...
 #
 # Remote Desktop Connection (sg-mstsc) starts the RDP client through this: it
 # has asked for the password in its own dialog and written it to
 # PASSWORDFILE, in the user's private runtime directory. The password is read,
 # the file removed, and the client is given the password on its standard input
 # (/from-stdin:force) -- never on a command line, which every account on the
-# machine can read. Its own sign-in dialog does not appear.
+# machine can read. Its own sign-in dialog does not appear. "-": no password,
+# the client asks for one itself.
+#
+# --session FILE (sg-shell -282): FILE, in the same directory, exists while the
+# client runs. Like mstsc, a connection from the command line lasts as long as
+# its session -- programs that start mstsc watch it -- and Wine gives a Windows
+# program no handle for a native one, so sg-mstsc watches this file.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 set -u
-pwfile=${1:?usage: sg-rdp-connect PASSWORDFILE CLIENT ARG...}
+usage="usage: sg-rdp-connect [--session FILE] PASSWORDFILE|- CLIENT ARG..."
+in_runtime_dir() {
+    case "$1" in
+    "${XDG_RUNTIME_DIR:-/nonexistent}"/sg-rdp-*) case "$1" in */../*|*/..) return 1 ;; esac; return 0 ;;
+    *) return 1 ;;
+    esac
+}
+session=
+if [ "${1:-}" = --session ]; then
+    session=${2:?$usage}
+    shift 2
+    in_runtime_dir "$session" || { echo "sg-rdp-connect: the session file must be in XDG_RUNTIME_DIR" >&2; exit 2; }
+fi
+pwfile=${1:?$usage}
 shift
-[ $# -ge 1 ] || { echo "usage: sg-rdp-connect PASSWORDFILE CLIENT ARG..." >&2; exit 2; }
-case "$pwfile" in
-"${XDG_RUNTIME_DIR:-/nonexistent}"/sg-rdp-*) ;;
-*) echo "sg-rdp-connect: the password file must be in XDG_RUNTIME_DIR" >&2; exit 2 ;;
-esac
-pw=$(cat "$pwfile" 2>/dev/null)
-rm -f "$pwfile"
-printf '%s\n' "$pw" | "$@" /from-stdin:force
+[ $# -ge 1 ] || { echo "$usage" >&2; exit 2; }
+if [ "$pwfile" != - ]; then
+    in_runtime_dir "$pwfile" || { echo "sg-rdp-connect: the password file must be in XDG_RUNTIME_DIR" >&2; exit 2; }
+fi
+if [ -n "$session" ]; then
+    ( umask 077; : > "$session" ) || exit 2
+    trap 'rm -f "$session"' EXIT
+    trap 'exit 1' HUP INT TERM
+fi
+if [ "$pwfile" = - ]; then
+    "$@"
+else
+    pw=$(cat "$pwfile" 2>/dev/null)
+    rm -f "$pwfile"
+    printf '%s\n' "$pw" | "$@" /from-stdin:force
+fi

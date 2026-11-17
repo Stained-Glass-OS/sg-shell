@@ -24,6 +24,10 @@ EXE="$HERE/build/sg-mstsc64.exe"
 T=$(mktemp -d)
 trap 'WINEPREFIX="$T/pfx" "$WINE_DIR/bin/wineserver" -k 2>/dev/null; rm -rf "$T"' EXIT
 export WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDEBUG=-all PATH="$WINE_DIR/bin:$PATH"
+# the session file and the password file live in a private runtime directory; the helper is this
+# tree's (SG_RDP_CONNECT is honoured only with SG_MSTSC_TEST=1)
+mkdir -m 700 "$T/xdg"; export XDG_RUNTIME_DIR="$T/xdg"
+export SG_RDP_CONNECT="\\\\?\\unix$(printf '%s' "$HERE/src/sg-rdp-connect" | tr / '\\\\')"
 unset DISPLAY WAYLAND_DISPLAY
 WINEDLLOVERRIDES='mscoree,mshtml=' wineboot -i >/dev/null 2>&1   # throwaway prefix only
 wineserver -w
@@ -60,8 +64,35 @@ dry "UTF-16 .rdp from mstsc"   "$CLIENT /v:rdp.sgtest.lan:3390 /u:alice /d:SGTES
 printf '%s\n' 'full address:s:files.sgtest.lan' 'username:s:bob@sgtest.lan' \
     'drivestoredirect:s:*' 'redirectdrives:i:1' 'redirectprinters:i:1' 'devicestoredirect:s:*' \
     'desktopwidth:i:1600' 'desktopheight:i:900' > "$T/handmade.rdp"
-dry "UTF-8 .rdp; redirections ignored" "$CLIENT /v:files.sgtest.lan /u:bob@sgtest.lan /size:1600x900 +clipboard" \
+dry "UTF-8 .rdp; drives and devices ignored, printers kept" "$CLIENT /v:files.sgtest.lan /u:bob@sgtest.lan /size:1600x900 +clipboard /printer" \
     "$(winepath -w "$T/handmade.rdp")"
+
+echo "== monitors, session and redirections (-282)"
+dry "/span"                    "$CLIENT /v:h1 +span /f +clipboard" /v:h1 /span
+dry "/multimon"                "$CLIENT /v:h1 /multimon /f +clipboard" /v:h1 /multimon
+dry "/admin and /public"       "$CLIENT /v:h1 /dynamic-resolution +admin +clipboard /cache:bitmap:off" /v:h1 /admin /public
+dry "/restrictedAdmin"         "$CLIENT /v:h1 /dynamic-resolution +restricted-admin +clipboard" /v:h1 /restrictedAdmin
+printf '%s\n' 'full address:s:mm.sgtest.lan' 'use multimon:i:1' 'selectedmonitors:s:0,1' > "$T/mm.rdp"
+dry ".rdp use multimon, selectedmonitors" "$CLIENT /v:mm.sgtest.lan /multimon /monitors:0,1 /f +clipboard" "$(winepath -w "$T/mm.rdp")"
+printf '%s\n' 'full address:s:mm.sgtest.lan' 'span monitors:i:1' 'use multimon:i:0' > "$T/span.rdp"
+dry ".rdp span monitors"       "$CLIENT /v:mm.sgtest.lan +span /f +clipboard" "$(winepath -w "$T/span.rdp")"
+printf '%s\n' 'full address:s:mm.sgtest.lan' 'use multimon:i:0' > "$T/one.rdp"
+dry "switches override the file" "$CLIENT /v:mm.sgtest.lan /multimon /f +clipboard" "$(winepath -w "$T/one.rdp")" /multimon
+printf '%s\n' 'full address:s:gw.sgtest.lan' 'gatewayhostname:s:rdg.sgtest.lan' 'gatewayusagemethod:i:1' \
+    'redirectclipboard:i:0' 'audiomode:i:2' 'smart sizing:i:1' 'administrative session:i:1' > "$T/gw.rdp"
+dry ".rdp gateway, clipboard off, no audio, smart sizing, admin" \
+    "$CLIENT /v:gw.sgtest.lan /dynamic-resolution /smart-sizing +admin /gateway:g:rdg.sgtest.lan -clipboard /audio-mode:2" "$(winepath -w "$T/gw.rdp")"
+printf '%s\n' 'full address:s:gw.sgtest.lan' 'gatewayhostname:s:rdg.sgtest.lan' 'gatewayusagemethod:i:0' > "$T/nogw.rdp"
+dry ".rdp gateway not used (method 0)" "$CLIENT /v:gw.sgtest.lan /dynamic-resolution +clipboard" "$(winepath -w "$T/nogw.rdp")"
+# Remote Desktop Manager 2026.3's file for "Open (external)" with "Use multiple monitors", as it wrote it on qa5
+rdp_utf16 'screen mode id:i:2' 'desktopwidth:i:1920' 'desktopheight:i:1080' 'winposstr:s:0,3,0,0,1920,1080' 'session bpp:i:32' \
+    'full address:s:127.0.0.1' 'compression:i:1' 'keyboardhook:i:0' 'audiomode:i:0' 'audioqualitymode:i:0' 'redirectdrives:i:1' \
+    'redirectprinters:i:0' 'redirectcomports:i:0' 'redirectsmartcards:i:0' 'redirectclipboard:i:1' 'redirectposdevices:i:0' \
+    'displayconnectionbar:i:1' 'authentication level:i:0' 'enablecredsspsupport:i:1' 'prompt for credentials:i:0' \
+    'username:s:rdptest' 'domain:s:' 'administrative session:i:0' 'gatewaycredentialssource:i:4' 'gatewayhostname:s:' \
+    'gatewayusagemethod:i:2' 'smart sizing:i:0' 'use multimon:i:1' > "$T/rdm.rdp"
+dry "Remote Desktop Manager's external file and /f" "$CLIENT /v:127.0.0.1 /u:rdptest /multimon /f +clipboard /sound" \
+    "$(winepath -w "$T/rdm.rdp")" /f
 
 echo "== injection attempts are refused"
 printf '%s\n' 'full address:s:evil.example /drive:root,/' > "$T/inject-host.rdp"
@@ -72,6 +103,10 @@ printf '%s\n' 'full address:s:ok.example' 'username:s:bo"b' > "$T/inject-quote.r
 dry "quote in the user name"         "REFUSED The user name is not valid." "$(winepath -w "$T/inject-quote.rdp")"
 dry "address that is an option"      "REFUSED The computer name is not valid." '/v:/drive:root,/'
 dry "unreadable file"                "REFUSED unreadable file" 'C:\no\such\file.rdp'
+printf '%s\n' 'full address:s:ok.example' 'use multimon:i:1' 'selectedmonitors:s:0,/drive:root,/' > "$T/inject-mon.rdp"
+dry "option smuggled in selectedmonitors" "REFUSED The selected monitors are not valid." "$(winepath -w "$T/inject-mon.rdp")"
+printf '%s\n' 'full address:s:ok.example' 'gatewayhostname:s:gw /drive:root,/' 'gatewayusagemethod:i:1' > "$T/inject-gw.rdp"
+dry "option smuggled in the gateway" "REFUSED The RD Gateway server name is not valid." "$(winepath -w "$T/inject-gw.rdp")"
 
 echo "== the real launch path through Wine"
 # A fake client that records its argv, one argument per line, and renames the
@@ -130,6 +165,29 @@ if [ "$got" = "$CLIENT /v:inert.example /dynamic-resolution +clipboard" ]; then
 else
     fail "the test switch is not inert: got '$got'"
 fi
+
+echo "== saved credentials of Remote Desktop Manager (-282)"
+# RDM saves an entry's credentials as a generic TERMSRV/<computer> credential before it starts mstsc
+SG_MSTSC_TEST=1 wine "$EXE" /sg-remember-generic /v:rdm.sgtest.lan rdptest 'Gen#Pass9' >/dev/null 2>&1 || true
+r=$(SG_MSTSC_TEST=1 wine "$EXE" /sg-saved /v:rdm.sgtest.lan 2>/dev/null | tr -d '\r')
+[ "$r" = "SAVED rdptest 9" ] && pass "a generic TERMSRV credential (as RDM saves) is used" || fail "generic credential: '$r'"
+
+echo "== a connection lasts as long as its session (-282)"
+# RDM's "Open (external)" watches mstsc to know when the session ends: mstsc returns only when the
+# client has exited (the client's standard output, a pipe, closes)
+cat > "$T/Remote Tools/slow client" <<'EOF2'
+#!/bin/sh
+sleep 4
+echo done > "$(dirname "$0")/slow.txt"
+EOF2
+chmod +x "$T/Remote Tools/slow client"
+rm -f "$T/Remote Tools/slow.txt"
+start=$(date +%s)
+SG_MSTSC_TEST=1 SG_RDP_CLIENT="\\\\?\\unix$(printf '%s' "$T/Remote Tools/slow client" | tr / '\\\\')" \
+    timeout 60 wine "$EXE" /v:server.sgtest.lan >/dev/null 2>&1 || true
+took=$(( $(date +%s) - start ))
+if [ -f "$T/Remote Tools/slow.txt" ] && [ "$took" -ge 4 ]; then pass "mstsc returned when the client ended (${took} s)"
+else fail "mstsc returned after ${took} s, the client $( [ -f "$T/Remote Tools/slow.txt" ] && echo done || echo 'still running')"; fi
 
 echo
 if [ "$FAILED" -eq 0 ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi
