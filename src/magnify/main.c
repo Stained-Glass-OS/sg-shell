@@ -39,6 +39,16 @@
  * /zoom:NNN, /reload (read the settings again). One instance: another
  * hands its command line over (WM_COPYDATA).
  *
+ * DRAWN BY THE COMPOSITOR. In a Stained Glass session the compositor draws all
+ * three views itself (sg-compositor's magnifier.c, through wine-sg's
+ * magnification.dll: MagSetFullscreenTransform and its SgMagCommand), as
+ * Windows' desktop window manager does: so X and Wayland programs are
+ * magnified too, and nothing secure (lock, consent prompt) ever is. This
+ * program is then only the toolbar, the settings, the keys and what to
+ * follow; the full-screen view and the lens follow the pointer in the
+ * compositor, frame by frame. Where there is no such compositor (an older
+ * one, a plain X server) the views are drawn here, as below.
+ *
  * SG_MAGNIFY_DUMP=<file> (a Windows path) is rewritten as the state changes,
  * for the gate (test/magnify-check.sh).
  *
@@ -75,6 +85,11 @@ static int g_follow_mouse = 1, g_follow_focus = 1, g_follow_caret = 1;
 static int g_lens_w = 40, g_lens_h = 30, g_dock_h = 25;
 static int g_sw, g_sh;                          /* the screen */
 static POINT g_center;                          /* what the view follows */
+static BOOL g_center_mouse = TRUE;              /* ...and whether that is the pointer */
+/* the compositor draws the views (SgMagCommand, wine-sg's magnification.dll) */
+static BOOL (WINAPI *p_SgMagCommand)(const char *);
+static BOOL g_comp;
+static char g_comp_view[96], g_comp_centre[48], g_comp_invert[16];
 static POINT g_last_mouse = { -1, -1 };
 static RECT g_last_caret; static HWND g_last_focus;
 static RECT g_src, g_viewrc;                    /* the source rectangle and where it is shown */
@@ -168,6 +183,7 @@ static void write_dump(void)
             fwprintf(f, L"BUTTON %ls %ld %ld\n", btn_names[i], c.x, c.y);
         }
     }
+    fwprintf(f, L"RENDER %ls\n", g_comp ? L"compositor" : L"self");
     fwprintf(f, L"FRAMES %lu\nEND\n", (unsigned long)g_frames);
     fclose(f);
     MoveFileExW(tmp, g_dump, MOVEFILE_REPLACE_EXISTING);
@@ -375,7 +391,7 @@ static void track(void)
         if (g_follow_mouse)
         {
             /* in the docked view, the pointer over the dock itself moves nothing */
-            if (!(g_mode == MODE_DOCKED && pt.y < g_viewrc.bottom && g_viewrc.bottom > 0)) g_center = pt;
+            if (!(g_mode == MODE_DOCKED && pt.y < g_viewrc.bottom && g_viewrc.bottom > 0)) g_center = pt, g_center_mouse = TRUE;
         }
         return;
     }
@@ -388,6 +404,7 @@ static void track(void)
         {
             g_last_caret = r;
             g_center.x = r.left; g_center.y = (r.top + r.bottom) / 2;
+            g_center_mouse = FALSE;
             return;
         }
     }
@@ -400,6 +417,7 @@ static void track(void)
         if (pid != GetCurrentProcessId() && GetWindowRect(gti.hwndFocus, &r))
         {
             g_center.x = (r.left + r.right) / 2; g_center.y = (r.top + r.bottom) / 2;
+            g_center_mouse = FALSE;
         }
     }
 }
@@ -504,9 +522,87 @@ static void paint_view(HDC dc)
     }
 }
 
+/* ---- the views drawn by the compositor -------------------------------------------------- */
+static BOOL comp_send(char *last, size_t size, const char *line)
+{
+    if (!strcmp(last, line)) return TRUE;
+    if (!p_SgMagCommand(line))
+    {
+        /* the compositor went away (or never had it): draw the views here again */
+        g_comp = FALSE;
+        g_comp_view[0] = g_comp_centre[0] = g_comp_invert[0] = 0;
+        return FALSE;
+    }
+    lstrcpynA(last, line, (int)size);
+    return TRUE;
+}
+
+static void comp_start(void)
+{
+    HMODULE mod = LoadLibraryW(L"magnification.dll");
+    if (mod) p_SgMagCommand = (void *)GetProcAddress(mod, "SgMagCommand");
+    /* the compositor answers, or the views are drawn here */
+    g_comp = p_SgMagCommand && p_SgMagCommand("smooth 1");
+}
+
+/* what is shown: the compositor's view lines; FALSE to draw it here instead */
+static BOOL comp_frame(void)
+{
+    char line[96];
+
+    if (!g_comp) return FALSE;
+    compute_rects();
+    if (g_mode == MODE_FULL)
+    {
+        if (g_zoom <= 100) strcpy(line, "off");
+        /* round the pointer, in the compositor, frame by frame; round the focus or the caret where we say */
+        else if (g_center_mouse) sprintf(line, "full %d", g_zoom);
+        else sprintf(line, "full %d %ld %ld", g_zoom, g_src.left, g_src.top);
+    }
+    else if (g_mode == MODE_LENS)
+        sprintf(line, "lens %d %ld %ld", g_zoom, g_viewrc.right - g_viewrc.left, g_viewrc.bottom - g_viewrc.top);
+    else
+        /* the band, less the accent line at its foot (ours, as Windows draws it) */
+        sprintf(line, "dock %d %ld %ld %ld %ld", g_zoom, g_viewrc.left, g_viewrc.top, g_viewrc.right - g_viewrc.left,
+                g_viewrc.bottom - g_viewrc.top - S(3));
+    if (!comp_send(g_comp_view, sizeof(g_comp_view), line)) return FALSE;
+    /* off forgets the rest: said again after it */
+    if (!strcmp(line, "off")) g_comp_centre[0] = g_comp_invert[0] = 0;
+    else
+    {
+        if (g_mode == MODE_DOCKED)
+            sprintf(line, "centre %ld %ld", (g_src.left + g_src.right) / 2, (g_src.top + g_src.bottom) / 2);
+        else
+            strcpy(line, "centre pointer");
+        if (!comp_send(g_comp_centre, sizeof(g_comp_centre), line)) return FALSE;
+        sprintf(line, "invert %d", g_invert ? 1 : 0);
+        if (!comp_send(g_comp_invert, sizeof(g_comp_invert), line)) return FALSE;
+    }
+
+    /* our own view window: only the docked view's, which keeps the band's room (AppBar) and draws its
+     * accent line; the compositor draws over the rest of it */
+    if (g_mode == MODE_DOCKED)
+    {
+        RECT br, is;
+        place_view();
+        /* the compositor draws the band over everything: the toolbar goes below it */
+        if (g_bar && GetWindowRect(g_bar, &br) && IntersectRect(&is, &br, &g_viewrc))
+            SetWindowPos(g_bar, HWND_TOPMOST, br.left, g_viewrc.bottom + S(8), 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
+    }
+    else
+    {
+        appbar(FALSE);
+        if (IsWindowVisible(g_view)) ShowWindow(g_view, SW_HIDE);
+    }
+    g_frames++;
+    write_dump();
+    return TRUE;
+}
+
 static void frame(void)
 {
     track();
+    if (comp_frame()) return;
     place_view();
     if (!IsWindowVisible(g_view)) { write_dump(); return; }
     capture(&g_src, g_mode != MODE_DOCKED);
@@ -531,7 +627,19 @@ static LRESULT CALLBACK view_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
-        if (g_cdc) paint_view(dc);
+        if (g_comp)
+        {
+            /* the compositor draws the band; ours is its accent line */
+            RECT cr, r;
+            HBRUSH b = CreateSolidBrush(sg_accent());
+            GetClientRect(hwnd, &cr);
+            r = cr; r.top = cr.bottom - S(3);
+            FillRect(dc, &r, b);
+            DeleteObject(b);
+            r = cr; r.bottom = cr.bottom - S(3);
+            FillRect(dc, &r, GetStockObject(BLACK_BRUSH));
+        }
+        else if (g_cdc) paint_view(dc);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -847,6 +955,7 @@ static LRESULT CALLBACK bar_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_DESTROY:
         KillTimer(hwnd, TIMER_FRAME);
+        if (g_comp) p_SgMagCommand("off");
         if (g_view) { appbar(FALSE); DestroyWindow(g_view); g_view = NULL; }
         if (g_mouse_hook) UnhookWindowsHookEx(g_mouse_hook);
         if (g_dump[0])
@@ -941,6 +1050,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     RegisterHotKey(g_bar, HK_WIN_ESC, MOD_WIN | MOD_NOREPEAT, VK_ESCAPE);
     g_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_ll, inst, 0);
 
+    comp_start();
     ShowWindow(g_bar, SW_SHOWNOACTIVATE);
     handle_cmdline(GetCommandLineW(), TRUE);
     frame();

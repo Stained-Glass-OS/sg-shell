@@ -1,3 +1,19 @@
+sg-shell (0.1.0-283) unstable; urgency=medium
+
+  * Magnifier magnifies Linux programs too: in a Stained Glass session the
+    compositor draws all three views (full screen, lens, docked) through
+    Wine's Magnification API (sg-compositor sg69, wine-sg 7845), so X and
+    Wayland programs are magnified like Windows ones, and nothing secure
+    ever is. Magnifier is the toolbar, the settings, the keys and what to
+    follow; full screen and the lens follow the pointer frame by frame in
+    the compositor. Without such a compositor it draws the views itself, as
+    before. The docked view's toolbar moves below the band. (David
+    2026-11-17: "Magnifier does not seem to work on Linux apps.")
+  * Gates' Wine never reaches the person's own compositor (scratch-home:
+    SG_LOCK_CONTROL).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 17 Nov 2026 13:00:00 -0800
+
 sg-shell (0.1.0-282) unstable; urgency=medium
 
   * Remote Desktop Connection: mstsc's /span, /multimon, /admin,
