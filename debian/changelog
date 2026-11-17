@@ -1,3 +1,12 @@
+sg-shell (0.1.0-284) unstable; urgency=medium
+
+  * Magnifier gives the compositor the Wine desktop's coordinates (the
+    virtual screen's top left 0,0) for the docked band and the focus and
+    text cursor it follows (sg-compositor sg70). Its state file
+    (SG_MAGNIFY_DUMP) says the virtual screen too.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 17 Nov 2026 14:30:00 -0800
+
 sg-shell (0.1.0-283) unstable; urgency=medium
 
   * Magnifier magnifies Linux programs too: in a Stained Glass session the

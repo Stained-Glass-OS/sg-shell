@@ -166,6 +166,8 @@ static void write_dump(void)
     if (!(f = _wfopen(tmp, L"w"))) return;
     fwprintf(f, L"MODE %ls\nZOOM %d\nINCREMENT %d\nINVERT %d\n", mode_name(g_mode), g_zoom, g_inc, g_invert);
     fwprintf(f, L"SCREEN %d %d\n", g_sw, g_sh);
+    fwprintf(f, L"VSCREEN %d %d %d %d\n", GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+             GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
     fwprintf(f, L"VIEW %ld %ld %ld %ld\n", g_viewrc.left, g_viewrc.top, g_viewrc.right, g_viewrc.bottom);
     fwprintf(f, L"SOURCE %ld %ld %ld %ld\n", g_src.left, g_src.top, g_src.right, g_src.bottom);
     fwprintf(f, L"CENTER %ld %ld\n", g_center.x, g_center.y);
@@ -549,6 +551,8 @@ static void comp_start(void)
 static BOOL comp_frame(void)
 {
     char line[96];
+    /* the compositor's coordinates are the Wine desktop's: the virtual screen's top left is 0,0 */
+    LONG vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
 
     if (!g_comp) return FALSE;
     compute_rects();
@@ -557,13 +561,13 @@ static BOOL comp_frame(void)
         if (g_zoom <= 100) strcpy(line, "off");
         /* round the pointer, in the compositor, frame by frame; round the focus or the caret where we say */
         else if (g_center_mouse) sprintf(line, "full %d", g_zoom);
-        else sprintf(line, "full %d %ld %ld", g_zoom, g_src.left, g_src.top);
+        else sprintf(line, "full %d %ld %ld", g_zoom, g_src.left - vx, g_src.top - vy);
     }
     else if (g_mode == MODE_LENS)
         sprintf(line, "lens %d %ld %ld", g_zoom, g_viewrc.right - g_viewrc.left, g_viewrc.bottom - g_viewrc.top);
     else
         /* the band, less the accent line at its foot (ours, as Windows draws it) */
-        sprintf(line, "dock %d %ld %ld %ld %ld", g_zoom, g_viewrc.left, g_viewrc.top, g_viewrc.right - g_viewrc.left,
+        sprintf(line, "dock %d %ld %ld %ld %ld", g_zoom, g_viewrc.left - vx, g_viewrc.top - vy, g_viewrc.right - g_viewrc.left,
                 g_viewrc.bottom - g_viewrc.top - S(3));
     if (!comp_send(g_comp_view, sizeof(g_comp_view), line)) return FALSE;
     /* off forgets the rest: said again after it */
@@ -571,7 +575,7 @@ static BOOL comp_frame(void)
     else
     {
         if (g_mode == MODE_DOCKED)
-            sprintf(line, "centre %ld %ld", (g_src.left + g_src.right) / 2, (g_src.top + g_src.bottom) / 2);
+            sprintf(line, "centre %ld %ld", (g_src.left + g_src.right) / 2 - vx, (g_src.top + g_src.bottom) / 2 - vy);
         else
             strcpy(line, "centre pointer");
         if (!comp_send(g_comp_centre, sizeof(g_comp_centre), line)) return FALSE;
