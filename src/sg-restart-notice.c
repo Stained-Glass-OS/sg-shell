@@ -12,6 +12,15 @@
  *
  *   sg-restart-notice
  *
+ * Built a second time with SG_BOOTSPACE as sg-bootspace-notice: "An
+ * update could not be installed" -- a new Linux kernel did not fit on the
+ * boot partition (sg-session's sg-boot-space left
+ * /var/lib/stained-glass/notices/boot-space: kernel=, running=), the PC
+ * keeps starting the kernel it has and tries again at each start; "Settings"
+ * (Settings > Update) and "Dismiss". Started by sg-session's
+ * sg-boot-space-notify once per boot. SG_BOOTSPACE_FILE (a Windows path) is
+ * the gate's notice.
+ *
  * SG_RESTART_FILE (a Windows path) is the gate's reboot-required;
  * SG_RESTART_NOTICE_DUMP=<file> writes what is shown there (UTF-8);
  * SG_RESTART_NOTICE_REBOOT=<file>: "Restart now" writes "reboot" there
@@ -30,7 +39,17 @@
 #include "sg-smooth.h"
 #include "sg-dpi.h"
 
+#ifdef SG_BOOTSPACE
+#define CLASS_NAME L"SgBootSpaceNotice"
+#define WINDOW_NAME L"Update could not be installed"
+#define BUTTON_1 L"Settings"
+#define BUTTON_2 L"Dismiss"
+#else
 #define CLASS_NAME L"SgRestartNotice"
+#define WINDOW_NAME L"Restart to finish"
+#define BUTTON_1 L"Restart now"
+#define BUTTON_2 L"Later"
+#endif
 #define W_DIP 380
 #define H_DIP 150
 #define TIMEOUT_MS notice_timeout()
@@ -47,7 +66,12 @@ static UINT notice_timeout(void)
 #define RESTART_FILE L"Z:\\run\\reboot-required"
 #define HISTORY_KEY L"Software\\Stained Glass\\Notifications\\History"
 
+#ifdef SG_BOOTSPACE
+#define BOOTSPACE_FILE L"Z:\\var\\lib\\stained-glass\\notices\\boot-space"
+static WCHAR g_title[96] = L"An update could not be installed", g_body[900];
+#else
 static WCHAR g_title[96] = L"Restart to finish updating", g_body[900];
+#endif
 static HFONT g_font, g_font_bold, g_font_small;
 static RECT g_review, g_dismiss, g_close;
 static int g_hot;       /* 1 review, 2 dismiss, 3 close */
@@ -70,6 +94,44 @@ static char *slurp(const WCHAR *path)
     return buf;
 }
 
+#ifdef SG_BOOTSPACE
+/* "key=value" from the notice, as UTF-16 (empty if missing) */
+static void field(const char *t, const char *key, WCHAR *out, int len)
+{
+    const char *p = t, *e;
+    size_t k = strlen(key);
+    int n;
+    out[0] = 0;
+    while (p && *p) {
+        if (!strncmp(p, key, k) && p[k] == '=') {
+            p += k + 1;
+            for (e = p; *e && *e != '\n' && *e != '\r'; e++) ;
+            n = MultiByteToWideChar(CP_UTF8, 0, p, (int)(e - p), out, len - 1);
+            out[n > 0 ? n : 0] = 0;
+            return;
+        }
+        p = strchr(p, '\n');
+        if (p) p++;
+    }
+}
+
+/* the kernel left out and the one still started */
+static BOOL load(void)
+{
+    WCHAR path[MAX_PATH], kernel[128], running[128];
+    char *t;
+    if (!GetEnvironmentVariableW(L"SG_BOOTSPACE_FILE", path, MAX_PATH)) lstrcpyW(path, BOOTSPACE_FILE);
+    if (!(t = slurp(path))) return FALSE;
+    field(t, "kernel", kernel, ARRAYSIZE(kernel));
+    field(t, "running", running, ARRAYSIZE(running));
+    free(t);
+    _snwprintf(g_body, ARRAYSIZE(g_body),
+               L"There is not enough room on the boot partition for the new Linux kernel%ls%ls. "
+               L"This PC keeps starting with %ls%ls, and tries again at each start.",
+               kernel[0] ? L" " : L"", kernel, running[0] ? L"Linux " : L"the Linux it has", running);
+    return TRUE;
+}
+#else
 /* what needs the restart: reboot-required's line ("*** System restart
  * required: Surface touch and pen support ***"), else a new kernel */
 static BOOL load(void)
@@ -92,6 +154,7 @@ static BOOL load(void)
                why[0] ? why : L"An update");
     return TRUE;
 }
+#endif
 
 /* kept in the notification centre's history, as a toast is */
 static void remember(void)
@@ -128,6 +191,20 @@ static void remember(void)
     PostMessageW(HWND_BROADCAST, RegisterWindowMessageW(L"SgNotificationsChanged"), 0, 0);
 }
 
+#ifdef SG_BOOTSPACE
+/* "Settings": Settings > Update (the gate: "settings" in
+ * SG_RESTART_NOTICE_REBOOT's file instead) */
+static void restart(void)
+{
+    WCHAR path[MAX_PATH];
+    FILE *f;
+    if (GetEnvironmentVariableW(L"SG_RESTART_NOTICE_REBOOT", path, MAX_PATH)) {
+        if ((f = _wfopen(path, L"w"))) { fputs("settings\n", f); fclose(f); }
+        return;
+    }
+    ShellExecuteW(NULL, L"open", L"ms-settings:windowsupdate", NULL, NULL, SW_SHOWNORMAL);
+}
+#else
 static void restart(void)
 {
     WCHAR path[MAX_PATH];
@@ -138,6 +215,7 @@ static void restart(void)
     }
     ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_MAJOR_OPERATINGSYSTEM | SHTDN_REASON_FLAG_PLANNED);
 }
+#endif
 
 static void dump(void)
 {
@@ -145,7 +223,7 @@ static void dump(void)
     FILE *f;
     if (!GetEnvironmentVariableW(L"SG_RESTART_NOTICE_DUMP", path, MAX_PATH)) return;
     if (!(f = _wfopen(path, L"w, ccs=UTF-8"))) return;
-    fwprintf(f, L"title: %ls\nbody: %ls\nbuttons: Restart now, Later\n", g_title, g_body);
+    fwprintf(f, L"title: %ls\nbody: %ls\nbuttons: %ls, %ls\n", g_title, g_body, BUTTON_1, BUTTON_2);
     fclose(f);
 }
 
@@ -183,6 +261,21 @@ static void paint(HWND hwnd)
     b = CreateSolidBrush(sg_accent()); FillRect(dc, &r, b); DeleteObject(b);
     SetBkMode(dc, TRANSPARENT);
 
+#ifdef SG_BOOTSPACE
+    /* an exclamation mark in a ring, drawn as the arrow is */
+    {
+        struct sg_ss ss;
+        HDC big = sg_ss_begin(&ss, dc, S(17), S(7), S(23), S(24), S(2));
+        HPEN pen = CreatePen(PS_SOLID, S(2), sg_accent());
+        HGDIOBJ op = SelectObject(big, pen), ob = SelectObject(big, GetStockObject(NULL_BRUSH));
+        Ellipse(big, S(20), S(12), S(36), S(28));     /* sg-smooth: in the region */
+        MoveToEx(big, S(28), S(15), NULL); LineTo(big, S(28), S(22));
+        MoveToEx(big, S(28), S(24), NULL); LineTo(big, S(28), S(25));
+        SelectObject(big, op); SelectObject(big, ob);
+        sg_ss_end(&ss);
+        DeleteObject(pen);
+    }
+#else
     /* a restart arrow: drawn, as the icon font's is not every machine's */
     {
         /* drawn soft-edged (sg-smooth.h): four times finer, averaged down */
@@ -199,6 +292,7 @@ static void paint(HWND hwnd)
         sg_ss_end(&ss);
         DeleteObject(pen);
     }
+#endif
     SelectObject(dc, g_font_small);
     SetTextColor(dc, sub);
     r = rc; r.left = S(44); r.top = S(11); r.bottom = S(30);
@@ -215,8 +309,8 @@ static void paint(HWND hwnd)
     r.top = S(60); r.bottom = g_review.top - S(8);
     DrawTextW(dc, g_body, -1, &r, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
 
-    button(dc, &g_review, L"Restart now", TRUE, g_hot == 1, dark);
-    button(dc, &g_dismiss, L"Later", FALSE, g_hot == 2, dark);
+    button(dc, &g_review, BUTTON_1, TRUE, g_hot == 1, dark);
+    button(dc, &g_dismiss, BUTTON_2, FALSE, g_hot == 2, dark);
     EndPaint(hwnd, &ps);
 }
 
@@ -336,7 +430,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show)
     while ((other = FindWindowExW(NULL, other, CLASS_NAME, NULL))) stacked++;
     g_stacked = stacked;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, L"Restart to finish",
+    hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, WINDOW_NAME,
                            WS_POPUP | WS_BORDER, work.right - w - S(12), work.bottom - (h + S(12)) * (stacked + 1),
                            w, h, NULL, NULL, inst, NULL);
     if (!hwnd) return 1;

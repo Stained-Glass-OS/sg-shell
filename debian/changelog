@@ -1,3 +1,23 @@
+sg-shell (0.1.0-285) unstable; urgency=medium
+
+  * "An update could not be installed": sg-bootspace-notice, the restart
+    notice's popup built a second time (SG_BOOTSPACE) for a kernel update
+    that did not fit on the boot partition. sg-session's sg-boot-space
+    (0.1.0-268) leaves /var/lib/stained-glass/notices/boot-space (kernel=,
+    running=) when a new kernel would not fit even with every other kernel
+    taken off; the popup names the kernel left out and the one the PC keeps
+    starting, says it tries again at each start, and offers Settings
+    (Settings > Update) and Dismiss; kept in the notification centre's
+    history. sg-session's sg-boot-space-notify shows it once a boot. Its own
+    executable, so an older sg-session never runs the restart notice in its
+    place. Gate: test/bootspace-notice-check.sh (mutant
+    SG_MUTANT_RESTART_BUTTON: Settings does nothing).
+  * test/restart-notice-check.sh looked for the notice's history entry under
+    "0"; it is named with eight digits ("00000000"), so the gate
+    failed on main. Fixed.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Tue, 17 Nov 2026 21:40:00 -0800
+
 sg-shell (0.1.0-284) unstable; urgency=medium
 
   * Magnifier gives the compositor the Wine desktop's coordinates (the

@@ -49,7 +49,7 @@ tr -d '\r' < "$T/dump.txt" 2>/dev/null | grep -q "body: Surface touch and pen su
 W1=$(xdotool search --onlyvisible --name '^Restart to finish$' | head -1)
 eval "$(xdotool getwindowgeometry --shell "$W1")"
 [ $((X + WIDTH)) -gt 900 ] && [ $((Y + HEIGHT)) -gt 650 ] && pass "...at the bottom right, above the tray ($X,$Y)" || fail "placed at $X,$Y"
-wine reg query 'HKCU\Software\Stained Glass\Notifications\History\0' /v Title 2>/dev/null | grep -q 'Restart to finish updating' \
+wine reg query 'HKCU\Software\Stained Glass\Notifications\History\00000000' /v Title 2>/dev/null | grep -q 'Restart to finish updating' \
     && pass "...kept in the notification centre's history" || fail "not in the notification history"
 command -v import >/dev/null && import -window root "$HERE/build/restart-notice.png" 2>/dev/null
 # Later: the right-hand button, near the bottom

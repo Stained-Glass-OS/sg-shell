@@ -23,6 +23,7 @@ sg-osk	On-Screen Keyboard
 sg-paint	Paint
 sg-photos	Photos
 sg-restart-notice	Restart to Finish Updates
+sg-bootspace-notice	Update Could Not Be Installed
 sg-roots	Code Signing Roots
 sg-rootterm	Linux Terminal
 sg-sni	Linux Tray Icons

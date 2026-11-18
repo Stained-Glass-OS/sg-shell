@@ -131,6 +131,10 @@ build:
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-defender-notice (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-restart-notice64.exe $$(sh tools/sg-verres.sh sg-restart-notice64 $(BUILD) $(WINDRES64)) src/sg-restart-notice.c \
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-restart-notice (64-bit)"
+	@# the same popup for a kernel update that did not fit on the boot partition
+	@# (sg-session's sg-boot-space-notify)
+	@$(MINGW64) $(SG_CFLAGS) -DSG_BOOTSPACE -Wno-missing-field-initializers -o $(BUILD)/sg-bootspace-notice64.exe $$(sh tools/sg-verres.sh sg-bootspace-notice64 $(BUILD) $(WINDRES64)) src/sg-restart-notice.c \
+	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-bootspace-notice (64-bit)"
 	@# the kiosk app's launcher (Settings > Accounts > Kiosk; sg-session's sg-kiosk runs it)
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-kiosk64.exe $$(sh tools/sg-verres.sh sg-kiosk64 $(BUILD) $(WINDRES64)) src/sg-kiosk.c \
 	    -lshell32 -luser32 -lole32 -luuid -municode -mwindows && echo "built sg-kiosk (64-bit)"
@@ -430,6 +434,7 @@ test: build
 	@sh test/control-icon-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/restart-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/bootspace-notice-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-check.sh
 	@sh test/terminal-handoff-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/terminal-panes-check.sh
