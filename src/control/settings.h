@@ -100,7 +100,7 @@ BOOL ctl_field(const char *s, int i, WCHAR *out, int cch);
 
 /* ---- page builders ------------------------------------------------------------------------- */
 void set_build_home(void);      void set_build_search(void);    BOOL set_cmd_home(int, int, HWND);
-void set_build_display(void);   BOOL set_cmd_display(int, int, HWND);   void set_timer_display(void);
+void set_build_display(void);   BOOL set_cmd_display(int, int, HWND);   void set_timer_display(void); HWND set_display_keep_dialog(void);
 void set_build_sound(void);     BOOL set_cmd_sound(int, int, HWND);     void set_timer_sound(void);
 void set_build_notify(void);    BOOL set_cmd_notify(int, int, HWND);
 void set_build_power(void);     BOOL set_cmd_power(int, int, HWND);

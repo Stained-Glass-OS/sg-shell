@@ -1209,6 +1209,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
             g_kbd_cues = TRUE;
             if (GetFocus()) InvalidateRect(GetFocus(), NULL, FALSE);
         }
+        {
+            HWND keep = set_display_keep_dialog();   /* Display's "Keep these display settings?" */
+            if (keep && IsDialogMessageW(keep, &msg)) continue;
+        }
         if (IsDialogMessageW(g_main, &msg)) continue;
         TranslateMessage(&msg);
         DispatchMessageW(&msg);

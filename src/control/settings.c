@@ -1061,6 +1061,10 @@ int settings_main(int argc, WCHAR **argv, int show)
         }
         if (msg.message == WM_SYSKEYDOWN && msg.wParam == VK_LEFT) { if (!nav_back()) navigate(PG_S_HOME); continue; }
         if (msg.message == WM_KEYDOWN && msg.wParam == VK_BROWSER_BACK) { nav_back(); continue; }
+        {
+            HWND keep = set_display_keep_dialog();   /* Display's "Keep these display settings?" */
+            if (keep && IsDialogMessageW(keep, &msg)) continue;
+        }
         if (IsDialogMessageW(g_main, &msg)) continue;
         TranslateMessage(&msg);
         DispatchMessageW(&msg);

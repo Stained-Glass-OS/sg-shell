@@ -303,6 +303,11 @@ test-office: office
 test-rotation: build
 	sh test/rotation-check.sh
 
+# Settings > Display: "Keep these display settings?" in a dialog of its own (test/displaykeep-check.sh).
+.PHONY: test-displaykeep
+test-displaykeep: build
+	sh test/displaykeep-check.sh
+
 # The kiosk: sg-kiosk64.exe, Settings > Accounts > Kiosk, Startup's Add an app (test/kiosk-check.sh).
 .PHONY: test-kiosk
 test-kiosk: build

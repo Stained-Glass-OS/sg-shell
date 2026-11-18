@@ -1,3 +1,13 @@
+sg-shell (0.1.0-286) unstable; urgency=medium
+
+  * Settings > Display: "Keep these display settings?" is a dialog of its own
+    over Settings, as in Windows, counting down by itself. It was part of the
+    page and the page was rebuilt every second while it counted: the page's
+    controls jumped between two places and an open list closed under the
+    pointer. Esc or closing it reverts, as in Windows.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 18 Nov 2026 12:12:12 -0800
+
 sg-shell (0.1.0-285) unstable; urgency=medium
 
   * "An update could not be installed": sg-bootspace-notice, the restart

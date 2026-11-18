@@ -17,7 +17,7 @@ static const WCHAR DESKTOP[] = L"Control Panel\\Desktop";
 
 /* ---- Display ------------------------------------------------------------------------------- */
 enum {
-    CMD_NIGHT = CMD_PAGE_FIRST + 1, CMD_NIGHT_STRENGTH, CMD_SCALE, CMD_RES, CMD_OUTPUT, CMD_KEEP, CMD_REVERT,
+    CMD_NIGHT = CMD_PAGE_FIRST + 1, CMD_NIGHT_STRENGTH, CMD_SCALE, CMD_RES, CMD_OUTPUT,
     CMD_ADVANCED, CMD_ORIENT, CMD_RLOCK, CMD_RATE, CMD_IDENTIFY, CMD_APPLY_LAYOUT, CMD_MAKEMAIN, CMD_PROJECT,
     CMD_ARRANGE,
 };
@@ -480,19 +480,6 @@ void set_build_display(void)
         y += S(46);
     }
 
-    if (g_revert_left > 0) {
-        WCHAR line[160];
-        y = st_head(y, L"Keep these display settings?");
-        _snwprintf(line, ARRAYSIZE(line), L"Reverting to previous display settings in %d seconds.", g_revert_left);
-        pg_text(st_x(), y, st_w(), S(22), g_font_body, COL_TEXT, line, DT_SINGLELINE);
-        y += S(34);
-        st_button(&y, L"Keep changes", CMD_KEEP);
-        y -= S(46);
-        pg_control(L"BUTTON", L"Revert", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(150), y, S(120), S(32), CMD_REVERT);
-        y += S(56);
-        pg_timer(1000);
-    }
-
     /* Night light: the compositor's colour temperature */
     y = st_head(y, L"Brightness and color");
     ans = ctl_run(L"nightlight", &ok, NULL, 0, 5000);
@@ -672,10 +659,13 @@ static BOOL apply_mode(int i, BOOL remember)
     }
 }
 
+static HWND g_keep_dlg;                     /* "Keep these display settings?" while it counts */
+static void keep_dialog_close(void);
+
 static void revert_mode(void)
 {
     g_revert_left = 0;
-    KillTimer(g_page, 1);
+    keep_dialog_close();
     if (g_modes_ctl && g_prev_spec[0]) {
         WCHAR args[128];
         BOOL ok;
@@ -689,11 +679,137 @@ static void revert_mode(void)
     refresh_page();
 }
 
+/* "Keep these display settings?" -- as Windows asks it: a small dialog of its
+ * own over Settings, which counts down by itself and leaves the page as it is.
+ * It used to be part of the page, rebuilt every second; the page's controls
+ * jumped and a list that was open closed under the pointer (David 2026-11-18).
+ * Closing it is Revert, as in Windows. */
+#define KEEP_TIMER 1
+enum { KEEP_ID_KEEP = 101, KEEP_ID_REVERT };
+
+static void keep_dialog_close(void)
+{
+    HWND d = g_keep_dlg;
+    if (!d) return;
+    g_keep_dlg = NULL;
+    KillTimer(d, KEEP_TIMER);
+    EnableWindow(g_main, TRUE);
+    DestroyWindow(d);
+    SetForegroundWindow(g_main);
+}
+
+static LRESULT CALLBACK keep_proc(HWND w, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg) {
+    case WM_TIMER:
+        if (wp != KEEP_TIMER) break;
+        if (--g_revert_left <= 0) revert_mode();
+        else {
+#ifdef SG_MUTANT_KEEP_REBUILDS_PAGE
+            refresh_page();
+#endif
+            RECT r;
+            GetClientRect(w, &r);
+            r.bottom = S(96);
+            InvalidateRect(w, &r, TRUE);    /* only the countdown line changes */
+        }
+        return 0;
+    case WM_COMMAND:
+        if (LOWORD(wp) == KEEP_ID_KEEP || LOWORD(wp) == IDOK) {
+            g_revert_left = 0;
+            keep_dialog_close();
+            refresh_page();
+        } else if (LOWORD(wp) == KEEP_ID_REVERT || LOWORD(wp) == IDCANCEL) {
+            revert_mode();
+        }
+        return 0;
+    case WM_CLOSE:
+        revert_mode();
+        return 0;
+    case WM_ACTIVATE:                       /* as a dialog: the focus on its default button */
+        if (LOWORD(wp) != WA_INACTIVE) SetFocus(GetDlgItem(w, KEEP_ID_KEEP));
+        return 0;
+    case DM_GETDEFID:                       /* Enter: Keep changes (IsDialogMessage asks) */
+        return MAKELONG(KEEP_ID_KEEP, DC_HASDEFID);
+    case WM_ERASEBKGND: {
+        RECT r;
+        HBRUSH b = CreateSolidBrush(COL_BG);
+        GetClientRect(w, &r);
+        FillRect((HDC)wp, &r, b);
+        DeleteObject(b);
+        return 1;
+    }
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(w, &ps);
+        RECT r;
+        WCHAR line[160];
+        GetClientRect(w, &r);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, COL_TEXT);
+        SelectObject(dc, g_font_head);
+        r.left += S(24); r.right -= S(24); r.top += S(20);
+        DrawTextW(dc, L"Keep these display settings?", -1, &r, DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(dc, g_font_body);
+        r.top += S(40);
+        _snwprintf(line, ARRAYSIZE(line), L"Reverting to previous display settings in %d seconds.", g_revert_left);
+        DrawTextW(dc, line, -1, &r, DT_WORDBREAK | DT_NOPREFIX);
+        EndPaint(w, &ps);
+        return 0;
+    }
+    }
+    return DefWindowProcW(w, msg, wp, lp);
+}
+
+static void keep_dialog_open(void)
+{
+    static BOOL reg;
+    RECT mr;
+    int cw = S(440), ch = S(150), x, y;
+    RECT wr = { 0, 0, 0, 0 };
+    HWND b;
+    DWORD style = WS_POPUP | WS_CAPTION | WS_SYSMENU;
+    if (g_keep_dlg) {                      /* another change while it counts: count again */
+        InvalidateRect(g_keep_dlg, NULL, TRUE);
+        return;
+    }
+    if (!reg) {
+        WNDCLASSW wc = { 0 };
+        wc.lpfnWndProc = keep_proc;
+        wc.hInstance = g_inst;
+        wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+        wc.lpszClassName = L"SgDisplayKeep";
+        reg = RegisterClassW(&wc) != 0;
+    }
+    wr.right = cw; wr.bottom = ch;
+    AdjustWindowRectEx(&wr, style, FALSE, WS_EX_DLGMODALFRAME);
+    GetWindowRect(g_main, &mr);
+    x = (mr.left + mr.right - (wr.right - wr.left)) / 2;
+    y = (mr.top + mr.bottom - (wr.bottom - wr.top)) / 2;
+    g_keep_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"SgDisplayKeep", L"Display Settings", style, x, y,
+                                 wr.right - wr.left, wr.bottom - wr.top, g_main, NULL, g_inst, NULL);
+    if (!g_keep_dlg) return;
+    b = CreateWindowExW(0, L"BUTTON", L"Keep changes", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                        cw - S(24) - S(240) - S(8), ch - S(20) - S(32), S(120), S(32), g_keep_dlg,
+                        (HMENU)(INT_PTR)KEEP_ID_KEEP, g_inst, NULL);
+    SendMessageW(b, WM_SETFONT, (WPARAM)g_font_body, TRUE);
+    b = CreateWindowExW(0, L"BUTTON", L"Revert", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                        cw - S(24) - S(120), ch - S(20) - S(32), S(120), S(32), g_keep_dlg,
+                        (HMENU)(INT_PTR)KEEP_ID_REVERT, g_inst, NULL);
+    SendMessageW(b, WM_SETFONT, (WPARAM)g_font_body, TRUE);
+    EnableWindow(g_main, FALSE);           /* modal to Settings, as Windows' is */
+    ShowWindow(g_keep_dlg, SW_SHOW);
+    SetForegroundWindow(g_keep_dlg);
+    SetFocus(GetDlgItem(g_keep_dlg, KEEP_ID_KEEP));
+    SetTimer(g_keep_dlg, KEEP_TIMER, 1000, NULL);
+}
+
+/* for the message loop: Enter, Esc and Tab in the dialog (IsDialogMessage) */
+HWND set_display_keep_dialog(void) { return g_keep_dlg; }
+
 void set_timer_display(void)
 {
-    if (g_revert_left <= 0) { KillTimer(g_page, 1); return; }
-    if (--g_revert_left <= 0) revert_mode();
-    else refresh_page();
+    /* the page has no timer of its own: the dialog counts (keep_proc) */
 }
 
 BOOL set_cmd_display(int id, int code, HWND ctl)
@@ -735,7 +851,7 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
                         (int)(g_modes[j].hz + 0.5) == (int)(g_modes[g_cur_mode].hz + 0.5)) m = j;
                 i = m;
             }
-            if (i != g_cur_mode && apply_mode(i, TRUE)) { g_revert_left = 15; refresh_page(); }
+            if (i != g_cur_mode && apply_mode(i, TRUE)) { g_revert_left = 15; refresh_page(); keep_dialog_open(); }
         }
         return TRUE;
     case CMD_RATE:
@@ -744,6 +860,7 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
             if (i >= 0 && i < g_nrate && g_rate_mode[i] != g_cur_mode && apply_mode(g_rate_mode[i], TRUE)) {
                 g_revert_left = 15;
                 refresh_page();
+                keep_dialog_open();
             }
         }
         return TRUE;
@@ -813,8 +930,6 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
         free(ctl_run(args, &ok, NULL, 0, 10000));
         refresh_page();
         return TRUE;
-    case CMD_KEEP: g_revert_left = 0; KillTimer(g_page, 1); refresh_page(); return TRUE;
-    case CMD_REVERT: revert_mode(); return TRUE;
     case CMD_ADVANCED: cpl_open_file(L"desk.cpl", NULL); return TRUE;
     }
     return FALSE;
