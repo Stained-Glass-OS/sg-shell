@@ -100,8 +100,9 @@ static IBasicAudio *g_audio;
 static IVideoWindow *g_vw;
 static IBasicVideo *g_bv;
 static BOOL g_has_video;
-static IBaseFilter *g_gdi_renderer; /* added before building (want_gdi_renderer) */
-static BOOL g_using_gdi;           /* the GDI Video Renderer shows the video (want_gdi_renderer) */
+static IBaseFilter *g_pre_renderer;   /* the video renderer added before building (new_graph) */
+static const WCHAR *g_pre_name;       /* its name in the dump: gdi or vmr9 */
+static const WCHAR *g_renderer_name = L"default"; /* the one that shows the video */
 static long g_vid_w, g_vid_h;
 static int g_state = ST_CLOSED;
 static LONGLONG g_duration, g_position;
@@ -375,7 +376,7 @@ static void write_dump(void)
     GetWindowRect(g_video, &vr);
     _snwprintf(line, ARRAYSIZE(line), L"VIDEO %d %ld %ld\nVIDEORECT %ld %ld %ld %ld\nVIDEOSHOWN %d\nRENDERER %s\n", g_has_video,
                g_vid_w, g_vid_h, vr.left, vr.top, vr.right, vr.bottom, IsWindowVisible(g_video),
-               g_using_gdi ? L"gdi" : L"default");
+               g_renderer_name);
     put_utf8(f, line);
     screen_rect(&g_hit[H_SEEK], &r);
     _snwprintf(line, ARRAYSIZE(line), L"SEEKRECT %ld %ld %ld %ld\n", r.left, r.top, r.right, r.bottom);
@@ -942,9 +943,9 @@ static void close_media(void)
     if (g_audio) { IBasicAudio_Release(g_audio); g_audio = NULL; }
     if (g_seek) { IMediaSeeking_Release(g_seek); g_seek = NULL; }
     if (g_control) { IMediaControl_Release(g_control); g_control = NULL; }
-    if (g_gdi_renderer) { IBaseFilter_Release(g_gdi_renderer); g_gdi_renderer = NULL; }
+    if (g_pre_renderer) { IBaseFilter_Release(g_pre_renderer); g_pre_renderer = NULL; }
     if (g_graph) { IGraphBuilder_Release(g_graph); g_graph = NULL; }
-    g_using_gdi = FALSE;
+    g_renderer_name = L"default";
     g_has_video = FALSE;
     g_vid_w = g_vid_h = 0;
     g_duration = g_position = 0;
@@ -983,7 +984,7 @@ static BOOL render_video_rgb(IPin *out)
     IEnumMediaTypes_Release(types);
     if (!rgb) return FALSE;
 
-    if (g_gdi_renderer) { ren = g_gdi_renderer; IBaseFilter_AddRef(ren); }
+    if (g_pre_renderer) { ren = g_pre_renderer; IBaseFilter_AddRef(ren); }
     else if (SUCCEEDED(CoCreateInstance(&CLSID_VideoRendererDefault, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&ren)) &&
              FAILED(IGraphBuilder_AddFilter(g_graph, ren, L"Video Renderer")))
     {
@@ -1006,7 +1007,7 @@ static BOOL render_video_rgb(IPin *out)
         ok = SUCCEEDED(IGraphBuilder_ConnectDirect(g_graph, out, in, rgb));
         IPin_Release(in);
     }
-    if (!ok && ren && ren != g_gdi_renderer) IGraphBuilder_RemoveFilter(g_graph, ren);
+    if (!ok && ren && ren != g_pre_renderer) IGraphBuilder_RemoveFilter(g_graph, ren);
     if (ren) IBaseFilter_Release(ren);
     CoTaskMemFree(rgb->pbFormat);
     if (rgb->pUnk) IUnknown_Release(rgb->pUnk);
@@ -1066,16 +1067,26 @@ static HRESULT build_with_gstreamer(const WCHAR *path, int *streams)
     return hr;
 }
 
-/* The video renderer. Wine's default one (the VMR) draws with Direct3D 9
- * into our child window, which comes out black with NVIDIA's driver under
- * Xwayland (David's RTX 3090, driver 550): every video showed a black
- * pane -- with drivers before 555 (nvidia_before_555 below). The GDI
- * Video Renderer (StretchDIBits) shows it there; it goes in the graph first, so Render takes it, and out again when nothing used it
- * (an audio file). SG_MEDIA_RENDERER=gdi or vmr chooses (the gate). */
-/* NVIDIA's driver older than 555: no explicit synchronization under
- * Xwayland, and the VMR's pane stays black. With 555 and later (and the
- * compositor's linux-drm-syncobj-v1) the VMR shows the film, and scales it
- * smoothly, where the GDI renderer's StretchDIBits made it look coarse. */
+/* The video renderer. It goes in the graph before the graph is built, so
+ * Render takes it, and out again when nothing used it (an audio file).
+ *
+ * The Video Mixing Renderer 9, not the default renderer (the VMR-7): Wine's
+ * VMR-7 draws each frame by a blit to a DirectDraw primary surface, which
+ * wined3d draws into the GL front buffer of the video window -- a child
+ * window, rendered offscreen. With NVIDIA's driver under Xwayland those front
+ * buffer draws stop reaching the window after a few seconds, or at once:
+ * the picture froze while the sound played on, every film, until it was
+ * closed (David's own render, 2026-11-18). The renderer itself kept every
+ * frame on time; only the screen never saw them. The VMR-9 presents each
+ * frame with Direct3D 9's Present, a swap chain's back buffer, on the GL path
+ * (wined3d) and the Vulkan one (DXVK) alike, and the picture keeps pace with
+ * the sound. Mesa's drivers showed both renderers fine.
+ *
+ * Wine's VMR draws with Direct3D, which came out black with NVIDIA's driver
+ * under Xwayland before 555 (David's RTX 3090, driver 550): there the GDI
+ * Video Renderer (StretchDIBits) shows it -- nvidia_before_555 below.
+ * SG_MEDIA_RENDERER=gdi, vmr (the VMR-9) or vmr7 (the default renderer, as
+ * before) chooses (the gates). */
 static BOOL nvidia_before_555(void)
 {
     HANDLE h = CreateFileW(L"Z:\\proc\\driver\\nvidia\\version", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
@@ -1093,20 +1104,31 @@ static BOOL nvidia_before_555(void)
     return FALSE;
 }
 
-static BOOL want_gdi_renderer(void)
+static const CLSID *pre_renderer(const WCHAR **name)
 {
     WCHAR v[16];
-    if (GetEnvironmentVariableW(L"SG_MEDIA_RENDERER", v, ARRAYSIZE(v))) return !lstrcmpiW(v, L"gdi");
-    return nvidia_before_555();
+    BOOL gdi;
+    if (GetEnvironmentVariableW(L"SG_MEDIA_RENDERER", v, ARRAYSIZE(v)))
+    {
+        if (!lstrcmpiW(v, L"vmr7")) return NULL;
+        gdi = !lstrcmpiW(v, L"gdi");
+    }
+    else gdi = nvidia_before_555();
+    if (gdi) { *name = L"gdi"; return &CLSID_VideoRenderer; }
+#ifdef SG_MUTANT_MEDIA_VMR7
+    return NULL;
+#endif
+    *name = L"vmr9";
+    return &CLSID_VideoMixingRenderer9;
 }
 
-static void drop_unused_gdi_renderer(void)
+static void drop_unused_pre_renderer(void)
 {
     IEnumPins *e;
     IPin *pin, *peer;
     BOOL used = FALSE;
-    if (!g_gdi_renderer) return;
-    if (SUCCEEDED(IBaseFilter_EnumPins(g_gdi_renderer, &e)))
+    if (!g_pre_renderer) return;
+    if (SUCCEEDED(IBaseFilter_EnumPins(g_pre_renderer, &e)))
     {
         while (!used && IEnumPins_Next(e, 1, &pin, NULL) == S_OK)
         {
@@ -1115,22 +1137,23 @@ static void drop_unused_gdi_renderer(void)
         }
         IEnumPins_Release(e);
     }
-    if (!used && g_graph) IGraphBuilder_RemoveFilter(g_graph, g_gdi_renderer);
-    g_using_gdi = used;
-    IBaseFilter_Release(g_gdi_renderer);
-    g_gdi_renderer = NULL;
+    if (!used && g_graph) IGraphBuilder_RemoveFilter(g_graph, g_pre_renderer);
+    if (used) g_renderer_name = g_pre_name;
+    IBaseFilter_Release(g_pre_renderer);
+    g_pre_renderer = NULL;
 }
 
 static HRESULT new_graph(void)
 {
     HRESULT hr = CoCreateInstance(&CLSID_FilterGraph, NULL, CLSCTX_INPROC_SERVER, &IID_IGraphBuilder, (void **)&g_graph);
+    const CLSID *clsid;
     if (FAILED(hr)) return hr;
-    if (want_gdi_renderer() &&
-        SUCCEEDED(CoCreateInstance(&CLSID_VideoRenderer, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&g_gdi_renderer)) &&
-        FAILED(IGraphBuilder_AddFilter(g_graph, g_gdi_renderer, L"Video Renderer")))
+    if ((clsid = pre_renderer(&g_pre_name)) &&
+        SUCCEEDED(CoCreateInstance(clsid, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&g_pre_renderer)) &&
+        FAILED(IGraphBuilder_AddFilter(g_graph, g_pre_renderer, L"Video Renderer")))
     {
-        IBaseFilter_Release(g_gdi_renderer);
-        g_gdi_renderer = NULL;
+        IBaseFilter_Release(g_pre_renderer);
+        g_pre_renderer = NULL;
     }
     IGraphBuilder_QueryInterface(g_graph, &IID_IMediaControl, (void **)&g_control);
     IGraphBuilder_QueryInterface(g_graph, &IID_IMediaSeeking, (void **)&g_seek);
@@ -1180,7 +1203,7 @@ static BOOL open_current(BOOL play)
     IMediaSeeking_SetTimeFormat(g_seek, &TIME_FORMAT_MEDIA_TIME);
     IMediaSeeking_GetDuration(g_seek, &g_duration);
     if (g_events) IMediaEventEx_SetNotifyWindow(g_events, (OAHWND)g_main, WM_GRAPHNOTIFY, 0);
-    drop_unused_gdi_renderer();
+    drop_unused_pre_renderer();
     own_video_renderers();
     if (g_vid_w > 0 && g_vid_h > 0) g_has_video = TRUE;
     else if (g_bv && SUCCEEDED(IBasicVideo_get_SourceWidth(g_bv, &g_vid_w)) &&

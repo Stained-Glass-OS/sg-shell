@@ -1,3 +1,21 @@
+sg-shell (0.1.0-287) unstable; urgency=medium
+
+  * Media Player: the picture no longer freezes while the sound plays on.
+    Wine's default video renderer (the VMR-7) draws each frame by a blit to
+    a DirectDraw primary surface, the GL front buffer of the video window;
+    with NVIDIA's driver under Xwayland those draws stop reaching the screen
+    after a few seconds, or at once, though every frame arrived on time
+    (David's own render, ten minutes of H.264 + AAC). The player renders
+    with the Video Mixing Renderer 9 now, which presents through a swap
+    chain (wined3d and DXVK alike) and keeps pace with the sound. The GDI
+    renderer stays for NVIDIA drivers before 555. New gate
+    test-media-pace: a ten-minute H.264 + AAC clip whose frames carry their
+    own time; the picture on screen must follow the sound through a long
+    play, a seek and a pause, on the host's GPU under headless weston
+    (the old build and a VMR-7 mutant fail it).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 18 Nov 2026 22:30:00 -0800
+
 sg-shell (0.1.0-286) unstable; urgency=medium
 
   * Settings > Display: "Keep these display settings?" is a dialog of its own

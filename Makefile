@@ -496,6 +496,18 @@ test-media-smtc: build
 	         || { echo "media-smtc-check: the mutant $$m was not caught"; exit 1; }; \
 	     echo "media-smtc-check: mutant $$m caught"; done
 
+# Media Player's picture keeps pace with its sound through a ten-minute H.264
+# + AAC film, a seek and a pause (headless weston on the host's GPU, else Xvfb);
+# the VMR-7 mutant (the renderer that froze the picture) must fail.
+.PHONY: test-media-pace
+test-media-pace: build
+	@sh test/media-pace-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_MEDIA_VMR7 -o $(BUILD)/sg-media-mut.exe src/sg-media.c \
+	     $(BUILD)/sg-media-res64.o $(MEDIA_LIBS) || exit 1; \
+	 ! EXE=$(BUILD)/sg-media-mut.exe PACE_SECS=20 sh test/media-pace-check.sh >/dev/null 2>&1 \
+	     || { echo "media-pace-check: the mutant MEDIA_VMR7 was not caught"; exit 1; }; \
+	 echo "media-pace-check: mutant MEDIA_VMR7 caught"
+
 # The notification centre (sg-notify): its icon and panel, under Xvfb with the shell.
 .PHONY: test-notify
 test-notify: build
