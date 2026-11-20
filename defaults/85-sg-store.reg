@@ -87,6 +87,43 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Classes\SG.LinuxPackage\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\" --deb \"%1\""
 
+; ---- app packages (.msix, .appx and their bundles): double-click installs ----------------
+; "Install an app package" (sg-store64.exe --package): the package's name, publisher and
+; version from its manifest, then PackageManager adds it for this person (Windows' App
+; Installer does this there).
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.msix]
+@="SG.AppPackage"
+"Content Type"="application/msix"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.msixbundle]
+@="SG.AppPackage"
+"Content Type"="application/msixbundle"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.appx]
+@="SG.AppPackage"
+"Content Type"="application/appx"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.appxbundle]
+@="SG.AppPackage"
+"Content Type"="application/appxbundle"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppPackage]
+@="App package"
+"FriendlyTypeName"="App package"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppPackage\DefaultIcon]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppPackage\shell]
+@="open"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppPackage\shell\open]
+@="&Install"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\SG.AppPackage\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-store64.exe\" --package \"%1\""
+
 ; ---- the catalogue --------------------------------------------------------------------
 ; Replaced whole on each import, so an app taken out of the list goes.
 

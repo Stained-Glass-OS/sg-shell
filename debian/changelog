@@ -1,3 +1,15 @@
+sg-shell (0.1.0-289) unstable; urgency=medium
+
+  * Double-clicking an app package (.msix, .msixbundle, .appx, .appxbundle)
+    opens SG Store's Install an app package window: it names the package,
+    its publisher and version from the package's manifest and installs it
+    through PackageManager. A file that is not a package is refused.
+  * Compatibility preset for Mesen (opt-in): Mesen 0.9.9 took Wine Mono
+    for Linux's Mono and started its Linux build; hiding Mono's identity
+    makes it run as on Windows.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 20 Nov 2026 12:20:00 -0800
+
 sg-shell (0.1.0-288) unstable; urgency=medium
 
   * SG Store: 18 more Windows apps, each installed, opened and uninstalled

@@ -1692,6 +1692,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             LocalFree(argv);
             return rc;
         }
+        if (!lstrcmpiW(argv[i], L"--package") && i + 1 < argc) {
+            rc = sys_package_window(inst, argv[i + 1]);
+            LocalFree(argv);
+            return rc;
+        }
         if (!lstrcmpiW(argv[i], L"--appimage") && i + 1 < argc) {
             rc = sys_appimage_window(inst, argv[i + 1]);
             LocalFree(argv);

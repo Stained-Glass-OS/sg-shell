@@ -98,6 +98,7 @@
 #   SG_MUTANT_KEEPSTORELINK the store's own shortcut stays when the app has its own in Start (two in Start)
 #   SG_MUTANT_NOSEED        an app's first settings (Everything's folders to index) are not written
 #   SG_MUTANT_NOCDN         manifests only from raw.githubusercontent.com (429 to a busy address), not winget's CDN
+#   SG_MUTANT_PACKAGE_NO_MANIFEST  the app package window reads no manifest (refuses every .msix)
 #   SG_MUTANT_NOCDNHASH     a CDN manifest taken without checking its SHA-256 against winget's version data
 #   SG_MUTANT_RECORDASUSER  the store's own record of a machine-folder program uninstalls as the person
 #   SG_MUTANT_NOREGISTERWAIT  a program the store records, put in place after its installer returned, is not recorded
@@ -190,7 +191,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -1743,6 +1744,70 @@ wine start /unix "$G/hello.deb" >/dev/null 2>&1
 if waitfor "$D" '^deb-window 1' 80; then pass "double-clicking a .deb (ShellExecute) opens the Install a Linux package window"
     click "$D" cancel
 else fail "ShellExecute of a .deb did not open the window: $(cat "$D" 2>/dev/null)"; fi
+sleep 0.5; wine taskkill /f /im sg-store64.exe >/dev/null 2>&1
+# --- J2. an app package (.msix): what it is, from its manifest, and Install ----------------------
+python3 - "$G" <<'PY'
+import sys, zipfile
+g = sys.argv[1]
+m = ('<?xml version="1.0" encoding="utf-8"?>\n<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">'
+     '<Identity Name="SG.GatePackage" Publisher="CN=Gate Maker &amp; Co, O=Gate" Version="1.2.3.0" ProcessorArchitecture="x64"/>'
+     '<Properties><DisplayName>Gate Package</DisplayName><PublisherDisplayName>Gate Maker</PublisherDisplayName></Properties></Package>')
+with zipfile.ZipFile(g + '/gate.msix', 'w') as z:
+    z.writestr('AppxManifest.xml', m)
+    z.writestr('Gate.exe', 'MZ')
+b = ('<?xml version="1.0" encoding="UTF-8"?><Bundle xmlns="http://schemas.microsoft.com/appx/2013/bundle">'
+     '<Identity Name="SG.GateBundle" Publisher="CN=Bundle Maker" Version="4.5.6.0"/></Bundle>')
+with zipfile.ZipFile(g + '/gate.msixbundle', 'w') as z:
+    z.writestr('AppxMetadata/AppxBundleManifest.xml', b)
+with zipfile.ZipFile(g + '/notapackage.msix', 'w') as z:
+    z.writestr('readme.txt', 'no manifest here')
+PY
+rm -f "$D"
+wine "$EXE" --package 'C:\gate\gate.msix' >/dev/null 2>&1 & DP=$!
+if waitfor "$D" '^hit install ' 80; then
+    [ "$(field valid)" = 1 ] && [ "$(field name)" = SG.GatePackage ] && [ "$(field version)" = 1.2.3.0 ] && [ "$(field display)" = 'Gate Package' ] \
+        && pass "the app package window names the package, its display name and version (from AppxManifest.xml)" || fail "package dump: $(cat "$D")"
+    [ "$(field maker)" = 'Gate Maker' ] && [ "$(field bundle)" = 0 ] && pass "and its publisher" || fail "maker '$(field maker)'"
+    import -window root "$OUT/store-package.png" 2>/dev/null
+    click "$D" install
+    waitfor "$D" '^result ' 120 && pass "Install hands it to PackageManager and says how it went: $(field result | cut -c1-80)" \
+        || fail "the package install did not finish: $(cat "$D")"
+    click "$D" close
+else fail "the app package window did not open: $(cat "$D" 2>/dev/null)"; fi
+sleep 0.5; kill $DP 2>/dev/null; wait $DP 2>/dev/null
+rm -f "$D"
+wine "$EXE" --package 'C:\gate\gate.msixbundle' >/dev/null 2>&1 & DP=$!
+if waitfor "$D" '^hit install ' 60; then
+    [ "$(field bundle)" = 1 ] && [ "$(field name)" = SG.GateBundle ] && [ "$(field maker)" = 'Bundle Maker' ] \
+        && pass "a bundle: its AppxBundleManifest.xml, the publisher from the certificate's name" || fail "bundle dump: $(cat "$D")"
+    click "$D" cancel
+else fail "the bundle window did not open: $(cat "$D" 2>/dev/null)"; fi
+sleep 0.5; kill $DP 2>/dev/null; wait $DP 2>/dev/null
+rm -f "$D"
+wine "$EXE" --package 'C:\gate\notapackage.msix' >/dev/null 2>&1 & DP=$!
+if waitfor "$D" '^hit close ' 60; then
+    [ "$(field valid)" = 0 ] && ! grep -q '^hit install ' "$D" && grep -q '^error .*not an app package' "$D" \
+        && pass "a file without a package manifest is refused, and says why" || fail "notapackage: $(cat "$D")"
+    click "$D" close
+else fail "the package refusal window did not open: $(cat "$D" 2>/dev/null)"; fi
+sleep 0.5; kill $DP 2>/dev/null; wait $DP 2>/dev/null
+rm -f "$D"
+wine "$T/mut-package_no_manifest.exe" --package 'C:\gate\gate.msix' >/dev/null 2>&1 & DP=$!
+if waitfor "$D" '^hit close ' 60 && [ "$(field valid)" = 0 ]; then pass "MUTANT PACKAGE_NO_MANIFEST refuses the package (gate catches it)"; click "$D" close
+else fail "PACKAGE_NO_MANIFEST not detected: $(cat "$D" 2>/dev/null)"; fi
+sleep 0.5; kill $DP 2>/dev/null; wait $DP 2>/dev/null
+for x in .msix .msixbundle .appx .appxbundle; do
+    [ "$(wine reg query "HKLM\\Software\\Classes\\$x" /ve 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')" = SG.AppPackage ] || fail "HKCR\\$x is not SG.AppPackage"
+done
+cmd=$(wine reg query 'HKLM\Software\Classes\SG.AppPackage\shell\open\command' /ve 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')
+case "$cmd" in *sg-store64.exe*--package*'%1'*) pass "HKCR\\.msix/.msixbundle/.appx/.appxbundle install with SG Store (--package \"%1\")" ;; *) fail ".msix verb: '$cmd'" ;; esac
+reg 'HKLM\Software\Classes\SG.AppPackage\shell\open\command' /ve /d "\"$winexe\" --package \"%1\""
+sleep 0.5
+rm -f "$D"
+wine start /unix "$G/gate.msix" >/dev/null 2>&1
+if waitfor "$D" '^package-window 1' 80; then pass "double-clicking a .msix (ShellExecute) opens the Install an app package window"
+    click "$D" cancel
+else fail "ShellExecute of a .msix did not open the window: $(cat "$D" 2>/dev/null)"; fi
 sleep 0.5; wine taskkill /f /im sg-store64.exe >/dev/null 2>&1
 # the real catalogue's DetectName against what the makers' installers really
 # register (the store walk 2026-10-20: Java 8 and Corretto 21 installed, but

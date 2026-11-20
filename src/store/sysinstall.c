@@ -30,6 +30,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "store.h"
+#include "zipcore.h"
 #include "../sg-smooth.h"
 #include "../sg-dpi.h"
 #include <shellapi.h>
@@ -1266,6 +1267,332 @@ int sys_deb_window(HINSTANCE inst, const WCHAR *file)
     d->wnd = NULL;
     deb_dump(d);
     return d->state == 2 ? d->code : d->valid ? SYS_CANCELLED : SYS_FAILED;
+}
+
+/* ---- --package FILE: an app package (.msix, .appx and their bundles) ----------------------------- */
+
+/* Double-clicking an app package someone downloaded did nothing: Windows has App
+ * Installer for it (what the package is, who published it, Install). This is
+ * ours: the package's identity and display names from its manifest (AppxManifest.xml,
+ * or a bundle's AppxMetadata/AppxBundleManifest.xml), read without running anything,
+ * and Install, which adds it for this person through PackageManager -- as SG Store
+ * adds the catalogue's packages (msix.c) and winget does; no administrator. */
+
+typedef struct {
+    WCHAR file[MAX_PATH], shown[MAX_PATH];
+    WCHAR name[256], publisher[512], version[64], display[256], maker[256], arch[32];
+    BOOL  valid, bundle;
+    WCHAR error[256];
+    int   state;                  /* 0 asking, 1 installing, 2 done */
+    BOOL  ok;
+    WCHAR result[768];
+    int   focus;                  /* 0 Install, 1 Cancel */
+    WCHAR dump[MAX_PATH];
+    HWND  wnd;
+} pkgwin_t;
+
+static pkgwin_t g_pkg;
+
+/* the value of attr="..." in the first <tag ...> of xml (UTF-8), XML entities decoded */
+static BOOL xml_attr(const char *xml, const char *tag, const char *attr, WCHAR *out, int cch)
+{
+    char open[64], key[64];
+    const char *p = xml, *e, *v;
+    out[0] = 0;
+    _snprintf(open, sizeof(open), "<%s", tag);
+    _snprintf(key, sizeof(key), "%s=\"", attr);
+    while ((p = strstr(p, open))) {
+        char c = p[strlen(open)];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') break;
+        p++;
+    }
+    if (!p || !(e = strchr(p, '>'))) return FALSE;
+    for (v = p; (v = strstr(v, key)) && v < e; v++) {
+        char prev = v[-1], buf[1024];
+        const char *end;
+        int n = 0;
+        if (prev != ' ' && prev != '\t' && prev != '\r' && prev != '\n') continue;
+        v += strlen(key);
+        if (!(end = strchr(v, '"')) || end > e) return FALSE;
+        while (v < end && n < (int)sizeof(buf) - 1) {
+            if (*v == '&') {
+                static const struct { const char *ent; char ch; } ents[] = {
+                    { "&amp;", '&' }, { "&lt;", '<' }, { "&gt;", '>' }, { "&quot;", '"' }, { "&apos;", '\'' } };
+                int k, done = 0;
+                for (k = 0; k < 5 && !done; k++)
+                    if (!strncmp(v, ents[k].ent, strlen(ents[k].ent))) { buf[n++] = ents[k].ch; v += strlen(ents[k].ent); done = 1; }
+                if (done) continue;
+            }
+            buf[n++] = *v++;
+        }
+        buf[n] = 0;
+        MultiByteToWideChar(CP_UTF8, 0, buf, -1, out, cch);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/* the text of the first <tag>...</tag> */
+static void xml_text(const char *xml, const char *tag, WCHAR *out, int cch)
+{
+    char open[64], close[64], buf[1024];
+    const char *p, *e;
+    size_t n;
+    out[0] = 0;
+    _snprintf(open, sizeof(open), "<%s>", tag);
+    _snprintf(close, sizeof(close), "</%s>", tag);
+    if (!(p = strstr(xml, open)) || !(e = strstr(p, close))) return;
+    p += strlen(open);
+    n = min((size_t)(e - p), sizeof(buf) - 1);
+    memcpy(buf, p, n);
+    buf[n] = 0;
+    MultiByteToWideChar(CP_UTF8, 0, buf, -1, out, cch);
+}
+
+static void pkg_read_info(pkgwin_t *d)
+{
+    zarchive z;
+    int i, which = -1, rc;
+    BYTE *xml = NULL;
+    size_t len = 0;
+    WCHAR cn[256];
+    d->valid = FALSE;
+    if ((rc = zip_open(&z, d->file))) {
+        lstrcpynW(d->error, L"This file is not an app package (it cannot be read as one).", ARRAYSIZE(d->error));
+        return;
+    }
+    for (i = 0; i < z.n; i++) {
+        if (!lstrcmpiW(z.e[i].name, L"AppxManifest.xml")) { which = i; d->bundle = FALSE; break; }
+        if (!lstrcmpiW(z.e[i].name, L"AppxMetadata/AppxBundleManifest.xml")) { which = i; d->bundle = TRUE; }
+    }
+    if (which < 0 || z.e[which].usize > (1 << 22) || zip_read(&z, which, &xml, &len)) {
+        lstrcpynW(d->error, L"This file is not an app package (it has no package manifest).", ARRAYSIZE(d->error));
+        zip_close(&z);
+        return;
+    }
+    zip_close(&z);
+    xml = realloc(xml, len + 1);
+    xml[len] = 0;
+    if (xml_attr((char *)xml, "Identity", "Name", d->name, ARRAYSIZE(d->name)) &&
+        xml_attr((char *)xml, "Identity", "Publisher", d->publisher, ARRAYSIZE(d->publisher)) &&
+        xml_attr((char *)xml, "Identity", "Version", d->version, ARRAYSIZE(d->version))) {
+        d->valid = TRUE;
+        xml_attr((char *)xml, "Identity", "ProcessorArchitecture", d->arch, ARRAYSIZE(d->arch));
+        xml_text((char *)xml, "DisplayName", d->display, ARRAYSIZE(d->display));
+        xml_text((char *)xml, "PublisherDisplayName", d->maker, ARRAYSIZE(d->maker));
+        /* "ms-resource:..." names are in the package's resources, not here */
+        if (!wcsncmp(d->display, L"ms-resource:", 12)) d->display[0] = 0;
+        if (!wcsncmp(d->maker, L"ms-resource:", 12)) d->maker[0] = 0;
+        if (!d->maker[0]) {
+            /* the subject's common name, CN=... */
+            const WCHAR *c = wcsstr(d->publisher, L"CN=");
+            if (c) {
+                lstrcpynW(cn, c + 3, ARRAYSIZE(cn));
+                if (wcschr(cn, L',')) *wcschr(cn, L',') = 0;
+                lstrcpynW(d->maker, cn, ARRAYSIZE(d->maker));
+            }
+        }
+    } else lstrcpynW(d->error, L"This file is not an app package (its manifest names no package).", ARRAYSIZE(d->error));
+    free(xml);
+}
+
+static void pkg_dump(pkgwin_t *d)
+{
+    WCHAR tmp[MAX_PATH + 8];
+    FILE *f;
+    char u[1024];
+    if (!d->dump[0]) return;
+    _snwprintf(tmp, ARRAYSIZE(tmp), L"%ls.tmp", d->dump);
+    if (!(f = _wfopen(tmp, L"wb"))) return;
+#define DL(fmt, ...) do { WCHAR w_[1024]; _snwprintf(w_, 1024, fmt, __VA_ARGS__); w_[1023] = 0; \
+        WideCharToMultiByte(CP_UTF8, 0, w_, -1, u, sizeof(u), NULL, NULL); fputs(u, f); fputc('\n', f); } while (0)
+    DL(L"package-window %d", d->wnd ? 1 : 0);
+    DL(L"valid %d", d->valid ? 1 : 0);
+    DL(L"name %ls", d->name);
+    DL(L"display %ls", d->display);
+    DL(L"version %ls", d->version);
+    DL(L"maker %ls", d->maker);
+    DL(L"bundle %d", d->bundle ? 1 : 0);
+    DL(L"state %d", d->state);
+    if (!d->valid) DL(L"error %ls", d->error);
+    if (d->state == 2) DL(L"result %d %ls", d->ok ? 0 : 1, d->result);
+#undef DL
+    fclose(f);
+    MoveFileExW(tmp, d->dump, MOVEFILE_REPLACE_EXISTING);
+}
+
+static DWORD WINAPI pkg_worker(void *arg)
+{
+    pkgwin_t *d = arg;
+    WCHAR err[512] = L"";
+    const WCHAR *what = d->display[0] ? d->display : d->name;
+    d->ok = msix_add(d->file, err, ARRAYSIZE(err));
+    if (d->ok) _snwprintf(d->result, ARRAYSIZE(d->result), L"%ls %ls is installed. Start has it.", what, d->version);
+    else _snwprintf(d->result, ARRAYSIZE(d->result), L"%ls was not installed. %ls", what, err);
+    d->result[ARRAYSIZE(d->result) - 1] = 0;
+    d->state = 2;
+    PostMessageW(d->wnd, WM_APP, 0, 0);
+    return 0;
+}
+
+static void pkg_start(pkgwin_t *d)
+{
+    HANDLE t;
+    if (d->state != 0 || !d->valid) return;
+    d->state = 1;
+    InvalidateRect(d->wnd, NULL, FALSE);
+    pkg_dump(d);
+    if ((t = CreateThread(NULL, 0, pkg_worker, d, 0, NULL))) CloseHandle(t);
+    else { d->state = 2; d->ok = FALSE; lstrcpynW(d->result, L"The install could not be started.", ARRAYSIZE(d->result)); }
+}
+
+static void pkg_paint(HWND hwnd, pkgwin_t *d)
+{
+    PAINTSTRUCT ps;
+    HDC wdc = BeginPaint(hwnd, &ps), dc = CreateCompatibleDC(wdc);
+    RECT c, r;
+    HBITMAP bmp, ob;
+    HBRUSH bg = CreateSolidBrush(C_BG);
+    int y;
+    GetClientRect(hwnd, &c);
+    bmp = CreateCompatibleBitmap(wdc, c.right, c.bottom);
+    ob = SelectObject(dc, bmp);
+    FillRect(dc, &c, bg);
+    DeleteObject(bg);
+
+    r.left = S(20); r.right = c.right - S(20); r.top = S(16); r.bottom = r.top + S(30);
+    draw_text(dc, f_head, C_TEXT, r, d->valid ? (d->display[0] ? d->display : d->name) : L"This file cannot be installed",
+              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    y = r.bottom + S(8);
+    if (d->valid) {
+        static const WCHAR *const labels[] = { L"Publisher", L"Version", L"Package", L"File" };
+        const WCHAR *values[4];
+        int k;
+        values[0] = d->maker[0] ? d->maker : L"(not given)"; values[1] = d->version; values[2] = d->name; values[3] = d->shown;
+        for (k = 0; k < 4; k++) {
+            RECT lr = { S(20), y, S(110), y + S(22) }, vr = { S(114), y, c.right - S(20), y + S(22) };
+            draw_text(dc, f_body, C_SUB, lr, labels[k], DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            draw_text(dc, f_body, C_TEXT, vr, values[k], DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_PATH_ELLIPSIS);
+            y += S(22);
+        }
+        y += S(8);
+        r.top = y; r.bottom = y + S(60);
+        if (d->state == 0)
+            draw_text(dc, f_small, C_SUB, r, L"This app package does not come from SG Store: install it only if you trust "
+                      L"its publisher. It is installed for you only.", DT_LEFT | DT_TOP | DT_WORDBREAK);
+        else if (d->state == 1)
+            draw_text(dc, f_body, C_SUB, r, L"Installing...", DT_LEFT | DT_TOP | DT_WORDBREAK);
+        else
+            draw_text(dc, f_body, d->ok ? C_ACCENT : C_ERR, r, d->result, DT_LEFT | DT_TOP | DT_WORDBREAK);
+    } else {
+        r.top = y; r.bottom = y + S(80);
+        draw_text(dc, f_body, C_ERR, r, d->error, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        r.top = r.bottom; r.bottom = r.top + S(24);
+        draw_text(dc, f_small, C_SUB, r, d->shown, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_PATH_ELLIPSIS);
+    }
+    if (d->valid && d->state == 0) {
+        draw_button(dc, deb_button(hwnd, 0), L"Install", TRUE, d->focus == 0);
+        draw_button(dc, deb_button(hwnd, 1), L"Cancel", FALSE, d->focus == 1);
+    } else if (d->state != 1) {
+        draw_button(dc, deb_button(hwnd, 1), L"Close", TRUE, TRUE);
+    }
+    BitBlt(wdc, 0, 0, c.right, c.bottom, dc, 0, 0, SRCCOPY);
+    SelectObject(dc, ob);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    EndPaint(hwnd, &ps);
+}
+
+static void pkg_hits(pkgwin_t *d)
+{
+    pkg_dump(d);
+    if (d->valid && d->state == 0) {
+        write_screen_hit(d->dump, d->wnd, L"install", deb_button(d->wnd, 0));
+        write_screen_hit(d->dump, d->wnd, L"cancel", deb_button(d->wnd, 1));
+    } else if (d->state != 1) write_screen_hit(d->dump, d->wnd, L"close", deb_button(d->wnd, 1));
+}
+
+static LRESULT CALLBACK pkg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    pkgwin_t *d = &g_pkg;
+    switch (msg) {
+    case WM_DPICHANGED:
+        sys_dpi_changed(hwnd, wp, lp);
+        return 0;
+    case WM_PAINT:
+        pkg_paint(hwnd, d);
+        return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_APP:
+        InvalidateRect(hwnd, NULL, FALSE);
+        UpdateWindow(hwnd);
+        pkg_hits(d);
+        SetForegroundWindow(hwnd);
+        return 0;
+    case WM_LBUTTONUP: {
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+        RECT i = deb_button(hwnd, 0), c = deb_button(hwnd, 1);
+        if (d->valid && d->state == 0 && PtInRect(&i, pt)) pkg_start(d);
+        else if (d->state != 1 && PtInRect(&c, pt)) DestroyWindow(hwnd);
+        return 0;
+    }
+    case WM_KEYDOWN:
+        if (d->state == 1) return 0;
+        if (wp == VK_ESCAPE) DestroyWindow(hwnd);
+        else if (wp == VK_TAB || wp == VK_LEFT || wp == VK_RIGHT) { d->focus = !d->focus; InvalidateRect(hwnd, NULL, FALSE); }
+        else if (wp == VK_RETURN || wp == VK_SPACE) {
+            if (d->valid && d->state == 0 && d->focus == 0) pkg_start(d);
+            else DestroyWindow(hwnd);
+        }
+        return 0;
+    case WM_CLOSE:
+        if (d->state != 1) DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+int sys_package_window(HINSTANCE inst, const WCHAR *file)
+{
+    pkgwin_t *d = &g_pkg;
+    WNDCLASSW wc = { 0 };
+    MSG m;
+    RECT wa;
+    const WCHAR *base;
+    make_fonts();
+    g_inst = inst;
+    memset(d, 0, sizeof(*d));
+    GetFullPathNameW(file, MAX_PATH, d->file, NULL);
+    base = wcsrchr(d->file, L'\\') ? wcsrchr(d->file, L'\\') + 1 : d->file;
+    lstrcpynW(d->shown, base, MAX_PATH);
+    GetEnvironmentVariableW(L"SG_STORE_DUMP", d->dump, MAX_PATH);
+#ifndef SG_MUTANT_PACKAGE_NO_MANIFEST
+    pkg_read_info(d);
+#else
+    lstrcpynW(d->error, L"This file is not an app package.", ARRAYSIZE(d->error));
+#endif
+    wc.lpfnWndProc = pkg_proc;
+    wc.hInstance = inst;
+    wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+    wc.lpszClassName = L"SgStorePackage";
+    RegisterClassW(&wc);
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+    d->wnd = CreateWindowExW(0, wc.lpszClassName, L"Install an app package", WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                             wa.left + (wa.right - wa.left - S(560)) / 2, wa.top + (wa.bottom - wa.top - S(340)) / 3,
+                             S(560), S(340), NULL, NULL, inst, NULL);
+    if (!d->wnd) return 1;
+    ShowWindow(d->wnd, SW_SHOWNORMAL);
+    UpdateWindow(d->wnd);
+    pkg_hits(d);
+    while (GetMessageW(&m, NULL, 0, 0) > 0) { TranslateMessage(&m); DispatchMessageW(&m); }
+    d->wnd = NULL;
+    pkg_dump(d);
+    return d->state == 2 ? (d->ok ? SYS_OK : SYS_FAILED) : d->valid ? SYS_CANCELLED : SYS_FAILED;
 }
 
 /* ---- --appimage FILE: an AppImage, installed for this user ----------------------------------------- */
