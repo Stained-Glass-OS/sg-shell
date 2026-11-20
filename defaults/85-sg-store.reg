@@ -4637,6 +4637,186 @@ Windows Registry Editor Version 5.00
 "Source"="winget:DBeaver.DBeaver.Community"
 "DetectName"="DBeaver"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\230]
+"Name"="AkelPad"
+"Publisher"="AkelSoft"
+"Description"="Small, fast text editor with plug-ins."
+"Category"="Development"
+"Colour"=dword:002a6fb0
+"Tier"="windows"
+"Source"="winget:AkelPad.AkelPad"
+"DetectName"="AkelPad"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\231]
+"Name"="FCEUX"
+"Publisher"="FCEUX team"
+"Description"="NES and Famicom emulator with debugging tools."
+"Category"="Games"
+"Colour"=dword:00b03030
+"Tier"="windows"
+"Source"="winget:FCEUX.FCEUX"
+"DetectName"="FCEUX"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\232]
+"Name"="DeSmuME"
+"Publisher"="DeSmuME team"
+"Description"="Nintendo DS emulator."
+"Category"="Games"
+"Colour"=dword:003060a0
+"Tier"="windows"
+"Source"="winget:DeSmuMETeam.DeSmuME"
+"DetectName"="DeSmuME"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\233]
+"Name"="mGBA"
+"Publisher"="Jeffrey Pfau"
+"Description"="Game Boy Advance emulator."
+"Category"="Games"
+"Colour"=dword:006a3fa0
+"Tier"="windows"
+"Source"="winget:JeffreyPfau.mGBA"
+"DetectName"="mGBA"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\234]
+"Name"="Project64"
+"Publisher"="Project64"
+"Description"="Nintendo 64 emulator."
+"Category"="Games"
+"Colour"=dword:002f8f4f
+"Tier"="windows"
+"Source"="winget:Project64.Project64"
+"DetectName"="Project64"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\235]
+"Name"="DOSBox-X"
+"Publisher"="joncampbell123"
+"Description"="DOS emulator for old games and programs."
+"Category"="Games"
+"Colour"=dword:00806020
+"Tier"="windows"
+"Source"="winget:joncampbell123.DOSBox-X"
+"DetectName"="DOSBox-X"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\236]
+"Name"="VisualBoyAdvance-M"
+"Publisher"="VBA-M team"
+"Description"="Game Boy and Game Boy Advance emulator."
+"Category"="Games"
+"Colour"=dword:005050c0
+"Tier"="windows"
+"Source"="winget:VisualBoyAdvance-M.VisualBoyAdvance-M"
+"DetectName"="VisualBoyAdvance-M"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\237]
+"Name"="Exact Audio Copy"
+"Publisher"="Andre Wiethoff"
+"Description"="Copies audio CDs exactly, with error checking."
+"Category"="Media"
+"Colour"=dword:00404040
+"Tier"="windows"
+"Source"="winget:AndreWiethoff.ExactAudioCopy"
+"DetectName"="Exact Audio Copy"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\238]
+"Name"="XMedia Recode"
+"Publisher"="Sebastian Dorfler"
+"Description"="Converts video and audio between formats."
+"Category"="Media"
+"Colour"=dword:00c06020
+"Tier"="windows"
+"Source"="winget:XMediaRecode.XMediaRecode"
+"DetectName"="XMedia Recode"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\239]
+"Name"="LAV Filters"
+"Publisher"="Hendrik Leppkes"
+"Description"="Decoders and splitter for media players that use DirectShow."
+"Category"="Media"
+"Colour"=dword:002080a0
+"Tier"="windows"
+"Source"="winget:Nevcairiel.LAVFilters"
+"DetectName"="LAV Filters"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\240]
+"Name"="MediaInfo"
+"Publisher"="MediaArea"
+"Description"="Shows what is inside video and audio files."
+"Category"="Media"
+"Colour"=dword:003a6ea5
+"Tier"="windows"
+"Source"="winget:MediaArea.MediaInfo.GUI"
+"DetectName"="MediaInfo"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\241]
+"Name"="PDF-XChange Editor"
+"Publisher"="PDF-XChange"
+"Description"="Views, annotates and fills in PDF documents."
+"Category"="Productivity"
+"Colour"=dword:00c02020
+"Tier"="windows"
+"Source"="winget:TrackerSoftware.PDF-XChangeEditor"
+"DetectName"="PDF-XChange Editor"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\242]
+"Name"="Dependencies"
+"Publisher"="lucasg"
+"Description"="Shows the DLLs a program needs and what they export."
+"Category"="Development"
+"Colour"=dword:00507090
+"Tier"="windows"
+"Source"="winget:lucasg.Dependencies"
+"DetectName"="Dependencies"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\243]
+"Name"="x64dbg"
+"Publisher"="x64dbg"
+"Description"="Debugger for 64-bit and 32-bit Windows programs."
+"Category"="Development"
+"Colour"=dword:008a2be2
+"Tier"="windows"
+"Source"="winget:x64dbg.x64dbg"
+"DetectName"="x64dbg"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\244]
+"Name"="SQLiteStudio"
+"Publisher"="Pawel Salawa"
+"Description"="Opens, edits and queries SQLite databases."
+"Category"="Development"
+"Colour"=dword:003c7ab8
+"Tier"="windows"
+"Source"="winget:PawelSalawa.SQLiteStudio"
+"DetectName"="SQLiteStudio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\245]
+"Name"="Freeplane"
+"Publisher"="Freeplane team"
+"Description"="Mind maps for thinking, planning and notes."
+"Category"="Productivity"
+"Colour"=dword:00d08020
+"Tier"="windows"
+"Source"="winget:Freeplane.Freeplane"
+"DetectName"="Freeplane"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\246]
+"Name"="AutoIt"
+"Publisher"="AutoIt Consulting"
+"Description"="Scripting language for automating the desktop."
+"Category"="Development"
+"Colour"=dword:002060a0
+"Tier"="windows"
+"Source"="winget:AutoIt.AutoIt"
+"DetectName"="AutoIt"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\247]
+"Name"="ImageGlass"
+"Publisher"="Duong Dieu Phap"
+"Description"="Fast image viewer for many formats."
+"Category"="Graphics"
+"Colour"=dword:001e88e5
+"Tier"="windows"
+"Source"="winget:DuongDieuPhap.ImageGlass"
+"PackageFamily"="DuongDieuPhap.ImageGlass_dhvarhd5k2r8t"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
