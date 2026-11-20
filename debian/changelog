@@ -1,3 +1,10 @@
+sg-shell (0.1.0-290) unstable; urgency=medium
+
+  * Compatibility preset for Sigil (opt-in): its book preview draws in
+    software, as with its GPU process it stays black.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 20 Nov 2026 12:45:00 -0800
+
 sg-shell (0.1.0-289) unstable; urgency=medium
 
   * Double-clicking an app package (.msix, .msixbundle, .appx, .appxbundle)
