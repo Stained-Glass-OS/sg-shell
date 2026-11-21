@@ -5098,6 +5098,66 @@ Windows Registry Editor Version 5.00
 "InstallArgs"="--script Z:\\usr\\share\\stained-glass\\store\\qtifw-auto.qs"
 "UninstallArgs"="--script Z:\\usr\\share\\stained-glass\\store\\qtifw-auto.qs"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\272]
+"Name"="Notepad3"
+"Publisher"="Rizonesoft"
+"Description"="Fast text editor with syntax highlighting."
+"Category"="Development"
+"Colour"=dword:0000a86b
+"Tier"="windows"
+"Source"="winget:Rizonesoft.Notepad3"
+"DetectName"="Notepad3"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\273]
+"Name"="GanttProject"
+"Publisher"="BarD Software"
+"Description"="Project scheduling with Gantt charts and resources."
+"Category"="Productivity"
+"Colour"=dword:0027ae60
+"Tier"="windows"
+"Source"="winget:GanttProject.GanttProject"
+"DetectName"="GanttProject"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\274]
+"Name"="MeshLab"
+"Publisher"="CNR-ISTI Visual Computing Lab"
+"Description"="Process and edit 3D triangular meshes."
+"Category"="Graphics"
+"Colour"=dword:008e44ad
+"Tier"="windows"
+"Source"="winget:CNRISTI.MeshLab"
+"DetectName"="MeshLab"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\275]
+"Name"="CopyQ"
+"Publisher"="Lukas Holecek"
+"Description"="Clipboard manager with searchable history."
+"Category"="Utilities"
+"Colour"=dword:00d35400
+"Tier"="windows"
+"Source"="winget:hluk.CopyQ"
+"DetectName"="CopyQ"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\276]
+"Name"="ocenaudio"
+"Publisher"="Ocen Audio"
+"Description"="Easy audio editor with real-time effect preview."
+"Category"="Media"
+"Colour"=dword:0016a085
+"Tier"="windows"
+"Source"="winget:Ocenaudio.Ocenaudio"
+"DetectName"="ocenaudio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\277]
+"Name"="Avogadro"
+"Publisher"="OpenChemistry"
+"Description"="Molecule editor and visualizer for chemistry."
+"Category"="Education"
+"Colour"=dword:00c0392b
+"Tier"="windows"
+"Source"="winget:OpenChemistry.Avogadro2"
+"DetectName"="Avogadro2"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
