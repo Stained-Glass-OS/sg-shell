@@ -5158,6 +5158,76 @@ Windows Registry Editor Version 5.00
 "Source"="winget:OpenChemistry.Avogadro2"
 "DetectName"="Avogadro2"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\278]
+"Name"="Bruno"
+"Publisher"="Bruno"
+"Description"="Open-source API client for testing and exploring APIs."
+"Category"="Development"
+"Colour"=dword:00f4a742
+"Tier"="windows"
+"Source"="winget:Bruno.Bruno"
+"DetectName"="Bruno"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\279]
+"Name"="Zettlr"
+"Publisher"="Hendrik Erz"
+"Description"="Markdown editor for notes, papers and books."
+"Category"="Productivity"
+"Colour"=dword:001cb27e
+"Tier"="windows"
+"Source"="winget:Zettlr.Zettlr"
+"DetectName"="Zettlr"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\280]
+"Name"="Pinta"
+"Publisher"="Pinta Project"
+"Description"="Simple image editor with layers and effects."
+"Category"="Graphics"
+"Colour"=dword:002f7bd6
+"Tier"="windows"
+"Source"="winget:Pinta.Pinta"
+"DetectName"="Pinta"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\281]
+"Name"="Bulk Rename Utility"
+"Publisher"="TGRMN Software"
+"Description"="Rename many files at once with rules and previews."
+"Category"="Utilities"
+"Colour"=dword:00546e7a
+"Tier"="windows"
+"Source"="winget:TGRMNSoftware.BulkRenameUtility"
+"DetectName"="Bulk Rename Utility"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\282]
+"Name"="XnConvert"
+"Publisher"="XnSoft"
+"Description"="Batch image converter and resizer."
+"Category"="Graphics"
+"Colour"=dword:00e67e22
+"Tier"="windows"
+"Source"="winget:XnSoft.XnConvert"
+"DetectName"="XnConvert"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\283]
+"Name"="FreeCommander XE"
+"Publisher"="Marek Jasinski"
+"Description"="Two-pane file manager with tabs and a built-in viewer."
+"Category"="Utilities"
+"Colour"=dword:00ef6c00
+"Tier"="windows"
+"Source"="winget:MarekJasinski.FreeCommanderXE"
+"DetectName"="FreeCommander"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\284]
+"Name"="Trilium Notes"
+"Publisher"="TriliumNext"
+"Description"="Hierarchical note-taking for building a personal knowledge base."
+"Category"="Productivity"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:TriliumNext.Notes"
+"DetectName"="Trilium Notes|TriliumNext Notes|Trilium"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
