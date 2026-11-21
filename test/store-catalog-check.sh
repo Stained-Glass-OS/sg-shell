@@ -32,6 +32,19 @@ badpin=$(awk 'function chk() {if (pin && !(ok && ver)) {sub(/.*\\/, "", key); su
     /^"PinVersion"="[0-9]/ {ver=1}
     END {chk()}' "$CAT")
 [ -z "$badpin" ] && pass "every pinned download is https with a SHA-256 and a version" || fail "bad pin: $badpin"
+# a file of ours an entry hands its installer (InstallArgs/UninstallArgs "Z:\usr\share\stained-glass\...")
+# is one this package installs: Avidemux's Qt Installer Framework setup ignores /S and takes its
+# answers from qtifw-auto.qs (else it waits on its first page until the Store gives up, 25 min)
+RULES="${SG_DEBIAN_RULES:-$HERE/debian/rules}"
+noship=""
+for f in $(grep -E '^"(Install|Uninstall)Args"=' "$CAT" | grep -oE 'Z:(\\\\[A-Za-z0-9._-]+)+' | sed 's/^Z://; s/\\\\/\//g' | sort -u); do
+    case "$f" in /usr/share/stained-glass/*) grep -q "debian/sg-shell$f\$" "$RULES" || noship="$noship $f" ;; esac
+done
+[ -z "$noship" ] && pass "every file of ours an installer is handed is installed" || fail "named but not installed:$noship"
+awk '/^\[/ {if (hit) printf "%s", buf; buf = ""; hit = 0} {buf = buf $0 "\n"} /^"Name"="Avidemux"$/ {hit = 1} END {if (hit) printf "%s", buf}' "$CAT" |
+    grep -cE '^"(Install|Uninstall)Args"="--script Z:\\\\usr\\\\share\\\\stained-glass\\\\store\\\\qtifw-auto.qs"$' | grep -qx 2 &&
+    pass "Avidemux installs and uninstalls with qtifw-auto.qs" ||
+    fail "Avidemux does not pass qtifw-auto.qs to its installer and uninstaller"
 grep -q '"Source"="linux:apt:secrets"' "$CAT" && pass "GNOME Secrets is listed (David 2026-10-03)" || fail "GNOME Secrets is not listed"
 # SG Mail: ours, from our apt repository; Open runs the desktop entry the
 # package installs, as the Store's Linux apps do (0.1.0-124: an sg-mail.exe

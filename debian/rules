@@ -107,3 +107,4 @@ override_dh_auto_install:
 	    install -D -m0644 $$d/apps/sg-pdf.png debian/sg-pdf/usr/share/icons/hicolor/$$(basename $$d)/apps/sg-pdf.png; done
 	# Recommended per-program settings for the Compatibility tab (src/compat).
 	install -D -m0644 data/compat-presets.ini debian/sg-shell/usr/share/stained-glass/compat-presets.ini
+	install -D -m0644 data/qtifw-auto.qs debian/sg-shell/usr/share/stained-glass/store/qtifw-auto.qs

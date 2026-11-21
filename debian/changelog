@@ -1,3 +1,14 @@
+sg-shell (0.1.0-294) unstable; urgency=medium
+
+  * SG Store: Avidemux. Its Qt Installer Framework setup ignores the usual
+    silent switch and waited on its first page until the Store gave up
+    (25 minutes); the Store now hands it an answer script
+    (/usr/share/stained-glass/store/qtifw-auto.qs) to install and
+    uninstall without questions. Installed, opened and uninstalled from
+    the Store on a test machine, twice.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 21 Nov 2026 02:40:00 -0800
+
 sg-shell (0.1.0-293) unstable; urgency=medium
 
   * SG Store: a catalogue entry can say its installer needs an

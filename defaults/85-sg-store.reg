@@ -5086,6 +5086,18 @@ Windows Registry Editor Version 5.00
 "Source"="winget:OlegShparber.Zeal"
 "DetectName"="Zeal"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\271]
+"Name"="Avidemux"
+"Publisher"="Mean"
+"Description"="Simple video editor for cutting, filtering and encoding."
+"Category"="Media"
+"Colour"=dword:00c0392b
+"Tier"="windows"
+"Source"="winget:Avidemux.Avidemux"
+"DetectName"="Avidemux"
+"InstallArgs"="--script Z:\\usr\\share\\stained-glass\\store\\qtifw-auto.qs"
+"UninstallArgs"="--script Z:\\usr\\share\\stained-glass\\store\\qtifw-auto.qs"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
