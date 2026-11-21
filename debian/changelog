@@ -1,3 +1,12 @@
+sg-shell (0.1.0-292) unstable; urgency=medium
+
+  * SG Store: 18 more Windows apps, each installed, opened and uninstalled
+    from the Store on a test machine: Celestia, Gpg4win, PicPick, Subtitle
+    Edit, R, Synfig Studio, Maxima, SpeedCrunch, Pencil2D, Sigil, NAPS2,
+    CodeLite, OpenMPT, Anki, Xmind, Hugin, Audacious and nomacs.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 20 Nov 2026 19:50:00 -0800
+
 sg-shell (0.1.0-291) unstable; urgency=medium
 
   * The compatibility preset for Sigil is gone: its book preview draws on

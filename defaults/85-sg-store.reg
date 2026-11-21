@@ -4854,6 +4854,186 @@ Windows Registry Editor Version 5.00
 "Source"="winget:DuongDieuPhap.ImageGlass"
 "PackageFamily"="DuongDieuPhap.ImageGlass_dhvarhd5k2r8t"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\248]
+"Name"="Celestia"
+"Publisher"="Celestia Project"
+"Description"="Real-time 3D space simulation: fly through the solar system and the galaxy."
+"Category"="Education"
+"Colour"=dword:00203a6a
+"Tier"="windows"
+"Source"="winget:Celestia.Celestia"
+"DetectName"="Celestia"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\249]
+"Name"="Gpg4win"
+"Publisher"="Gpg4win team"
+"Description"="OpenPGP encryption and signing for files and e-mail, with Kleopatra."
+"Category"="Security"
+"Colour"=dword:00176b2b
+"Tier"="windows"
+"Source"="winget:GnuPG.Gpg4win"
+"DetectName"="Gpg4win"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\250]
+"Name"="PicPick"
+"Publisher"="NGWIN"
+"Description"="Screen capture, image editor, colour picker and on-screen ruler."
+"Category"="Graphics"
+"Colour"=dword:00d2471a
+"Tier"="windows"
+"Source"="winget:NGWIN.PicPick"
+"DetectName"="PicPick"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\251]
+"Name"="Subtitle Edit"
+"Publisher"="Nikse"
+"Description"="Create, synchronise and translate subtitles for videos."
+"Category"="Media"
+"Colour"=dword:00e0ae2e
+"Tier"="windows"
+"Source"="winget:Nikse.SubtitleEdit"
+"DetectName"="Subtitle Edit"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\252]
+"Name"="R"
+"Publisher"="The R Foundation"
+"Description"="Language and environment for statistical computing and graphics."
+"Category"="Development"
+"Colour"=dword:002167b5
+"Tier"="windows"
+"Source"="winget:RProject.R"
+"DetectName"="R for"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\253]
+"Name"="Synfig Studio"
+"Publisher"="Synfig team"
+"Description"="2D vector animation with bones, morphing and a timeline."
+"Category"="Graphics"
+"Colour"=dword:00b03a2e
+"Tier"="windows"
+"Source"="winget:Synfig.SynfigStudio"
+"DetectName"="Synfig Studio"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\254]
+"Name"="Maxima"
+"Publisher"="Maxima team"
+"Description"="Computer algebra system for symbolic and numeric mathematics, with wxMaxima."
+"Category"="Education"
+"Colour"=dword:006a3fa0
+"Tier"="windows"
+"Source"="winget:MaximaTeam.Maxima"
+"DetectName"="Maxima"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\255]
+"Name"="SpeedCrunch"
+"Publisher"="SpeedCrunch team"
+"Description"="Fast, keyboard-driven scientific calculator with history and constants."
+"Category"="Utilities"
+"Colour"=dword:004a4ab8
+"Tier"="windows"
+"Source"="winget:SpeedCrunch.SpeedCrunch"
+"DetectName"="SpeedCrunch"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\256]
+"Name"="Pencil2D"
+"Publisher"="Pencil2D team"
+"Description"="Hand-drawn 2D animation with bitmap and vector layers."
+"Category"="Graphics"
+"Colour"=dword:00e2732f
+"Tier"="windows"
+"Source"="winget:Pencil2D.Pencil"
+"DetectName"="Pencil2D"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\257]
+"Name"="Sigil"
+"Publisher"="Sigil-Ebook"
+"Description"="EPUB e-book editor with code view and live preview."
+"Category"="Productivity"
+"Colour"=dword:00227d8d
+"Tier"="windows"
+"Source"="winget:Sigil-Ebook.Sigil"
+"DetectName"="Sigil"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\258]
+"Name"="NAPS2"
+"Publisher"="Ben Olden-Cooligan"
+"Description"="Scan documents to PDF and images, with OCR."
+"Category"="Productivity"
+"Colour"=dword:002b6cb0
+"Tier"="windows"
+"Source"="winget:Cyanfish.NAPS2"
+"DetectName"="NAPS2"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\259]
+"Name"="CodeLite"
+"Publisher"="Eran Ifrah"
+"Description"="Open-source C, C++, Rust and PHP IDE."
+"Category"="Development"
+"Colour"=dword:003c6eb4
+"Tier"="windows"
+"Source"="winget:CodeLite.CodeLite"
+"DetectName"="CodeLite"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\260]
+"Name"="OpenMPT"
+"Publisher"="OpenMPT team"
+"Description"="Tracker for composing music with samples and VST instruments."
+"Category"="Media"
+"Colour"=dword:00c06030
+"Tier"="windows"
+"Source"="winget:OpenMPT.OpenMPT"
+"DetectName"="OpenMPT"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\261]
+"Name"="Anki"
+"Publisher"="Ankitects"
+"Description"="Flashcards with spaced repetition for learning anything."
+"Category"="Education"
+"Colour"=dword:003a7bd5
+"Tier"="windows"
+"Source"="winget:Anki.Anki"
+"DetectName"="Anki"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\262]
+"Name"="Xmind"
+"Publisher"="Xmind"
+"Description"="Mind maps, outlines and brainstorming diagrams."
+"Category"="Productivity"
+"Colour"=dword:00e04040
+"Tier"="windows"
+"Source"="winget:Xmind.Xmind"
+"DetectName"="Xmind"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\263]
+"Name"="Hugin"
+"Publisher"="Hugin team"
+"Description"="Stitch photos into panoramas."
+"Category"="Graphics"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:Hugin.Hugin"
+"DetectName"="Hugin"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\264]
+"Name"="Audacious"
+"Publisher"="Audacious team"
+"Description"="Lightweight music player with playlists and equalizer."
+"Category"="Media"
+"Colour"=dword:004060a0
+"Tier"="windows"
+"Source"="winget:Audacious.MediaPlayer"
+"DetectName"="Audacious"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\265]
+"Name"="nomacs"
+"Publisher"="nomacs team"
+"Description"="Fast image viewer with editing and sync between windows."
+"Category"="Graphics"
+"Colour"=dword:00207050
+"Tier"="windows"
+"Source"="winget:nomacs.nomacs"
+"DetectName"="nomacs"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
