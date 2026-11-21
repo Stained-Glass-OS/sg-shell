@@ -5368,6 +5368,76 @@ Windows Registry Editor Version 5.00
 "Source"="winget:eTeks.SweetHome3D"
 "DetectName"="Sweet Home 3D"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\299]
+"Name"="Texmaker"
+"Publisher"="Pascal Brachet"
+"Description"="LaTeX editor with a built-in PDF viewer."
+"Category"="Productivity"
+"Colour"=dword:006d4c41
+"Tier"="windows"
+"Source"="winget:Texmaker.Texmaker"
+"DetectName"="Texmaker"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\300]
+"Name"="Mudlet"
+"Publisher"="Mudlet Makers"
+"Description"="Client for playing text-based MUD games."
+"Category"="Games"
+"Colour"=dword:00283593
+"Tier"="windows"
+"Source"="winget:Mudlet.Mudlet"
+"DetectName"="Mudlet"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\301]
+"Name"="SpaceSniffer"
+"Publisher"="Uderzo Software"
+"Description"="See what fills your disk as a treemap."
+"Category"="Utilities"
+"Colour"=dword:00ff8f00
+"Tier"="windows"
+"Source"="winget:UderzoSoftware.SpaceSniffer"
+"DetectName"="SpaceSniffer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\302]
+"Name"="melonDS"
+"Publisher"="melonDS team"
+"Description"="Nintendo DS emulator."
+"Category"="Games"
+"Colour"=dword:00ad1457
+"Tier"="windows"
+"Source"="winget:melonDS.melonDS"
+"DetectName"="melonDS"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\303]
+"Name"="TigerVNC Viewer"
+"Publisher"="TigerVNC"
+"Description"="Connect to a remote desktop over VNC."
+"Category"="Internet"
+"Colour"=dword:00f57f17
+"Tier"="windows"
+"Source"="winget:TigerVNC.TigerVNC"
+"DetectName"="TigerVNC"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\304]
+"Name"="Seer"
+"Publisher"="Corey"
+"Description"="Preview files with the space bar, as macOS Quick Look."
+"Category"="Utilities"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:ccseer.Seer"
+"DetectName"="Seer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\305]
+"Name"="Sylpheed"
+"Publisher"="Hiroyuki Yamamoto"
+"Description"="Lightweight, keyboard-friendly email client."
+"Category"="Communication"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:Sylpheed.Sylpheed"
+"DetectName"="Sylpheed"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
