@@ -5034,6 +5034,58 @@ Windows Registry Editor Version 5.00
 "Source"="winget:nomacs.nomacs"
 "DetectName"="nomacs"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\266]
+"Name"="Bitvise SSH Client"
+"Publisher"="Bitvise"
+"Description"="SSH and SFTP client with terminal, file transfer and port forwarding."
+"Category"="Internet"
+"Colour"=dword:000f6fb5
+"Tier"="windows"
+"Source"="winget:Bitvise.SSH.Client"
+"DetectName"="Bitvise SSH Client|!Bitvise SSH Client - FlowSshNet"
+"UninstallArgs"="-unat"
+"ElevationRequirement"="elevationRequired"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\267]
+"Name"="OpenToonz"
+"Publisher"="OpenToonz team"
+"Description"="2D animation software used in studio productions."
+"Category"="Graphics"
+"Colour"=dword:00305a8a
+"Tier"="windows"
+"Source"="winget:DWANGO.OpenToonz"
+"DetectName"="OpenToonz"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\268]
+"Name"="Tiled"
+"Publisher"="Thorbjorn Lindeijer"
+"Description"="Map editor for tile-based games."
+"Category"="Development"
+"Colour"=dword:0032a852
+"Tier"="windows"
+"Source"="winget:Tiled.Tiled"
+"DetectName"="Tiled"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\269]
+"Name"="Blockbench"
+"Publisher"="JannisX11"
+"Description"="Low-poly 3D model editor with texture painting."
+"Category"="Graphics"
+"Colour"=dword:001e6fd0
+"Tier"="windows"
+"Source"="winget:JannisX11.Blockbench"
+"DetectName"="Blockbench"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\270]
+"Name"="Zeal"
+"Publisher"="Oleg Shparber"
+"Description"="Offline documentation browser for developers."
+"Category"="Development"
+"Colour"=dword:00c0392b
+"Tier"="windows"
+"Source"="winget:OlegShparber.Zeal"
+"DetectName"="Zeal"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

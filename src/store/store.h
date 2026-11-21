@@ -77,6 +77,10 @@ typedef struct {
     WCHAR scope[16];              /* Scope: "machine" takes the machine's installer where the
                                    * package offers both (Total Commander's user entry still
                                    * writes Program Files); else winget's default, the person's */
+    WCHAR elevation[24];          /* ElevationRequirement: "elevationRequired" starts its installer
+                                   * as an administrator when winget's manifest does not say so
+                                   * (Bitvise's unattended setup exits 131 as the user; its own
+                                   * manifest is asInvoker). Winget's field, winget's value. */
     BOOL  also_in_category;       /* a Linux app also listed under its Category (Steam in Games) */
     WCHAR deb_url[512];           /* SRC_LINUX_APT: the maker's own .deb (DebUrl), installed
                                    * when its package is in no apt source (Valve's steam.deb) */

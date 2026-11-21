@@ -128,6 +128,7 @@ int catalog_load(app_t *apps, int max)
         reg_str(item, L"PackageFamily", a->package_family, ARRAYSIZE(a->package_family));
         reg_str(item, L"InstallArgs", a->install_args, ARRAYSIZE(a->install_args));
         reg_str(item, L"Scope", a->scope, ARRAYSIZE(a->scope));
+        reg_str(item, L"ElevationRequirement", a->elevation, ARRAYSIZE(a->elevation));
         reg_str(item, L"Run", a->run, ARRAYSIZE(a->run));
         reg_str(item, L"DebUrl", a->deb_url, ARRAYSIZE(a->deb_url));
         {
@@ -1232,6 +1233,12 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
 #ifndef SG_MUTANT_NOINSTALLARGS
     if (a && a->install_args[0]) lstrcpynW(p.silent, a->install_args, ARRAYSIZE(p.silent));
 #endif
+#ifndef SG_MUTANT_NOCATALOGELEVATE
+    /* the catalogue's ElevationRequirement, for an installer whose manifest (winget's and its own)
+     * does not ask but which needs an administrator: as if winget's said elevationRequired --
+     * the consent prompt as for any other, nothing else */
+    if (a && !_wcsicmp(a->elevation, L"elevationRequired")) p.elevate = TRUE;
+#endif
     if (a) lstrcpynW(a->available_version, p.version, ARRAYSIZE(a->available_version));
     if (winget_path(winget, MAX_PATH))   /* winget installs the dependencies itself */
         return winget_install(winget, &p, err, cch) ? 0 : 1;
@@ -1288,6 +1295,9 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     lstrcpynW(p.type, a->pin_type[0] ? a->pin_type : L"exe", ARRAYSIZE(p.type));
     lstrcpynW(p.silent, a->pin_silent, ARRAYSIZE(p.silent));
     memcpy(p.sha256, a->pin_sha, 32);
+#ifndef SG_MUTANT_NOCATALOGELEVATE
+    if (!_wcsicmp(a->elevation, L"elevationRequired")) p.elevate = TRUE;   /* as for a winget entry */
+#endif
 #ifndef SG_MUTANT_NOPINDEPENDS
     /* what the catalogue says it needs first, as for a winget entry: CCleaner
      * 7's installer only checks for the WebView2 runtime, and ended with

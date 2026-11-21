@@ -1,3 +1,15 @@
+sg-shell (0.1.0-293) unstable; urgency=medium
+
+  * SG Store: a catalogue entry can say its installer needs an
+    administrator (ElevationRequirement=elevationRequired, winget's field)
+    when winget's manifest does not; the consent prompt is asked as for
+    any other such installer.
+  * SG Store: 5 more Windows apps, each installed, opened and uninstalled
+    from the Store on a test machine: Bitvise SSH Client, OpenToonz,
+    Tiled, Blockbench and Zeal.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 21 Nov 2026 01:40:00 -0800
+
 sg-shell (0.1.0-292) unstable; urgency=medium
 
   * SG Store: 18 more Windows apps, each installed, opened and uninstalled

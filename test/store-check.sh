@@ -71,6 +71,7 @@
 #   SG_MUTANT_KEEPDEADLINKS an uninstalled app's own Desktop shortcut into its removed folder stays (GeoGebra)
 #   SG_MUTANT_NOSUITEFOLDER a suite's shortcuts in its own Start folder (FreeOffice's TextMaker) are not its programs
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
+#   SG_MUTANT_NOCATALOGELEVATE ignores the catalogue entry's ElevationRequirement
 #   SG_MUTANT_NOINNOSCOPE runs an Inno Setup installer without /ALLUSERS or /CURRENTUSER
 #   SG_MUTANT_NOSWEEP     leaves what an ended Store left of its downloads
 #   SG_MUTANT_NODEPENDS   ignores a catalogue entry's Depends
@@ -191,7 +192,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST NOCATALOGELEVATE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -735,6 +736,31 @@ SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='
     wine "$T/mut-noelevate.exe" --install 08 >/dev/null 2>&1
 grep -q '^elevated 08 0' "$D.result" 2>/dev/null \
     && pass "MUTANT NOELEVATE runs it as the user (gate catches it)" || fail "NOELEVATE not detected: $(cat "$D.result" 2>/dev/null)"
+# the catalogue says elevationRequired where neither manifest does (Bitvise's unattended setup,
+# asInvoker, exits 131 as the user): its installer is started as an administrator, pin or winget
+ununinstall PickApp
+app R1 'Elevated Pin' Utilities windows "pin:http://127.0.0.1:$PORT/files/store-fake.exe|$SHA|nullsoft|/S" 'Elevated Pin'
+reg "$K\\R1" /v ElevationRequirement /d elevationRequired
+app R2 'Elevated App' Utilities windows 'winget:Fake.App' 'Elevated App'
+reg "$K\\R2" /v ElevationRequirement /d elevationRequired
+SG_FAKE_KEY=ElevApp SG_FAKE_DISPLAY='Elevated App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Elevated App' \
+    wine "$EXE" --install R2 >/dev/null 2>&1
+grep -q '^elevated R2 1' "$D.result" 2>/dev/null \
+    && pass "a catalogue entry's ElevationRequirement starts a winget installer as an administrator (Bitvise)" \
+    || fail "catalogue ElevationRequirement (winget) not elevated: $(cat "$D.result" 2>/dev/null)"
+ununinstall ElevApp
+SG_FAKE_KEY=ElevPin SG_FAKE_DISPLAY='Elevated Pin' SG_FAKE_VERSION=3.0 SG_FAKE_DIR='Elevated Pin' \
+    wine "$EXE" --install R1 >/dev/null 2>&1
+grep -q '^elevated R1 1' "$D.result" 2>/dev/null \
+    && pass "...and a pinned one" || fail "catalogue ElevationRequirement (pin) not elevated: $(cat "$D.result" 2>/dev/null)"
+ununinstall ElevPin
+SG_FAKE_KEY=ElevApp SG_FAKE_DISPLAY='Elevated App' SG_FAKE_VERSION=1.10.0 SG_FAKE_DIR='Elevated App' \
+    wine "$T/mut-nocatalogelevate.exe" --install R2 >/dev/null 2>&1
+grep -q '^elevated R2 0' "$D.result" 2>/dev/null \
+    && pass "MUTANT NOCATALOGELEVATE runs it as the user (gate catches it)" \
+    || fail "NOCATALOGELEVATE not detected: $(cat "$D.result" 2>/dev/null)"
+ununinstall ElevApp
+wine reg delete "$K\\R1" /f >/dev/null 2>&1; wine reg delete "$K\\R2" /f >/dev/null 2>&1
 rm -f "$G/setup.log"; ununinstall PickApp
 SG_FAKE_KEY=PickApp SG_FAKE_DISPLAY='Pick App' SG_FAKE_VERSION=2.0 SG_FAKE_DIR='Pick App' \
     wine "$T/mut-nocustom.exe" --install 08 >/dev/null 2>&1
