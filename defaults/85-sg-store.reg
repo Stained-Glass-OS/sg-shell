@@ -5228,6 +5228,66 @@ Windows Registry Editor Version 5.00
 "Source"="winget:TriliumNext.Notes"
 "DetectName"="Trilium Notes|TriliumNext Notes|Trilium"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\285]
+"Name"="Surge XT"
+"Publisher"="Surge Synth Team"
+"Description"="Hybrid software synthesizer you can play standalone."
+"Category"="Media"
+"Colour"=dword:00f39c12
+"Tier"="windows"
+"Source"="winget:SurgeSynth.SurgeXT"
+"DetectName"="Surge XT"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\286]
+"Name"="Tenacity"
+"Publisher"="Tenacity Team"
+"Description"="Multi-track audio editor and recorder."
+"Category"="Media"
+"Colour"=dword:00ab47bc
+"Tier"="windows"
+"Source"="winget:TenacityTeam.Tenacity"
+"DetectName"="Tenacity"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\287]
+"Name"="Pixelorama"
+"Publisher"="Orama Interactive"
+"Description"="Pixel art editor for sprites, tiles and animations."
+"Category"="Graphics"
+"Colour"=dword:008e24aa
+"Tier"="windows"
+"Source"="winget:OramaInteractive.Pixelorama"
+"DetectName"="Pixelorama"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\288]
+"Name"="Godot Engine"
+"Publisher"="Godot Engine contributors"
+"Description"="Game engine for 2D and 3D games."
+"Category"="Development"
+"Colour"=dword:00478cbf
+"Tier"="windows"
+"Source"="winget:GodotEngine.GodotEngine"
+"DetectName"="Godot Engine|Godot"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\289]
+"Name"="OpenRA"
+"Publisher"="The OpenRA Developers"
+"Description"="Classic real-time strategy games, rebuilt."
+"Category"="Games"
+"Colour"=dword:00b71c1c
+"Tier"="windows"
+"Source"="winget:OpenRA.OpenRA.Release"
+"DetectName"="OpenRA"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\290]
+"Name"="Endless Sky"
+"Publisher"="Endless Sky contributors"
+"Description"="Space trading and combat game."
+"Category"="Games"
+"Colour"=dword:001a237e
+"Tier"="windows"
+"Source"="winget:EndlessSky.EndlessSky"
+"DetectName"="Endless Sky"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
