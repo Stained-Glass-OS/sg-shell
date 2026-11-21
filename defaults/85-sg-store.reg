@@ -5288,6 +5288,86 @@ Windows Registry Editor Version 5.00
 "Source"="winget:EndlessSky.EndlessSky"
 "DetectName"="Endless Sky"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\291]
+"Name"="SMPlayer"
+"Publisher"="SMPlayer team"
+"Description"="Media player that remembers where you left off."
+"Category"="Media"
+"Colour"=dword:00e65100
+"Tier"="windows"
+"Source"="winget:SMPlayer.SMPlayer"
+"DetectName"="SMPlayer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\292]
+"Name"="fre:ac"
+"Publisher"="Robert Kausch"
+"Description"="Audio converter and CD ripper."
+"Category"="Media"
+"Colour"=dword:0000838f
+"Tier"="windows"
+"Source"="winget:enzo1982.freac"
+"DetectName"="fre:ac|freac"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\293]
+"Name"="JabRef"
+"Publisher"="JabRef e.V."
+"Description"="Manage citations and bibliographies (BibTeX)."
+"Category"="Productivity"
+"Colour"=dword:006a1b9a
+"Tier"="windows"
+"Source"="winget:JabRef.JabRef"
+"DetectName"="JabRef"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\294]
+"Name"="QOwnNotes"
+"Publisher"="Patrizio Bekerle"
+"Description"="Markdown notes stored as plain files."
+"Category"="Productivity"
+"Colour"=dword:00558b2f
+"Tier"="windows"
+"Source"="winget:pbek.QOwnNotes"
+"DetectName"="QOwnNotes"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\295]
+"Name"="Explorer++"
+"Publisher"="David Erceg"
+"Description"="Lightweight file manager with tabs."
+"Category"="Utilities"
+"Colour"=dword:00546e7a
+"Tier"="windows"
+"Source"="winget:derceg.Explorer++"
+"DetectName"="Explorer++"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\296]
+"Name"="Teeworlds"
+"Publisher"="Teeworlds team"
+"Description"="Fast multiplayer 2D shooter."
+"Category"="Games"
+"Colour"=dword:00f9a825
+"Tier"="windows"
+"Source"="winget:MagnusAuvinen.Teeworlds"
+"DetectName"="Teeworlds"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\297]
+"Name"="Lite XL"
+"Publisher"="Lite XL team"
+"Description"="Lightweight, extensible text editor."
+"Category"="Development"
+"Colour"=dword:00263238
+"Tier"="windows"
+"Source"="winget:LiteXLTeam.LiteXL"
+"DetectName"="Lite XL"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\298]
+"Name"="Sweet Home 3D"
+"Publisher"="eTeks"
+"Description"="Draw a home plan and see it furnished in 3D."
+"Category"="Graphics"
+"Colour"=dword:0043a047
+"Tier"="windows"
+"Source"="winget:eTeks.SweetHome3D"
+"DetectName"="Sweet Home 3D"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
