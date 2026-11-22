@@ -545,6 +545,12 @@ BOOL pkg_download(package_t *p, progress_fn progress, void *ctx, volatile LONG *
     }
     p->size = done;
     ok = TRUE;
+#ifndef SG_MUTANT_NOINSTALLSTAGE
+    /* downloaded and checked: what comes next is its installer. The Store's
+     * card said "Downloading... 100%" for the whole of Scilab's ten-minute
+     * install, and looked stuck. */
+    if (progress) progress(ctx, STAGE_INSTALL, done, total);
+#endif
 done:
     if (hash) BCryptDestroyHash(hash);
     if (alg) BCryptCloseAlgorithmProvider(alg, 0);

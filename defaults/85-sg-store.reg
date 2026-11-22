@@ -5519,6 +5519,137 @@ Windows Registry Editor Version 5.00
 "Source"="winget:FreeTube.FreeTube"
 "DetectName"="FreeTube"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\314]
+"Name"="Luminance HDR"
+"Publisher"="Luminance HDR team"
+"Description"="Create and tone-map high dynamic range photos."
+"Category"="Graphics"
+"Colour"=dword:00f9a825
+"Tier"="windows"
+"Source"="winget:LuminanceHDR.LuminanceHDR"
+"DetectName"="Luminance HDR"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\315]
+"Name"="Espanso"
+"Publisher"="Federico Terzi"
+"Description"="Text expander: type a short trigger, get the full text."
+"Category"="Productivity"
+"Colour"=dword:00424242
+"Tier"="windows"
+"Source"="winget:Espanso.Espanso"
+"DetectName"="Espanso"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\316]
+"Name"="Scilab"
+"Publisher"="Dassault Systemes"
+"Description"="Numerical computation and simulation, with Xcos block diagrams."
+"Category"="Development"
+"Colour"=dword:00c62828
+"Tier"="windows"
+"Source"="winget:Scilab.Scilab"
+"DetectName"="scilab"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\317]
+"Name"="Helm"
+"Publisher"="Matt Tytel"
+"Description"="Polyphonic software synthesizer, standalone and as a plugin."
+"Category"="Media"
+"Colour"=dword:0026a69a
+"Tier"="windows"
+"Source"="winget:MattTytel.Helm"
+"DetectName"="Helm"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\318]
+"Name"="Cardinal"
+"Publisher"="DISTRHO"
+"Description"="Modular synthesizer based on VCV Rack, standalone and as a plugin."
+"Category"="Media"
+"Colour"=dword:00b71c1c
+"Tier"="windows"
+"Source"="winget:DISTRHO.Cardinal"
+"DetectName"="Cardinal"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\319]
+"Name"="RStudio"
+"Publisher"="Posit"
+"Description"="IDE for R: console, editor, plots and packages."
+"Category"="Development"
+"Colour"=dword:0075aadb
+"Tier"="windows"
+"Source"="winget:Posit.RStudio"
+"DetectName"="RStudio"
+"Depends"="store:252"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\322]
+"Name"="GPXSee"
+"Publisher"="Martin Tuma"
+"Description"="Viewer for GPS logs and maps: GPX, FIT, KML and more."
+"Category"="Utilities"
+"Colour"=dword:002e7d32
+"Tier"="windows"
+"Source"="winget:tumic0.GPXSee"
+"DetectName"="GPXSee"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\324]
+"Name"="KopiaUI"
+"Publisher"="Kopia"
+"Description"="Encrypted, deduplicated backups of your files."
+"Category"="Utilities"
+"Colour"=dword:00f57c00
+"Tier"="windows"
+"Source"="winget:Kopia.KopiaUI"
+"DetectName"="KopiaUI"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\325]
+"Name"="Bluefish"
+"Publisher"="Bluefish team"
+"Description"="Editor for web and programming code."
+"Category"="Development"
+"Colour"=dword:001565c0
+"Tier"="windows"
+"Source"="winget:Bluefish.Bluefish"
+"DetectName"="Bluefish"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\326]
+"Name"="Xonotic"
+"Publisher"="Team Xonotic"
+"Description"="Fast arena first-person shooter."
+"Category"="Games"
+"Colour"=dword:000277bd
+"Tier"="windows"
+"Source"="winget:Xonotic.Xonotic"
+"DetectName"="Xonotic"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\327]
+"Name"="Clementine"
+"Publisher"="Clementine team"
+"Description"="Music player and library organiser."
+"Category"="Media"
+"Colour"=dword:00ef6c00
+"Tier"="windows"
+"Source"="winget:Clementine.Clementine"
+"DetectName"="Clementine"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\328]
+"Name"="Advanced Renamer"
+"Publisher"="Hulubulu Software"
+"Description"="Rename many files at once with methods you combine."
+"Category"="Utilities"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:HulubuluSoftware.AdvancedRenamer"
+"DetectName"="Advanced Renamer"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\329]
+"Name"="Qucs-S"
+"Publisher"="The Qucs team"
+"Description"="Circuit simulator with schematic capture (ngspice, Xyce)."
+"Category"="Development"
+"Colour"=dword:00283593
+"Tier"="windows"
+"Source"="winget:TheQucsTeam.Qucs-S"
+"DetectName"="Qucs-S"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
