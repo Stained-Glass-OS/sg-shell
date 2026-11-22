@@ -402,6 +402,12 @@ BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR 
     MultiByteToWideChar(CP_UTF8, 0, best->url, -1, p->url, 2048);
     MultiByteToWideChar(CP_UTF8, 0, best->type, -1, p->type, 32);
     MultiByteToWideChar(CP_UTF8, 0, best->scope, -1, p->scope, 16);
+#ifndef SG_MUTANT_NOCATALOGSCOPE
+    /* the manifest names no scope: the catalogue's says how the installer installs (ocenaudio's
+     * NSIS installs for the person, /CurrentUser, but asks for the highest level; elevated, its
+     * shortcuts went to all users and its own uninstaller, run as the person, left them) */
+    if (!p->scope[0] && scope && scope[0]) lstrcpynW(p->scope, scope, 16);
+#endif
     MultiByteToWideChar(CP_UTF8, 0, best->silent, -1, p->silent, 512);
     MultiByteToWideChar(CP_UTF8, 0, best->arch, -1, p->arch, 16);
     MultiByteToWideChar(CP_UTF8, 0, best->nested, -1, p->nested, 32);

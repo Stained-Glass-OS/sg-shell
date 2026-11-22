@@ -116,6 +116,7 @@
 #   SG_MUTANT_NOELEVATEDTREE does not follow a consent-run installer's parentless copy
 #   SG_MUTANT_NODISKHINT  a failed install on a nearly full drive does not say so (Edge: "code 91")
 #   SG_MUTANT_NOCHROMIUMFORCE leaves a Chromium-family uninstaller (--uninstall) asking
+#   SG_MUTANT_NOCATALOGSCOPE ignores a catalogue Scope where the manifest names none (ocenaudio)
 #   SG_MUTANT_NOINVOKER   runs a user-scope installer without __COMPAT_LAYER=RunAsInvoker (Kdenlive)
 #   SG_MUTANT_NOUNINVOKER runs a person's own (HKCU) uninstaller as its manifest asks (Kdenlive)
 #   SG_MUTANT_NOMACHINEELEVATE runs the machine's uninstaller the person cannot change as the person (NVDA)
@@ -192,7 +193,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST NOCATALOGELEVATE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST NOCATALOGELEVATE NOCATALOGSCOPE; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -205,7 +206,7 @@ W="$T/www"
 mkdir -p "$W/api/f/Fake" "$W/api/b/Bad" "$W/raw/f/Fake/App/1.10.0" "$W/raw/b/Bad/Hash/2.0" "$W/files" \
          "$W/raw/f/Fake/Pick/2.0" "$W/raw/f/Fake/Zip/5.1" "$W/raw/f/Fake/Plus++/1.0" \
          "$W/raw/f/Fake/InnoM/1.0" "$W/raw/f/Fake/InnoU/1.0" "$W/raw/f/Fake/Scopes/1.0" \
-         "$W/raw/f/Fake/Port/1.0"
+         "$W/raw/f/Fake/Port/1.0" "$W/raw/f/Fake/NoScope/1.0"
 cp "$T/store-fake.exe" "$W/files/store-fake.exe"
 # an address with a dot but no extension of an installer's (Deezer's .../artifact-win32-x86-8.0.10)
 cp "$T/store-fake.exe" "$W/files/artifact-win32-x86-1.0"
@@ -238,6 +239,7 @@ printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Plus++"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoM"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/InnoU"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Scopes"
+printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/NoScope"
 printf '[{"name": "1.0", "type": "dir"}]' > "$W/api/f/Fake/Port"
 cat > "$W/raw/f/Fake/Port/1.0/Fake.Port.installer.yaml" <<EOF
 PackageIdentifier: Fake.Port
@@ -254,6 +256,17 @@ Installers:
 ManifestType: installer
 EOF
 # one installer offered for both scopes, as Total Commander's (machine /AHN*, user /AH)
+# a manifest that names no scope (ocenaudio's): the catalogue's Scope decides
+cat > "$W/raw/f/Fake/NoScope/1.0/Fake.NoScope.installer.yaml" <<EOF
+PackageIdentifier: Fake.NoScope
+PackageVersion: 1.0
+InstallerType: nullsoft
+Installers:
+- Architecture: x64
+  InstallerUrl: http://127.0.0.1:$PORT/files/store-fake.exe
+  InstallerSha256: $SHA
+ManifestType: installer
+EOF
 cat > "$W/raw/f/Fake/Scopes/1.0/Fake.Scopes.installer.yaml" <<EOF
 PackageIdentifier: Fake.Scopes
 PackageVersion: 1.0
@@ -789,6 +802,21 @@ SG_FAKE_KEY=InnoU SG_FAKE_DISPLAY='Inno User' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='I
 grep -q '/CURRENTUSER' "$G/setup.log" 2>/dev/null && [ ! -e "$G/layer.log" ] \
     && pass "MUTANT NOINVOKER runs it without RunAsInvoker (gate catches it)" || fail "NOINVOKER not detected: $(cat "$G/layer.log" 2>/dev/null)"
 rm -f "$G/setup.log" "$G/layer.log"; ununinstall InnoU
+# a manifest without a scope and the catalogue's Scope=user (ocenaudio): run as the person too
+app R3 'NoScope App' Media windows 'winget:Fake.NoScope' 'NoScope App'
+reg "$K\\R3" /v Scope /d user
+SG_FAKE_KEY=NoScope SG_FAKE_DISPLAY='NoScope App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='NoScope App' \
+    wine "$EXE" --install R3 >/dev/null 2>&1
+grep -qx 'RunAsInvoker' "$G/layer.log" 2>/dev/null && grep -q '^elevated R3 0' "$D.result" 2>/dev/null \
+    && pass "the catalogue's Scope=user fills a manifest's missing scope: run as the person (ocenaudio)" \
+    || fail "catalogue Scope=user, layer '$(cat "$G/layer.log" 2>/dev/null)' $(grep R3 "$D.result" 2>/dev/null)"
+rm -f "$G/setup.log" "$G/layer.log"; ununinstall NoScope
+SG_FAKE_KEY=NoScope SG_FAKE_DISPLAY='NoScope App' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='NoScope App' \
+    wine "$T/mut-nocatalogscope.exe" --install R3 >/dev/null 2>&1
+[ ! -e "$G/layer.log" ] \
+    && pass "MUTANT NOCATALOGSCOPE ignores the catalogue's scope (gate catches it)" || fail "NOCATALOGSCOPE not detected: $(cat "$G/layer.log" 2>/dev/null)"
+rm -f "$G/setup.log" "$G/layer.log"; ununinstall NoScope
+wine reg delete "$K\\R3" /f >/dev/null 2>&1
 SG_FAKE_KEY=InnoM SG_FAKE_DISPLAY='Inno Machine' SG_FAKE_VERSION=1.0 SG_FAKE_DIR='Inno Machine' \
     wine "$T/mut-noinnoscope.exe" --install 0A >/dev/null 2>&1
 grep -q '/SP-' "$G/setup.log" 2>/dev/null && ! grep -q 'ALLUSERS' "$G/setup.log" \

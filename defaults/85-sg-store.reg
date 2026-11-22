@@ -5147,6 +5147,7 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Ocenaudio.Ocenaudio"
 "DetectName"="ocenaudio"
+"Scope"="user"
 
 [HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\277]
 "Name"="Avogadro"
@@ -5437,6 +5438,86 @@ Windows Registry Editor Version 5.00
 "Tier"="windows"
 "Source"="winget:Sylpheed.Sylpheed"
 "DetectName"="Sylpheed"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\306]
+"Name"="Claws Mail"
+"Publisher"="The Claws Mail Team"
+"Description"="Fast, configurable email client."
+"Category"="Communication"
+"Colour"=dword:00c62828
+"Tier"="windows"
+"Source"="winget:ClawsMail.ClawsMail"
+"DetectName"="Claws Mail"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\307]
+"Name"="CudaText"
+"Publisher"="Alexey Torgashin"
+"Description"="Fast text and code editor with plugins."
+"Category"="Development"
+"Colour"=dword:00546e7a
+"Tier"="windows"
+"Source"="winget:CudaText.CudaText"
+"DetectName"="CudaText"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\308]
+"Name"="Pulsar"
+"Publisher"="Pulsar team"
+"Description"="Hackable text editor, the community's continuation of Atom."
+"Category"="Development"
+"Colour"=dword:00512da8
+"Tier"="windows"
+"Source"="winget:Pulsar-Edit.Pulsar"
+"DetectName"="Pulsar"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\309]
+"Name"="MarkText"
+"Publisher"="MarkText team"
+"Description"="Live-preview Markdown editor."
+"Category"="Productivity"
+"Colour"=dword:00263238
+"Tier"="windows"
+"Source"="winget:MarkText.MarkText"
+"DetectName"="MarkText|Mark Text"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\310]
+"Name"="AnyBurn"
+"Publisher"="Power Software"
+"Description"="Burn, rip and create disc images."
+"Category"="Utilities"
+"Colour"=dword:00e65100
+"Tier"="windows"
+"Source"="winget:PowerSoftware.AnyBurn"
+"DetectName"="AnyBurn"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\311]
+"Name"="Natron"
+"Publisher"="Natron team"
+"Description"="Node-based compositing for visual effects."
+"Category"="Media"
+"Colour"=dword:00b71c1c
+"Tier"="windows"
+"Source"="winget:Natron.Natron"
+"DetectName"="Natron"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\312]
+"Name"="Processing"
+"Publisher"="Processing Foundation"
+"Description"="Sketchbook and language for learning to code visual art."
+"Category"="Development"
+"Colour"=dword:000d47a1
+"Tier"="windows"
+"Source"="winget:ProcessingFoundation.Processing"
+"DetectName"="Processing"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\313]
+"Name"="FreeTube"
+"Publisher"="FreeTube team"
+"Description"="Private desktop client for watching YouTube."
+"Category"="Media"
+"Colour"=dword:00e53935
+"Tier"="windows"
+"Source"="winget:FreeTube.FreeTube"
+"DetectName"="FreeTube"
 
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
