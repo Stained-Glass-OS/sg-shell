@@ -59,7 +59,9 @@ while [ $k -lt 14 ]; do
     bars="$bars,drawbox=x=$((24 + k * 66)):y=200:w=60:h=140:color=white:t=fill:enable='eq(mod(floor(t*10/pow(2\\,$k))\\,2)\\,1)'"
     k=$((k + 1))
 done
-ffmpeg -loglevel error -y -f lavfi -i "color=c=0x203040:s=960x540:r=30:d=600,drawbox=x=0:y=60:w=960:h=40:color=white:t=fill$bars" \
+# PACE_SIZE=1920x1080 scales the clip up (David's renders are 1080p: four times the pixels to decode and convert).
+PACE_SIZE="${PACE_SIZE:-960x540}"
+ffmpeg -loglevel error -y -f lavfi -i "color=c=0x203040:s=960x540:r=30:d=600,drawbox=x=0:y=60:w=960:h=40:color=white:t=fill$bars,scale=${PACE_SIZE%x*}:${PACE_SIZE#*x}:flags=neighbor" \
     -f lavfi -i "sine=frequency=330:duration=600" -c:v libx264 -preset veryfast -profile:v high -bf 2 -g 15 -pix_fmt yuv420p \
     -c:a aac -shortest "$T/pace.mp4" || { echo "SKIP: ffmpeg cannot make an H.264 + AAC clip"; exit 77; }
 
