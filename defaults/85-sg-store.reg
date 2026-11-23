@@ -5650,6 +5650,76 @@ Windows Registry Editor Version 5.00
 "Source"="winget:TheQucsTeam.Qucs-S"
 "DetectName"="Qucs-S"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\331]
+"Name"="Jitsi Meet"
+"Publisher"="Jitsi"
+"Description"="Video meetings, free and open source."
+"Category"="Communication"
+"Colour"=dword:001976d2
+"Tier"="windows"
+"Source"="winget:Jitsi.Meet"
+"DetectName"="Jitsi Meet"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\332]
+"Name"="QGIS"
+"Publisher"="QGIS project"
+"Description"="Geographic information system: maps, layers and spatial analysis."
+"Category"="Graphics"
+"Colour"=dword:00589632
+"Tier"="windows"
+"Source"="winget:OSGeo.QGIS_LTR"
+"DetectName"="QGIS"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\333]
+"Name"="Workrave"
+"Publisher"="Workrave team"
+"Description"="Reminds you to take micro-breaks and rest breaks."
+"Category"="Utilities"
+"Colour"=dword:00388e3c
+"Tier"="windows"
+"Source"="winget:Workrave.Workrave"
+"DetectName"="Workrave"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\334]
+"Name"="Stretchly"
+"Publisher"="Jan Hovancik"
+"Description"="Break reminder that helps you stretch and rest your eyes."
+"Category"="Utilities"
+"Colour"=dword:00ef5350
+"Tier"="windows"
+"Source"="winget:Stretchly.Stretchly"
+"DetectName"="Stretchly"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\336]
+"Name"="Scratch"
+"Publisher"="MIT Media Lab"
+"Description"="Make games and animations by snapping code blocks together."
+"Category"="Development"
+"Colour"=dword:00ffab19
+"Tier"="windows"
+"Source"="winget:MITMediaLab.Scratch.3"
+"DetectName"="Scratch 3"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\337]
+"Name"="dupeGuru"
+"Publisher"="Virgil Dupras and contributors"
+"Description"="Find duplicate files, music and pictures."
+"Category"="Utilities"
+"Colour"=dword:00455a64
+"Tier"="windows"
+"Source"="winget:DupeGuru.DupeGuru"
+"DetectName"="dupeGuru"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\338]
+"Name"="Upscayl"
+"Publisher"="Upscayl team"
+"Description"="Enlarge and sharpen images with AI, on your graphics card."
+"Category"="Graphics"
+"Colour"=dword:00673ab7
+"Tier"="windows"
+"Source"="winget:Upscayl.Upscayl"
+"DetectName"="Upscayl"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

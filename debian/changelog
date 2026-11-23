@@ -1,3 +1,12 @@
+sg-shell (0.1.0-304) unstable; urgency=medium
+
+  * SG Store catalogue: Jitsi Meet, QGIS (the LTR release), Workrave,
+    Stretchly, Scratch, dupeGuru and Upscayl (331-334, 336-338). Each was
+    walked twice on qa5, the second time from a clean state. QGIS needs
+    wine-sg 10.0-1107 (8418) to start.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sun, 22 Nov 2026 20:20:00 -0800
+
 sg-shell (0.1.0-303) unstable; urgency=medium
 
   * SG Store: once a download is complete and checked, the card says
