@@ -1917,6 +1917,73 @@ static void drop_dead_shortcuts(const WCHAR *dir)
 
 #define UNINSTALL_NEXT 4   /* uninstall_once: removed one part; another is left */
 
+/* The store's cleanup inside the elevated step (David 2026-11-23, option a): an uninstaller that
+ * runs as an administrator is run by an elevated copy of the store,
+ *
+ *   sg-store64.exe --elevated-uninstall-run "DIR" "UNINSTALLER" ARGS...
+ *
+ * which runs it, waits for it and what it started, and then drops the dead shortcuts into DIR --
+ * the all-users Start menu's too, which the store as the person cannot delete. Claws Mail's
+ * uninstaller removes Program Files\Claws Mail and leaves Claws-Mail.lnk in ProgramData's Start
+ * menu (as on Windows), and the store's sweep after it was denied. One consent covers both; the
+ * prompt names the uninstaller, as its arguments. */
+static void drop_dead_shortcuts(const WCHAR *dir);
+
+/* past the next argument of a command line (blanks, then a quoted or plain word, then blanks) */
+static const WCHAR *skip_arg(const WCHAR *p)
+{
+    while (*p == L' ' || *p == L'\t') p++;
+    if (*p == L'"') { for (p++; *p && *p != L'"'; p++); if (*p) p++; }
+    else while (*p && *p != L' ' && *p != L'\t') p++;
+    while (*p == L' ' || *p == L'\t') p++;
+    return p;
+}
+
+static void unquote(const WCHAR *from, const WCHAR *to, WCHAR *out, int cch)
+{
+    while (to > from && (to[-1] == L' ' || to[-1] == L'\t')) to--;
+    if (*from == L'"') from++;
+    if (to > from && to[-1] == L'"') to--;
+    lstrcpynW(out, from, min(cch, (int)(to - from) + 1));
+}
+
+/* the elevated copy's part: cmdline is its whole command line (the program, the switch, DIR,
+ * UNINSTALLER, then the uninstaller's arguments exactly as written). Returns the uninstaller's exit
+ * code; SYS_FAILED (with nothing run) on a malformed request. */
+int app_uninstall_run_elevated(const WCHAR *cmdline)
+{
+    const WCHAR *p = skip_arg(skip_arg(cmdline)), *q, *args;
+    WCHAR dir[MAX_PATH], file[MAX_PATH], v[16];
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    DWORD tree[64], code = SYS_FAILED, start, grace = 180000;
+    FILETIME since;
+    int ntree = 0;
+
+    q = skip_arg(p);
+    unquote(p, q, dir, ARRAYSIZE(dir));
+    args = skip_arg(q);
+    unquote(q, args, file, ARRAYSIZE(file));
+    if (!file[0]) return SYS_FAILED;
+    pkg_tree_start(&since);
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    sei.lpFile = file;
+    sei.lpParameters = args[0] ? args : NULL;
+    sei.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess) return SYS_FAILED;
+    tree[ntree++] = GetProcessId(sei.hProcess);
+    while (WaitForSingleObject(sei.hProcess, 500) == WAIT_TIMEOUT) tree_alive(tree, &ntree, ARRAYSIZE(tree), &since);
+    GetExitCodeProcess(sei.hProcess, &code);
+    CloseHandle(sei.hProcess);
+    /* an NSIS uninstaller's copy in %TEMP% (Au_.exe) deletes the shortcuts after its entry */
+    if (GetEnvironmentVariableW(L"SG_STORE_UNINSTALL_GRACE", v, ARRAYSIZE(v))) grace = _wtoi(v);
+    for (start = GetTickCount(); tree_alive(tree, &ntree, ARRAYSIZE(tree), &since) && GetTickCount() - start < grace;)
+        Sleep(500);
+#ifndef SG_MUTANT_ELEVATED_NOSWEEP
+    if (dir[0]) drop_dead_shortcuts(dir);
+#endif
+    return (int)code;
+}
+
 /* An uninstaller of the machine's (its entry in HKLM) that the person cannot
  * change: run as an administrator from the start. NVDA's (NSIS, asInvoker)
  * never asks; run as the person it copied itself to %TEMP%, could delete
@@ -1947,6 +2014,28 @@ static BOOL uninstaller_needs_admin(HKEY root, const WCHAR *file)
     return GetLastError() == ERROR_ACCESS_DENIED;
 }
 
+/* Does starting the machine's uninstaller need an administrator (its manifest asks for one, or it is
+ * taken for an installer: wine-sg 0259, 9000)? CreateProcess says so with ERROR_ELEVATION_REQUIRED and
+ * starts nothing, as on Windows; ShellExecuteEx would go on to ask for consent by itself, before the
+ * store could make the elevated step its own (app_uninstall_run_elevated). Started suspended and
+ * stopped again when it needs none: none of its code runs. */
+static BOOL uninstaller_asks(HKEY root, const WCHAR *file)
+{
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    WCHAR cmd[MAX_PATH + 4], full[MAX_PATH];
+    if (root != HKEY_LOCAL_MACHINE) return FALSE;
+    if (!wcschr(file, L'\\') && SearchPathW(NULL, file, L".exe", MAX_PATH, full, NULL)) file = full;
+    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\"", file);
+    if (CreateProcessW(file, cmd, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+        TerminateProcess(pi.hProcess, 0);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return FALSE;
+    }
+    return GetLastError() == ERROR_ELEVATION_REQUIRED;
+}
+
 /* the store's own entry (register_installed): the person's (HKCU), for a
  * program its installer may have put in a machine folder as an administrator */
 static BOOL store_record(HKEY root, const WCHAR *entry)
@@ -1964,6 +2053,7 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
     FILETIME since;
     int ntree = 0;
     WCHAR cmd[2048], file[MAX_PATH], args[2048], ver[64], entry[512], dir[MAX_PATH] = L"";
+    WCHAR self[MAX_PATH], wrapped[2048 + 2 * MAX_PATH + 64];
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     HKEY root = NULL;
     DWORD code = 0, start, gone_since = 0, gone_wait = 20000, tick;
@@ -1997,11 +2087,28 @@ static int uninstall_once(app_t *a, WCHAR *err, int cch, WCHAR *ran, int rcch)
      * the store said "Kdenlive was not removed". */
     if (root == HKEY_CURRENT_USER) SetEnvironmentVariableW(L"__COMPAT_LAYER", L"RunAsInvoker");
 #endif
-    for (attempt = app_is_runtime(a) || uninstaller_needs_admin(root, file) ? 1 : 0; attempt < 2; attempt++) {
+    attempt = app_is_runtime(a) || uninstaller_needs_admin(root, file) ? 1 : 0;
+#ifndef SG_MUTANT_SWEEP_UNELEVATED
+    /* one that will ask anyway: the store's elevated step from the start (its sweep goes with it) */
+    if (!attempt && dir[0] && own_folder(dir) && uninstaller_asks(root, file)) attempt = 1;
+#endif
+    for (; attempt < 2; attempt++) {
         sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
         sei.lpVerb = attempt ? L"runas" : NULL;
         sei.lpFile = file;
         sei.lpParameters = args[0] ? args : NULL;
+#ifndef SG_MUTANT_SWEEP_UNELEVATED
+        /* elevated: by an elevated copy of the store, which then drops the dead shortcuts as an
+         * administrator (app_uninstall_run_elevated) */
+        if (attempt && dir[0] && own_folder(dir) && !wcschr(dir, L'"') && !wcschr(file, L'"') &&
+            lstrlenW(dir) + lstrlenW(file) + lstrlenW(args) + 64 < ARRAYSIZE(wrapped)) {
+            GetModuleFileNameW(NULL, self, MAX_PATH);
+            swprintf(wrapped, ARRAYSIZE(wrapped), L"--elevated-uninstall-run \"%ls\" \"%ls\"%ls%ls",
+                     dir, file, args[0] ? L" " : L"", args);
+            sei.lpFile = self;
+            sei.lpParameters = wrapped;
+        }
+#endif
         sei.nShow = SW_SHOWNORMAL;
         if (ShellExecuteExW(&sei)) break;
         if (GetLastError() != ERROR_ELEVATION_REQUIRED && GetLastError() != ERROR_ACCESS_DENIED) break;

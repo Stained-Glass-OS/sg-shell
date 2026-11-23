@@ -19,6 +19,8 @@
  *   --elevated-apt / --elevated-apt-remove / --elevated-deb
  *   --install-batch ORD...   install them as Install selected does: one consent
  *   --elevated-helper FILE   that consent's helper (sysinstall.c)
+ *   --elevated-uninstall-run "DIR" "UNINSTALLER" ARGS...
+ *                            (runas) the uninstaller, then its dead shortcuts (catalog.c)
  *                                  the elevated half (sysinstall.c)
  *
  * SG_STORE_DUMP=<file> (a Windows path) receives the catalogue, each app's
@@ -1712,6 +1714,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             rc = sys_elevated_main(argc, argv, i);
             LocalFree(argv);
             return rc;
+        }
+        if (!lstrcmpiW(argv[i], L"--elevated-uninstall-run") && i + 2 < argc) {
+            /* (runas) an uninstaller that runs as an administrator, then the store's cleanup of its
+             * dead shortcuts, all-users ones too: one consent (catalog.c) */
+            LocalFree(argv);
+            return app_uninstall_run_elevated(GetCommandLineW());
         }
         if (!lstrcmpiW(argv[i], L"--elevated-uninstall") && i + 1 < argc) {
             /* (runas) an app whose installer put in a package for the machine: that

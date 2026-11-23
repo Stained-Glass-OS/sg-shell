@@ -128,6 +128,7 @@ BOOL msix_installed(const WCHAR *family, WCHAR *version, int cch);
 int  msix_remove(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* 0: gone */
 BOOL msix_aumid(const WCHAR *family, WCHAR *out, int cch);
 int  msix_remove_machine(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* every user's; 0: none left */
+int  app_uninstall_run_elevated(const WCHAR *cmdline);  /* (elevated copy) an uninstaller, then the dead shortcuts */
 int  app_uninstall_wrapped(app_t *a, WCHAR *err, int cch);  /* (elevated copy) its installer's uninstaller, then its package */
 BOOL msix_open(const WCHAR *family);
 int  app_uninstall(app_t *a, WCHAR *err, int cch);  /* 0: removed (as its uninstaller or apt says) */

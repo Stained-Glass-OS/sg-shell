@@ -1,3 +1,23 @@
+sg-shell (0.1.0-305) unstable; urgency=medium
+
+  * SG Store: the cleanup after an uninstall that runs as an administrator
+    happens inside the same elevated step (David 2026-11-23). Claws Mail's
+    uninstaller removes Program Files\Claws Mail and, as on Windows, leaves
+    Claws-Mail.lnk and its manual's shortcut in the all-users Start menu;
+    the store's sweep of dead shortcuts ran afterwards as the person, who
+    cannot delete in ProgramData, and they stayed. Such an uninstaller is
+    now run by an elevated copy of the store (sg-store64.exe
+    --elevated-uninstall-run "FOLDER" "UNINSTALLER" ARGS), which waits for
+    it and what it started, then drops the dead shortcuts into the app's
+    folder, all users' too: one consent, which names the uninstaller and
+    its arguments. One that needs an administrator by its manifest (or is
+    taken for an installer, wine-sg 9000) is recognised before it is
+    started (CreateProcess's ERROR_ELEVATION_REQUIRED). Gate
+    store-sweep-check.sh; mutants SG_MUTANT_SWEEP_UNELEVATED,
+    SG_MUTANT_ELEVATED_NOSWEEP. Verified on qa5 with Claws Mail 4.1.1.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 23 Nov 2026 08:40:00 -0800
+
 sg-shell (0.1.0-304) unstable; urgency=medium
 
   * SG Store catalogue: Jitsi Meet, QGIS (the LTR release), Workrave,
