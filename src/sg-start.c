@@ -3619,6 +3619,14 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && !g_menu) show_panel(FALSE);   /* click-away closes */
         return 0;
+#ifndef SG_MUTANT_START_ALTF4_DESTROYS
+    case WM_CLOSE:
+        /* Alt+F4 while Start is open closes Start, as on Windows -- it hides:
+         * DefWindowProc would destroy the panel, and the Start button and the
+         * Windows key opened nothing until the next sign-in (apps11 2026-11-23) */
+        show_panel(FALSE);
+        return 0;
+#endif
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }

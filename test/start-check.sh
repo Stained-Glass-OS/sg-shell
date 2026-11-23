@@ -523,6 +523,22 @@ xdotool key Escape; sleep 0.8
 click 1000 300
 [ "$(val visible)" = 0 ] && pass "clicking outside closes Start" || fail "still open after clicking away"
 
+# --- Alt+F4 ----------------------------------------------------------------------------------
+# Alt+F4 with Start open closes Start, and Start opens again next time, as on
+# Windows (apps11 2026-11-23: the panel was destroyed and Start never opened
+# again until the next sign-in). Mutant: SG_MUTANT_START_ALTF4_DESTROYS.
+poke
+if [ "$(val visible)" = 1 ]; then
+    xdotool key alt+F4; sleep 1.5
+    [ "$(val visible)" = 0 ] && pass "Alt+F4 closes Start" || fail "Alt+F4: visible $(val visible)"
+    poke
+    [ "$(val visible)" = 1 ] && xdotool search --name '^Start$' >/dev/null 2>&1 \
+        && pass "and Start opens again after Alt+F4" || fail "Start did not open again after Alt+F4 (visible $(val visible))"
+    xdotool key Escape; sleep 0.8
+else
+    fail "Start did not open before the Alt+F4 check"
+fi
+
 echo
 [ "$RC" -eq 0 ] && echo "RESULT: PASS" || echo "RESULT: FAIL"
 exit "$RC"

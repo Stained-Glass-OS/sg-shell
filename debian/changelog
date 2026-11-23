@@ -1,3 +1,14 @@
+sg-shell (0.1.0-307) unstable; urgency=medium
+
+  * Start: Alt+F4 while Start is open closes Start, as on Windows. The
+    panel had no WM_CLOSE handler, so DefWindowProc destroyed it and the
+    Start button and the Windows key opened nothing until the next sign-in
+    (found in the pre-release walk on qa5; shell 304 did the same). Gate:
+    start-check.sh "Alt+F4" (fails before, mutant
+    SG_MUTANT_START_ALTF4_DESTROYS).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 23 Nov 2026 13:02:21 -0800
+
 sg-shell (0.1.0-306) unstable; urgency=medium
 
   * SG Store catalogue: Mixxx (339, the Windows build beside the Linux
