@@ -1,3 +1,16 @@
+sg-shell (0.1.0-306) unstable; urgency=medium
+
+  * SG Store catalogue: Mixxx (339, the Windows build beside the Linux
+    one) and Bespoke Synth (340), winget's machine-scope WiX packages.
+    Both are per-user MSIs that need elevation; the store elevates the
+    MSIs it installs, so they install, open and uninstall (they failed with
+    1603 before wine-sg 9001/9004 for a double-click, and put their
+    shortcuts in all users' Start menu). Bespoke's dependency on the Visual
+    C++ runtime is met by Wine's own. Walked twice on qa5 (wine-sg 1109,
+    then with 9002-9004): install, open, uninstall.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Mon, 23 Nov 2026 11:41:54 -0800
+
 sg-shell (0.1.0-305) unstable; urgency=medium
 
   * SG Store: the cleanup after an uninstall that runs as an administrator

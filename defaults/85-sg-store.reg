@@ -5720,6 +5720,28 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Upscayl.Upscayl"
 "DetectName"="Upscayl"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\339]
+"Name"="Mixxx"
+"Publisher"="Mixxx Project"
+"Description"="DJ software: mix tracks live with decks, effects and controllers."
+"Category"="Media"
+"Colour"=dword:00212121
+"Tier"="windows"
+"Source"="winget:Mixxx.Mixxx"
+"Scope"="machine"
+"DetectName"="Mixxx"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\340]
+"Name"="Bespoke Synth"
+"Publisher"="Ryan Challinor"
+"Description"="A modular software synthesizer you patch together live."
+"Category"="Media"
+"Colour"=dword:00ff6f00
+"Tier"="windows"
+"Source"="winget:BespokeSynth.BespokeSynth"
+"Scope"="machine"
+"DetectName"="Bespoke Synth"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
