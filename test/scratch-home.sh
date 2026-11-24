@@ -44,6 +44,17 @@ export SG_FIREWALL_NOTIFY="$SG_GATE_HOME/no-firewall-notify"
 # gate, that powers off the real PC (David's desktop went down twice, 2026-11-21/22, from shutdown-gate
 # in an agent's sweep). A path that does not exist: nothing is run. Gates that test it set their own.
 export SG_POWERCTL="$SG_GATE_HOME/no-power-helper"
+# The person's session bus (systemd's unix:path=/run/user/UID/bus) came along in
+# DBUS_SESSION_BUS_ADDRESS, and Wine's Unix side uses it: Credential Manager's
+# keyring (Secret Service), the media controls (MPRIS), the screen saver
+# inhibitor. A census run of PrusaSlicer reached the person's keyring
+# (2026-11-24; wine-sg's scratch-home.sh has the same guard). A gate reaches no
+# bus but one it starts itself (dbus-run-session, its own dbus-daemon: those
+# addresses stay).
+case "${DBUS_SESSION_BUS_ADDRESS:-}" in
+*/run/user/*|*"${SG_REAL_XDG_RUNTIME_DIR:-/nonexistent}"/*)
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$SG_GATE_HOME/no-session-bus" ;;
+esac
 # sg_prefix_safe PREFIX: fail when any folder of PREFIX's user profiles
 # resolves outside the prefix and the gate's HOME (an old prefix made on the
 # real HOME). Gates that reuse a prefix call it before starting Wine.
