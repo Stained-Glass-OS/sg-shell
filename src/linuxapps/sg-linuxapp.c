@@ -109,6 +109,48 @@ static BOOL env_a(const char *name, char *out, int len)
     return n > 0 && (int)n < len;
 }
 
+/* a variable of the Unix environment this program was started with: the
+ * session's search paths for Linux programs' data (XDG_DATA_DIRS) are kept
+ * out of the Windows environment (wine-sg 9650: a Windows GTK took them as
+ * its own and Xournal++ crashed), but they are still in the Unix side of
+ * every Wine process -- /proc/self/environ. Without it the data folders the
+ * session names (a gate's, Snap's, Nix's) were missed. */
+static BOOL unix_env_a(const char *name, char *out, int len)
+{
+    WCHAR path[MAX_PATH];
+    HANDLE h;
+    char *buf = NULL, *p, *end;
+    DWORD got, size = 0, cap = 0;
+    size_t nl = strlen(name);
+    BOOL ret = FALSE;
+
+#ifdef SG_MUTANT_NO_UNIX_ENV
+    return FALSE;
+#endif
+    if (!dos_path("/proc/self/environ", path, MAX_PATH)) return FALSE;
+    h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    for (;;) {   /* a /proc file says it is empty: read it to its end */
+        char *nb;
+        if (size + 4096 > cap) {
+            if (cap >= 1 << 20 || !(nb = realloc(buf, cap + 65536))) break;
+            buf = nb; cap += 65536;
+        }
+        if (!ReadFile(h, buf + size, 4096, &got, NULL) || !got) break;
+        size += got;
+    }
+    CloseHandle(h);
+    for (p = buf, end = buf + size; p && p < end; p += strnlen(p, end - p) + 1) {
+        if ((size_t)(end - p) > nl && !strncmp(p, name, nl) && p[nl] == '=') {
+            size_t vl = strnlen(p + nl + 1, end - p - nl - 1);
+            if ((int)vl < len) { memcpy(out, p + nl + 1, vl); out[vl] = 0; ret = TRUE; }
+            break;
+        }
+    }
+    free(buf);
+    return ret;
+}
+
 /* the user's Unix home: Wine gives its programs no HOME, but WINEHOMEDIR
  * (\??\Z:\home\user) -- without it ~/.local/share and ~/.config were missed */
 static BOOL home_unix(char *out, int len)
@@ -352,7 +394,7 @@ static int data_dirs(char dirs[][MAX_PATH], int max)
     if (env_a("XDG_DATA_HOME", dirs[n], MAX_PATH)) n++;
     else if (home[0] && _snprintf(dirs[n], MAX_PATH, "%s/.local/share", home) > 0) n++;
     if (home[0] && n < max && _snprintf(dirs[n], MAX_PATH, "%s/.local/share/flatpak/exports/share", home) > 0) n++;
-    if (!env_a("XDG_DATA_DIRS", buf, sizeof(buf)) || !buf[0])
+    if ((!env_a("XDG_DATA_DIRS", buf, sizeof(buf)) || !buf[0]) && (!unix_env_a("XDG_DATA_DIRS", buf, sizeof(buf)) || !buf[0]))
         strcpy(buf, "/usr/local/share:/usr/share:/var/lib/flatpak/exports/share");
     for (p = buf; p && *p && n < max; p = next) {
         if ((next = strchr(p, ':'))) *next++ = 0;

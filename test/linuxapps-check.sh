@@ -4,7 +4,9 @@
 # .desktop files of the XDG data folders into Programs\Linux apps\*.lnk with
 # the apps' own icons; what a Linux desktop would not show is left out; an
 # app that goes loses its shortcut; --run starts the app (gio launch).
-# Scratch HOME and prefix; the data folders are the gate's (XDG_DATA_DIRS).
+# Scratch HOME and prefix; the data folders are the gate's (XDG_DATA_DIRS). wine-sg 9650 keeps
+# XDG_DATA_DIRS out of the Windows environment: sg-linuxapp reads it from its Unix environment
+# (/proc/self/environ); with Wine 10.0-1139 and mutant SG_MUTANT_NO_UNIX_ENV it listed the host's apps.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 EXE="${SG_LINUXAPP_EXE:-$HERE/build/sg-linuxapp64.exe}"
