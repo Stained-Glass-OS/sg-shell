@@ -366,6 +366,19 @@ so the elevated copy of Settings is the Control Panel's elevated dialogs.
   time synchronisation (`/admin ntp`), the clock by hand (`/admin set-time`,
   sg-admind's new `time` verb, refused while synchronised), the update check,
   the device-wide privacy switches (`/admin consent CAP on|off`, HKLM).
+- **Time & Language > Language** (`set_language.c`, `ms-settings:regionlanguage`,
+  `ms-settings:keyboard`): the person's keyboards as Windows keeps them --
+  listed by Windows' names, added (a list of Windows' keyboards with their
+  KLIDs and the XKB layout(variant) that types as each), moved up and down
+  (the first is the default), removed; the Start key + Space always switches,
+  Left Alt + Shift when chosen (`grp:alt_shift_toggle`). Every change goes to
+  `sg-settingsctl keyboard set` at once (the user's own keyboard file and the
+  compositor's KEYMAP: no signing out), the keymap's other options kept, and
+  `HKCU\Keyboard Layout\Preload`/`Substitutes`/`Toggle` are written as Windows
+  writes them (a keyboard of another language than the person's as a
+  `d00Nllll` substitute). wine-sg 9157 stops Wine rewriting Preload "1" at
+  every process start. Gate `make test-keyboards` (`test/keyboards-check.sh`,
+  mutants `KBD_NO_SUBST`, `KBD_DROP_OPTIONS`).
 - **sg-settingsctl answers through a file** (`--out`), as sg-dictate --mics
   does: Wine gives a Windows program no pipes to a native one. `ctl_run`
   polls for the answer, which the helper renames into place whole.

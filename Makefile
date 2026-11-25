@@ -339,6 +339,19 @@ test-flyout-toggle: build
 	     || { echo "flyout-toggle-check: the mutant FLYOUT_STAYS was not caught"; exit 1; }; \
 	 echo "flyout-toggle-check: mutant FLYOUT_STAYS caught"
 
+# Settings > Time & Language > Language (the person's keyboards): test/keyboards-check.sh, and each
+# mutant build must fail it.
+.PHONY: test-keyboards
+test-keyboards: build
+	@sh test/keyboards-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 for m in KBD_NO_SUBST KBD_DROP_OPTIONS; do \
+	   $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_$$m -o $(BUILD)/sg-settings-$$m.exe \
+	       $(CONTROL_SRC) $(BUILD)/sg-settings-res64.o $(CONTROL_LIBS) || exit 1; \
+	   SG_SETTINGS_EXE=$(BUILD)/sg-settings-$$m.exe sh test/keyboards-check.sh >/dev/null 2>&1; rc=$$?; \
+	   [ $$rc -eq 1 ] || { echo "keyboards-check: the mutant $$m was not caught ($$rc)"; exit 1; }; \
+	   echo "keyboards-check: mutant $$m caught"; \
+	 done
+
 # The touch keyboard (sg-touchkbd): test/touchkbd-check.sh, and each mutant
 # build must fail it.
 .PHONY: test-touchkbd
@@ -426,6 +439,7 @@ test: build
 	@sh test/location-check.sh
 	@sh test/control-check.sh
 	@sh test/settings-check.sh
+	@sh test/keyboards-check.sh; rc=$$?; [ $$rc -eq 77 ] || [ $$rc -eq 0 ]
 	@sh test/printers-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/hidpi-check.sh
 	@sh test/hidpi-live-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

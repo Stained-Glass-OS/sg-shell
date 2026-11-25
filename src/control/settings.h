@@ -56,6 +56,7 @@
     [PG_S_KIOSK]        = { L"Kiosk",                        PG_S_HOME, set_build_kiosk,     set_cmd_kiosk }, \
     [PG_S_DATETIME]     = { L"Date & time",                  PG_S_HOME, set_build_datetime,  set_cmd_datetime, NULL, set_timer_datetime }, \
     [PG_S_REGION]       = { L"Region",                       PG_S_HOME, set_build_region,    set_cmd_region }, \
+    [PG_S_LANGUAGE]     = { L"Language",                     PG_S_HOME, set_build_language,  set_cmd_language }, \
     [PG_S_EOA_DISPLAY]  = { L"Display",                      PG_S_HOME, set_build_eoa_display, set_cmd_eoa }, \
     [PG_S_EOA_KEYBOARD] = { L"Keyboard",                     PG_S_HOME, set_build_eoa_keyboard, set_cmd_eoa }, \
     [PG_S_EOA_MOUSE]    = { L"Mouse pointer",                PG_S_HOME, set_build_eoa_mouse, set_cmd_eoa }, \
@@ -130,6 +131,7 @@ void set_build_startup(void);   BOOL set_cmd_startup(int, int, HWND);
 void set_build_yourinfo(void);  void set_build_signin(void); void set_build_otherusers(void); BOOL set_cmd_accounts(int, int, HWND);
 void set_build_datetime(void);  BOOL set_cmd_datetime(int, int, HWND); void set_timer_datetime(void);
 void set_build_region(void);    BOOL set_cmd_region(int, int, HWND);
+void set_build_language(void);  BOOL set_cmd_language(int, int, HWND);
 void set_build_eoa_display(void); void set_build_eoa_keyboard(void); void set_build_eoa_mouse(void); void set_build_eoa_magnifier(void); BOOL set_cmd_eoa(int, int, HWND);
 void set_build_priv_general(void); void set_build_priv_mic(void); void set_build_priv_camera(void);
 void set_build_priv_location(void); BOOL set_cmd_privacy(int, int, HWND);

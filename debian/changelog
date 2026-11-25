@@ -1,3 +1,24 @@
+sg-shell (0.1.0-310) unstable; urgency=medium
+
+  * Settings > Time & Language > Language: the person's keyboards, as
+    Windows keeps them (ms-settings:regionlanguage, ms-settings:keyboard).
+    The session's layouts by their Windows names, the first the default and
+    the one typing now marked; Add a keyboard (Windows' keyboards, each
+    with its KLID and the XKB layout that types as it does), Move up, Move
+    down, Remove, up to four; the Start key + Space always switches, Left
+    Alt + Shift when chosen. A change applies at once without signing out
+    (sg-session 0.1.0-290's sg-settingsctl keyboard set, sg-compositor
+    sg82's KEYMAP), the keymap's other options are kept, and HKCU\Keyboard
+    Layout\Preload, Substitutes and Toggle are written as Windows writes
+    them (a keyboard of another language than the person's through a
+    d00Nllll substitute). Without a compositor to tell, the page says the
+    keyboards change at the next sign-in. Layouts used to come only from
+    Setup and the first-run setup. Gate: make test-keyboards
+    (test/keyboards-check.sh, 19 checks), mutants KBD_NO_SUBST,
+    KBD_DROP_OPTIONS.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 25 Nov 2026 12:15:38 -0800
+
 sg-shell (0.1.0-309) unstable; urgency=medium
 
   * test/scratch-home.sh: a gate no longer reaches the person's session bus
