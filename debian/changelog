@@ -1,3 +1,38 @@
+sg-shell (0.1.0-314) unstable; urgency=medium
+
+  * The taskbar clock's calendar, as Windows' (David 2026-11-26: "when you
+    click the time it should bring up a nice calendar just like in
+    Windows"). Walked on next34 in a two-display VM first: the main bar's
+    clock opened it, but always in the main display's bottom corner --
+    under a top taskbar it came up at the bottom of the screen -- and the
+    other displays' clocks did nothing (wine-sg 9950). Now:
+    - it opens against the bar whose clock was clicked (SgCalendarToggle's
+      lparam or --show --bar N, wine-sg 9950; the main bar for an older
+      taskbar): any display, bottom, top, left or right, flush with the
+      bar and the screen's edge as Windows 10's; a click on another
+      display's clock while it is open moves it there;
+    - frosted (Transparency effects), a thin edge, and Windows 10's reveal:
+      the cells' edges near the pointer light up;
+    - a click on the month's name shows the year's months, on the year the
+      decade; a year or month goes back in; the month slides in from below
+      or above on the arrows, Page Up / Page Down and the wheel;
+    - the keyboard: the arrows move a day or a week (a month or a year in
+      the larger views), Home today, Enter / Space chooses, Ctrl+Up the
+      larger view, Esc closes;
+    - the display's own DPI where it opens;
+    - with the Rounded taskbar, Windows 11's flyout: round, 12 px off the
+      bar and the edge, the day's date on top with a chevron that folds the
+      month away (remembered), round day cells; switching the look back
+      to Classic makes it a new window (the old one kept the Rounded
+      corners' region at its old size and showed only part of the flyout).
+    Gate test/calendar-check.sh (stand-in bars, test/calendar-bar-probe.c):
+    placement on four edges and the move, views, keys, slide, reveal,
+    frost, the Windows 11 flyout; mutants MAIN_ONLY, NO_YEARVIEW,
+    ARROWS_DEAD, NO_SLIDE, NO_REVEAL, NO_FROST, W10_ONLY (and SUNDAY,
+    NOTOGGLE); 0.1.0-313's calendar fails 14 of its checks.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 26 Nov 2026 08:25:01 -0800
+
 sg-shell (0.1.0-313) unstable; urgency=medium
 
   * SG Store: Gramps (genealogy) in the catalogue (Education, winget
