@@ -1,3 +1,16 @@
+sg-shell (0.1.0-313) unstable; urgency=medium
+
+  * SG Store: Gramps (genealogy) in the catalogue (Education, winget
+    Gramps.Gramps, the person's own install). Its installer hung when the
+    Store ran it on wine-sg before 10.0-1123: its fc-cache step read the
+    machine's Linux fonts through Z: (wine-sg 9900 fixed that) and wrote
+    lines longer than the installer's nsExec buffer takes. Walked on
+    next34 (wine-sg 10.0-1174): installed through the Store in 40-43 s
+    three times, opens (Family Trees), uninstalled clean; with 9900 turned
+    off (SgUnixPaths=1 for fc-cache.exe) the same install hangs.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 26 Nov 2026 07:53:13 -0800
+
 sg-shell (0.1.0-312) unstable; urgency=medium
 
   * Settings > Virus & threat protection, as Windows Security's page (SG

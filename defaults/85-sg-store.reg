@@ -5742,6 +5742,16 @@ Windows Registry Editor Version 5.00
 "Scope"="machine"
 "DetectName"="Bespoke Synth"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\341]
+"Name"="Gramps"
+"Publisher"="The Gramps Project"
+"Description"="Genealogy: build your family tree, research and print charts and reports."
+"Category"="Education"
+"Colour"=dword:00556b2f
+"Tier"="windows"
+"Source"="winget:Gramps.Gramps"
+"DetectName"="GrampsAIO64|Gramps"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and
