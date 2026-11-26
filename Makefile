@@ -448,6 +448,7 @@ test: build
 	@sh test/printers-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/hidpi-check.sh
 	@sh test/hidpi-live-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/dispscale-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/defender-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/restore-points-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/firewall-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]

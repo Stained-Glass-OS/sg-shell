@@ -1,3 +1,16 @@
+sg-shell (0.1.0-315) unstable; urgency=medium
+
+  * Settings > Display > Scale is the selected display's own scale, as on
+    Windows (ledger i0621, wine-sg 9971): read and set with
+    DisplayConfigGetDeviceInfo / DisplayConfigSetDeviceInfo (Windows' types
+    -3 and -4), the display's own recommendation marked, the list up to the
+    largest scale that leaves it 1024x720; the main display's scale is the
+    session's too (LogPixels, Linux programs) as before. One scale was every
+    display's. Gate test/dispscale-check.sh; mutant
+    SG_MUTANT_SCALE_ONE_FOR_ALL.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 26 Nov 2026 14:40:30 -0800
+
 sg-shell (0.1.0-314) unstable; urgency=medium
 
   * The taskbar clock's calendar, as Windows' (David 2026-11-26: "when you

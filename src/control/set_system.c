@@ -444,12 +444,111 @@ static void load_modes(void)
  * (a 4K screen and larger), so a 1080p screen's list is as it was */
 static const int SCALES[] = { 100, 125, 150, 175, 200, 225, 250, 300, 350, 400 };
 
+/* ---- each display's own scale (wine-sg 9971), as Windows' Settings has it: the
+ * display selected above, read and set with DisplayConfigGetDeviceInfo /
+ * DisplayConfigSetDeviceInfo (Windows' types -3 and -4: the scale relative to the
+ * display's recommended one, in Windows' list of scales). The main display's is
+ * the session's scale too (LogPixels: Linux programs, the system DPI). Before,
+ * one scale was every display's. */
+static const int WIN_SCALES[] = { 100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500 };
+struct dpi_scale_get { DISPLAYCONFIG_DEVICE_INFO_HEADER header; INT32 min, cur, max; };
+struct dpi_scale_set { DISPLAYCONFIG_DEVICE_INFO_HEADER header; INT32 rel; };
+
+/* the DisplayConfig source of the display selected in the box (the main one
+ * when there is no box); MAIN: whether it is the main display */
+static BOOL disp_source(LUID *luid, UINT32 *id, BOOL *main)
+{
+    DISPLAYCONFIG_PATH_INFO paths[16];
+    DISPLAYCONFIG_MODE_INFO modes[32];
+    UINT32 np = ARRAYSIZE(paths), nm = ARRAYSIZE(modes), i;
+    MONITORINFOEXW mi = { .cbSize = sizeof(mi) };
+    POINT origin = { 0, 0 };
+    HMONITOR mon = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
+    WCHAR fake[8];
+
+    /* the gates' stand-in screen is not a display Wine has */
+    if (GetEnvironmentVariableW(L"SG_FAKE_SCREEN", fake, ARRAYSIZE(fake))) return FALSE;
+#ifdef SG_MUTANT_SCALE_ONE_FOR_ALL
+    return FALSE;
+#endif
+    *main = TRUE;
+    if (g_ndisps > 1 && g_sel >= 0 && g_sel < g_ndisps && !g_disps[g_sel].main) {
+        /* where it is in Wine's screen: its place from the main display's (applied, not dragged) */
+        int j, mx = 0, my = 0;
+        RECT r;
+        char *ans;
+        BOOL ok;
+        for (j = 0; j < g_ndisps; j++) if (g_disps[j].main) { mx = g_disps[j].x; my = g_disps[j].y; }
+        r.left = g_disps[g_sel].x; r.top = g_disps[g_sel].y;
+        if (g_layout_dirty && (ans = ctl_run(L"display", &ok, NULL, 0, 6000))) {
+            /* the box was dragged: the places applied, from sg-settingsctl */
+            const char *pos = NULL;
+            char buf[256];
+            while (ok && ctl_line(ans, "PLACE", &pos, buf, sizeof(buf))) {
+                WCHAR name[64], f[16];
+                char nm8[64];
+                int x, y, k;
+                ctl_field(buf, 0, name, ARRAYSIZE(name));
+                WideCharToMultiByte(CP_UTF8, 0, name, -1, nm8, sizeof(nm8), NULL, NULL);
+                ctl_field(buf, 1, f, ARRAYSIZE(f)); x = _wtoi(f);
+                ctl_field(buf, 2, f, ARRAYSIZE(f)); y = _wtoi(f);
+                ctl_field(buf, 6, f, ARRAYSIZE(f));
+                if (!lstrcmpW(f, L"yes")) { mx = x; my = y; }
+                for (k = 0; k < g_ndisps; k++) if (!strcmp(g_disps[k].name, nm8) && k == g_sel) { r.left = x; r.top = y; }
+            }
+            free(ans);
+        } else { r.left = g_disps[g_sel].x; r.top = g_disps[g_sel].y; }
+        r.left -= mx; r.top -= my;
+        r.right = r.left + g_disps[g_sel].w; r.bottom = r.top + g_disps[g_sel].h;
+        mon = MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST);
+        *main = FALSE;
+    }
+    if (!GetMonitorInfoW(mon, (MONITORINFO *)&mi)) return FALSE;
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &np, paths, &nm, modes, NULL)) return FALSE;
+    for (i = 0; i < np; i++) {
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME name = { { DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, sizeof(name),
+                                                    paths[i].sourceInfo.adapterId, paths[i].sourceInfo.id } };
+        if (DisplayConfigGetDeviceInfo(&name.header) || lstrcmpiW(name.viewGdiDeviceName, mi.szDevice)) continue;
+        *luid = paths[i].sourceInfo.adapterId;
+        *id = paths[i].sourceInfo.id;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/* the selected display's scale, its recommended one and the largest offered, in percent */
+static BOOL disp_scale_get(int *cur, int *rec, int *top, BOOL *main)
+{
+    struct dpi_scale_get g = { { (DISPLAYCONFIG_DEVICE_INFO_TYPE)-3, sizeof(g) } };
+    if (!disp_source(&g.header.adapterId, &g.header.id, main) || DisplayConfigGetDeviceInfo(&g.header)) return FALSE;
+    if (-g.min < 0 || -g.min >= (int)ARRAYSIZE(WIN_SCALES) || -g.min + g.cur < 0 || -g.min + g.cur >= (int)ARRAYSIZE(WIN_SCALES)) return FALSE;
+    *rec = WIN_SCALES[-g.min];
+    *cur = WIN_SCALES[-g.min + g.cur];
+    *top = WIN_SCALES[min(-g.min + g.max, (int)ARRAYSIZE(WIN_SCALES) - 1)];
+    return TRUE;
+}
+
+static BOOL disp_scale_set(int percent)
+{
+    struct dpi_scale_set req = { { (DISPLAYCONFIG_DEVICE_INFO_TYPE)-4, sizeof(req) } };
+    struct dpi_scale_get g = { { (DISPLAYCONFIG_DEVICE_INFO_TYPE)-3, sizeof(g) } };
+    BOOL main;
+    int i;
+    if (!disp_source(&g.header.adapterId, &g.header.id, &main) || DisplayConfigGetDeviceInfo(&g.header)) return FALSE;
+    for (i = 0; i < (int)ARRAYSIZE(WIN_SCALES) && WIN_SCALES[i] != percent; i++) ;
+    if (i == (int)ARRAYSIZE(WIN_SCALES)) return FALSE;
+    req.header.adapterId = g.header.adapterId;
+    req.header.id = g.header.id;
+    req.rel = i - (-g.min);
+    return !DisplayConfigSetDeviceInfo(&req.header);
+}
+
 void set_build_display(void)
 {
     const WCHAR *items[64];
     WCHAR scales[ARRAYSIZE(SCALES)][32];
     const WCHAR *sitems[ARRAYSIZE(SCALES)];
-    int y = st_title(L"Display"), i, dpi, sel = 0, rec = scale_recommended(), nscales = 0;
+    int y = st_title(L"Display"), i, dpi, sel = 0, rec = scale_recommended(), nscales = 0, top_scale = 0;
     BOOL ok, night = FALSE, avail = FALSE;
     int temp = 4000;
     char *ans, buf[256];
@@ -501,9 +600,19 @@ void set_build_display(void)
     /* Scale: LogPixels, which Windows programs read at start */
     y = st_head(y, L"Scale and layout");
     dpi = (int)reg_dword(HKEY_CURRENT_USER, DESKTOP, L"LogPixels", g_dpi);
+    {
+        /* the selected display's own scale (wine-sg 9971) */
+        int cur, drec, top;
+        BOOL main;
+        if (disp_scale_get(&cur, &drec, &top, &main)) {
+            dpi = MulDiv(cur, 96, 100);
+            rec = drec;
+            top_scale = top;   /* none that leaves the display less than 1024x720, as Windows */
+        }
+    }
     /* "(Recommended)": the scale that makes everything the share of this
      * screen it has on a 1080p screen at 100% (scale_for_screen) */
-    for (i = 0; i < (int)ARRAYSIZE(SCALES) && (SCALES[i] <= 250 || SCALES[i] <= rec); i++) {
+    for (i = 0; i < (int)ARRAYSIZE(SCALES) && (top_scale ? SCALES[i] <= top_scale : (SCALES[i] <= 250 || SCALES[i] <= rec)); i++) {
         _snwprintf(scales[i], ARRAYSIZE(scales[i]), L"%d%%%ls", SCALES[i], SCALES[i] == rec ? L" (Recommended)" : L"");
         sitems[i] = scales[i];
         if (MulDiv(SCALES[i], 96, 100) == dpi) sel = i;
@@ -831,8 +940,16 @@ BOOL set_cmd_display(int id, int code, HWND ctl)
         return TRUE;
     case CMD_SCALE:
         if (code == CBN_SELCHANGE) {
-            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0);
-            if (i >= 0 && i < (int)ARRAYSIZE(SCALES) && SCALES[i] != scale_current()) {
+            int i = (int)SendMessageW(ctl, CB_GETCURSEL, 0, 0), cur, drec, top;
+            BOOL main = TRUE;
+            if (i >= 0 && i < (int)ARRAYSIZE(SCALES) && disp_scale_get(&cur, &drec, &top, &main)) {
+                /* the selected display's own scale; the main display's is the session's too */
+                if (SCALES[i] != cur) {
+                    disp_scale_set(SCALES[i]);
+                    if (main && SCALES[i] != scale_current()) scale_set(SCALES[i]);
+                    st_status(L"Some apps won't respond to scaling changes until you close and open them again.");
+                }
+            } else if (i >= 0 && i < (int)ARRAYSIZE(SCALES) && SCALES[i] != scale_current()) {
                 scale_set(SCALES[i]);
                 st_status(L"Some apps won't respond to scaling changes until you close and open them again.");
             }
