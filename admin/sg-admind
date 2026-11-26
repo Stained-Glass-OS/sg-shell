@@ -685,6 +685,79 @@ def op_defender(args):
     return []
 
 
+DEFENDER_RUNTIME = os.environ.get("SG_ADMIN_DEFENDER_RUNTIME", "/run/stained-glass/defender")
+DEFENDER_EXCLUSIONS = os.environ.get("SG_ADMIN_DEFENDER_EXCLUSIONS", "/etc/stained-glass/defender-exclusions")
+REALTIME_OFF_FOR = 4 * 3600
+
+
+def op_defender_realtime(args):
+    """Real-time protection on or off (Settings > Virus & threat protection),
+    as Windows' switch: off is for a while -- it comes back on by itself
+    after REALTIME_OFF_FOR, or at the next restart (the mark is in /run).
+    Scheduled and manual scans still run."""
+    (v,) = args
+    if v not in ("on", "off"):
+        raise Refused("Real-time protection is on or off.")
+    mark = os.path.join(DEFENDER_RUNTIME, "realtime-off")
+    try:
+        if v == "on":
+            try:
+                os.unlink(mark)
+            except FileNotFoundError:
+                pass
+            return []
+        os.makedirs(DEFENDER_RUNTIME, mode=0o755, exist_ok=True)
+        tmp = mark + ".sg-new"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w") as f:
+            f.write("%d\n" % (time.time() + REALTIME_OFF_FOR))
+        os.replace(tmp, mark)
+    except OSError as e:
+        raise Refused("The setting could not be saved: %s" % e)
+    import datetime
+    back = datetime.datetime.fromtimestamp(time.time() + REALTIME_OFF_FOR).strftime("%H:%M")
+    return ["Real-time protection is off until %s, or the next restart." % back]
+
+
+def op_defender_exclusion(args):
+    """An exclusion (Settings > Virus & threat protection > Exclusions): a
+    folder or file SG Defender does not scan. Absolute paths on this machine
+    (Settings turns the Windows path into one)."""
+    verb, path = args
+    if verb not in ("add", "remove"):
+        raise Refused("An exclusion is added or removed.")
+    if (not path.startswith("/") or "\n" in path or "\0" in path or len(path) > 4096
+            or os.path.normpath(path) != path.rstrip("/") or path.rstrip("/") == ""):
+        raise Refused("'%s' is not a folder or file on this PC." % path)
+    path = path.rstrip("/")
+    try:
+        with open(DEFENDER_EXCLUSIONS) as f:
+            now = [l.strip() for l in f if l.strip().startswith("/")]
+    except FileNotFoundError:
+        now = []
+    if verb == "add":
+        if path not in now:
+            now.append(path)
+    elif path in now:
+        now.remove(path)
+    else:
+        raise Refused("'%s' is not an exclusion." % path)
+    try:
+        os.makedirs(os.path.dirname(DEFENDER_EXCLUSIONS), exist_ok=True)
+        tmp = DEFENDER_EXCLUSIONS + ".sg-new"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "w") as f:
+            f.write("# SG Defender: not scanned (Settings > Virus & threat protection > Exclusions)\n")
+            f.write("".join(p + "\n" for p in now))
+        if not TEST:      # administrators see them, as on Windows: the elevated Settings (SYSTEM)
+            os.chown(tmp, 0, system_gid())
+        os.chmod(tmp, 0o640)
+        os.replace(tmp, DEFENDER_EXCLUSIONS)
+    except OSError as e:
+        raise Refused("The exclusion could not be saved: %s" % e)
+    return now
+
+
 DEFENDER_STATE = os.environ.get("SG_ADMIN_DEFENDER_STATE", "/var/lib/stained-glass/defender")
 QUARANTINE_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
 
@@ -1794,6 +1867,8 @@ OPS = {
     "kiosk": (op_kiosk, 5),
     "defender-restore": (op_defender_restore, 1),
     "defender-delete": (op_defender_delete, 1),
+    "defender-realtime": (op_defender_realtime, 1),
+    "defender-exclusion": (op_defender_exclusion, 2),
     "time": (op_time, 1),
     "update-check": (op_update_check, 0),
     "source-add": (op_source_add, 4),

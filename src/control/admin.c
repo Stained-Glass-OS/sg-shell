@@ -859,6 +859,103 @@ static int do_one(const WCHAR *title, const WCHAR *const *req, int n)
     return 1;
 }
 
+/* SG Defender's exclusions (Settings > Virus & threat protection > Add or
+ * remove exclusions): only administrators see them, as on Windows -- the
+ * list (root's, readable by the SYSTEM account) is read here, elevated. One
+ * folder or file a line; what changed goes to sg-admind's defender-exclusion
+ * as paths on this machine. */
+#define DEFENDER_EXCLUSIONS L"Z:\\etc\\stained-glass\\defender-exclusions"   /* SG_DEFENDER_EXCLUSIONS_FILE: the gate's */
+static int do_defender_exclusions(void)
+{
+    static WCHAR *(CDECL *to_dos)(const char *);
+    static char *(CDECL *to_unix)(const WCHAR *);
+    WCHAR file[MAX_PATH] = DEFENDER_EXCLUSIONS, text[8192] = L"", msg[512], *line, *ctx;
+    char before[64][1024], after[64][1024];
+    int nb = 0, na = 0, i, j;
+    HANDLE h;
+    if (!to_dos) to_dos = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
+    if (!to_unix) to_unix = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+    if (!to_dos || !to_unix) return 1;
+    GetEnvironmentVariableW(L"SG_DEFENDER_EXCLUSIONS_FILE", file, MAX_PATH);
+    h = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        char buf[32768], *p, *e;
+        DWORD got = 0;
+        ReadFile(h, buf, sizeof(buf) - 1, &got, NULL);
+        CloseHandle(h);
+        buf[got] = 0;
+        for (p = buf; *p && nb < (int)ARRAYSIZE(before); p = *e ? e + 1 : e) {
+            WCHAR *dos;
+            e = p + strcspn(p, "\n");
+            if (*p != '/' || e - p >= (int)sizeof(before[0])) continue;
+            memcpy(before[nb], p, e - p);
+            before[nb][e - p] = 0;
+            if ((dos = to_dos(before[nb]))) {
+                wcsncat(text, dos, ARRAYSIZE(text) - lstrlenW(text) - 3);
+                HeapFree(GetProcessHeap(), 0, dos);
+            } else
+                MultiByteToWideChar(CP_UTF8, 0, before[nb], -1, text + lstrlenW(text), ARRAYSIZE(text) - lstrlenW(text) - 3);
+            wcsncat(text, L"\r\n", ARRAYSIZE(text) - lstrlenW(text) - 1);
+            nb++;
+        }
+    }
+    for (;;) {
+        struct form_field f[] = {
+            { L"Folders and files not scanned, one a line:", text, ARRAYSIZE(text), FF_MULTILINE },
+        };
+        BOOL ok = TRUE;
+        if (!run_form(NULL, L"Exclusions", L"SG Defender does not scan what is listed here: not when it starts, not in a scan. "
+                      L"Add only folders and files you trust -- malware there is not found.", f, 1, L"Save", TRUE)) return 1;
+        na = 0;
+        for (line = text; *line && na < (int)ARRAYSIZE(after); line = ctx) {
+            char *u = NULL;
+            ctx = line + wcscspn(line, L"\r\n");
+            if (*ctx) *ctx++ = 0;
+            while (*ctx == L'\r' || *ctx == L'\n') ctx++;
+            while (*line == L' ' || *line == L'\t') line++;
+            if (!*line) continue;
+            if (line[0] == L'/') {      /* a path of this PC as it is (Linux's) */
+                int len = WideCharToMultiByte(CP_UTF8, 0, line, -1, NULL, 0, NULL, NULL);
+                if (len > 0 && (u = HeapAlloc(GetProcessHeap(), 0, len)))
+                    WideCharToMultiByte(CP_UTF8, 0, line, -1, u, len, NULL, NULL);
+            } else u = to_unix(line);
+            if (!u || strlen(u) >= sizeof(after[0])) {
+                _snwprintf(msg, ARRAYSIZE(msg), L"'%ls' is not a folder or file on this PC.", line);
+                message(NULL, L"Exclusions", msg, TRUE);
+                if (u) HeapFree(GetProcessHeap(), 0, u);
+                ok = FALSE;
+                break;
+            }
+            lstrcpyA(after[na], u);
+            j = lstrlenA(after[na]);
+            while (j > 1 && after[na][j - 1] == '/') after[na][--j] = 0;
+            HeapFree(GetProcessHeap(), 0, u);
+            na++;
+        }
+        if (!ok) continue;
+        break;
+    }
+    for (i = 0; i < nb; i++) {          /* removed */
+        for (j = 0; j < na && strcmp(before[i], after[j]); j++) ;
+        if (j == na) {
+            WCHAR w[1024];
+            const WCHAR *req[] = { L"defender-exclusion", L"remove", w };
+            MultiByteToWideChar(CP_UTF8, 0, before[i], -1, w, ARRAYSIZE(w));
+            if (!admin_request(req, 3, msg, ARRAYSIZE(msg), 60000)) { message(NULL, L"Exclusions", msg, TRUE); return 1; }
+        }
+    }
+    for (i = 0; i < na; i++) {          /* added */
+        for (j = 0; j < nb && strcmp(after[i], before[j]); j++) ;
+        if (j == nb) {
+            WCHAR w[1024];
+            const WCHAR *req[] = { L"defender-exclusion", L"add", w };
+            MultiByteToWideChar(CP_UTF8, 0, after[i], -1, w, ARRAYSIZE(w));
+            if (!admin_request(req, 3, msg, ARRAYSIZE(msg), 60000)) { message(NULL, L"Exclusions", msg, TRUE); return 1; }
+        }
+    }
+    return 0;
+}
+
 /* "Change the date and time": the form Windows 10 shows, then sg-admind's time */
 static int do_set_time(void)
 {
@@ -922,6 +1019,11 @@ int admin_main(int argc, WCHAR **argv)
         const WCHAR *req[] = { L"defender", argv[1] };
         return do_one(L"Virus & threat protection", req, 2);
     }
+    if (!lstrcmpW(argv[0], L"defender-realtime") && argc > 1) {
+        const WCHAR *req[] = { L"defender-realtime", argv[1] };
+        return do_one(L"Real-time protection", req, 2);
+    }
+    if (!lstrcmpW(argv[0], L"defender-exclusions")) return do_defender_exclusions();
     if (!lstrcmpW(argv[0], L"power-buttons") && argc > 3) {
         const WCHAR *req[] = { L"power-buttons", argv[1], argv[2], argv[3] };
         return do_one(L"Power buttons and lid", req, 4);

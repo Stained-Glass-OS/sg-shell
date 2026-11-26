@@ -68,7 +68,7 @@ EOF
 chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
-    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf" \
+    SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_DEFENDER_RUNTIME="$T/defrun" SG_ADMIN_DEFENDER_EXCLUSIONS="$T/def-excl" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf" \
     SG_ADMIN_LOCATION_TOOL="$B/sg-location"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
@@ -208,6 +208,35 @@ r=$(ask defender on)
 [ "$(first "$r")" = OK ] && grep -qx "enabled=1" "$T/defender.conf" && pass "...and on" || fail "defender on: $r"
 r=$(ask defender sometimes)
 case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted defender sometimes" ;; esac
+# real-time protection: off for a while (it comes back by itself), as on Windows
+r=$(ask defender-realtime off)
+until=$(cat "$T/defrun/realtime-off" 2>/dev/null); left=$(( ${until:-0} - $(date +%s) ))
+[ "$(first "$r")" = OK ] && [ "$left" -gt 14000 ] && [ "$left" -le 14400 ] \
+    && pass "real-time protection off, for four hours at most" || fail "defender-realtime off: $r ($left s)"
+r=$(ask defender-realtime on)
+[ "$(first "$r")" = OK ] && [ ! -e "$T/defrun/realtime-off" ] && pass "...and back on" || fail "defender-realtime on: $r"
+# MUTANT REALTIME_FOREVER: off with no end (Windows turns it back on by itself)
+sed 's/^REALTIME_OFF_FOR = 4 \* 3600$/REALTIME_OFF_FOR = 10 ** 9/' "$ADMIND" > "$T/mut-rtforever"
+grep -q '^REALTIME_OFF_FOR = 4 \* 3600$' "$T/mut-rtforever" && fail "the REALTIME_FOREVER mutant did not apply"
+id=$(next_id); printf 'defender-realtime\noff\n' > "$S/requests/.m"; mv "$S/requests/.m" "$S/requests/$id.req"
+python3 "$T/mut-rtforever" 2>>"$T/log"
+left=$(( $(cat "$T/defrun/realtime-off") - $(date +%s) ))
+[ "$left" -gt 14400 ] && pass "MUTANT REALTIME_FOREVER is caught" || fail "REALTIME_FOREVER not detected ($left s)"
+rm -f "$T/defrun/realtime-off"
+r=$(ask defender-realtime never)
+case "$(first "$r")" in "FAILED "*) pass "...only on or off" ;; *) fail "accepted defender-realtime never" ;; esac
+# exclusions: absolute paths, added once, removed
+r=$(ask defender-exclusion add /home/bob/Tools)
+r=$(ask defender-exclusion add /home/bob/Tools)
+[ "$(first "$r")" = OK ] && [ "$(grep -cx /home/bob/Tools "$T/def-excl")" = 1 ] && pass "an exclusion is added (once)" || fail "exclusion add: $r"
+for bad in relative/path '/a/../etc' '/x
+/etc' /; do
+    r=$(ask defender-exclusion add "$bad")
+    case "$(first "$r")" in "FAILED "*) : ;; *) fail "exclusion accepted '$bad'"; break ;; esac
+done
+grep -qx /etc "$T/def-excl" || grep -q '\.\.' "$T/def-excl" || pass "...not a relative path, a .., two lines or the root"
+r=$(ask defender-exclusion remove /home/bob/Tools)
+[ "$(first "$r")" = OK ] && ! grep -qx /home/bob/Tools "$T/def-excl" && pass "...and removed" || fail "exclusion remove: $r"
 # --- Stained Glass Firewall: sg-admind runs sg-firewall's changes for an
 # elevated program (the prompt's Allow access, Settings, netsh, hnetcfg)
 cat > "$B/sg-firewall" <<EOF

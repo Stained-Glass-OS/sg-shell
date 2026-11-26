@@ -1,3 +1,26 @@
+sg-shell (0.1.0-312) unstable; urgency=medium
+
+  * Settings > Virus & threat protection, as Windows Security's page (SG
+    Defender, issue #10): Quick scan, Full scan and Custom scan (a folder
+    chosen) run sg-defender-scan as the person, and the page follows a
+    running scan (its buttons off until it is done); the last scans and
+    Protection history (what was found in the person's files and how: at
+    a program's start, a script, AMSI's text, a scan, a download; Restore
+    and Delete for what was kept); Real-time protection, an
+    administrator's switch that is off for a while only (it comes back
+    within four hours or at the next restart); SG Defender itself on/off;
+    Exclusions, an elevated window that lists them (only administrators
+    see them, as on Windows), one folder or file a line, C:/Z: or Linux
+    paths, saved as what changed.
+  * sg-admind: defender-realtime on|off (off until four hours on, in
+    /run), defender-exclusion add|remove PATH (absolute and normalised;
+    the list root's and the SYSTEM account's group's, 0640).
+  * Gates: test/defender-page-check.sh (the scans, history, real-time,
+    exclusions; the released page fails 22 checks), test/admind-check.sh
+    (+ mutant REALTIME_FOREVER).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 25 Nov 2026 15:52:27 -0800
+
 sg-shell (0.1.0-311) unstable; urgency=medium
 
   * The emoji panel (issue #15), Windows' Win+. and Win+; (wine-sg
