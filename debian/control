@@ -9,9 +9,9 @@ Rules-Requires-Root: no
 
 Package: sg-shell
 Architecture: all
-Depends: ${misc:Depends}, wine-sg (>= 10.0-807) | wine, fonts-inter, fonts-liberation, xdotool,
+Depends: ${misc:Depends}, wine-sg (>= 10.0-1171) | wine, fonts-inter, fonts-liberation, xdotool,
          fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-cascadia-code,
-         fonts-noto-cjk,
+         fonts-noto-cjk, fonts-noto-color-emoji, fonts-symbola,
          python3, sg-session (>= 0.1.0-215), xterm, lxterminal, libglib2.0-bin,
          librsvg2-bin, xdg-utils, squashfs-tools, libfuse2t64, fuse3, geoclue-2.0
 Description: Stained Glass OS shell panels (Start menu, Control Panel, Task Manager)

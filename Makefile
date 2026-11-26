@@ -147,6 +147,10 @@ build:
 	    -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows && echo "built sg-notify (64-bit)"
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-dictate64.exe $$(sh tools/sg-verres.sh sg-dictate64 $(BUILD) $(WINDRES64)) src/sg-dictate.c $(DICTATE_LIBS) \
 	    && echo "built sg-dictate (64-bit)"
+	@# the emoji panel (Win+. / Win+;): its table from Unicode's emoji-test.txt (unicode-data)
+	@python3 src/emoji/gen-emoji.py /usr/share/unicode/emoji/emoji-test.txt $(BUILD)/emoji-data.h >/dev/null
+	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -I $(BUILD) -o $(BUILD)/sg-emoji64.exe $$(sh tools/sg-verres.sh sg-emoji64 $(BUILD) $(WINDRES64)) src/sg-emoji.c \
+	    -ld2d1 -ldwrite -lole32 -luuid -luser32 -ladvapi32 && echo "built sg-emoji (64-bit)"
 	@python3 src/zip/gen-icon.py $(BUILD)/sg-zip.ico
 	@$(WINDRES64) -I src/zip -I $(BUILD) src/zip/sg-zip.rc -O coff -o $(BUILD)/sg-zip-res64.o
 	@$(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -o $(BUILD)/sg-zip64.exe $$(sh tools/sg-verres.sh sg-zip64 $(BUILD) $(WINDRES64)) $(ZIP_SRC) $(BUILD)/sg-zip-res64.o $(ZIP_LIBS) \
@@ -435,6 +439,7 @@ test: build
 	@sh test/store-catalog-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/updates-page-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/dictate-linux-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
+	@sh test/emoji-check.sh; rc=$$?; [ $$rc = 0 ] || [ $$rc = 77 ]
 	@sh test/timezone-auto-test.sh
 	@sh test/location-check.sh
 	@sh test/control-check.sh

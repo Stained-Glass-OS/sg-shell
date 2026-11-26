@@ -1,3 +1,22 @@
+sg-shell (0.1.0-311) unstable; urgency=medium
+
+  * The emoji panel (issue #15), Windows' Win+. and Win+; (wine-sg
+    10.0-1171, 9412): sg-emoji opens at the text cursor of the program in
+    front without taking its focus; letters typed search the emoji by name,
+    the arrows and Enter pick one, a click types it; recently used ones
+    first, then smileys, people, animals and nature, food, travel,
+    activities, objects, symbols and flags (Unicode's emoji-test.txt from
+    unicode-data, src/emoji/gen-emoji.py); colour through Direct2D. The
+    emoji arrives as typing (SendInput), and in a Linux program's frame
+    through xdotool, as voice typing does. Esc clears the search, then
+    closes it; another window in front or Win+. again closes it.
+    Depends on fonts-noto-color-emoji (emoji in colour, in Windows and
+    Linux programs alike) and fonts-symbola, and on wine-sg 10.0-1171
+    (emoji fall back to those fonts in DirectWrite, 9411). Test:
+    test/emoji-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Wed, 25 Nov 2026 16:01:08 -0800
+
 sg-shell (0.1.0-310) unstable; urgency=medium
 
   * Settings > Time & Language > Language: the person's keyboards, as

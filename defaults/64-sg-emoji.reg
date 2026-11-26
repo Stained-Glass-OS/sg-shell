@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Stained Glass OS -- the emoji panel (sg-emoji). explorer's Win+. and Win+;
+; run ShellExecute("sg-emoji.exe", "/toggle") (wine-sg 9412), which finds the
+; program here, as the Run box and scripts do (issue #15).
+;
+; The path is the package's install location reached through Z:. If Z: is ever
+; removed from the prefix for isolation, this must move with it.
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\sg-emoji.exe]
+@="Z:\\usr\\libexec\\stained-glass\\shell\\sg-emoji64.exe"

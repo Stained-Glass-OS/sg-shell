@@ -9,6 +9,7 @@ sg-charmap	Character Map
 sg-clock	Alarms & Clock
 sg-defender-notice	SG Defender
 sg-dictate	Voice Typing
+sg-emoji	Emoji Panel
 sg-fontview	Font Viewer
 sg-gpresult	Group Policy Results
 sg-kiosk	Kiosk
