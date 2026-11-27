@@ -66,10 +66,14 @@ static const struct keyboard KEYBOARDS[] = {
     { L"Korean", 0x00000412, "kr", "" },
 };
 #define NKEYBOARDS ((int)ARRAYSIZE(KEYBOARDS))
+#ifndef SPI_GETTHREADLOCALINPUTSETTINGS
+#define SPI_GETTHREADLOCALINPUTSETTINGS 0x104E
+#define SPI_SETTHREADLOCALINPUTSETTINGS 0x104F
+#endif
 #define MAX_KEYBOARDS 4   /* the groups an XKB keymap has */
 
 enum {
-    CMD_ADD = CMD_PAGE_FIRST + 1, CMD_ALTSHIFT, CMD_REGION, CMD_TYPING,
+    CMD_ADD = CMD_PAGE_FIRST + 1, CMD_ALTSHIFT, CMD_REGION, CMD_TYPING, CMD_PERWINDOW,
     CMD_UP = CMD_PAGE_FIRST + 20, CMD_DOWN = CMD_PAGE_FIRST + 30, CMD_REMOVE = CMD_PAGE_FIRST + 40,
 };
 
@@ -155,13 +159,15 @@ static void keyboard_name(int i, WCHAR *out, int cch)
 
 /* Preload, Substitutes and Toggle, as Windows writes them: Preload's values 1, 2 ... are the keyboards in
  * order -- a keyboard whose layout is the person's language's own by its KLID, else a substitute
- * "d00Nllll" (llll the input language) that Substitutes maps to the keyboard's KLID */
+ * "d00Nllll" (llll the input language) that Substitutes maps to the keyboard's KLID; with none of the
+ * language's own, the first keyboard is the language's plain id, substituted (en-AU with a US keyboard:
+ * 00000c09 -> 00000409) */
 static void write_registry(void)
 {
     LANGID lang = LANGIDFROMLCID(GetUserDefaultLCID());
     HKEY pre, sub, tog;
     WCHAR name[16], data[16];
-    int i, nsub = 0;
+    int i, nsub = 0, own = 0;
 
     RegDeleteTreeW(HKEY_CURRENT_USER, L"Keyboard Layout\\Preload");
     RegDeleteTreeW(HKEY_CURRENT_USER, L"Keyboard Layout\\Substitutes");
@@ -172,11 +178,19 @@ static void write_registry(void)
     }
     for (i = 0; i < g_nkbd; i++) {
         int k = find_keyboard(g_kbd[i].layout, g_kbd[i].variant);
+        if ((k >= 0 ? KEYBOARDS[k].klid : lang) == lang) own = 1;
+    }
+    for (i = 0; i < g_nkbd; i++) {
+        int k = find_keyboard(g_kbd[i].layout, g_kbd[i].variant);
         DWORD klid = k >= 0 ? KEYBOARDS[k].klid : lang;
         _snwprintf(name, ARRAYSIZE(name), L"%d", i + 1);
 #ifndef SG_MUTANT_KBD_NO_SUBST
         if (klid != lang) {
             WCHAR subst[16];
+#ifndef SG_MUTANT_KBD_FIRST_SUBST
+            if (!i && !own) _snwprintf(subst, ARRAYSIZE(subst), L"%08x", lang);
+            else
+#endif
             _snwprintf(subst, ARRAYSIZE(subst), L"d%03x%04x", ++nsub, lang);
             _snwprintf(data, ARRAYSIZE(data), L"%08lx", (unsigned long)klid);
             RegSetValueExW(sub, subst, 0, REG_SZ, (const BYTE *)data, (lstrlenW(data) + 1) * sizeof(WCHAR));
@@ -187,7 +201,7 @@ static void write_registry(void)
         _snwprintf(data, ARRAYSIZE(data), L"%08lx", (unsigned long)klid);
         RegSetValueExW(pre, name, 0, REG_SZ, (const BYTE *)data, (lstrlenW(data) + 1) * sizeof(WCHAR));
     }
-    (void)nsub;
+    (void)nsub; (void)own;
     RegCloseKey(pre);
     RegCloseKey(sub);
     /* Toggle: "1" Left Alt + Shift, "3" not assigned */
@@ -286,6 +300,13 @@ void set_build_language(void)
     if (g_nkbd >= MAX_KEYBOARDS) y = st_para(y - S(6), L"You can have up to four keyboards. Remove one to add another.");
     y = st_head(y, L"Switching keyboards");
     st_toggle(&y, L"Left Alt + Shift also switches to the next keyboard", g_altshift, CMD_ALTSHIFT);
+    {
+        /* Windows' "Let me use a different input method for each app window" (wine-sg 9161): off, the
+         * keyboard is the person's whatever window they type in */
+        BOOL local = FALSE;
+        SystemParametersInfoW(SPI_GETTHREADLOCALINPUTSETTINGS, 0, &local, 0);
+        st_toggle(&y, L"Let me use a different keyboard for each app window", local, CMD_PERWINDOW);
+    }
     y = st_head(y, L"Related settings");
     st_link(&y, L"Region and formats", CMD_REGION);
     st_link(&y, L"Typing", CMD_TYPING);
@@ -307,6 +328,11 @@ BOOL set_cmd_language(int id, int code, HWND ctl)
         return TRUE;
     }
     if (id == CMD_ALTSHIFT) { g_altshift = st_checked(ctl); apply_keyboards(); return TRUE; }
+    if (id == CMD_PERWINDOW) {
+        SystemParametersInfoW(SPI_SETTHREADLOCALINPUTSETTINGS, 0, (void *)(ULONG_PTR)st_checked(ctl),
+                              SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        return TRUE;
+    }
     if (id == CMD_REGION) { navigate(PG_S_REGION); return TRUE; }
     if (id == CMD_TYPING) { navigate(PG_S_TYPING); return TRUE; }
     if (id >= CMD_UP && id < CMD_UP + MAX_KEYBOARDS && (i = id - CMD_UP) > 0 && i < g_nkbd) {

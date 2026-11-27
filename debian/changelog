@@ -1,3 +1,21 @@
+sg-shell (0.1.0-317) unstable; urgency=medium
+
+  * Settings > Time & Language > Language: "Let me use a different keyboard
+    for each app window", Windows' "Let me use a different input method
+    for each app window" (SPI_SETTHREADLOCALINPUTSETTINGS, wine-sg 9161:
+    a window coming to the front brings its own keyboard back). Off by
+    default, as on Windows.
+  * Preload with none of the language's own keyboard is written as Windows
+    writes it (ledger i0562): the first keyboard takes the language's plain
+    identifier, substituted (English (United States) with only a German
+    keyboard: Preload 1 = 00000409, Substitutes 00000409 = 00000407); it
+    was d0010409. Gate test-keyboards: the new checks (German alone; the
+    per-window switch in UserPreferencesMask byte 4, 0x80 -- FAIL on a
+    wine-sg without 9161), mutant SG_MUTANT_KBD_FIRST_SUBST caught (and
+    KBD_NO_SUBST, KBD_DROP_OPTIONS still).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 12:07:27 -0800
+
 sg-shell (0.1.0-316) unstable; urgency=medium
 
   * The foreground lock (wine-sg 9930): a second sg-notify (Win+A),

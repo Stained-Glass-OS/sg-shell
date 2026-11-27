@@ -14,7 +14,7 @@
 #   - no compositor to tell (APPLIED no): the page says the keyboards change at the next sign-in
 #
 # Needs wine-sg, Xvfb, xdotool; skips (77) without them. SG_SETTINGS_EXE runs another build (the
-# mutants: SG_MUTANT_KBD_NO_SUBST, SG_MUTANT_KBD_DROP_OPTIONS), SG_WINE_DIR another Wine.
+# mutants: SG_MUTANT_KBD_NO_SUBST, SG_MUTANT_KBD_DROP_OPTIONS, SG_MUTANT_KBD_FIRST_SUBST), SG_WINE_DIR another Wine.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -151,10 +151,25 @@ got=$(told 5)
 [ "$(regq 'HKCU\Keyboard Layout\Toggle' 'Language Hotkey')" = 1 ] && [ "$(regq 'HKCU\Keyboard Layout\Toggle' Hotkey)" = 1 ] \
     && pass "Toggle: Hotkey and Language Hotkey 1 (Left Alt + Shift)" || fail "Toggle: '$(regq 'HKCU\Keyboard Layout\Toggle' Hotkey)'"
 
+# --- Let me use a different keyboard for each app window (SPI_SETTHREADLOCALINPUTSETTINGS, wine-sg 9161):
+# Windows keeps it in UserPreferencesMask, byte 4's 0x80 ---
+set -- $(tr -d '\r' < "$DUMP" | grep '^control SgSetCtl ' | sed -n '2s/.* at=\([0-9]*\),\([0-9]*\).*/\1 \2/p')
+[ $# -eq 2 ] && { xdotool mousemove "$1" "$2" click 1; sleep 1; }
+m=$(regq 'HKCU\Control Panel\Desktop' UserPreferencesMask)
+b4=$(printf '%s' "$m" | cut -c9-10)
+[ -n "$b4" ] && [ $(( 0x$b4 & 0x80 )) = 128 ] && pass "a different keyboard for each app window: UserPreferencesMask byte 4 has 0x80 ($m)" \
+    || fail "per-window keyboards: UserPreferencesMask '$m'"
+
 # --- no compositor: at the next sign-in ---
 : > "$T/no-compositor"
 click_id $((CMD + 41)); got=$(told 6)
 [ "$got" = "keyboard set de - compose:ralt" ] && pass "Remove the second: one keyboard, no switching keys ($got)" || fail "Remove told: '$got'"
+# none of the language's own keyboard (only German, in English (United States)): the language's plain id,
+# substituted, as Windows writes it (mutant SG_MUTANT_KBD_FIRST_SUBST: d0010409)
+p=$(preload)
+[ "$p" = "1=00000409 " ] && [ "$(regq 'HKCU\Keyboard Layout\Substitutes' 00000409)" = 00000407 ] \
+    && pass "German alone: Preload 1 = 00000409, Substitutes 00000409 = German (00000407)" \
+    || fail "German alone: Preload '$p', Substitutes 00000409 = '$(regq 'HKCU\Keyboard Layout\Substitutes' 00000409)'"
 i=0; while ! has "Your keyboards change the next time you sign in." && [ $i -lt 20 ]; do sleep 0.25; i=$((i + 1)); done
 has "Your keyboards change the next time you sign in." && pass "no compositor to tell: the change is for the next sign-in" \
     || fail "no next-sign-in notice: $(texts)"

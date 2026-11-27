@@ -361,7 +361,7 @@ test-handoff: build
 .PHONY: test-keyboards
 test-keyboards: build
 	@sh test/keyboards-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
-	 for m in KBD_NO_SUBST KBD_DROP_OPTIONS; do \
+	 for m in KBD_NO_SUBST KBD_DROP_OPTIONS KBD_FIRST_SUBST; do \
 	   $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_$$m -o $(BUILD)/sg-settings-$$m.exe \
 	       $(CONTROL_SRC) $(BUILD)/sg-settings-res64.o $(CONTROL_LIBS) || exit 1; \
 	   SG_SETTINGS_EXE=$(BUILD)/sg-settings-$$m.exe sh test/keyboards-check.sh >/dev/null 2>&1; rc=$$?; \
