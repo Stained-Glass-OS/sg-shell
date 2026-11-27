@@ -86,6 +86,7 @@ f1 = Image.new("RGB", (120, 120), (255, 0, 0)); f2 = Image.new("RGB", (120, 120)
 f1.save(a + "/anim.gif", save_all=True, append_images=[f2], duration=300, loop=0)
 EOF
 
+"${MINGW64:-x86_64-w64-mingw32-gcc}" -O2 -municode -o "$T/front.exe" "$HERE/test/front-probe.c" || { fail "front-probe did not build"; exit 1; }
 # the gate's explorer must own the desktop before any program starts
 WINEDEBUG=trace+explorer wine explorer /desktop=shell,1024x768 > "$T/explorer.out" 2>&1 &
 i=0; while ! grep -q 'desktop message loop starting' "$T/explorer.out" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
@@ -181,6 +182,9 @@ SG_PHOTOS_DUMP="$(wd "$D2")" wine start photos.exe 'C:\anim\anim.gif' >/dev/null
 if wait_field file 'C:\anim\anim.gif' 20 "$D2"; then pass "photos.exe (App Paths) opened anim.gif"
 else fail "photos.exe did not open anim.gif"; fi
 case "$(field frames "$D2")" in "2 frame"*) pass "anim.gif has 2 frames" ;; *) fail "frames: '$(field frames "$D2")'" ;; esac
+# started from outside after the person's keys it opens behind the first Photos (wine-sg 9930's foreground
+# lock): the person brings it forward first (test/front-probe.c)
+wine "$T/front.exe" 'anim.gif - Photos' >/dev/null 2>&1; sleep 0.8
 seen=""
 i=0; while [ $i -lt 16 ]; do seen="$seen $(field frames "$D2" | awk '{print $3}')"; sleep 0.2; i=$((i + 1)); done
 echo "$seen" | grep -q 0 && echo "$seen" | grep -q 1 && pass "the GIF animates (frames seen:$seen)" || fail "the GIF does not animate:$seen"

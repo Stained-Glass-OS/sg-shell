@@ -286,6 +286,9 @@ wine taskkill /f /im sg-pdf64.exe >/dev/null 2>&1; sleep 1
 if [ $HAVE_QPDF = 1 ]; then
     SG_PDF_DUMP="$(wd "$D3")" wine start 'C:\my docs\locked.pdf' >/dev/null 2>&1 &
     sleep 5; shot password
+    # started from outside after the person's input it opens behind (wine-sg 9930's foreground lock): the
+    # person brings the password box forward first (X gives it the keyboard, as a click on it does)
+    xdotool search --onlyvisible --name '^Password$' windowfocus 2>/dev/null; sleep 0.5
     xdotool type sesame; xdotool key Return
     wait_field pages 4 15 "$D3" && pass "a password-protected PDF asks, and opens with the password" || fail "password: pages '$(field pages "$D3")' error '$(field error "$D3")'"
     wine taskkill /f /im sg-pdf64.exe >/dev/null 2>&1; sleep 1

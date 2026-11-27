@@ -202,6 +202,9 @@ fi
 wine reg add 'HKCU\Software\Microsoft\Windows\DWM' /v AccentColor /t REG_DWORD /d 0xff3e8910 /f >/dev/null 2>&1
 
 # --- the calculator: URI --------------------------------------------------------------------
+# the first one closed (Alt+F4), as a person would: a program started from outside after the person's
+# clicks opens behind the window in front (wine-sg 9930's foreground lock), and its = key was sampled there
+xdotool key alt+F4; sleep 1.5
 DUMP2="$T/calc2.dump"
 SG_CALC_DUMP="$(wine winepath -w "$DUMP2" | tr -d '\r')" wine start calculator:scientific >/dev/null 2>&1
 i=0; while [ ! -s "$DUMP2" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done

@@ -343,6 +343,19 @@ test-flyout-toggle: build
 	     || { echo "flyout-toggle-check: the mutant FLYOUT_STAYS was not caught"; exit 1; }; \
 	 echo "flyout-toggle-check: mutant FLYOUT_STAYS caught"
 
+# The foreground lock (wine-sg 9930): a second sg-notify / sg-calendar hands the running one the right to
+# come forward (test/handoff-check.sh; needs SG_WINE with the lock); the mutant must fail it.
+.PHONY: test-handoff
+test-handoff: build
+	@sh test/handoff-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_HANDOFF_NO_GRANT -o $(BUILD)/sg-notify-mut.exe src/sg-notify.c \
+	     -lshell32 -luser32 -lgdi32 -ladvapi32 -municode -mwindows || exit 1; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_HANDOFF_NO_GRANT -o $(BUILD)/sg-calendar-mut.exe src/sg-calendar.c \
+	     -lshell32 -luser32 -lgdi32 -ladvapi32 || exit 1; \
+	 SG_NOTIFY_EXE=$(BUILD)/sg-notify-mut.exe SG_CALENDAR_EXE=$(BUILD)/sg-calendar-mut.exe sh test/handoff-check.sh >/dev/null 2>&1; rc=$$?; \
+	 [ $$rc -eq 1 ] || { echo "handoff-check: the mutant HANDOFF_NO_GRANT was not caught ($$rc)"; exit 1; }; \
+	 echo "handoff-check: mutant HANDOFF_NO_GRANT caught"
+
 # Settings > Time & Language > Language (the person's keyboards): test/keyboards-check.sh, and each
 # mutant build must fail it.
 .PHONY: test-keyboards

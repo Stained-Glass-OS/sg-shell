@@ -1101,6 +1101,17 @@ static void create_flyout(void)
                             0, 0, fly_w(), fly_h(), g_host, NULL, GetModuleHandleW(NULL), NULL);
 }
 
+/* the foreground lock (wine-sg 9930): the running one may come forward on this request, made on the
+ * person's key or click -- as Windows programs hand it on (AllowSetForegroundWindow) */
+static void pass_foreground(HWND to)
+{
+    DWORD pid;
+#ifdef SG_MUTANT_HANDOFF_NO_GRANT
+    return;
+#endif
+    if (to && GetWindowThreadProcessId(to, &pid)) AllowSetForegroundWindow(pid);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
 {
     WNDCLASSW wc = { 0 };
@@ -1123,6 +1134,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     if (bar_arg) bar = (HWND)(ULONG_PTR)wcstoul(bar_arg + 5, NULL, 0);
     g_toggle_msg = RegisterWindowMessageW(L"SgCalendarToggle");
     if ((running = FindWindowW(L"SgCalendarHost", NULL))) {   /* one per session: that one opens or closes */
+        pass_foreground(running);
         if (show_now) PostMessageW(running, g_toggle_msg, 0, (LPARAM)bar);
         return 0;
     }

@@ -1,3 +1,21 @@
+sg-shell (0.1.0-316) unstable; urgency=medium
+
+  * The foreground lock (wine-sg 9930): a second sg-notify (Win+A),
+    sg-calendar (the clock), sg-emoji and Settings that hand their request
+    to the running instance grant it the right to come forward
+    (AllowSetForegroundWindow), as Windows programs do; without it the
+    panel stayed behind the window in front. Gate test-handoff
+    (test/handoff-check.sh, skips on a Wine without the lock), mutant
+    SG_MUTANT_HANDOFF_NO_GRANT.
+    Checks that started a program from outside after the person's input and
+    then typed into it now bring it forward as a person does
+    (test/front-probe.c: a click on its caption or taskbar button, else
+    Alt+Tab; sg-start-poke: the Windows key and the search button) --
+    start, paint, photos, snip, calc (the first calculator closed), pdf
+    (the password box given the keyboard).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Thu, 26 Nov 2026 21:31:01 -0800
+
 sg-shell (0.1.0-315) unstable; urgency=medium
 
   * Settings > Display > Scale is the selected display's own scale, as on

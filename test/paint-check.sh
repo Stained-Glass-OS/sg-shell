@@ -59,6 +59,7 @@ int wmain(int argc, WCHAR **argv)
 }
 EOF
 "$MINGW" -O2 -municode -o "$WINEPREFIX/drive_c/probe.exe" "$T/probe.c" -luser32 || { echo "FAIL  probe did not build"; exit 1; }
+"$MINGW" -O2 -municode -o "$T/front.exe" "$HERE/test/front-probe.c" || { echo "FAIL  front-probe did not build"; exit 1; }
 for r in "$HERE"/theme/5*.reg; do wine regedit /S "$(wine winepath -w "$r" 2>/dev/null | tr -d '\r')" >/dev/null 2>&1; done
 reg() { wine reg add "$@" /f >/dev/null 2>&1; }
 reg 'HKCU\Software\Wine\Explorer' /v Desktop /d shell
@@ -83,9 +84,8 @@ click_item() { set -- $(item "$1" "$2"); [ $# -eq 2 ] || return 1; xdotool mouse
 click_label() {
     set -- $(awk -v l="$2" '$1 == "item" { n = $7; for (i = 8; i <= NF; i++) n = n " " $i; if (n == l) { printf "%d %d\n", ($3 + $5) / 2, ($4 + $6) / 2; exit } }' "$1")
     [ $# -eq 2 ] || return 1; xdotool mousemove "$1" "$2" click 1; sleep 0.4; }
-# bring a Paint window to the front by its title (a probe: there is no X
-# window manager here for xdotool to ask)
-front() { wine 'C:\probe.exe' activate "$2 - Paint" >/dev/null 2>&1; sleep 0.8; }
+# bring a Paint window to the front by its title, as a person does (test/front-probe.c)
+front() { wine "$T/front.exe" "$2 - Paint" >/dev/null 2>&1; sleep 0.8; }
 # screen position of picture pixel x,y (100% zoom)
 at() { awk -v x="$2" -v y="$3" '$1 == "canvas" { printf "%d %d\n", $2 + x, $3 + y; exit }' "$1"; }
 drag() {           # dump x1 y1 x2 y2 [button]
@@ -201,6 +201,9 @@ if wait_dump "$D2" title "in.png - Paint" 30; then pass "a file on the command l
 else fail "command-line file: title $(dv "$D2" title)"; fi
 [ "$(dv "$D2" image)" = "64 48" ] && pass "its size is 64 x 48" || fail "opened size $(dv "$D2" image)"
 sleep 1
+# started from outside after the person's input it opens behind the first Paint (wine-sg 9930's foreground
+# lock): the person brings it forward first
+front "$D2" in.png
 xdotool key ctrl+r; sleep 0.5
 [ "$(dv "$D2" image)" = "48 64" ] && pass "Ctrl+R rotates it right" || fail "after rotating: $(dv "$D2" image)"
 xdotool key ctrl+s; sleep 1.5

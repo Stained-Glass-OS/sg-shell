@@ -742,6 +742,17 @@ static void make_fonts(void)
     g_font_head = make_font(U(20), FW_NORMAL);
 }
 
+/* the foreground lock (wine-sg 9930): the running one may come forward on this request, made on the
+ * person's key or click -- as Windows programs hand it on (AllowSetForegroundWindow) */
+static void pass_foreground(HWND to)
+{
+    DWORD pid;
+#ifdef SG_MUTANT_HANDOFF_NO_GRANT
+    return;
+#endif
+    if (to && GetWindowThreadProcessId(to, &pid)) AllowSetForegroundWindow(pid);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
 {
     static WCHAR dump_path[MAX_PATH];
@@ -770,6 +781,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     /* one per session: a second (Win+A) asks the first */
     if ((running = FindWindowW(L"SgNotifyTray", NULL)))
     {
+        pass_foreground(running);
         if (cmdline && wcsstr(cmdline, L"/toggle")) PostMessageW(running, WM_TOGGLE, 0, 0);
         return 0;
     }

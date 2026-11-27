@@ -950,6 +950,11 @@ static BOOL hand_off(enum page_id p)
     COPYDATASTRUCT cd = { SET_COPYDATA_PAGE, sizeof(p), &p };
     DWORD_PTR r;
     if (!other || GetEnvironmentVariableW(L"SG_SETTINGS_NEW_WINDOW", NULL, 0)) return FALSE;
+    {
+        /* the foreground lock (wine-sg 9930): that window may come forward itself too */
+        DWORD pid;
+        if (GetWindowThreadProcessId(other, &pid)) AllowSetForegroundWindow(pid);
+    }
     if (!SendMessageTimeoutW(other, WM_COPYDATA, 0, (LPARAM)&cd, SMTO_ABORTIFHUNG, 3000, &r)) return FALSE;
     if (IsIconic(other)) ShowWindow(other, SW_RESTORE);
     SetForegroundWindow(other);

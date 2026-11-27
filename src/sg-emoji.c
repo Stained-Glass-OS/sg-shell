@@ -629,6 +629,17 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* the foreground lock (wine-sg 9930): the running one may come forward on this request, made on the
+ * person's key or click -- as Windows programs hand it on (AllowSetForegroundWindow) */
+static void pass_foreground(HWND to)
+{
+    DWORD pid;
+#ifdef SG_MUTANT_HANDOFF_NO_GRANT
+    return;
+#endif
+    if (to && GetWindowThreadProcessId(to, &pid)) AllowSetForegroundWindow(pid);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
 {
     WNDCLASSW wc = { 0 };
@@ -639,6 +650,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     /* Win+. again (or /toggle) closes an open panel */
     if ((running = FindWindowW(L"SgEmojiPanel", NULL)))
     {
+        pass_foreground(running);   /* closing, it gives the keyboard back to the window it typed into */
         PostMessageW(running, WM_CLOSE, 0, 0);
         return 0;
     }

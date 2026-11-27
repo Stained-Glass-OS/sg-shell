@@ -43,6 +43,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 "$MINGW" -O2 -municode -o "$T/probe.exe" "$HERE/test/sg-snip-probe.c" -lgdi32 -luser32 || { fail "probe did not build"; exit 1; }
+"$MINGW" -O2 -municode -o "$T/front.exe" "$HERE/test/front-probe.c" || { fail "front-probe did not build"; exit 1; }
 "$MINGW" -O2 -municode -mwindows -o "$T/target.exe" "$HERE/test/sg-snip-target.c" -lgdi32 -luser32 -lshell32 || { fail "target did not build"; exit 1; }
 
 Xvfb ":$DPY" -screen 0 1024x768x24 -nolisten tcp >/dev/null 2>&1 & XP=$!
@@ -251,6 +252,9 @@ rm -f "$DUMP"; wine start snippingtool.exe >/dev/null 2>&1
 if wait_state tool; then pass "snippingtool.exe opens the Snipping Tool window"; else fail "no tool window: $(D state)"; fi
 sleep 1; shot tool
 case "$(D window_title)" in "Snipping Tool") pass "titled Snipping Tool" ;; *) fail "title: $(D window_title)" ;; esac
+# started from outside after the person's input it opens behind (wine-sg 9930's foreground lock): the
+# person brings it forward first (test/front-probe.c)
+wine "$T/front.exe" 'Snipping Tool' >/dev/null 2>&1; sleep 0.8
 # shellcheck disable=SC2046
 click $(centre "$(D button_new)")
 wait_state overlay 10 && pass "New starts a snip" || fail "New: $(D state)"
