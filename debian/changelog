@@ -1,3 +1,23 @@
+sg-shell (0.1.0-336) unstable; urgency=medium
+
+  * SG Store: 21 apps that earlier walks found working (store3, ledger
+    i0875), each installed, opened and uninstalled in a VM: ILSpy 5.0.2,
+    GraphStudioNext and Git Extensions 3.5.4 as portable pins (ILSpy needs
+    Wine Mono sg38 or newer), and Rufus, WinBox, WinMTR, Cemu, WinUAE,
+    pgAdmin 4, Beekeeper Studio, YACReader, Thorium Reader, F3D, ART,
+    Siril, QElectroTech, Logisim-evolution, Notepad2, LabPlot, LightZone
+    and LTspice (344-364).
+  * A portable app's uninstaller is the store's own (i0876), as winget's
+    entries name winget: --uninstall-portable closes the program, deletes
+    the files the store put there and the folders that leaves empty, keeps
+    what the program made there, and takes the entry away only when every
+    file of the app's is gone. The cmd rmdir it replaces dropped Rufus's
+    entry while Rufus, running elevated, kept its folder, and never ended
+    on a folder it could not empty. Gate store-portable-check (mutant
+    ENTRYFIRST).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 03:10:00 -0800
+
 sg-shell (0.1.0-335) unstable; urgency=medium
 
   * SG Store (games1, ledger i0837): the EA app (winget

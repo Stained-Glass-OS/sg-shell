@@ -1188,9 +1188,13 @@ static BOOL install_portable(package_t *p, const app_t *a, BOOL machine, WCHAR *
         lstrcpynW(err, L"The app's Uninstall entry could not be written.", cch);
         goto fail;
     }
-    GetSystemDirectoryW(sys, MAX_PATH);
-    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\cmd.exe\" /c rmdir /s /q \"%ls\" & reg delete \"%ls\\%ls\" /f", sys, base,
-             root == HKEY_LOCAL_MACHINE ? L"HKLM" : L"HKCU", sub);
+    /* its uninstaller is the store's own, as winget's portable entries name winget: a program still
+     * running from the folder (Rufus, elevated) is closed or makes the uninstall fail with its entry
+     * kept -- cmd's rmdir left the folder and the entry went, and on a folder it could not empty it
+     * never ended */
+    GetModuleFileNameW(NULL, sys, MAX_PATH);
+    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --uninstall-portable %ls \"%ls\"", sys,
+             root == HKEY_LOCAL_MACHINE ? L"HKLM" : L"HKCU", wcsrchr(base, L'\\') + 1);
     set_sz(key, L"DisplayName", a && a->detect_name[0] && !wcspbrk(a->detect_name, L"|!") ? a->detect_name : a ? a->name : p->id);
     if (p->version[0]) set_sz(key, L"DisplayVersion", p->version);
     if (a) set_sz(key, L"Publisher", a->publisher);
@@ -1222,6 +1226,84 @@ static BOOL install_portable(package_t *p, const app_t *a, BOOL machine, WCHAR *
 fail:
     free(old.s); free(now.s);
     return FALSE;
+}
+
+/* --uninstall-portable HKCU|HKLM NAME__SgStore: a portable app's uninstaller (its entry's UninstallString),
+ * as winget uninstalls one: the program closed, the files the store put there (SgStoreFiles) deleted and
+ * the folders that leaves empty; what the program made there stays (winget's default, --preserve) -- an
+ * entry from before SgStoreFiles takes its whole folder. The entry goes only when every file of the
+ * app's is gone; 0: uninstalled. Only a folder in a WinGet Packages folder is touched. */
+static BOOL tree_remove(const WCHAR *dir)
+{
+    WCHAR pat[MAX_PATH], path[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    BOOL ok = TRUE;
+    if (lstrlenW(dir) + 3 >= MAX_PATH) return FALSE;
+    swprintf(pat, MAX_PATH, L"%ls\\*", dir);
+    if ((h = FindFirstFileW(pat, &fd)) != INVALID_HANDLE_VALUE) {
+        do {
+            if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+            if (lstrlenW(dir) + lstrlenW(fd.cFileName) + 2 >= MAX_PATH) { ok = FALSE; continue; }
+            swprintf(path, MAX_PATH, L"%ls\\%ls", dir, fd.cFileName);
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ok &= tree_remove(path);
+            else {
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_READONLY) SetFileAttributesW(path, FILE_ATTRIBUTE_NORMAL);
+                ok &= DeleteFileW(path);
+            }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return RemoveDirectoryW(dir) && ok && GetFileAttributesW(dir) == INVALID_FILE_ATTRIBUTES;
+}
+
+static BOOL in_packages(const WCHAR *dir, BOOL machine)
+{
+    WCHAR base[MAX_PATH], *leaf = wcsrchr(dir, L'\\');
+    int n;
+    if (!leaf || !portable_base(leaf + 1, machine, base)) return FALSE;
+    /* portable_base made <root>\<leaf>__SgStore: dir must be <root>\<name>__SgStore */
+    n = lstrlenW(base) - lstrlenW(leaf + 1) - 9;
+    return n > 0 && !_wcsnicmp(base, dir, n) && !wcschr(leaf + 1, L'/') && wcsstr(leaf, L"..") == NULL &&
+           lstrlenW(leaf) > 9 && !_wcsicmp(leaf + lstrlenW(leaf) - 9, L"__SgStore");
+}
+
+int app_portable_uninstall(const WCHAR *root_name, const WCHAR *leaf)
+{
+    WCHAR sub[300], dir[MAX_PATH], path[MAX_PATH], *c;
+    const WCHAR *name;
+    BOOL machine = !lstrcmpiW(root_name, L"HKLM"), left = FALSE;
+    HKEY root = machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER, key;
+    DWORD cb = sizeof(dir);
+    file_list_t files;
+    if (wcschr(leaf, L'\\') || lstrlenW(leaf) + 64 >= ARRAYSIZE(sub)) return SYS_FAILED;
+    swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", leaf);
+    if (RegOpenKeyExW(root, sub, 0, KEY_READ, &key)) return SYS_FAILED;
+    if (RegGetValueW(key, NULL, L"InstallLocation", RRF_RT_REG_SZ, NULL, dir, &cb)) dir[0] = 0;
+    RegCloseKey(key);
+    if (!dir[0] || !in_packages(dir, machine)) return SYS_FAILED;
+    list_read(root, sub, &files);
+    if (GetFileAttributesW(dir) != INVALID_FILE_ATTRIBUTES) {
+        close_running(dir);
+        if (!files.s) left = !tree_remove(dir);
+        else {
+            for (name = files.s; name < files.s + files.n && *name; name += lstrlenW(name) + 1) {
+                if (wcsstr(name, L"..") || lstrlenW(dir) + lstrlenW(name) + 2 >= MAX_PATH) continue;
+                swprintf(path, MAX_PATH, L"%ls\\%ls", dir, name);
+                if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) continue;
+                SetFileAttributesW(path, FILE_ATTRIBUTE_NORMAL);
+                /* (Wine deletes on close and says nothing when that fails: look again) */
+                if (!DeleteFileW(path) || GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) { left = TRUE; continue; }
+                while ((c = wcsrchr(path, L'\\')) && c > path + lstrlenW(dir)) { *c = 0; if (!RemoveDirectoryW(path)) break; }
+            }
+            RemoveDirectoryW(dir);   /* when that left it empty */
+        }
+    }
+    free(files.s);
+#ifndef SG_MUTANT_ENTRYFIRST
+    if (left) return SYS_FAILED;
+#endif
+    return RegDeleteKeyW(root, sub) ? SYS_FAILED : SYS_OK;
 }
 
 /* the catalogue's Scope machine, for a portable app: an elevated copy of the store puts it in Program

@@ -21,6 +21,7 @@
  *   --update-all             check, then update every app with an update (Update all): one consent
  *   --elevated-helper FILE   that consent's helper (sysinstall.c)
  *   --elevated-portable ORD FILE   a portable app for the machine (Scope machine)
+ *   --uninstall-portable HKCU|HKLM NAME__SgStore   a portable app's uninstaller (its entry names it)
  *   --elevated-uninstall-run "DIR" "UNINSTALLER" ARGS...
  *                            (runas) the uninstaller, then its dead shortcuts (catalog.c)
  *                                  the elevated half (sysinstall.c)
@@ -1843,6 +1844,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
              * dead shortcuts, all-users ones too: one consent (catalog.c) */
             LocalFree(argv);
             return app_uninstall_run_elevated(GetCommandLineW());
+        }
+        if (!lstrcmpiW(argv[i], L"--uninstall-portable") && i + 2 < argc) {
+            /* a portable app's uninstaller (its entry's UninstallString; elevated for the machine's) */
+            rc = app_portable_uninstall(argv[i + 1], argv[i + 2]);
+            LocalFree(argv);
+            return rc;
         }
         if (!lstrcmpiW(argv[i], L"--elevated-portable") && i + 2 < argc) {
             /* (runas) a portable app for the machine: its download checked again and put in

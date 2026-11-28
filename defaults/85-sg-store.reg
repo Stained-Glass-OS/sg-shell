@@ -5777,6 +5777,230 @@ Windows Registry Editor Version 5.00
 "Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openttd.OpenTTD.png"
 "Linux"="L102"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\344]
+"Name"="ILSpy"
+"Publisher"="ICSharpCode"
+"Description"="The .NET decompiler: browse an assembly's code as C#."
+"Category"="Development"
+"Colour"=dword:00406080
+"Tier"="windows"
+"Source"="pin:https://github.com/icsharpcode/ILSpy/releases/download/v5.0.2/ILSpy_binaries_5.0.2.5153.zip|854583f8d43b7d30716d62ab39ec4e9b93122f0bf3b310c652a0f7383e79f7f5|portable-zip|ILSpy.exe"
+"PinVersion"="5.0.2.5153"
+"DetectName"="ILSpy"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\345]
+"Name"="GraphStudioNext"
+"Publisher"="cplussharp"
+"Description"="Builds and tests DirectShow filter graphs: render a file, inspect filters and pins."
+"Category"="Development"
+"Colour"=dword:00607040
+"Tier"="windows"
+"Source"="pin:https://github.com/cplussharp/graph-studio-next/releases/download/v0.7.3.1/graphstudionext64.exe|374b0bbf589663f5c09b6ca255de74bbab0e0d570a058b19655e444ca591a63a|portable|"
+"PinVersion"="0.7.3.1"
+"DetectName"="GraphStudioNext"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\346]
+"Name"="Git Extensions"
+"Publisher"="Git Extensions team"
+"Description"="A graphical Git client: history, commits, branches and merges."
+"Category"="Development"
+"Colour"=dword:00a04020
+"Tier"="windows"
+"Source"="pin:https://github.com/gitextensions/gitextensions/releases/download/v3.5.4/GitExtensions-Portable-3.5.4.12724-65f01f399.zip|b1e2fb39319e80ec5da2af66ca62ab1f7b0b63f2bdadc2c9388ac67e2ae6f74b|portable-zip|GitExtensions\\GitExtensions.exe"
+"PinVersion"="3.5.4.12724"
+"DetectName"="Git Extensions"
+"Depends"="Git.Git"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\347]
+"Name"="Rufus"
+"Publisher"="Pete Batard"
+"Description"="Makes bootable USB drives from ISO images."
+"Category"="Utilities"
+"Colour"=dword:00305090
+"Tier"="windows"
+"Source"="winget:Rufus.Rufus"
+"DetectName"="Rufus"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\348]
+"Name"="WinBox"
+"Publisher"="MikroTik"
+"Description"="Configures MikroTik routers and RouterOS devices."
+"Category"="Internet"
+"Colour"=dword:00203040
+"Tier"="windows"
+"Source"="winget:Mikrotik.Winbox"
+"DetectName"="WinBox"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\349]
+"Name"="WinMTR"
+"Publisher"="leeter"
+"Description"="Traceroute and ping in one: watch every hop to a host."
+"Category"="Internet"
+"Colour"=dword:00406020
+"Tier"="windows"
+"Source"="winget:leeter.WinMTR"
+"DetectName"="WinMTR"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\350]
+"Name"="Cemu"
+"Publisher"="Cemu team"
+"Description"="Wii U emulator."
+"Category"="Games"
+"Colour"=dword:0040a0c0
+"Tier"="windows"
+"Source"="winget:Cemu.Cemu"
+"DetectName"="Cemu"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/info.cemu.Cemu.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\351]
+"Name"="WinUAE"
+"Publisher"="Toni Wilen"
+"Description"="Amiga emulator."
+"Category"="Games"
+"Colour"=dword:00c05020
+"Tier"="windows"
+"Source"="winget:WinUAE.WinUAE"
+"DetectName"="WinUAE"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\352]
+"Name"="pgAdmin 4"
+"Publisher"="The pgAdmin Development Team"
+"Description"="Manage PostgreSQL databases: queries, tables, backups."
+"Category"="Development"
+"Colour"=dword:00336791
+"Tier"="windows"
+"Source"="winget:PostgreSQL.pgAdmin"
+"DetectName"="pgAdmin 4"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.pgadmin.pgadmin4.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\353]
+"Name"="Beekeeper Studio"
+"Publisher"="Beekeeper Studio"
+"Description"="SQL editor and database manager for SQLite, PostgreSQL, MySQL and more."
+"Category"="Development"
+"Colour"=dword:00f0b020
+"Tier"="windows"
+"Source"="winget:beekeeper-studio.beekeeper-studio"
+"DetectName"="Beekeeper Studio"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.beekeeperstudio.Studio.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\354]
+"Name"="YACReader"
+"Publisher"="YACReader"
+"Description"="Comic book reader and library (CBZ, CBR, PDF)."
+"Category"="Media"
+"Colour"=dword:00e05030
+"Tier"="windows"
+"Source"="winget:YACReader.YACReader"
+"DetectName"="YACReader"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.yacreader.YACReader.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\355]
+"Name"="Thorium Reader"
+"Publisher"="EDRLab"
+"Description"="EPUB and audiobook reader with read aloud."
+"Category"="Education"
+"Colour"=dword:004060a0
+"Tier"="windows"
+"Source"="winget:EDRLab.Thorium"
+"DetectName"="Thorium"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\356]
+"Name"="F3D"
+"Publisher"="F3D contributors"
+"Description"="Fast 3D model viewer (glTF, OBJ, STL, PLY...)."
+"Category"="Graphics"
+"Colour"=dword:00505050
+"Tier"="windows"
+"Source"="winget:f3d-app.f3d"
+"DetectName"="F3D"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/io.github.f3d_app.f3d.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\357]
+"Name"="ART"
+"Publisher"="ART developers"
+"Description"="RAW photo editor (a RawTherapee offshoot)."
+"Category"="Graphics"
+"Colour"=dword:00808020
+"Tier"="windows"
+"Source"="winget:ART.ART"
+"DetectName"="ART"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/us.pixls.art.ART.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\358]
+"Name"="Siril"
+"Publisher"="Free-Astro"
+"Description"="Astronomical image processing: stack and enhance deep-sky photos."
+"Category"="Graphics"
+"Colour"=dword:00202060
+"Tier"="windows"
+"Source"="winget:Free-Astro.Siril"
+"DetectName"="Siril"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.free_astro.siril.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\359]
+"Name"="QElectroTech"
+"Publisher"="QElectroTech team"
+"Description"="Draws electrical diagrams and schematics."
+"Category"="Productivity"
+"Colour"=dword:00d0a000
+"Tier"="windows"
+"Source"="winget:QElectroTech.QElectroTech"
+"DetectName"="QElectroTech"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.qelectrotech.QElectroTech.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\360]
+"Name"="Logisim-evolution"
+"Publisher"="Logisim-evolution team"
+"Description"="Design and simulate digital logic circuits."
+"Category"="Education"
+"Colour"=dword:00008080
+"Tier"="windows"
+"Source"="winget:logisim-evolution.logisim-evolution"
+"DetectName"="logisim-evolution"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/com.github.reds.LogisimEvolution.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\361]
+"Name"="Notepad2"
+"Publisher"="Florian Balmer"
+"Description"="A light, fast text editor with syntax highlighting."
+"Category"="Productivity"
+"Colour"=dword:00306030
+"Tier"="windows"
+"Source"="winget:flos-freeware.Notepad2"
+"DetectName"="Notepad2"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\362]
+"Name"="LabPlot"
+"Publisher"="KDE"
+"Description"="Data analysis and plotting: spreadsheets, curve fitting, charts."
+"Category"="Education"
+"Colour"=dword:002060a0
+"Tier"="windows"
+"Source"="winget:KDE.LabPlot"
+"DetectName"="LabPlot"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.kde.labplot.png"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\363]
+"Name"="LightZone"
+"Publisher"="LightZone Project"
+"Description"="Photo editor for RAW and JPEG with non-destructive zones."
+"Category"="Graphics"
+"Colour"=dword:00604030
+"Tier"="windows"
+"Source"="winget:LightZoneProject.LightZone"
+"DetectName"="LightZone"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\364]
+"Name"="LTspice"
+"Publisher"="Analog Devices"
+"Description"="SPICE circuit simulator with schematic capture and waveforms."
+"Category"="Development"
+"Colour"=dword:00a02060
+"Tier"="windows"
+"Source"="winget:AnalogDevices.LTspice"
+"DetectName"="LTspice"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

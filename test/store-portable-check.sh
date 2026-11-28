@@ -47,7 +47,7 @@ trap cleanup EXIT INT TERM
 
 STORE_SRC="$HERE/src/store/main.c $HERE/src/store/details.c $HERE/src/store/catalog.c $HERE/src/store/sysinstall.c $HERE/src/store/icons.c $HERE/src/store/msix.c $HERE/src/browser/fetch.c $HERE/src/browser/manifest.c $HERE/src/zip/zipcore.c"
 STORE_LIBS="-lruntimeobject -lsetupapi -lwininet -lbcrypt -lshlwapi -lshell32 -lgdi32 -luser32 -ladvapi32 -lole32 -luuid -lwindowscodecs -lmsimg32 -lcomdlg32"
-for m in NOPINPORTABLE PORTABLEKEEPOLD PORTABLEUSERONLY STALELINK; do
+for m in NOPINPORTABLE PORTABLEKEEPOLD PORTABLEUSERONLY STALELINK ENTRYFIRST; do
     # shellcheck disable=SC2086
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-DSG_MUTANT_$m" -o "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log" \
@@ -137,9 +137,27 @@ run --install P1; ec=$?
 [ "$(find "$PROGS" -name '*.lnk' | wc -l)" = 1 ] && pass "still one Start shortcut" || fail "shortcuts: $(ls "$PROGS")"
 
 # --- C. Uninstall --------------------------------------------------------------------------------
+# a folder that cannot be taken away (a program still running from it): the entry stays, the store
+# says so, and the app can be uninstalled again later
+chmod 555 "$P/Viewer-x/data"
+SG_STORE_UNINSTALL_GRACE=2000 run --uninstall P1
+grep -q '^uninstall P1 fail' "$D.result" 2>/dev/null && wine reg query "$E" >/dev/null 2>&1 && [ -f "$P/Viewer-x/data/new.txt" ] \
+    && pass "a folder that cannot be removed keeps its entry, and the store says it was not removed" \
+    || fail "busy folder: $(cat "$D.result" 2>/dev/null); entry $(wine reg query "$E" >/dev/null 2>&1 && echo kept || echo gone)"
+chmod 755 "$P/Viewer-x/data"
+SG_MUT="$T/mut-entryfirst.exe" run --install P1
+chmod 555 "$P/Viewer-x/data"
+SG_STORE_UNINSTALL_GRACE=2000 run --uninstall P1
+wine reg query "$E" >/dev/null 2>&1 && fail "ENTRYFIRST not detected" || pass "MUTANT ENTRYFIRST takes the entry and leaves the folder (gate catches it)"
+chmod 755 "$P/Viewer-x/data"
+run --install P1
 run --uninstall P1
-grep -q '^uninstall P1 ok' "$D.result" 2>/dev/null && [ ! -d "$P" ] && ! wine reg query "$E" >/dev/null 2>&1 && [ ! -e "$PROGS/Zip Viewer.lnk" ] \
-    && pass "Uninstall takes its folder, entry and Start shortcut away" || fail "uninstall P1: $(cat "$D.result" 2>/dev/null); $(ls "$P" "$PROGS" 2>&1 | head -4)"
+grep -q '^uninstall P1 ok' "$D.result" 2>/dev/null && [ ! -e "$P/Viewer-x/bin" ] && [ ! -e "$P/Viewer-x/readme.txt" ] && [ ! -e "$P/Viewer-x/plugins" ] \
+    && ! wine reg query "$E" >/dev/null 2>&1 && [ ! -e "$PROGS/Zip Viewer.lnk" ] \
+    && pass "Uninstall takes its files, entry and Start shortcut away" || fail "uninstall P1: $(cat "$D.result" 2>/dev/null); $(ls -R "$P" "$PROGS" 2>&1 | head -8)"
+[ "$(cd "$P" 2>/dev/null && find . -type f)" = "./Viewer-x/data/user.txt" ] && pass "and keeps what the program made there (winget's default)" \
+    || fail "after uninstall: $(cd "$P" 2>/dev/null && find .)"
+rm -rf "$P"
 
 # the mutants of A and B
 reg "$K\\P1" /v Source /d "pin:$U/viewer-1.zip|$S1|portable-zip|Viewer-x\\bin\\Viewer.exe"; reg "$K\\P1" /v PinVersion /d 1.0
