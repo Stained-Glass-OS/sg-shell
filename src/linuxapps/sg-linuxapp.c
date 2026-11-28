@@ -71,6 +71,7 @@
 #include <objbase.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <ctype.h>
 
 #define FOLDER_NAME L"Linux apps"
 #define MAX_APPS 512
@@ -1407,6 +1408,7 @@ static void sync_jump_list(const struct app *a, const WCHAR *aumid, const WCHAR 
             _snwprintf(sig + lstrlenW(sig), ARRAYSIZE(sig) - lstrlenW(sig), L"%hs=%ls;", p, names[n]);
         n++;
     }
+    if (n) lstrcatW(sig, L"+recent");   /* the list as it is now made: with its Recent category */
     free(text);
     _snwprintf(sub, ARRAYSIZE(sub), AUMID_KEY L"\\%ls", aumid);
     sub[ARRAYSIZE(sub) - 1] = 0;
@@ -1423,6 +1425,8 @@ static void sync_jump_list(const struct app *a, const WCHAR *aumid, const WCHAR 
         if (SUCCEEDED(ICustomDestinationList_BeginList(dest, &slots, &IID_IObjectArray, (void **)&removed)) &&
             SUCCEEDED(CoCreateInstance(&CLSID_EnumerableObjectCollection, NULL, CLSCTX_INPROC_SERVER, &IID_IObjectCollection,
                                        (void **)&tasks))) {
+            /* its recent files above its tasks, as a Windows program's list asks (sync_recent fills it) */
+            ICustomDestinationList_AppendKnownCategory(dest, KDC_RECENT);
             for (i = 0; i < n; i++) {
                 IShellLinkW *link;
                 WCHAR args[MAX_PATH + 200];
@@ -1479,6 +1483,15 @@ static void unregister_gone_aumids(WCHAR (*made)[130], int nmade)
             ICustomDestinationList_DeleteList(dest, gone[i]);
             ICustomDestinationList_Release(dest);
         }
+        {
+            /* and its recent files */
+            IApplicationDestinations *dests;
+            if (SUCCEEDED(CoCreateInstance(&CLSID_ApplicationDestinations, NULL, CLSCTX_INPROC_SERVER,
+                                           &IID_IApplicationDestinations, (void **)&dests))) {
+                if (SUCCEEDED(IApplicationDestinations_SetAppID(dests, gone[i]))) IApplicationDestinations_RemoveAllDestinations(dests);
+                IApplicationDestinations_Release(dests);
+            }
+        }
         _snwprintf(sub, ARRAYSIZE(sub), AUMID_KEY L"\\%ls", gone[i]);
         sub[ARRAYSIZE(sub) - 1] = 0;
         RegDeleteTreeW(HKEY_CURRENT_USER, sub);
@@ -1487,6 +1500,7 @@ static void unregister_gone_aumids(WCHAR (*made)[130], int nmade)
 }
 
 static void sync_default_browser(void);
+static void sync_recent(void);
 
 static int sync_apps(void)
 {
@@ -1576,6 +1590,7 @@ static int sync_apps(void)
     free(made);
     SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, folder, NULL);
     sync_default_browser();
+    sync_recent();
     return 0;
 }
 
@@ -2076,6 +2091,139 @@ done:
     return rc;
 }
 
+/* ---- recent files: a Linux app's on its jump list ----------------------
+ * A Linux program records the files it opened in recently-used.xbel (GTK's
+ * GtkRecentManager, the freedesktop desktop bookmarks: the file, and the
+ * program by its command). Each new one goes to that app's recent documents
+ * (SHAddToRecentDocs with its AppUserModelID), so the app's jump list shows
+ * them, as a Windows program's do. What was taken already is remembered by
+ * its time (Software\Stained Glass\Linux apps RecentSeen); the first time,
+ * the last thirty days. */
+#define LINUXAPPS_KEY L"Software\\Stained Glass\\Linux apps"
+
+static char *xml_attr(const char *tag, const char *end, const char *name, char *out, int len)
+{
+    char key[40];
+    const char *p, *q;
+    int n = 0;
+    _snprintf(key, sizeof(key), " %s=\"", name);
+    key[sizeof(key) - 1] = 0;
+    if (!(p = strstr(tag, key)) || p >= end) return NULL;
+    p += strlen(key);
+    if (!(q = strchr(p, '"')) || q > end) return NULL;
+    while (p < q && n < len - 1) {
+        if (*p == '&') {
+            static const struct { const char *e; char c; } ents[] = { {"&apos;", '\''}, {"&quot;", '"'}, {"&amp;", '&'}, {"&lt;", '<'}, {"&gt;", '>'} };
+            size_t k;
+            for (k = 0; k < ARRAYSIZE(ents); k++)
+                if (!strncmp(p, ents[k].e, strlen(ents[k].e))) { out[n++] = ents[k].c; p += strlen(ents[k].e); break; }
+            if (k < ARRAYSIZE(ents)) continue;
+        }
+        out[n++] = *p++;
+    }
+    out[n] = 0;
+    return out;
+}
+
+/* the app a recorded command is (its program's name), else by the recorder's name */
+static const struct app *recent_app(const char *exec, const char *name)
+{
+    char prog[256], *p = prog, *e;
+    int i;
+    lstrcpynA(prog, exec, sizeof(prog));
+    while (*p == '\'' || *p == '"' || *p == ' ') p++;
+    if ((e = strpbrk(p, " '\""))) *e = 0;
+    if (strrchr(p, '/')) p = strrchr(p, '/') + 1;
+    for (i = 0; i < g_napps; i++)
+        if (!g_apps[i].name_only && (!_stricmp(g_apps[i].exe, p) || !_stricmp(g_apps[i].id, p))) return &g_apps[i];
+    for (i = 0; i < g_napps; i++) {
+        char nm[128];
+        if (g_apps[i].name_only) continue;
+        WideCharToMultiByte(CP_UTF8, 0, g_apps[i].name, -1, nm, sizeof(nm), NULL, NULL);
+        if (!_stricmp(nm, name) || !_stricmp(g_apps[i].id, name) || !_stricmp(g_apps[i].wmclass, name)) return &g_apps[i];
+    }
+    return NULL;
+}
+
+static void url_to_path(const char *url, char *out, int len)
+{
+    int n = 0;
+    const char *p = url + 7;   /* file:// */
+    while (*p && n < len - 1) {
+        if (*p == '%' && isxdigit((unsigned char)p[1]) && isxdigit((unsigned char)p[2])) {
+            char h[3] = { p[1], p[2], 0 };
+            out[n++] = (char)strtol(h, NULL, 16);
+            p += 3;
+        } else out[n++] = *p++;
+    }
+    out[n] = 0;
+}
+
+static void sync_recent(void)
+{
+    char data[MAX_PATH] = "", home[MAX_PATH] = "", path[MAX_PATH], seen[40] = "", newest[40] = "", *text, *b;
+    WCHAR w[MAX_PATH], wseen[40] = L"";
+    DWORD size = sizeof(wseen) - sizeof(WCHAR);
+    int added = 0;
+
+    if (!env_a("XDG_DATA_HOME", data, sizeof(data)) || !data[0]) {
+        if (!home_unix(home, sizeof(home)) || !home[0]) return;
+        _snprintf(data, sizeof(data), "%s/.local/share", home);
+    }
+    if (_snprintf(path, sizeof(path), "%s/recently-used.xbel", data) < 0 || !dos_path(path, w, MAX_PATH)) return;
+    if (!(text = read_file(w, 16 << 20, NULL))) return;
+    if (!RegGetValueW(HKEY_CURRENT_USER, LINUXAPPS_KEY, L"RecentSeen", RRF_RT_REG_SZ, NULL, wseen, &size))
+        WideCharToMultiByte(CP_UTF8, 0, wseen, -1, seen, sizeof(seen), NULL, NULL);
+    if (!seen[0]) {
+        /* the first time: the last thirty days */
+        SYSTEMTIME st;
+        FILETIME ft;
+        ULARGE_INTEGER u;
+        GetSystemTimeAsFileTime(&ft);
+        u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+        u.QuadPart -= 30ULL * 24 * 3600 * 10000000;
+        ft.dwLowDateTime = u.LowPart; ft.dwHighDateTime = u.HighPart;
+        FileTimeToSystemTime(&ft, &st);
+        _snprintf(seen, sizeof(seen), "%04u-%02u-%02uT%02u:%02u:%02u", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    }
+    lstrcpynA(newest, seen, sizeof(newest));
+    for (b = strstr(text, "<bookmark "); b; b = strstr(b + 1, "<bookmark ")) {
+        char *bend = strstr(b, "</bookmark>"), *tagend = strchr(b, '>'), href[2048], *a;
+        if (!bend || !tagend || !xml_attr(b, tagend, "href", href, sizeof(href)) || strncmp(href, "file://", 7)) continue;
+        for (a = strstr(b, "<bookmark:application "); a && a < bend; a = strstr(a + 1, "<bookmark:application ")) {
+            char *aend = strchr(a, '>'), name[256] = "", exec[512] = "", mod[40] = "", file[2048];
+            const struct app *app;
+            if (!aend) break;
+            xml_attr(a, aend, "name", name, sizeof(name));
+            xml_attr(a, aend, "exec", exec, sizeof(exec));
+            if (!xml_attr(a, aend, "modified", mod, sizeof(mod)) || strcmp(mod, seen) <= 0) continue;
+            if (strcmp(mod, newest) > 0) lstrcpynA(newest, mod, sizeof(newest));
+            if (!(app = recent_app(exec, name))) continue;
+            url_to_path(href, file, sizeof(file));
+            if (dos_path(file, w, MAX_PATH) && GetFileAttributesW(w) != INVALID_FILE_ATTRIBUTES) {
+                IShellItem *item;
+                if (SUCCEEDED(SHCreateItemFromParsingName(w, NULL, &IID_IShellItem, (void **)&item))) {
+                    WCHAR aumid[130];
+                    SHARDAPPIDINFO info;
+                    app_aumid(app, aumid, ARRAYSIZE(aumid));
+                    info.psi = item;
+                    info.pszAppID = aumid;
+#ifndef SG_MUTANT_NO_RECENT
+                    SHAddToRecentDocs(SHARD_APPIDINFO, &info);
+#endif
+                    IShellItem_Release(item);
+                    added++;
+                }
+            }
+        }
+    }
+    free(text);
+    if (strcmp(newest, seen)) {
+        MultiByteToWideChar(CP_UTF8, 0, newest, -1, wseen, ARRAYSIZE(wseen));
+        set_sz(HKEY_CURRENT_USER, LINUXAPPS_KEY, L"RecentSeen", wseen);
+    }
+}
+
 /* ---- keeping Start up to date ------------------------------------------ */
 
 static int watch_apps(void)
@@ -2088,9 +2236,9 @@ static int watch_apps(void)
         int nd = data_dirs(dirs, 16), nev = 0, i;
         DWORD r;
 
-        int cfg_ev = -1;
-        char cfg[MAX_PATH] = "", home[MAX_PATH] = "";
-        WCHAR wcfg[MAX_PATH];
+        int cfg_ev = -1, rec_ev = -1;
+        char cfg[MAX_PATH] = "", home[MAX_PATH] = "", data[MAX_PATH] = "";
+        WCHAR wcfg[MAX_PATH], wdata[MAX_PATH];
 
         sync_apps();
         for (i = 0; i < nd; i++) {
@@ -2109,13 +2257,30 @@ static int watch_apps(void)
                 (e = FindFirstChangeNotificationW(wcfg, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE)) != INVALID_HANDLE_VALUE)
                 { cfg_ev = nev; ev[nev++] = e; }
         }
+        /* the user's data folder, where recently-used.xbel is: the recent files only */
+        if ((env_a("XDG_DATA_HOME", data, sizeof(data)) && data[0]) ||
+            (home_unix(home, sizeof(home)) && home[0] && _snprintf(data, sizeof(data), "%s/.local/share", home) > 0)) {
+            HANDLE e;
+            if (nev < 16 && dos_path(data, wdata, MAX_PATH) &&
+                (e = FindFirstChangeNotificationW(wdata, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE)) != INVALID_HANDLE_VALUE)
+                { rec_ev = nev; ev[nev++] = e; }
+        }
         /* a change, or every ten minutes (a folder made since: Flatpak's first app) */
         for (;;) {
             r = nev ? WaitForMultipleObjects(nev, ev, FALSE, 600000) : (Sleep(600000), WAIT_TIMEOUT);
-            if (cfg_ev < 0 || r != WAIT_OBJECT_0 + (DWORD)cfg_ev) break;
-            Sleep(500);
-            sync_default_browser();
-            FindNextChangeNotification(ev[cfg_ev]);
+            if (cfg_ev >= 0 && r == WAIT_OBJECT_0 + (DWORD)cfg_ev) {
+                Sleep(500);
+                sync_default_browser();
+                FindNextChangeNotification(ev[cfg_ev]);
+                continue;
+            }
+            if (rec_ev >= 0 && r == WAIT_OBJECT_0 + (DWORD)rec_ev) {
+                Sleep(500);
+                sync_recent();
+                FindNextChangeNotification(ev[rec_ev]);
+                continue;
+            }
+            break;
         }
         for (i = 0; i < nev; i++) FindCloseChangeNotification(ev[i]);
         if (r != WAIT_TIMEOUT) Sleep(2000);   /* a package puts in several files: once, after */

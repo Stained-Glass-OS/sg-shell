@@ -9,7 +9,9 @@
 # tasks (ICustomDestinationList), each started with --action through GLib. An app that goes
 # loses all of it. Before, a Linux window's button was "\sg-linux\<class>": the app pinned
 # from Start showed twice, its menu named the class and pinned nothing, no jump list.
-#   mutants: -DSG_MUTANT_NO_AUMID, -DSG_MUTANT_NO_WINDOW_CLASSES (src/linuxapps/sg-linuxapp.c)
+# The files a Linux program opened (recently-used.xbel, GTK's recent files) go to its app's recent
+# documents (SHAddToRecentDocs with its ID): its jump list's Recent.
+#   mutants: -DSG_MUTANT_NO_AUMID, -DSG_MUTANT_NO_WINDOW_CLASSES, -DSG_MUTANT_NO_RECENT (src/linuxapps/sg-linuxapp.c)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 EXE="${SG_LINUXAPP_EXE:-$HERE/build/sg-linuxapp64.exe}"
@@ -83,6 +85,28 @@ if python3 -c 'import gi; gi.require_version("Gio", "2.0"); from gi.repository i
 else
     echo "SKIP  starting an action (no python3-gi here)"
 fi
+# the files a Linux program opened (recently-used.xbel, GTK's): on its jump list's Recent
+echo notes > "$T/notes.txt"; echo old > "$T/ancient.txt"
+NOW=$(date -u +%Y-%m-%dT%H:%M:%S.000000Z)
+cat > "$XDG_DATA_HOME/recently-used.xbel" <<XBEL
+<?xml version="1.0" encoding="UTF-8"?>
+<xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">
+  <bookmark href="file://$T/notes.txt" added="$NOW" modified="$NOW" visited="$NOW">
+    <info><metadata owner="http://freedesktop.org"><mime:mime-type type="text/plain"/>
+      <bookmark:applications><bookmark:application name="Gate Editor" exec="&apos;gate-editor %u&apos;" modified="$NOW" count="1"/></bookmark:applications>
+    </metadata></info>
+  </bookmark>
+  <bookmark href="file://$T/ancient.txt" added="2001-01-01T00:00:00Z" modified="2001-01-01T00:00:00Z" visited="2001-01-01T00:00:00Z">
+    <info><metadata owner="http://freedesktop.org"><mime:mime-type type="text/plain"/>
+      <bookmark:applications><bookmark:application name="gate-editor" exec="&apos;gate-editor %u&apos;" modified="2001-01-01T00:00:00Z" count="1"/></bookmark:applications>
+    </metadata></info>
+  </bookmark>
+</xbel>
+XBEL
+"$WINE" "$EXE" --sync; "$WINESERVER" -w
+jump=$("$WINE" "$T/probe.exe" jump "$ID" 2>/dev/null | tr -d '\r' | cut -f2 | tr '\n' '|')
+case "$jump" in *notes*) pass "a file it opened (recently-used.xbel) is on its jump list's Recent ($jump)" ;; *) fail "recent: '$jump'" ;; esac
+case "$jump" in *ancient*) fail "an entry from before the last thirty days was taken" ;; *) pass "one older than thirty days is not" ;; esac
 rm "$T/share/applications/org.gate.Editor.desktop"
 "$WINE" "$EXE" --sync; "$WINESERVER" -w
 [ -z "$(q "$K" DisplayName)" ] && [ -z "$(q "$W" GateEditorWin)" ] && [ -z "$(q "$W" org.gate.Editor)" ] \

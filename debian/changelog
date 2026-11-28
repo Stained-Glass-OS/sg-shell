@@ -1,3 +1,17 @@
+sg-shell (0.1.0-326) unstable; urgency=medium
+
+  * A Linux app's recent files on its jump list (linux1, ledger i0816), as
+    a Windows program's: the files Linux programs record in
+    recently-used.xbel (GTK's recent files: the file and the program's
+    command) go to that app's recent documents (SHAddToRecentDocs with its
+    AppUserModelID) -- as they are recorded (sg-linuxapp --watch hears the
+    file change), the first time the last thirty days; an app with
+    .desktop actions has its Recent category above its Tasks; an app gone
+    loses its recent files too. Gate linuxapp-identity-check.sh (mutant
+    SG_MUTANT_NO_RECENT).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 22:30:00 -0800
+
 sg-shell (0.1.0-325) unstable; urgency=medium
 
   * Open with lists a Linux app for every type it opens (linux1, ledger
