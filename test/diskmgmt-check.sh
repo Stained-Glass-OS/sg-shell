@@ -265,16 +265,28 @@ if ! sudo -n true 2>/dev/null || [ ! -x /usr/sbin/losetup ]; then
     echo "NOTE  no passwordless sudo: the loop-device part is skipped"
 else
     truncate -s 512M "$T/disk.img"
-    LOOP=$(sudo -n losetup -f --show "$T/disk.img")
+    # -P: the kernel reads the new, empty image's partition table; without it a partition a
+    # run before left on this loop device's number (/sys/block/loopN/loopNp1, kept after the
+    # device was detached) stayed in lsblk, and the wizard made its volume after it
+    LOOP=$(sudo -n losetup -f -P --show "$T/disk.img")
     N=${LOOP#/dev/}
     echo "      test disk: $LOOP"
     unset SG_LSBLK SG_MKFS_EXFAT
     mkdir -p "$T/media"
     export SG_SYSINFO_DISKS="$LOOP" SG_MEDIA_DIR="$T/media"
     [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; rm -f "$SG_SYSINFO_SOCKET"
+    # in a network namespace of its own (netns-run.sh) no uevent reaches it: "udevadm trigger
+    # --settle" waits for ones that never come, 30 s per change, and the console lags behind every
+    # step; there sg-sysinfod's udevadm triggers without waiting (lsblk is polled instead)
+    UDEV=""
+    if [ "$(readlink /proc/self/ns/net)" != "$(sudo -n readlink /proc/1/ns/net)" ]; then
+        printf '#!/bin/sh\nfor a; do shift; [ "$a" = --settle ] || set -- "$@" "$a"; done\nexec udevadm "$@"\n' > "$T/udevadm"
+        chmod 755 "$T/udevadm"; UDEV="$T/udevadm"
+    fi
     sudo -n env SG_ADMIN_GROUP="$me" SG_WINE_GROUP="$me" SG_SYSINFO_DISKS="$LOOP" SG_MEDIA_DIR="$T/media" \
-        WINEPREFIX="$WINEPREFIX" systemd-socket-activate -l "$SG_SYSINFO_SOCKET" --inetd -a -E SG_ADMIN_GROUP \
-        -E SG_WINE_GROUP -E SG_SYSINFO_DISKS -E SG_MEDIA_DIR -E WINEPREFIX -E PATH "$SYSINFO" --serve >/dev/null 2>&1 &
+        ${UDEV:+SG_UDEVADM="$UDEV"} WINEPREFIX="$WINEPREFIX" systemd-socket-activate -l "$SG_SYSINFO_SOCKET" --inetd -a \
+        -E SG_ADMIN_GROUP -E SG_WINE_GROUP -E SG_SYSINFO_DISKS -E SG_MEDIA_DIR ${UDEV:+-E SG_UDEVADM} -E WINEPREFIX -E PATH \
+        "$SYSINFO" --serve >/dev/null 2>&1 &
     SP=$!
     i=0; while [ ! -S "$SG_SYSINFO_SOCKET" ] && [ $i -lt 30 ]; do sleep 0.2; i=$((i + 1)); done
     sudo -n chmod 666 "$SG_SYSINFO_SOCKET"
@@ -290,7 +302,10 @@ else
     xdotool key ctrl+a; xdotool type --delay 50 'GATEONE'
     shot new-volume
     xdotool key Return
-    i=0; while [ -z "$(lsblk -n -r -o NAME "$LOOP" | sed 1d)" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done; sleep 3
+    i=0; while [ -z "$(lsblk -n -r -o NAME "$LOOP" | sed 1d)" ] && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+    # then the wizard mounts it and gives it its letter: two more requests to sg-sysinfod, each
+    # reading every disk again (seconds on a loaded machine) -- up to 30 s, not a fixed 3
+    i=0; while ! ls -l "$WINEPREFIX"/dosdevices/ 2>/dev/null | grep -q "/GATEONE$" && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done; sleep 1
     p1=$(lsblk -n -r -o NAME "$LOOP" | sed -n 2p)
     [ -n "$p1" ] && [ "$(lsblk -n -b -o SIZE "/dev/$p1")" = $((100 * 1048576)) ] && [ "$(lsblk -n -o FSTYPE "/dev/$p1")" = ext4 ] \
         && [ "$(lsblk -n -o LABEL "/dev/$p1")" = GATEONE ] && pass "New Simple Volume: $p1, 100 MB ext4 'GATEONE'" \

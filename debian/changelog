@@ -1,3 +1,19 @@
+sg-shell (0.1.0-321) unstable; urgency=medium
+
+  * diskmgmt-check, the loop-device part (i0647; 9 failures, now 35 pass):
+    the gate's harness, not Disk Management. In netns-run.sh's network
+    namespace no uevent arrives, so sg-sysinfod's "udevadm trigger
+    --settle" waited its 30 s on every change while the console stood
+    still, and the gate's fixed sleeps acted on a stale console (no drive
+    letter yet, a dialog still up, Shrink/Extend/Delete on the wrong row).
+    There sg-sysinfod now gets a udevadm that triggers without waiting.
+    The loop device is attached with -P: a partition an aborted run left on
+    the loop number (/sys/block/loop0/loop0p1, kept after detaching) stayed
+    in lsblk and the wizard made its volume after it. The first volume's
+    letter is waited for (up to 30 s), not a fixed 3 s.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 19:56:19 -0800
+
 sg-shell (0.1.0-320) unstable; urgency=medium
 
   * Gates whose failures were the machine, not the product (i0646, i0647);
