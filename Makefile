@@ -616,6 +616,11 @@ test-linuxapp-identity: build
 test-linuxapp-uninstall: build
 	@sh test/linuxapp-uninstall-check.sh
 
+# Open with lists a Linux app for every type it opens (mime/globs2 extensions). test/linuxapp-openwith-check.sh.
+.PHONY: test-linuxapp-openwith
+test-linuxapp-openwith: build
+	@sh test/linuxapp-openwith-check.sh
+
 # AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
 .PHONY: test-appimage test-appimage-mutants
 test-appimage: build

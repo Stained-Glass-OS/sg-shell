@@ -1,3 +1,17 @@
+sg-shell (0.1.0-325) unstable; urgency=medium
+
+  * Open with lists a Linux app for every type it opens (linux1, ledger
+    i0815), as Windows lists a program for every extension it registered:
+    sg-linuxapp registers the app's ProgID under each extension the shared
+    MIME database gives its MimeType= types (mime/globs2's plain globs,
+    mime/aliases followed) -- Inkscape for .svg, GIMP for .xcf and .psd,
+    Krita for .kra, VLC for .mkv -- not only the types Settings > Default
+    apps chooses for; a type no longer named or an app gone lets go of its
+    extensions. Gate test/linuxapp-openwith-check.sh (mutant
+    SG_MUTANT_OPENWITH_DEFAULTS_ONLY).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 22:05:00 -0800
+
 sg-shell (0.1.0-324) unstable; urgency=medium
 
   * Uninstalling a Linux app as Windows uninstalls a Store app (linux1,

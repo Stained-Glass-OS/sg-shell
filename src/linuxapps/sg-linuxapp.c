@@ -809,6 +809,158 @@ static BOOL has_mime(const struct app *a, const char *mime)
     return FALSE;
 }
 
+/* ---- every type an app opens: the shared MIME database's extensions ------
+ * Open with lists the Linux apps for every file they open, as Windows lists
+ * a program for every extension it registered (OpenWithProgids): Inkscape
+ * for .svg, GIMP for .xcf and .psd, Krita for .kra, VLC for .mkv, a text
+ * editor for .md or .py -- not only for the types Settings > Default apps
+ * chooses for (MIME_EXTS). The extensions are the shared MIME database's
+ * plain globs (mime/globs2: "weight:type:*.ext"), aliases followed
+ * (mime/aliases), in the data folders, the most particular first. */
+struct glob { char mime[96]; WCHAR ext[24]; };
+static struct glob *g_globs;
+static int g_nglobs;
+struct alias { char from[96], to[96]; };
+static struct alias *g_aliases;
+static int g_naliases;
+
+static void load_mime_db(void)
+{
+    char dirs[16][MAX_PATH];
+    int nd, i;
+    static BOOL loaded;
+
+    if (loaded) return;
+    loaded = TRUE;
+    nd = data_dirs(dirs, 16);
+    for (i = 0; i < nd; i++) {
+        char path[MAX_PATH], *text, *line, *next;
+        WCHAR w[MAX_PATH];
+        if (_snprintf(path, sizeof(path), "%s/mime/globs2", dirs[i]) < 0 || !dos_path(path, w, MAX_PATH)) continue;
+        if ((text = read_file(w, 4 << 20, NULL))) {
+            for (line = text; line && *line; line = next) {
+                char *c1, *c2, *ext;
+                struct glob *grown;
+                int k;
+                if ((next = strchr(line, '\n'))) *next++ = 0;
+                if (line[0] == '#' || !(c1 = strchr(line, ':')) || !(c2 = strchr(c1 + 1, ':'))) continue;
+                ext = c2 + 1;
+                if (strncmp(ext, "*.", 2) || strpbrk(ext + 2, "*?[]:") || strlen(ext + 1) >= 23 || c2 - c1 - 1 >= 96) continue;
+                if (g_nglobs % 256 == 0) {
+                    if (!(grown = realloc(g_globs, (g_nglobs + 256) * sizeof(*grown)))) break;
+                    g_globs = grown;
+                }
+                memcpy(g_globs[g_nglobs].mime, c1 + 1, c2 - c1 - 1);
+                g_globs[g_nglobs].mime[c2 - c1 - 1] = 0;
+                MultiByteToWideChar(CP_UTF8, 0, ext + 1, -1, g_globs[g_nglobs].ext, 24);
+                for (k = 0; g_globs[g_nglobs].ext[k]; k++) g_globs[g_nglobs].ext[k] = towlower(g_globs[g_nglobs].ext[k]);
+                g_nglobs++;
+            }
+            free(text);
+        }
+        if (_snprintf(path, sizeof(path), "%s/mime/aliases", dirs[i]) < 0 || !dos_path(path, w, MAX_PATH)) continue;
+        if ((text = read_file(w, 1 << 20, NULL))) {
+            for (line = text; line && *line; line = next) {
+                char *sp;
+                struct alias *grown;
+                if ((next = strchr(line, '\n'))) *next++ = 0;
+                if (!(sp = strchr(line, ' ')) || sp - line >= 96 || strlen(sp + 1) >= 96) continue;
+                if (g_naliases % 128 == 0) {
+                    if (!(grown = realloc(g_aliases, (g_naliases + 128) * sizeof(*grown)))) break;
+                    g_aliases = grown;
+                }
+                memcpy(g_aliases[g_naliases].from, line, sp - line);
+                g_aliases[g_naliases].from[sp - line] = 0;
+                strcpy(g_aliases[g_naliases].to, sp + 1);
+                g_naliases++;
+            }
+            free(text);
+        }
+    }
+}
+
+/* the extensions of the types an app opens (MimeType=), at most MAX */
+static int app_extensions(const struct app *a, WCHAR (*exts)[24], int max)
+{
+    char list[4096], *p, *next;
+    int n = 0, i, k;
+
+    load_mime_db();
+    lstrcpynA(list, a->mime, sizeof(list));
+    for (p = list; p && *p && n < max; p = next) {
+        const char *mime = p;
+        if ((next = strchr(p, ';'))) *next++ = 0;
+        if (!*p) continue;
+        for (i = 0; i < g_naliases; i++) if (!strcmp(g_aliases[i].from, p)) { mime = g_aliases[i].to; break; }
+        for (i = 0; i < g_nglobs && n < max; i++) {
+            BOOL have = FALSE;
+            if (strcmp(g_globs[i].mime, mime)) continue;
+            for (k = 0; k < n && !have; k++) have = !lstrcmpW(exts[k], g_globs[i].ext);
+            if (!have) lstrcpyW(exts[n++], g_globs[i].ext);
+        }
+    }
+    return n;
+}
+
+/* what was registered this sync: "PROGID|.ext" */
+static WCHAR (*g_openwith)[160];
+static int g_nopenwith;
+
+static void note_openwith(const WCHAR *progid, const WCHAR *ext)
+{
+    if (g_nopenwith % 1024 == 0) {
+        WCHAR (*grown)[160] = realloc(g_openwith, (g_nopenwith + 1024) * sizeof(*grown));
+        if (!grown) return;
+        g_openwith = grown;
+    }
+    _snwprintf(g_openwith[g_nopenwith], 160, L"%ls|%ls", progid, ext);
+    g_openwith[g_nopenwith][159] = 0;
+    g_nopenwith++;
+}
+
+static int cmp_openwith(const void *a, const void *b) { return lstrcmpiW((const WCHAR *)a, (const WCHAR *)b); }
+
+/* each .ext's OpenWithProgids: a Linux app's ProgID that no longer opens it
+ * (the app gone, or no longer naming the type) goes */
+static void prune_openwith(void)
+{
+    WCHAR name[260], sub[300];
+    DWORD i, n;
+    HKEY k;
+    WCHAR (*exts)[260] = NULL;
+    int next = 0, e;
+
+    qsort(g_openwith, g_nopenwith, sizeof(*g_openwith), cmp_openwith);
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Classes", 0, KEY_READ, &k)) return;
+    for (i = 0; n = ARRAYSIZE(name), !RegEnumKeyExW(k, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+        WCHAR (*grown)[260];
+        if (name[0] != '.') continue;
+        if (next % 256 == 0) {
+            if (!(grown = realloc(exts, (next + 256) * sizeof(*grown)))) break;
+            exts = grown;
+        }
+        lstrcpyW(exts[next++], name);
+    }
+    RegCloseKey(k);
+    for (e = 0; e < next; e++) {
+        HKEY ow;
+        WCHAR doomed[64][128];
+        int nd = 0, d;
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\OpenWithProgids", exts[e]);
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, sub, 0, KEY_READ | KEY_SET_VALUE, &ow)) continue;
+        for (i = 0; n = ARRAYSIZE(name), !RegEnumValueW(ow, i, name, &n, NULL, NULL, NULL, NULL); i++) {
+            WCHAR key[160];
+            if (_wcsnicmp(name, PROGID_PREFIX, lstrlenW(PROGID_PREFIX)) || lstrlenW(name) >= 128) continue;
+            _snwprintf(key, ARRAYSIZE(key), L"%ls|%ls", name, exts[e]);
+            key[159] = 0;
+            if (!bsearch(key, g_openwith, g_nopenwith, sizeof(*g_openwith), cmp_openwith) && nd < 64) lstrcpyW(doomed[nd++], name);
+        }
+        for (d = 0; d < nd; d++) RegDeleteValueW(ow, doomed[d]);
+        RegCloseKey(ow);
+    }
+    free(exts);
+}
+
 static void set_sz(HKEY root, const WCHAR *sub, const WCHAR *name, const WCHAR *value)
 {
     HKEY k;
@@ -834,8 +986,14 @@ static BOOL register_app(const struct app *a, const WCHAR *self, const WCHAR *de
          mail = has_mime(a, "x-scheme-handler/mailto");
     int i, e;
 
+    WCHAR (*exts)[24] = calloc(400, sizeof(*exts));
+    int nexts = exts ? app_extensions(a, exts, 400) : 0;
+
     for (i = 0; i < (int)ARRAYSIZE(MIME_EXTS) && !any; i++) any = has_mime(a, MIME_EXTS[i].mime);
-    if (!any && !web && !mail) return FALSE;
+#ifndef SG_MUTANT_OPENWITH_DEFAULTS_ONLY
+    if (nexts) any = TRUE;
+#endif
+    if (!any && !web && !mail) { free(exts); return FALSE; }
     MultiByteToWideChar(CP_UTF8, 0, a->id, -1, id, ARRAYSIZE(id));
     _snwprintf(progid, len, PROGID_PREFIX L"%ls", id);
     progid[len - 1] = 0;
@@ -861,8 +1019,17 @@ static BOOL register_app(const struct app *a, const WCHAR *self, const WCHAR *de
         for (e = 0; e < 4 && MIME_EXTS[i].exts[e]; e++) {
             _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\OpenWithProgids", MIME_EXTS[i].exts[e]);
             set_none(HKEY_CURRENT_USER, sub, progid);
+            note_openwith(progid, MIME_EXTS[i].exts[e]);
         }
     }
+#ifndef SG_MUTANT_OPENWITH_DEFAULTS_ONLY
+    for (i = 0; i < nexts; i++) {
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\OpenWithProgids", exts[i]);
+        set_none(HKEY_CURRENT_USER, sub, progid);
+        note_openwith(progid, exts[i]);
+    }
+#endif
+    free(exts);
     if (web || mail) {
         WCHAR base[200];
         _snwprintf(base, ARRAYSIZE(base), L"Software\\Clients\\%ls\\" CLIENT_PREFIX L"%ls",
@@ -1390,6 +1557,8 @@ static int sync_apps(void)
     free(named);
     unregister_gone(progids, nprogids);
     free(progids);
+    prune_openwith();
+    g_nopenwith = 0;
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
     /* what is no longer there */
     _snwprintf(pattern, MAX_PATH, L"%ls\\*.lnk", folder);
