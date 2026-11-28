@@ -5755,6 +5755,28 @@ Windows Registry Editor Version 5.00
 "Source"="winget:Gramps.Gramps"
 "DetectName"="GrampsAIO64|Gramps"
 
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\342]
+"Name"="EA app"
+"Publisher"="Electronic Arts"
+"Description"="EA's games, store and launcher."
+"Category"="Games"
+"Colour"=dword:00ff4747
+"Tier"="windows"
+"Source"="winget:ElectronicArts.EADesktop"
+"DetectName"="EA app"
+
+[HKEY_LOCAL_MACHINE\Software\Stained Glass\Store\Apps\343]
+"Name"="OpenTTD"
+"Publisher"="OpenTTD"
+"Description"="Transport tycoon."
+"Category"="Games"
+"Colour"=dword:003a6a2a
+"Tier"="windows"
+"Source"="winget:OpenTTD.OpenTTD"
+"DetectName"="OpenTTD"
+"Icon"="https://dl.flathub.org/repo/appstream/x86_64/icons/128x128/org.openttd.OpenTTD.png"
+"Linux"="L102"
+
 ; App package frameworks Windows comes with, which app packages' winget
 ; manifests leave out: when PackageManager says one is missing (0x80073CF3,
 ; "Provide the framework NAME"), the store installs its winget package and

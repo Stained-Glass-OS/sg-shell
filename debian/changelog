@@ -1,3 +1,13 @@
+sg-shell (0.1.0-335) unstable; urgency=medium
+
+  * SG Store (games1, ledger i0837): the EA app (winget
+    ElectronicArts.EADesktop) and OpenTTD's Windows build (winget
+    OpenTTD.OpenTTD, paired with the Linux OpenTTD) in Games. Walked in the
+    QA VM: the EA app installs and reaches its sign-in; OpenTTD installs
+    from the Store, opens, downloads its graphics and plays.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 02:13:54 -0800
+
 sg-shell (0.1.0-334) unstable; urgency=medium
 
   * SG Store: portable apps from a pinned download (store3, ledger i0870),
