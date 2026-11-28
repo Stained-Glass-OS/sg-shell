@@ -30,6 +30,7 @@
 #include <shlobj.h>
 #include <shellapi.h>
 #include <shlwapi.h>
+#include <propsys.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -1221,7 +1222,7 @@ static void go_to_sleep(BOOL hibernate)
 
 /* The menus are drawn dark, as the Start menu is: owner-drawn items whose
  * labels live here while the menu is up. */
-#define MENU_MAX 12
+#define MENU_MAX 40
 static const WCHAR *g_mlabels[MENU_MAX];
 static int g_nmlabels;
 #define COL_MENU     (g_pal->menu)
@@ -1555,6 +1556,105 @@ static void run_debugging(const struct entry *e)
     ShellExecuteW(NULL, NULL, tool, params, NULL, SW_SHOWNORMAL);
 }
 
+/* ---- an app's jump list in its menu ------------------------------------
+ * As Windows 10's Start shows an app's jump list at the top of its menu --
+ * its recent files and its tasks (Firefox's New private window, a Linux
+ * app's .desktop actions): the shortcut's AppUserModelID (else its program)
+ * names the list, which shell32 keeps (wine-sg 1664) and reads for the
+ * taskbar through its private SGJumpList* -- read here the same way. */
+#define JUMP_MAX 20
+static WCHAR g_jump_titles[JUMP_MAX][128];
+struct jump_api
+{
+    HRESULT (WINAPI *load)(const WCHAR *, const WCHAR *, void **);
+    UINT (WINAPI *count)(void *);
+    BOOL (WINAPI *entry)(void *, UINT, int *, WCHAR *, UINT);
+    HRESULT (WINAPI *invoke)(void *, UINT, HWND);
+    void (WINAPI *release)(void *);
+};
+
+static const struct jump_api *jump_api(void)
+{
+    static struct jump_api api;
+    static BOOL done;
+    if (!done)
+    {
+        HMODULE shell32 = GetModuleHandleW(L"shell32.dll");
+        done = TRUE;
+        if (shell32)
+        {
+            api.load = (void *)GetProcAddress(shell32, "SGJumpListLoad");
+            api.count = (void *)GetProcAddress(shell32, "SGJumpListCount");
+            api.entry = (void *)GetProcAddress(shell32, "SGJumpListEntry");
+            api.invoke = (void *)GetProcAddress(shell32, "SGJumpListInvoke");
+            api.release = (void *)GetProcAddress(shell32, "SGJumpListFree");
+        }
+    }
+    return api.load && api.count && api.entry && api.invoke && api.release ? &api : NULL;
+}
+
+/* the jump list of the app a shortcut starts, its entries added to the menu
+ * (ids FIRST + its index); the list to give jump_done, or NULL */
+static void *jump_menu(HMENU m, const struct entry *e, UINT first)
+{
+    static const PROPERTYKEY key_aumid = {{0x9f4c2855, 0x9f79, 0x4b39, {0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3}}, 5};
+    static const IID iid_store = {0x886d8eeb, 0x8cf2, 0x4446, {0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99}};
+    const struct jump_api *api = jump_api();
+    WCHAR target[MAX_PATH] = L"", aumid[130] = L"";
+    IShellLinkW *link;
+    IPersistFile *file;
+    void *view = NULL;
+    UINT n, i, shown = 0;
+
+#ifdef SG_MUTANT_START_NO_JUMP
+    return NULL;
+#endif
+    if (!api || e->kind != K_APP) return NULL;
+    if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link)))
+    {
+        if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+        {
+            if (SUCCEEDED(IPersistFile_Load(file, e->path, STGM_READ)))
+            {
+                IPropertyStore *store;
+                IShellLinkW_GetPath(link, target, MAX_PATH, NULL, 0);
+                if (SUCCEEDED(IShellLinkW_QueryInterface(link, &iid_store, (void **)&store)))
+                {
+                    PROPVARIANT v;
+                    PropVariantInit(&v);
+                    if (SUCCEEDED(IPropertyStore_GetValue(store, &key_aumid, &v)) && v.vt == VT_LPWSTR && v.pwszVal)
+                        lstrcpynW(aumid, v.pwszVal, ARRAYSIZE(aumid));
+                    PropVariantClear(&v);
+                    IPropertyStore_Release(store);
+                }
+            }
+            IPersistFile_Release(file);
+        }
+        IShellLinkW_Release(link);
+    }
+    if (!aumid[0] && !target[0]) return NULL;
+    if (FAILED(api->load(aumid[0] ? aumid : NULL, target[0] ? target : NULL, &view)) || !view) return NULL;
+    if (!(n = api->count(view))) { api->release(view); return NULL; }
+    for (i = 0; i < n && shown < JUMP_MAX; i++)
+    {
+        int kind = -1;
+        if (!api->entry(view, i, &kind, g_jump_titles[shown], ARRAYSIZE(g_jump_titles[shown]))) continue;
+        if (kind == 2) menu_add(m, 0, NULL);
+        else menu_add(m, kind == 0 ? 0 : first + i, g_jump_titles[shown][0] ? g_jump_titles[shown] : L"(untitled)");
+        shown++;
+    }
+    menu_add(m, 0, NULL);
+    return view;
+}
+
+static void jump_done(void *view, int cmd, UINT first)
+{
+    const struct jump_api *api = jump_api();
+    if (!view || !api) return;
+    if (cmd >= (int)first && cmd < (int)first + 0x800) api->invoke(view, cmd - first, NULL);
+    api->release(view);
+}
+
 /* A Linux app's shortcut (sg-linuxapp64.exe --run "FILE.desktop"): its
  * launcher and .desktop file. Its menu is a Linux app's, as Windows' Start
  * gives a Store app its own: no Run as administrator or Run with debugging
@@ -1588,7 +1688,8 @@ static BOOL linux_app_of(const struct entry *e, WCHAR *exe, WCHAR *desktop)
 
 static void entry_menu(int id, POINT pt)
 {
-    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG, C_STARTUP };
+    enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG, C_STARTUP, C_JUMP = 0x1000 };
+    void *jump = NULL;
     struct entry *e = entry_of(id);
     HMENU m;
     BOOL pinned, on_taskbar, at_signin = FALSE, linux_app;
@@ -1606,6 +1707,7 @@ static void entry_menu(int id, POINT pt)
     m = menu_new();
     if (e->kind == K_APP)
     {
+        jump = jump_menu(m, e, C_JUMP);
         menu_add(m, C_PIN, pinned ? L"Un&pin from Start" : L"&Pin to Start");
         menu_add(m, C_TASKBAR, on_taskbar ? L"Unpin from tas&kbar" : L"Pin to tas&kbar");
         at_signin = starts_at_signin(e);
@@ -1623,6 +1725,12 @@ static void entry_menu(int id, POINT pt)
     else menu_add(m, C_RUNAS, L"&Open");
     cmd = track(m, pt, e->kind == K_APP ? L"context" : L"context-setting");
     DestroyMenu(m);
+    if (jump)
+    {
+        if (cmd >= C_JUMP) show_panel(FALSE);
+        jump_done(jump, cmd, C_JUMP);
+        if (cmd >= C_JUMP) return;
+    }
     switch (cmd)
     {
     case C_PIN:       pin(e->name, !pinned); InvalidateRect(g_panel, NULL, FALSE); break;

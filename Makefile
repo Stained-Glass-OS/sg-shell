@@ -621,6 +621,11 @@ test-linuxapp-uninstall: build
 test-linuxapp-openwith: build
 	@sh test/linuxapp-openwith-check.sh
 
+# An app's jump list (recent files, tasks) at the top of its Start menu. test/start-jumplist-check.sh.
+.PHONY: test-start-jumplist
+test-start-jumplist: build
+	@sh test/start-jumplist-check.sh
+
 # AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
 .PHONY: test-appimage test-appimage-mutants
 test-appimage: build

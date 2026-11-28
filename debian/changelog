@@ -1,3 +1,16 @@
+sg-shell (0.1.0-327) unstable; urgency=medium
+
+  * An app's jump list in its Start menu (linux1, ledger i0817), as Windows
+    10's Start shows it: the recent files and tasks of the app a shortcut
+    starts -- by the shortcut's AppUserModelID (a Linux app's: its recent
+    files and .desktop actions; a Windows program's own), else its
+    program -- at the top of the app's menu, each opening its file or
+    running its task (shell32's jump lists, wine-sg 1664, read through its
+    SGJumpList* as the taskbar reads them). Gate
+    test/start-jumplist-check.sh (mutant SG_MUTANT_START_NO_JUMP).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 22:45:00 -0800
+
 sg-shell (0.1.0-326) unstable; urgency=medium
 
   * A Linux app's recent files on its jump list (linux1, ledger i0816), as
