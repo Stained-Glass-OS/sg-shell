@@ -52,7 +52,7 @@ done
 
 T=$(mktemp -d /var/tmp/sg-hidpi-live.XXXXXX)
 # shellcheck disable=SC2317
-cleanup() { "$WINESERVER" -k 2>/dev/null; [ -n "$XP" ] && kill "$XP" 2>/dev/null; [ -n "${KEEP:-}" ] && echo "kept $T" || rm -rf "$T"; }
+cleanup() { "$WINESERVER" -k 2>/dev/null; sg_kill_prefix "$WINEPREFIX"; [ -n "$XP" ] && kill "$XP" 2>/dev/null; [ -n "${KEEP:-}" ] && echo "kept $T" || rm -rf "$T"; }
 trap cleanup EXIT INT TERM
 export WINEPREFIX="$T/pfx" WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=;winemenubuilder.exe=d" XDG_CONFIG_HOME="$T/config"
 mkdir -p "$T/run" "$T/config"; export XDG_RUNTIME_DIR="$T/run" SG_LOCK_CONTROL=/nonexistent
@@ -77,6 +77,10 @@ SG_DEFENDER_DIR=$("$WINE" winepath -w "$T/defender" 2>/dev/null | tr -d '\r')
 SG_RESTART_FILE=$("$WINE" winepath -w "$T/reboot-required" 2>/dev/null | tr -d '\r')
 SG_NOTICE_TIMEOUT_MS=300000
 export SG_DEFENDER_DIR SG_RESTART_FILE SG_NOTICE_TIMEOUT_MS
+# the voice typing bar without its engine (it shows, saying so): where sg-session is installed,
+# sg-dictate.exe would start itself again through /usr/bin/sg-dictate's bridge with the
+# machine's own wine, not this one, and no bar would come
+export SG_DICTATE="$T/no-engine"
 FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 [ -f "$FONT" ] || FONT=$(find /usr/share/fonts -name '*.ttf' 2>/dev/null | head -1)
 # program : its window's class : a control in it (or -) : its arguments

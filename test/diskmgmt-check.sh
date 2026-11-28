@@ -60,6 +60,7 @@ LOOP=""
 # shellcheck disable=SC2317
 cleanup() {
     WINEPREFIX="$T/pfx" "$WSERVER" -k 2>/dev/null
+    sg_kill_prefix "$T/pfx"
     [ -n "$SP" ] && { kill "$SP" 2>/dev/null; sudo -n kill "$SP" 2>/dev/null; }
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     if [ -n "$LOOP" ]; then

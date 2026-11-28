@@ -34,6 +34,7 @@ T=$(mktemp -d /var/tmp/sg-dictate-check.XXXXXX); chmod 755 "$T"
 # shellcheck disable=SC2317
 cleanup() {
     WINEPREFIX="$T/pfx" "$WINE_DIR/bin/wineserver" -k 2>/dev/null
+    sg_kill_prefix "$T/pfx"
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     rm -f "/tmp/.X${DPY}-lock"; rm -rf "$T"
 }
@@ -378,8 +379,10 @@ sleep 1
 # --- Control Panel > Speech Recognition ------------------------------------------------------
 CTL="$HERE/build/sg-control64.exe"
 if [ -f "$CTL" ]; then
-    export SG_SPEECH_DIR="$T/speech" FAKE_DL_STEP=4
-    mkdir -p "$SG_SPEECH_DIR"
+    # no packaged model: the host's own (sg-speech-model-parakeet in
+    # /usr/share/stained-glass-speech) would count as installed
+    export SG_SPEECH_DIR="$T/speech" FAKE_DL_STEP=4 SG_SPEECH_PACKAGED_DIR="$T/nopkg"
+    mkdir -p "$SG_SPEECH_DIR" "$T/nopkg"
     ctl() { wine "$CTL" "$@" 2>/dev/null </dev/null | tr -d '\r'; }
     val() { printf '%s\n' "$1" | sed -n "s/^speech\.$2=//p" | head -1; }
     wine reg delete 'HKCU\Software\Stained Glass\Speech' /f >/dev/null 2>&1

@@ -1,3 +1,29 @@
+sg-shell (0.1.0-320) unstable; urgency=medium
+
+  * Gates whose failures were the machine, not the product (i0646, i0647);
+    each failed on 0.1.0-316 with wine-sg 10.0-1180 and passes now:
+    - hidpi-live-check: the voice typing bar runs without its engine
+      (SG_DICTATE pointing nowhere). Where sg-session is installed,
+      sg-dictate.exe first starts itself again through /usr/bin/sg-dictate's
+      bridge with the machine's own wine, not the gate's, and no bar came;
+      with a bar missing the settle loop never agreed and ran its 40 rounds,
+      long enough on a loaded host for the Defender and restart notices to
+      time out -- their "back at 100%" failures. Not a DPI bug (32 pass;
+      SG_MUTANT_DICTATE_DPI_IGNORED still caught).
+    - dictate-check: the Speech page part points SG_SPEECH_PACKAGED_DIR at
+      an empty folder; the machine's packaged model
+      (/usr/share/stained-glass-speech) counted as installed.
+    - pdf-check: the Explorer double-click looks for the PDF's icon in the
+      file list only; the navigation pane's folder icons, solid purple in
+      the accent's shade, were taken for it (it opened Pictures).
+    - store-busy-check: under netns-run.sh's private /tmp/.X11-unix an Xvfb
+      with -displayfd takes :0; the guard refuses :0 only when
+      /tmp/.X11-unix is not a mount of its own.
+  * These gates and zip-check and diskmgmt-check call sg_kill_prefix in
+    their cleanup.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 19:23:47 -0800
+
 sg-shell (0.1.0-319) unstable; urgency=medium
 
   * SG Store: Open of an app whose Uninstall entry shows its cached

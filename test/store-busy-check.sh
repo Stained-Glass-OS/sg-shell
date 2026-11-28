@@ -41,6 +41,7 @@ T=$(mktemp -d /var/tmp/sg-store-busy.XXXXXX); chmod 755 "$T"
 # shellcheck disable=SC2317
 cleanup() {
     WINEPREFIX="$T/pfx" "$WINESERVER" -k 2>/dev/null
+    sg_kill_prefix "$T/pfx"
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     [ -n "$HP" ] && kill "$HP" 2>/dev/null
     rm -rf "$T"
@@ -92,7 +93,9 @@ python3 "$T/slow.py" "$PORT" "$T/inst.exe" & HP=$!
 Xvfb -displayfd 3 -screen 0 1024x768x24 -nolisten tcp 3>"$T/display" >/dev/null 2>&1 & XP=$!
 i=0; while [ ! -s "$T/display" ] && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
 DPY=$(cat "$T/display" 2>/dev/null); [ -n "$DPY" ] || { echo "FAIL  Xvfb did not start"; exit 1; }
-case "$DPY" in 0) echo "FAIL  not the host's display"; exit 1 ;; esac
+# :0 only in a private /tmp/.X11-unix of its own (netns-run.sh mounts one: there an Xvfb
+# with -displayfd takes :0 and no lock file); never the host's display
+case "$DPY" in 0) mountpoint -q /tmp/.X11-unix || { echo "FAIL  not the host's display"; exit 1; } ;; esac
 export DISPLAY=":$DPY" WINEPREFIX="$T/pfx" WINEARCH=win64 WINEDEBUG=-all WINESERVER
 export WINEDLLOVERRIDES="mscoree,mshtml=;winemenubuilder.exe=d"
 "$WINE" wineboot --init >/dev/null 2>&1; "$WINESERVER" -w

@@ -31,6 +31,7 @@ T=$(mktemp -d /var/tmp/sg-zip-check.XXXXXX); chmod 755 "$T"
 # shellcheck disable=SC2317
 cleanup() {
     WINEPREFIX="$T/pfx" "$WINE_DIR/bin/wineserver" -k 2>/dev/null
+    sg_kill_prefix "$T/pfx"
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     rm -f "/tmp/.X${DPY}-lock"; rm -rf "$T"
 }
