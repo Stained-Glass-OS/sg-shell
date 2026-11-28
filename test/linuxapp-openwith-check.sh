@@ -6,7 +6,9 @@
 # MimeType= types (mime/globs2's plain globs, mime/aliases followed) -- Inkscape for .svg, GIMP for
 # .xcf, not only the types Settings > Default apps chooses for. A type the app no longer names, or
 # the app gone: its extensions let go of it, another app's kept.
-#   mutant: -DSG_MUTANT_OPENWITH_DEFAULTS_ONLY (src/linuxapps/sg-linuxapp.c)
+# Each class says which app it is (its Application key: ApplicationName, ApplicationIcon,
+# AppUserModelID), as a packaged app's does, for Open with (wine-sg 9517).
+#   mutants: -DSG_MUTANT_OPENWITH_DEFAULTS_ONLY, -DSG_MUTANT_NO_APPLICATION_KEY (src/linuxapps/sg-linuxapp.c)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 EXE="${SG_LINUXAPP_EXE:-$HERE/build/sg-linuxapp64.exe}"
@@ -46,6 +48,12 @@ ow() { "$WINE" reg query "HKCU\\Software\\Classes\\$1\\OpenWithProgids" 2>/dev/n
 [ "$(ow .svgz)" = "SG.LinuxApp.org.gate.Draw " ] && [ "$(ow .xcf)" = "SG.LinuxApp.org.gate.Paint " ] && pass "each extension of each type it names (.svgz, .xcf)" || fail ".svgz '$(ow .svgz)' .xcf '$(ow .xcf)'"
 [ "$(ow .gatething)" = "SG.LinuxApp.org.gate.Draw " ] && pass "a type named by its alias (mime/aliases)" || fail "alias: '$(ow .gatething)'"
 [ "$(ow .png)" = "SG.LinuxApp.org.gate.Paint " ] && pass "and the Default apps types as before (.png)" || fail ".png: '$(ow .png)'"
+# each class says which app it is (its Application key): Open with names it so (wine-sg 9517), not
+# after the launcher every Linux app's class starts
+appname=$("$WINE" reg query 'HKCU\Software\Classes\SG.LinuxApp.org.gate.Draw\Application' /v ApplicationName 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')
+appid=$("$WINE" reg query 'HKCU\Software\Classes\SG.LinuxApp.org.gate.Draw\Application' /v AppUserModelID 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_SZ *//p')
+[ "$appname" = "Gate Draw" ] && [ "$appid" = SG.LinuxApp.org.gate.Draw ] && pass "the class's Application key names the app (ApplicationName, AppUserModelID)" \
+    || fail "Application key: name '$appname' id '$appid'"
 app org.gate.Draw 'Type=Application' 'Name=Gate Draw' 'Exec=gate-draw %F' 'MimeType=image/svg+xml;'
 rm "$T/share/applications/org.gate.Paint.desktop"
 "$WINE" "$EXE" --sync; "$WINESERVER" -w

@@ -1012,6 +1012,22 @@ static BOOL register_app(const struct app *a, const WCHAR *self, const WCHAR *de
         _snwprintf(di, ARRAYSIZE(di), L"%ls,0", ico);
         set_sz(HKEY_CURRENT_USER, sub, NULL, di);
     }
+#ifndef SG_MUTANT_NO_APPLICATION_KEY
+    {
+        /* which app the class is, as a packaged app's class says (its Application
+         * key): every Linux app's class starts this launcher, and Open with and
+         * "How do you want to open this file?" (wine-sg 9517) named them all after
+         * it, as one entry */
+        WCHAR di[MAX_PATH + 8];
+        _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\Application", progid);
+        set_sz(HKEY_CURRENT_USER, sub, L"ApplicationName", a->name);
+        set_sz(HKEY_CURRENT_USER, sub, L"AppUserModelID", progid);
+        if (ico) {
+            _snwprintf(di, ARRAYSIZE(di), L"%ls,0", ico);
+            set_sz(HKEY_CURRENT_USER, sub, L"ApplicationIcon", di);
+        }
+    }
+#endif
     _snwprintf(sub, ARRAYSIZE(sub), L"Software\\Classes\\%ls\\shell\\open\\command", progid);
     _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --open \"%ls\" \"%%1\"", self, desktop);
     set_sz(HKEY_CURRENT_USER, sub, NULL, cmd);
@@ -1777,6 +1793,24 @@ static void sync_default_browser(void)
 
 /* ---- starting an app --------------------------------------------------- */
 
+/* The Linux app's window comes in the shell's frame, which the shell brings
+ * to the front -- but the shell may not take the foreground from the window
+ * in front (wine-sg 9930's foreground lock: File Explorer in front, GIMP
+ * started from Start came behind it with its button flashing, its window
+ * taking seconds to come). This program was started by the person's Start or
+ * taskbar and may take the foreground; as a Windows program starting another
+ * does, it hands that right on, to the shell (AllowSetForegroundWindow), until
+ * the person's next input elsewhere. */
+static void grant_shell_foreground(void)
+{
+    HWND tray = FindWindowW(L"Shell_TrayWnd", NULL);
+    DWORD pid = 0;
+#ifdef SG_MUTANT_NO_SHELL_GRANT
+    return;
+#endif
+    if (tray && GetWindowThreadProcessId(tray, &pid) && pid) AllowSetForegroundWindow(pid);
+}
+
 static int run_app(const WCHAR *file)
 {
     LONG (WINAPI *spawnvp)(char * const argv[], int wait);
@@ -1784,6 +1818,7 @@ static int run_app(const WCHAR *file)
     char *argv[4];
     LONG r = 1;
 
+    grant_shell_foreground();
     spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
     if (p_unix_name) unix_file = p_unix_name(file);
     if (spawnvp && unix_file) {
@@ -1822,6 +1857,7 @@ static int run_action(const WCHAR *action, const WCHAR *file)
     char *argv[6];
     LONG r = 1;
 
+    grant_shell_foreground();
     spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
     if (p_unix_name) unix_file = p_unix_name(file);
     if (WideCharToMultiByte(CP_UTF8, 0, action, -1, act, sizeof(act), NULL, NULL) && spawnvp && unix_file) {
@@ -1848,6 +1884,7 @@ static int open_with_app(const WCHAR *desktop, const WCHAR *arg)
     LONG r = 1;
     BOOL is_path = arg[0] && (arg[1] == L':' || (arg[0] == L'\\' && arg[1] == L'\\'));
 
+    grant_shell_foreground();
     spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
     if (p_unix_name) unix_desktop = p_unix_name(desktop);
     if (is_path && p_unix_name) unix_arg = p_unix_name(arg);
@@ -1878,6 +1915,7 @@ static int launch_app(const WCHAR *desktop, WCHAR **args, int nargs)
     LONG r = 1;
     int i, n = 0;
 
+    grant_shell_foreground();
     spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
     if (!(argv = calloc(nargs + 4, sizeof(*argv)))) return 1;
     argv[n++] = gio; argv[n++] = launch;

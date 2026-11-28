@@ -1,3 +1,21 @@
+sg-shell (0.1.0-330) unstable; urgency=medium
+
+  * Found in linux1's QA VM walk (ledger i0820, i0821):
+    - A Linux app started from Start comes to the front over another
+      program's window: with File Explorer in front, GIMP opened behind it
+      with its button flashing (the shell may not take the foreground from
+      the window in front, wine-sg 9930). sg-linuxapp, started by the
+      person's Start or taskbar, hands its right to the foreground on to the
+      shell (AllowSetForegroundWindow) before it starts the app. Gate
+      test/linuxapp-foreground-check.sh (mutant SG_MUTANT_NO_SHELL_GRANT).
+    - Each Linux app's class says which app it is (its Application key:
+      ApplicationName, ApplicationIcon, AppUserModelID), so "How do you
+      want to open this file?" (wine-sg 9517) offers Inkscape and GIMP by
+      name instead of one entry named after the launcher. Gate
+      linuxapp-openwith-check.sh (mutant SG_MUTANT_NO_APPLICATION_KEY).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 23:45:00 -0800
+
 sg-shell (0.1.0-329) unstable; urgency=medium
 
   * The Project pane, Win+P as Windows has it: PC screen only, Duplicate,

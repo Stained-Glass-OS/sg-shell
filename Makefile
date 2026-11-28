@@ -636,6 +636,12 @@ test-linuxapp-openwith: build
 test-start-jumplist: build
 	@sh test/start-jumplist-check.sh
 
+# A Linux app started from Start comes to the front over another program's window (sg-linuxapp hands
+# the shell its right to the foreground). test/linuxapp-foreground-check.sh.
+.PHONY: test-linuxapp-foreground
+test-linuxapp-foreground: build
+	@sh test/linuxapp-foreground-check.sh
+
 # AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
 .PHONY: test-appimage test-appimage-mutants
 test-appimage: build
