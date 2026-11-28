@@ -1,3 +1,20 @@
+sg-shell (0.1.0-323) unstable; urgency=medium
+
+  * The Volume Mixer: "Open Volume mixer" on the volume icon's menu (as
+    on Windows 10) opens it (sg-volume --mixer): the output's volume
+    beside each program's, a vertical slider, the number and a mute
+    button per program playing, as Windows' sndvol shows them; programs
+    come and go as they play. A Windows program's slider is its audio
+    session's volume (wine-sg 9416): set here, the program hears of it
+    (IAudioSessionEvents); set by the program, the slider moves. Moving a
+    muted program's slider unmutes it, as on Windows. sg-settingsctl
+    sound apps / app-volume / app-mute (sg-session 0.1.0-303) do the work.
+    test/volume-check.sh: +5 checks (--dump-mixer; the slider, the mute
+    button and the output's slider ask for the right changes); mutant
+    SG_MUTANT_MIXER_KEEPS_MUTE caught (make test-volume).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 21:21:30 -0800
+
 sg-shell (0.1.0-322) unstable; urgency=medium
 
   * Linux apps are apps to the taskbar (linux1, ledger i0810; with wine-sg

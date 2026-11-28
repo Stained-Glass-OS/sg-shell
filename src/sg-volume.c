@@ -18,8 +18,17 @@
  * default sink NAME [VALUE]" changes them. Those calls run on a worker
  * thread, so a slow sound server never stops the taskbar icon.
  *
+ * The Volume Mixer ("Open Volume mixer" on the icon's menu; sg-volume --mixer):
+ * the output's volume beside each program's, as Windows' sndvol shows them --
+ * a slider and a mute button per program playing (sg-settingsctl sound apps).
+ * A Windows program's slider is its audio session's volume (wine-sg 9416): set
+ * here, the program hears of it; set by the program, it moves here.
+ *
  *   sg-volume              the icon (sg-session starts it with the shell)
  *   sg-volume --dump       what it would show (stderr): the gate
+ *   sg-volume --mixer      the Volume Mixer
+ *   sg-volume --dump-mixer what the mixer would show (stderr); --mixer-set N V,
+ *                          --mixer-mute N yes|no: what its slider and button do
  *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -604,6 +613,7 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             HMENU m = CreatePopupMenu();
             POINT p;
             int cmd;
+            AppendMenuW(m, MF_STRING, 3, L"Open Volume mixer");
             AppendMenuW(m, MF_STRING, 1, L"Open Sound settings");
             AppendMenuW(m, MF_STRING | (g_cur < 0 ? MF_GRAYED : 0), 2, muted() ? L"Unmute" : L"Mute");
             GetCursorPos(&p);
@@ -611,6 +621,12 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, p.x, p.y, 0, hwnd, NULL);
             DestroyMenu(m);
             if (cmd == 1) ShellExecuteW(NULL, NULL, L"ms-settings:sound", NULL, NULL, SW_SHOWNORMAL);
+            if (cmd == 3)
+            {
+                WCHAR self[MAX_PATH];
+                GetModuleFileNameW(NULL, self, MAX_PATH);
+                ShellExecuteW(NULL, NULL, self, L"--mixer", NULL, SW_SHOWNORMAL);
+            }
             if (cmd == 2) toggle_mute();
         }
         return 0;
@@ -639,6 +655,482 @@ static LRESULT CALLBACK tray_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* --- the Volume Mixer ---------------------------------------------------------------- */
+
+#define MAX_APPS 24
+#define MIX_COL 104     /* a column, at 100% */
+#define MIX_H 330
+#define WM_MIXSTATE (WM_APP + 3)
+
+struct app { int index, vol, pid; BOOL muted; WCHAR name[128]; };
+struct mixstate { struct sink sinks[MAX_SINKS]; int nsinks; struct app apps[MAX_APPS]; int napps; BOOL ok; };
+
+static struct mixstate g_mix;       /* on the mixer's window thread */
+static HWND g_mixwnd;
+static int g_mix_drag = -2;         /* -1 the output's slider, N program N's, -2 none */
+static int g_mix_drag_vol;
+
+/* "APP index\tvol\tmuted\tpid\tname" lines */
+static BOOL parse_apps(const char *ans, struct app *list, int *count)
+{
+    const char *line = ans;
+    *count = 0;
+    if (!ans || (!strstr(ans, "\nOK") && strncmp(ans, "OK", 2))) return FALSE;
+    while (line && *line)
+    {
+        if (!strncmp(line, "APP ", 4) && *count < MAX_APPS)
+        {
+            struct app *a = &list[(*count)++];
+            WCHAR f[16];
+            field(line + 4, 0, f, ARRAYSIZE(f)); a->index = _wtoi(f);
+            field(line + 4, 1, f, ARRAYSIZE(f)); a->vol = max(_wtoi(f), 0);
+            field(line + 4, 2, f, ARRAYSIZE(f)); a->muted = !lstrcmpW(f, L"yes");
+            field(line + 4, 3, f, ARRAYSIZE(f)); a->pid = _wtoi(f);
+            field(line + 4, 4, a->name, ARRAYSIZE(a->name));
+        }
+        if ((line = strchr(line, '\n'))) line++;
+    }
+    return TRUE;
+}
+
+/* a program's name as the mixer shows it: "spotify.exe" -> "spotify" */
+static void app_label(const struct app *a, WCHAR *out, int cch)
+{
+    size_t n;
+    lstrcpynW(out, a->name, cch);
+    n = wcslen(out);
+    if (n > 4 && !_wcsicmp(out + n - 4, L".exe")) out[n - 4] = 0;
+}
+
+static void mix_read(struct mixstate *st)
+{
+    char *ans = ctl_run(L"sound", 8000);
+    st->ok = parse_sinks(ans, st->sinks, &st->nsinks);
+    free(ans);
+    /* an older sg-settingsctl knows no "apps": the output alone */
+    ans = ctl_run(L"sound apps", 8000);
+    if (!parse_apps(ans, st->apps, &st->napps)) st->napps = 0;
+    free(ans);
+}
+
+static int mix_default(const struct mixstate *st)
+{
+    int i;
+    for (i = 0; i < st->nsinks; i++) if (st->sinks[i].def) return i;
+    return st->nsinks ? 0 : -1;
+}
+
+/* the mixer's changes, carried out off the window thread, newest volume per slider */
+static struct change g_mix_pending[16];
+static int g_mix_npending;
+static HANDLE g_mix_wake;
+
+static void mix_queue(const WCHAR *args)
+{
+    int i;
+    EnterCriticalSection(&g_cs);
+    for (i = 0; i < g_mix_npending; i++)
+    {
+        /* the same slider again: the newer value replaces the older */
+        const WCHAR *a = g_mix_pending[i].args, *sp = wcsrchr(a, L' '), *sp2 = wcsrchr(args, L' ');
+        if (sp && sp2 && sp - a == sp2 - args && !wcsncmp(a, args, sp - a)) break;
+    }
+    if (i == g_mix_npending && g_mix_npending < (int)ARRAYSIZE(g_mix_pending)) g_mix_npending++;
+    if (i < g_mix_npending) lstrcpynW(g_mix_pending[i].args, args, ARRAYSIZE(g_mix_pending[i].args));
+    LeaveCriticalSection(&g_cs);
+    SetEvent(g_mix_wake);
+}
+
+static DWORD WINAPI mix_worker(void *arg)
+{
+    (void)arg;
+    for (;;)
+    {
+        struct change todo[16];
+        struct mixstate *st;
+        int n, i;
+
+        WaitForSingleObject(g_mix_wake, 1000);  /* a change, or every second: programs come and go */
+        EnterCriticalSection(&g_cs);
+        n = g_mix_npending;
+        memcpy(todo, g_mix_pending, n * sizeof(*todo));
+        g_mix_npending = 0;
+        LeaveCriticalSection(&g_cs);
+        for (i = 0; i < n; i++) free(ctl_run(todo[i].args, 8000));
+        if (!(st = calloc(1, sizeof(*st)))) continue;
+        mix_read(st);
+        if (!PostMessageW(g_mixwnd, WM_MIXSTATE, 0, (LPARAM)st)) free(st);
+    }
+    return 0;
+}
+
+/* column C (-1 the output): its parts */
+static RECT mix_col(int c)
+{
+    RECT r;
+    int x = S(12) + (c + 1) * S(MIX_COL) + (c >= 0 ? S(16) : 0);
+    SetRect(&r, x, S(12), x + S(MIX_COL), S(MIX_H) - S(12));
+    return r;
+}
+static RECT mix_track(int c)
+{
+    RECT r = mix_col(c);
+    int cx = (r.left + r.right) / 2;
+    SetRect(&r, cx - S(12), S(96), cx + S(12), S(MIX_H) - S(84));
+    return r;
+}
+static RECT mix_mute(int c)
+{
+    RECT r = mix_col(c);
+    int cx = (r.left + r.right) / 2;
+    SetRect(&r, cx - S(20), S(MIX_H) - S(56), cx + S(20), S(MIX_H) - S(16));
+    return r;
+}
+
+static int mix_vol(int c)
+{
+    int d = mix_default(&g_mix);
+    if (g_mix_drag == c) return g_mix_drag_vol;
+    if (c < 0) return d >= 0 ? min(g_mix.sinks[d].vol, 100) : 0;
+    return c < g_mix.napps ? min(g_mix.apps[c].vol, 100) : 0;
+}
+static BOOL mix_muted(int c)
+{
+    int d = mix_default(&g_mix);
+    if (c < 0) return d >= 0 && g_mix.sinks[d].muted;
+    return c < g_mix.napps && g_mix.apps[c].muted;
+}
+
+static void mix_set(int c, int v)
+{
+    WCHAR args[512];
+    int d = mix_default(&g_mix);
+    v = max(0, min(100, v));
+    if (c < 0)
+    {
+        if (d < 0) return;
+        g_mix.sinks[d].vol = v;
+        _snwprintf(args, ARRAYSIZE(args), L"sound volume sink \"%ls\" %d", g_mix.sinks[d].name, v);
+        mix_queue(args);
+        /* moving the slider unmutes, as on Windows */
+        if (g_mix.sinks[d].muted)
+        {
+            g_mix.sinks[d].muted = FALSE;
+            _snwprintf(args, ARRAYSIZE(args), L"sound mute sink \"%ls\" no", g_mix.sinks[d].name);
+            mix_queue(args);
+        }
+    }
+    else if (c < g_mix.napps)
+    {
+        g_mix.apps[c].vol = v;
+        _snwprintf(args, ARRAYSIZE(args), L"sound app-volume %d %d", g_mix.apps[c].index, v);
+        mix_queue(args);
+#ifndef SG_MUTANT_MIXER_KEEPS_MUTE
+        if (g_mix.apps[c].muted)
+        {
+            g_mix.apps[c].muted = FALSE;
+            _snwprintf(args, ARRAYSIZE(args), L"sound app-mute %d no", g_mix.apps[c].index);
+            mix_queue(args);
+        }
+#endif
+    }
+    if (g_mixwnd) InvalidateRect(g_mixwnd, NULL, FALSE);
+}
+
+static void mix_toggle(int c)
+{
+    WCHAR args[512];
+    int d = mix_default(&g_mix);
+    if (c < 0)
+    {
+        if (d < 0) return;
+        g_mix.sinks[d].muted = !g_mix.sinks[d].muted;
+        _snwprintf(args, ARRAYSIZE(args), L"sound mute sink \"%ls\" %ls", g_mix.sinks[d].name, g_mix.sinks[d].muted ? L"yes" : L"no");
+    }
+    else if (c < g_mix.napps)
+    {
+        g_mix.apps[c].muted = !g_mix.apps[c].muted;
+        _snwprintf(args, ARRAYSIZE(args), L"sound app-mute %d %ls", g_mix.apps[c].index, g_mix.apps[c].muted ? L"yes" : L"no");
+    }
+    else return;
+    mix_queue(args);
+    if (g_mixwnd) InvalidateRect(g_mixwnd, NULL, FALSE);
+}
+
+static void mix_size(void)
+{
+    RECT r = { 0, 0, S(12) * 2 + S(MIX_COL) * (1 + max(g_mix.napps, 1)) + S(16), S(MIX_H) };
+    AdjustWindowRectEx(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, 0);
+    SetWindowPos(g_mixwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+static void mix_paint(HWND hwnd)
+{
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(hwnd, &ps), mem;
+    RECT c, r, t;
+    HBITMAP bmp;
+    HBRUSH b;
+    BOOL dark = sg_system_dark();
+    COLORREF bg = dark ? RGB(0x20, 0x20, 0x20) : RGB(0xFF, 0xFF, 0xFF), text = dark ? RGB(0xFF, 0xFF, 0xFF) : RGB(0, 0, 0),
+             subtle = dark ? RGB(0xA8, 0xA8, 0xA8) : RGB(0x5A, 0x5A, 0x5A),
+             rail = dark ? RGB(0x5A, 0x5A, 0x5A) : RGB(0xC8, 0xC8, 0xC8),
+             line = dark ? RGB(0x40, 0x40, 0x40) : RGB(0xDD, 0xDD, 0xDD),
+             accent = dark ? sg_accent_light(40) : sg_accent();
+    WCHAR buf[160];
+    int col, d = mix_default(&g_mix);
+
+    GetClientRect(hwnd, &c);
+    mem = CreateCompatibleDC(dc);
+    bmp = CreateCompatibleBitmap(dc, c.right, c.bottom);
+    SelectObject(mem, bmp);
+    b = CreateSolidBrush(bg); FillRect(mem, &c, b); DeleteObject(b);
+    SetBkMode(mem, TRANSPARENT);
+
+    /* between the output and the programs */
+    r = mix_col(-1);
+    SetRect(&t, r.right + S(7), S(12), r.right + S(8), c.bottom - S(12));
+    b = CreateSolidBrush(line); FillRect(mem, &t, b); DeleteObject(b);
+
+    for (col = -1; col < max(g_mix.napps, 0); col++)
+    {
+        int vol = mix_vol(col), y;
+        BOOL m = mix_muted(col);
+        HICON icon;
+
+        /* the heading: "Device" over the output, "Applications" over the first program */
+        r = mix_col(col);
+        SelectObject(mem, g_font_small);
+        SetTextColor(mem, subtle);
+        SetRect(&t, r.left, r.top, r.right + (col == 0 ? S(MIX_COL) * 2 : 0), r.top + S(20));
+        if (col < 1) DrawTextW(mem, col < 0 ? L"Device" : L"Applications", -1, &t, DT_SINGLELINE | DT_LEFT | DT_NOCLIP);
+        /* the name, two lines at most */
+        SelectObject(mem, g_font);
+        SetTextColor(mem, text);
+        if (col < 0) lstrcpynW(buf, d >= 0 ? g_mix.sinks[d].desc : (g_mix.ok ? L"No audio output device" : L"Not responding"), ARRAYSIZE(buf));
+        else app_label(&g_mix.apps[col], buf, ARRAYSIZE(buf));
+        SetRect(&t, r.left + S(4), r.top + S(28), r.right - S(4), r.top + S(72));
+        DrawTextW(mem, buf, -1, &t, DT_CENTER | DT_WORDBREAK | DT_END_ELLIPSIS | DT_EDITCONTROL);
+
+        /* the slider: a rail, filled from the bottom, and the thumb */
+        t = mix_track(col);
+        y = t.bottom - (t.bottom - t.top) * vol / 100;
+        SetRect(&r, (t.left + t.right) / 2 - S(2), t.top, (t.left + t.right) / 2 + S(2), t.bottom);
+        b = CreateSolidBrush(rail); FillRect(mem, &r, b); DeleteObject(b);
+        SetRect(&r, (t.left + t.right) / 2 - S(2), y, (t.left + t.right) / 2 + S(2), t.bottom);
+        b = CreateSolidBrush(m ? rail : accent); FillRect(mem, &r, b); DeleteObject(b);
+        {
+            HBRUSH ob;
+            HPEN op, edge = CreatePen(PS_SOLID, S(2), bg);
+            int cx = (t.left + t.right) / 2;
+            b = CreateSolidBrush(m ? subtle : accent);
+            ob = SelectObject(mem, b); op = SelectObject(mem, edge);
+            sg_ellipse(mem, cx - S(9), y - S(9), cx + S(10), y + S(10));
+            SelectObject(mem, ob); SelectObject(mem, op);
+            DeleteObject(b); DeleteObject(edge);
+        }
+        /* the number */
+        SelectObject(mem, g_font_small);
+        SetTextColor(mem, subtle);
+        _snwprintf(buf, ARRAYSIZE(buf), L"%d", vol);
+        SetRect(&r, t.left - S(20), t.bottom + S(4), t.right + S(20), t.bottom + S(22));
+        DrawTextW(mem, buf, -1, &r, DT_SINGLELINE | DT_CENTER);
+        /* the mute button: the speaker as it is */
+        r = mix_mute(col);
+        {
+            int keep_cur = g_cur, keep_n = g_nsinks;
+            struct sink keep = g_sinks[0];
+            /* make_icon draws the icon's state: lend it this column's */
+            g_sinks[0].vol = vol; g_sinks[0].muted = m; g_cur = 0; g_nsinks = 1; g_known = TRUE;
+            icon = make_icon(S(24), text);
+            g_sinks[0] = keep; g_cur = keep_cur; g_nsinks = keep_n;
+        }
+        DrawIconEx(mem, r.left + S(8), r.top + S(8), icon, S(24), S(24), 0, NULL, DI_NORMAL);
+        DestroyIcon(icon);
+    }
+
+    BitBlt(dc, 0, 0, c.right, c.bottom, mem, 0, 0, SRCCOPY);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    EndPaint(hwnd, &ps);
+}
+
+static int mix_hit_track(POINT p)
+{
+    int c;
+    for (c = -1; c < g_mix.napps; c++)
+    {
+        RECT t = mix_track(c);
+        InflateRect(&t, S(8), S(10));
+        if (PtInRect(&t, p)) return c;
+    }
+    return -2;
+}
+static int mix_hit_mute(POINT p)
+{
+    int c;
+    for (c = -1; c < g_mix.napps; c++)
+    {
+        RECT r = mix_mute(c);
+        if (PtInRect(&r, p)) return c;
+    }
+    return -2;
+}
+static int mix_vol_at(int c, int y)
+{
+    RECT t = mix_track(c);
+    return max(0, min(100, (t.bottom - y) * 100 / max(t.bottom - t.top, 1)));
+}
+
+static LRESULT CALLBACK mix_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    POINT p = { (short)LOWORD(lp), (short)HIWORD(lp) };
+    switch (msg)
+    {
+    case WM_PAINT: mix_paint(hwnd); return 0;
+    case WM_ERASEBKGND: return 1;
+    case WM_LBUTTONDOWN:
+    {
+        int c = mix_hit_track(p);
+        if (c != -2)
+        {
+            g_mix_drag = c;
+            g_mix_drag_vol = mix_vol_at(c, p.y);
+            SetCapture(hwnd);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        else if ((c = mix_hit_mute(p)) != -2) mix_toggle(c);
+        return 0;
+    }
+    case WM_MOUSEMOVE:
+        if (g_mix_drag != -2)
+        {
+            g_mix_drag_vol = mix_vol_at(g_mix_drag, p.y);
+            mix_set(g_mix_drag, g_mix_drag_vol);
+        }
+        return 0;
+    case WM_LBUTTONUP:
+        if (g_mix_drag != -2)
+        {
+            int c = g_mix_drag;
+            g_mix_drag = -2;
+            ReleaseCapture();
+            mix_set(c, mix_vol_at(c, p.y));
+        }
+        return 0;
+    case WM_CAPTURECHANGED:
+        g_mix_drag = -2;
+        return 0;
+    case WM_MIXSTATE:
+    {
+        struct mixstate *st = (struct mixstate *)lp;
+        int old = g_mix.napps;
+        WCHAR title[256];
+        int d;
+        /* while a thumb moves, the slider is the truth */
+        if (g_mix_drag == -2)
+        {
+            g_mix = *st;
+            if (g_mix.napps != old) mix_size();
+            d = mix_default(&g_mix);
+            _snwprintf(title, ARRAYSIZE(title), L"Volume Mixer - %ls", d >= 0 ? g_mix.sinks[d].desc : L"");
+            title[ARRAYSIZE(title) - 1] = 0;
+            SetWindowTextW(hwnd, title);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        free(st);
+        return 0;
+    }
+    case WM_DPICHANGED:
+        g_dpi = HIWORD(wp);
+        make_fonts();
+        mix_size();
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static int mixer_main(HINSTANCE inst)
+{
+    WNDCLASSW wc = { 0 };
+    HWND old;
+    MSG msg;
+
+    /* one mixer: a second "Open Volume mixer" brings the first forward */
+    if ((old = FindWindowW(L"SgVolumeMixer", NULL)))
+    {
+        ShowWindow(old, SW_RESTORE);
+        SetForegroundWindow(old);
+        return 0;
+    }
+    InitializeCriticalSection(&g_cs);
+    g_mix_wake = CreateEventW(NULL, FALSE, TRUE, NULL);
+    sg_dpi_init();
+    g_dpi = (int)sg_dpi_for(NULL);
+    make_fonts();
+    wc.lpfnWndProc = mix_proc;
+    wc.hInstance = inst;
+    wc.hCursor = LoadCursorW(NULL, (const WCHAR *)IDC_ARROW);
+    wc.lpszClassName = L"SgVolumeMixer";
+    wc.hIcon = make_icon(GetSystemMetrics(SM_CXICON), RGB(0x40, 0x40, 0x40));
+    RegisterClassW(&wc);
+    g_mixwnd = CreateWindowExW(0, wc.lpszClassName, L"Volume Mixer", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                               CW_USEDEFAULT, CW_USEDEFAULT, 400, 300, NULL, NULL, inst, NULL);
+    mix_size();
+    ShowWindow(g_mixwnd, SW_SHOWNORMAL);
+    CloseHandle(CreateThread(NULL, 0, mix_worker, NULL, 0, NULL));
+    while (GetMessageW(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    return 0;
+}
+
+/* --dump-mixer, --mixer-set N V, --mixer-mute N yes|no: what the mixer shows and what
+ * its slider and mute button carry out (the gate) */
+static int mixer_test(const WCHAR *cmdline)
+{
+    const WCHAR *a;
+    int i, d;
+    char name[256];
+    WCHAR label[128];
+
+    InitializeCriticalSection(&g_cs);
+    mix_read(&g_mix);
+    if ((a = wcsstr(cmdline, L"--mixer-set ")) || (a = wcsstr(cmdline, L"--mixer-mute ")))
+    {
+        BOOL set = !wcsncmp(a, L"--mixer-set ", 12);
+        int c = _wtoi(a + (set ? 12 : 13));
+        const WCHAR *v = wcschr(a + (set ? 12 : 13), L' ');
+        if (!v) return 2;
+        if (set) mix_set(c, _wtoi(v + 1));
+        else if (mix_muted(c) != !wcsncmp(v + 1, L"yes", 3)) mix_toggle(c);
+        for (i = 0; i < g_mix_npending; i++) free(ctl_run(g_mix_pending[i].args, 8000));
+        g_mix_npending = 0;
+        return 0;
+    }
+    d = mix_default(&g_mix);
+    if (!g_mix.ok) fprintf(stderr, "MIXER failed\n");
+    else if (d < 0) fprintf(stderr, "MIXER no-device\n");
+    else
+    {
+        WideCharToMultiByte(CP_UTF8, 0, g_mix.sinks[d].desc, -1, name, sizeof(name), NULL, NULL);
+        fprintf(stderr, "MIXER %d %s %s\n", mix_vol(-1), mix_muted(-1) ? "muted" : "on", name);
+    }
+    for (i = 0; i < g_mix.napps; i++)
+    {
+        app_label(&g_mix.apps[i], label, ARRAYSIZE(label));
+        WideCharToMultiByte(CP_UTF8, 0, label, -1, name, sizeof(name), NULL, NULL);
+        fprintf(stderr, "MIXAPP %d %d %s %s\n", i, mix_vol(i), mix_muted(i) ? "muted" : "on", name);
+    }
+    return 0;
+}
+
 static HFONT make_font(int height, int weight)
 {
     return CreateFontW(-S(height), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
@@ -660,6 +1152,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     MSG msg;
 
     (void)prev; (void)show;
+    if (cmdline && (wcsstr(cmdline, L"--dump-mixer") || wcsstr(cmdline, L"--mixer-")))
+        return mixer_test(cmdline);
+    if (cmdline && wcsstr(cmdline, L"--mixer"))
+        return mixer_main(inst);
     if (cmdline && wcsstr(cmdline, L"--dump"))
     {
         char *ans = ctl_run(L"sound", 8000), a[256];

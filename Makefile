@@ -502,7 +502,7 @@ test-smooth-shapes:
 test-icon-sizes:
 	@sh test/icon-sizes-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
-# The taskbar's volume icon (sg-volume), against a stand-in sg-settingsctl.
+# The taskbar's volume icon (sg-volume) and its Volume Mixer, against a stand-in sg-settingsctl.
 # The shell's icon font (caption buttons of Windows 10/11-era programs).
 .PHONY: test-icons-font
 test-icons-font:
@@ -515,7 +515,12 @@ test-volume: build
 	     -lshell32 -luser32 -lgdi32 -municode -mwindows || exit 1; \
 	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe sh test/volume-check.sh 2>&1 | grep -q 'FAIL  media keys' \
 	     || { echo "volume-check: the mutant MEDIA_PLAY_ONLY was not caught"; exit 1; }; \
-	 echo "volume-check: mutant MEDIA_PLAY_ONLY caught"
+	 echo "volume-check: mutant MEDIA_PLAY_ONLY caught"; \
+	 $(MINGW64) $(SG_CFLAGS) -Wno-missing-field-initializers -DSG_MUTANT_MIXER_KEEPS_MUTE -o $(BUILD)/sg-volume-mut.exe src/sg-volume.c \
+	     -lshell32 -luser32 -lgdi32 -municode -mwindows || exit 1; \
+	 SG_VOLUME_EXE=$(BUILD)/sg-volume-mut.exe sh test/volume-check.sh 2>&1 | grep -q "FAIL  mixer slider on a muted program" \
+	     || { echo "volume-check: the mutant MIXER_KEEPS_MUTE was not caught"; exit 1; }; \
+	 echo "volume-check: mutant MIXER_KEEPS_MUTE caught"
 
 # Media Player's transport controls (sg-media): the desktop's media controls
 # and the media keys, on a session bus of its own; two mutants.

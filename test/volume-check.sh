@@ -2,7 +2,8 @@
 . "$(dirname "$0")/scratch-home.sh"
 # Gate for the taskbar's volume icon (sg-volume): what it says for each state
 # of the sound server -- an output at 40%, muted, none at all, the server not
-# answering -- read from its --dump. A stand-in sg-settingsctl answers as the
+# answering -- read from its --dump; the Volume Mixer (--dump-mixer, and what
+# its sliders and mute buttons ask for: --mixer-set, --mixer-mute). A stand-in sg-settingsctl answers as the
 # real one does (SINK lines, then OK).
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -32,6 +33,10 @@ mode=\$(cat "$T/mode")
         two)   printf 'SINK hdmi\tno\t70\tno\tHDMI Output\nSINK speakers\tyes\t25\tyes\tSpeakers (Built-in Audio)\nOK\n' ;;
         none)  printf 'OK\n' ;;
         down)  printf 'ERROR failed pactl: Connection refused\n' ;;
+        mix)   case "\$1 \$2" in
+                   "sound apps") printf 'APP 86\t79\tno\t4242\tspotify.exe\nAPP 91\t100\tyes\t5151\tFirefox\nOK\n' ;;
+                   *) printf 'SINK alsa_output.pci.analog-stereo\tyes\t40\tno\tSpeakers (Built-in Audio)\nOK\n' ;;
+               esac ;;
     esac
 } > "\$out.tmp" && mv "\$out.tmp" "\$out"
 EOF
@@ -51,6 +56,25 @@ out=$(dump down); echo "$out" | sed 's/^/      /'
 [ "$out" = "VOLUME none failed
 TIP The sound service is not responding" ] && pass "the sound server down: said, not a silent blank" || fail "down: $out"
 grep -q '^sound --out ' "$T/calls" && pass "it asks sg-settingsctl, as Settings' Sound page does" || fail "calls: $(cat "$T/calls")"
+
+# --- the Volume Mixer: the output and each program playing, their sliders and mute buttons ------
+# (sg-volume --mixer; a Windows program's slider is its audio session's volume, wine-sg 9416)
+echo mix > "$T/mode"
+mixer() { SG_SETTINGSCTL="$T/settingsctl" "$WINE_DIR/bin/wine" "$T/sg-volume64.exe" "$@" 2>&1 | tr -d '\r' | grep -E '^MIX'; }
+out=$(mixer --dump-mixer); echo "$out" | sed 's/^/      /'
+[ "$out" = "MIXER 40 on Speakers (Built-in Audio)
+MIXAPP 0 79 on spotify
+MIXAPP 1 100 muted Firefox" ] && pass "the mixer: the output, then each program playing with its volume and mute" || fail "mixer: $out"
+: > "$T/calls"; mixer --mixer-set 0 50 >/dev/null
+grep -q '^sound app-volume 86 50 --out ' "$T/calls" && pass "a program's slider sets its stream's volume" || fail "mixer slider: $(cat "$T/calls")"
+: > "$T/calls"; mixer --mixer-set 1 30 >/dev/null
+grep -q '^sound app-volume 91 30 --out ' "$T/calls" && grep -q '^sound app-mute 91 no --out ' "$T/calls" \
+    && pass "moving a muted program's slider unmutes it, as on Windows" || fail "mixer slider on a muted program: $(cat "$T/calls")"
+: > "$T/calls"; mixer --mixer-mute 0 yes >/dev/null
+grep -q '^sound app-mute 86 yes --out ' "$T/calls" && pass "a program's mute button mutes its stream" || fail "mixer mute: $(cat "$T/calls")"
+: > "$T/calls"; mixer --mixer-set -1 60 >/dev/null
+grep -q '^sound volume sink alsa_output.pci.analog-stereo 60 --out ' "$T/calls" && pass "the output's slider sets the output's volume" \
+    || fail "mixer output slider: $(cat "$T/calls")"
 
 # --- a second click on the icon closes the flyout, not flickers it (David 2026-09-29) ----------
 # The click's mouse-down deactivates the flyout (it hides) before the icon's
