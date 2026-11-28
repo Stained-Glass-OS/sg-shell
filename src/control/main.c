@@ -1118,6 +1118,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     pal_apply(NULL);
 
     if (argc >= 2) {
+        /* the Project pane, as Windows opens it for Win+P (ms-settings-displays-topology:projection) */
+        if (!_wcsnicmp(argv[1], L"ms-settings-displays-topology:", 30) || !_wcsicmp(argv[1], L"/project")) return project_main();
+        if (!_wcsicmp(argv[1], L"/project-dump")) return project_dump();
+        if (!_wcsicmp(argv[1], L"/project-choose") && argc > 2) return project_choose(_wtoi(argv[2]));
         if (!wcscmp(argv[1], L"--dump")) return dump(argc > 2 ? argv[2] : NULL);
         if (!wcscmp(argv[1], L"--set")) {
             int rc = personalize_set(argc - 2, argv + 2);

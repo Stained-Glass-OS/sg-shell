@@ -163,6 +163,9 @@ extern COLORREF g_glyph_color;
 /* ---- the machine: facts shared by pages and --dump ----------------------------- */
 void reg_sz(HKEY root, const WCHAR *sub, const WCHAR *val, WCHAR *out, DWORD cch);
 DWORD reg_dword(HKEY root, const WCHAR *sub, const WCHAR *val, DWORD def);
+int project_main(void);           /* the Project pane, Win+P (project.c) */
+int project_dump(void);
+int project_choose(int which);
 BOOL reg_set_sz(HKEY root, const WCHAR *sub, const WCHAR *val, const WCHAR *data);
 BOOL reg_set_dword(HKEY root, const WCHAR *sub, const WCHAR *val, DWORD data);
 /* read a whole Unix text file through Wine's Z: (UTF-8); caller frees */

@@ -307,6 +307,11 @@ test-office: office
 test-rotation: build
 	sh test/rotation-check.sh
 
+# The Project pane, Win+P (ms-settings-displays-topology:projection; test/project-check.sh).
+.PHONY: test-project
+test-project: build
+	sh test/project-check.sh
+
 # Settings > Display: "Keep these display settings?" in a dialog of its own (test/displaykeep-check.sh).
 .PHONY: test-displaykeep
 test-displaykeep: build

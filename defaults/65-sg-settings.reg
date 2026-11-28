@@ -22,3 +22,13 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Classes\ms-settings\shell\open\command]
 @="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-settings64.exe\" \"%1\""
+
+; The Project pane (PC screen only / Duplicate / Extend / Second screen only):
+; Windows opens it for ms-settings-displays-topology:projection, which Win+P
+; runs (wine-sg 9068).
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-settings-displays-topology]
+@="URL:ms-settings-displays-topology"
+"URL Protocol"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\ms-settings-displays-topology\shell\open\command]
+@="\"Z:\\usr\\libexec\\stained-glass\\shell\\sg-settings64.exe\" \"%1\""

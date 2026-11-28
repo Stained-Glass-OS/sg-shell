@@ -1,3 +1,19 @@
+sg-shell (0.1.0-329) unstable; urgency=medium
+
+  * The Project pane, Win+P as Windows has it: PC screen only, Duplicate,
+    Extend, Second screen only, at the main display's right edge, the
+    present choice in the accent; Up/Down (or Win+P again) move the
+    highlight, Enter or a click chooses, Escape or a click elsewhere
+    closes it. Windows opens it for ms-settings-displays-topology:projection,
+    now registered to Settings (defaults/65-sg-settings.reg), which wine-sg
+    9068's Win+P runs; the choice goes to the compositor through
+    sg-settingsctl display project, as Settings > Display's "Multiple
+    displays" does (the PC screen is the built-in panel, else the main
+    display). Gate test/project-check.sh (make test-project): old FAIL (no
+    URI, no pane), new PASS; mutant SG_MUTANT_PROJECT_NO_APPLY.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 23:40:00 -0800
+
 sg-shell (0.1.0-328) unstable; urgency=medium
 
   * "Segoe UI Symbol" is Symbola (fonts-symbola, in the image) for GDI, GDI+
