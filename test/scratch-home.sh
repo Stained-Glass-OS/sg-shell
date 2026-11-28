@@ -77,3 +77,19 @@ case "${SG_LOCK_CONTROL:-}" in
 "$SG_GATE_HOME"/*|/var/tmp/*|/tmp/*) ;;
 *) export SG_LOCK_CONTROL="$SG_GATE_HOME/no-compositor-control.sock" ;;
 esac
+# sg_kill_prefix PREFIX: kill every process of this user still running in
+# PREFIX (by WINEPREFIX, by PID). "wineserver -k" kills nothing once the
+# server is gone, and a gate that crashes it on purpose, or a server killed by
+# a timeout, leaves its winedevice.exe and services orphaned. Three such
+# winedevice.exe stopped reading the system bus and filled it with systemd's
+# signals until the bus stopped reading systemd (2026-11-27; 72 orphans, 35
+# hours old). Gates call it in their cleanup after "-k", before deleting PREFIX.
+sg_kill_prefix() {
+    [ -n "${1:-}" ] || return 0
+    for _sg_p in /proc/[0-9]*; do
+        [ -O "$_sg_p" ] || continue
+        _sg_wp=$({ tr '\0' '\n' < "$_sg_p/environ"; } 2>/dev/null | sed -n 's/^WINEPREFIX=//p')
+        [ "$_sg_wp" = "$1" ] && kill -9 "${_sg_p#/proc/}" 2>/dev/null
+    done
+    return 0
+}

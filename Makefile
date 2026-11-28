@@ -425,7 +425,7 @@ test-appmode: build
 # Every test that runs Wine sources test/scratch-home.sh first (a HOME of its
 # own: a prefix links its Desktop, Documents... into HOME).
 lint:
-	@for f in $$(grep -l WINEPREFIX test/*.sh); do \
+	@for f in $$(grep -l WINEPREFIX test/*.sh | grep -vx test/scratch-home.sh); do \
 	    sed -n 2p "$$f" | grep -q '^\. "$$(dirname "$$0")/scratch-home.sh"$$' || \
 	    { echo "$$f: line 2 must be: . \"\$$(dirname \"\$$0\")/scratch-home.sh\""; exit 1; }; done
 	@python3 tools/trademark-check.py --allow tools/trademark-allow.txt src defaults theme admin office

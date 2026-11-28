@@ -1,3 +1,14 @@
+sg-shell (0.1.0-318) unstable; urgency=medium
+
+  * Gates: sg_kill_prefix (test/scratch-home.sh) kills every process left in
+    a gate's prefix, by PID; clock-check calls it after "wineserver -k".
+    "-k" kills nothing once the server is gone, and three gates' orphaned
+    winedevice.exe, 35 hours old, stopped reading the system bus until it
+    stopped reading systemd (systemd-run --user --scope timed out on the
+    build machine, 2026-11-27; wine-sg 9062 fixes the bus side).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 19:10:00 -0800
+
 sg-shell (0.1.0-317) unstable; urgency=medium
 
   * Settings > Time & Language > Language: "Let me use a different keyboard
