@@ -508,6 +508,11 @@ test-icon-sizes:
 test-icons-font:
 	@sh test/icons-font-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
 
+# "Segoe UI Symbol" is Symbola for GDI and GDI+ (WinDirStat's toolbar icons).
+.PHONY: test-symbol-font
+test-symbol-font:
+	@sh test/symbolfont-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || exit $$rc
+
 .PHONY: test-volume
 test-volume: build
 	@sh test/volume-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \

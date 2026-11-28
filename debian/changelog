@@ -1,3 +1,20 @@
+sg-shell (0.1.0-328) unstable; urgency=medium
+
+  * "Segoe UI Symbol" is Symbola (fonts-symbola, in the image) for GDI, GDI+
+    and DirectWrite: FontSubstitutes (HKLM, so every machine gets it with
+    the update) and Replacements (theme/52-sg-fonts.reg). Programs draw
+    arrows, shapes and pictographs by that name; WinDirStat 2.9 paints its
+    toolbar's Resume, Refresh, Search and recycle icons as GDI+ paths of
+    U+25B6, U+21BB, U+2315, U+267B in it, and with no font of that name
+    GDI+ found no family (FontFamilyNotFound), nothing was painted, and
+    the icons were black squares (grey when disabled). Seen in the app
+    walk (apps12) on next39; checked on a VM after the import: drawn.
+    Gate test/symbolfont-check.sh (make test-symbol-font): before FAIL
+    (no family, no glyphs), after PASS; mutant SG_MUTANT_NO_SYMBOL_FONT=1
+    (the .reg without those lines) caught.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 22:55:00 -0800
+
 sg-shell (0.1.0-327) unstable; urgency=medium
 
   * An app's jump list in its Start menu (linux1, ledger i0817), as Windows

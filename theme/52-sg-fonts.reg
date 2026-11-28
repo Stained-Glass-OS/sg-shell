@@ -50,10 +50,16 @@ Windows Registry Editor Version 5.00
 ; the shell's own (sg-icons-font.py). Without it those buttons were boxes.
 "Segoe MDL2 Assets"="Stained Glass Icons"
 "Segoe Fluent Icons"="Stained Glass Icons"
+; Windows' symbol font, which programs draw arrows, shapes and pictographs
+; with by name (WinDirStat paints its toolbar icons as GDI+ paths of U+25B6,
+; U+21BB, U+2315 in it): Symbola (fonts-symbola), which has those blocks.
+; Without the name GDI+ found no family and the icons were black squares.
+"Segoe UI Symbol"="Symbola"
 
 [HKEY_CURRENT_USER\Software\Wine\Fonts\Replacements]
 "Segoe MDL2 Assets"="Stained Glass Icons"
 "Segoe Fluent Icons"="Stained Glass Icons"
+"Segoe UI Symbol"="Symbola"
 "Arial"="Liberation Sans"
 "Helvetica"="Liberation Sans"
 "Times New Roman"="Liberation Serif"
