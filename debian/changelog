@@ -1,3 +1,11 @@
+sg-shell (0.1.0-331) unstable; urgency=medium
+
+  * Start's jump list headings (Recent, Tasks) are dimmed, as Windows'
+    are, not drawn as items to choose (linux1, ledger i0817; seen in the
+    QA VM walk). start-jumplist-check.sh.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 00:20:00 -0800
+
 sg-shell (0.1.0-330) unstable; urgency=medium
 
   * Found in linux1's QA VM walk (ledger i0820, i0821):

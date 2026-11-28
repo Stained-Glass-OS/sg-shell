@@ -52,7 +52,7 @@ xdotool type --delay 80 'gate jumper'; sleep 1.5
 xdotool mousemove 110 $((panel_y + 112)) click 3; sleep 1.5
 items=$(val menu_items)
 case "$items" in *jumpernotes.txt*"Pin to Start"*) pass "its menu begins with its jump list: the recent file ($items)" ;; *) fail "menu: '$items'" ;; esac
-# the file: second in the menu (after the "Recent" heading)
+# the file: second in the menu (after the dimmed "Recent" heading, which the keys pass over as Windows' do)
 xdotool key Down Down Return; sleep 4
 xdotool search --name 'jumpernotes' >/dev/null 2>&1 && pass "choosing it opens the file" || fail "no window for the recent file"
 echo

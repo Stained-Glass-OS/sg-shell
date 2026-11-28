@@ -1640,7 +1640,13 @@ static void *jump_menu(HMENU m, const struct entry *e, UINT first)
         int kind = -1;
         if (!api->entry(view, i, &kind, g_jump_titles[shown], ARRAYSIZE(g_jump_titles[shown]))) continue;
         if (kind == 2) menu_add(m, 0, NULL);
-        else menu_add(m, kind == 0 ? 0 : first + i, g_jump_titles[shown][0] ? g_jump_titles[shown] : L"(untitled)");
+        else if (kind == 0)
+        {
+            /* a category's heading (Recent, Tasks): dimmed, not an item to choose */
+            menu_add(m, 0, g_jump_titles[shown]);
+            EnableMenuItem(m, GetMenuItemCount(m) - 1, MF_BYPOSITION | MF_GRAYED);
+        }
+        else menu_add(m, first + i, g_jump_titles[shown][0] ? g_jump_titles[shown] : L"(untitled)");
         shown++;
     }
     menu_add(m, 0, NULL);
