@@ -32,6 +32,10 @@ badpin=$(awk 'function chk() {if (pin && !(ok && ver)) {sub(/.*\\/, "", key); su
     /^"PinVersion"="[0-9]/ {ver=1}
     END {chk()}' "$CAT")
 [ -z "$badpin" ] && pass "every pinned download is https with a SHA-256 and a version" || fail "bad pin: $badpin"
+# a pinned portable zip names its program inside the zip (the Silent field: winget's
+# NestedInstallerFiles RelativeFilePath), so Start's shortcut and Open start that one
+badport=$(grep -E '^"Source"="pin:[^|]*\|[0-9a-f]{64}\|portable-zip\|' "$CAT" | grep -vE '\|portable-zip\|[^|"]+\.exe"$')
+[ -z "$badport" ] && pass "every pinned portable zip names its program" || fail "portable zip without its program: $badport"
 # a file of ours an entry hands its installer (InstallArgs/UninstallArgs "Z:\usr\share\stained-glass\...")
 # is one this package installs: Avidemux's Qt Installer Framework setup ignores /S and takes its
 # answers from qtifw-auto.qs (else it waits on its first page until the Store gives up, 25 min)

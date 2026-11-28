@@ -145,6 +145,10 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
     mf_entry *nf_to = NULL;
     int sc_indent = -1;          /* InstallerSuccessCodes' own indentation, while inside it */
     mf_entry *sc_to = NULL;
+    int rc_indent = -1;          /* ExpectedReturnCodes' own indentation, while inside it */
+    mf_entry *rc_to = NULL;
+    long rc_code = 0;
+    int rc_have = 0;
     memset(root, 0, sizeof(*root));
     for (line = text; line && *line; line = next) {
         char *colon, key[64], *body;
@@ -170,6 +174,28 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (sc_indent >= 0 && (indent < sc_indent || (indent == sc_indent && !item))) sc_indent = -1;
         if (sc_indent >= 0) {
             if (item) add_code(sc_to, body + 1);
+            continue;
+        }
+        /* ExpectedReturnCodes: - InstallerReturnCode: 1618 / ReturnResponse: installInProgress */
+        if (rc_indent >= 0 && (indent < rc_indent || (indent == rc_indent && !item))) rc_indent = -1;
+        if (rc_indent >= 0) {
+#ifndef SG_MUTANT_NOEXPECTED
+            char *k = item ? body + 1 : body, v[64], *end;
+            size_t len;
+            while (*k == ' ') k++;
+            if (item) rc_have = 0;
+            if (!strncmp(k, "InstallerReturnCode:", 20)) {
+                rc_code = strtol(k + 20, &end, 10);
+                rc_have = end != k + 20;
+            } else if (!strncmp(k, "ReturnResponse:", 15) && rc_have) {
+                copy(v, k + 15, sizeof(v));
+                unquote(v);
+                len = strlen(rc_to->expected);
+                if (v[0] && len + strlen(v) + 24 < sizeof(rc_to->expected))
+                    snprintf(rc_to->expected + len, sizeof(rc_to->expected) - len, "%s%ld=%s", len ? " " : "", rc_code, v);
+                rc_have = 0;
+            }
+#endif
             continue;
         }
         if (nf_indent >= 0) {
@@ -233,6 +259,11 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
                 sc_indent = indent;
                 sc_to = indent == 0 ? root : &list[n];
             }
+            else if (!strcmp(key, "ExpectedReturnCodes") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
+                rc_indent = indent;
+                rc_to = indent == 0 ? root : &list[n];
+                rc_have = 0;
+            }
             else if (!strcmp(key, "NestedInstallerFiles") && (indent == 0 || (in_installers && n >= 0 && indent == item_indent + 2))) {
                 nf_indent = indent;
                 nf_to = indent == 0 ? root : &list[n];
@@ -261,6 +292,7 @@ int mf_parse(char *text, mf_entry *root, mf_entry *list, int max)
         if (!e->nested_file[0]) copy(e->nested_file, root->nested_file, sizeof(e->nested_file));
         if (!e->deps[0]) copy(e->deps, root->deps, sizeof(e->deps));
         if (!e->success[0]) copy(e->success, root->success, sizeof(e->success));
+        if (!e->expected[0]) copy(e->expected, root->expected, sizeof(e->expected));
     }
     return n + 1;
 }
@@ -351,4 +383,89 @@ int mf_sha256(const char *hex, unsigned char out[32])
         out[k] = (unsigned char)(hi << 4 | lo);
     }
     return 1;
+}
+
+/* ---- what an exit code means ----------------------------------------------------------------------
+ *
+ * "The installer stopped with code 1618" told the person nothing. As winget does, the manifest's
+ * ExpectedReturnCodes say what a package's own codes mean (its ReturnResponse values), and the
+ * installer kinds' documented codes say the rest: Windows Installer's (an MSI, a WiX bundle), Inno
+ * Setup's and NSIS's. */
+static const struct { const char *response, *text; } responses[] = {
+    { "packageInUse", "the app is in use: close it and try again" },
+    { "packageInUseByApplication", "a program that uses it is running: close it and try again" },
+    { "fileInUse", "a file it needs is in use: close the programs using it and try again" },
+    { "installInProgress", "another installation is in progress: try again when it has finished" },
+    { "missingDependency", "something it needs is not installed" },
+    { "diskFull", "the disk is full: free some space and try again" },
+    { "insufficientMemory", "there is not enough memory: close some programs and try again" },
+    { "invalidParameter", "it did not accept the options it was given" },
+    { "noNetwork", "it needs a connection to the internet" },
+    { "contactSupport", "it reported an error its maker's support can explain" },
+    { "rebootRequiredToFinish", "restart the computer to finish the installation" },
+    { "rebootRequiredForInstall", "restart the computer, then install it again" },
+    { "rebootInitiated", "it is restarting the computer to finish" },
+    { "cancelledByUser", "the installation was cancelled" },
+    { "alreadyInstalled", "another version of it is already installed" },
+    { "downgrade", "a newer version of it is already installed" },
+    { "blockedByPolicy", "an administrator's policy does not allow it" },
+    { "systemNotSupported", "it does not support this system" },
+};
+
+static const struct { long code; const char *text; } msi_codes[] = {
+    { 1601, "the installer service could not be reached" },
+    { 1602, "the installation was cancelled" },
+    { 1603, "it failed while installing (a fatal error)" },
+    { 1618, "another installation is in progress: try again when it has finished" },
+    { 1619, "the installation package could not be opened" },
+    { 1620, "the installation package could not be opened" },
+    { 1625, "an administrator's policy does not allow it" },
+    { 1633, "it does not support this system" },
+    { 1638, "another version of it is already installed: uninstall that first" },
+    { 1639, "it did not accept the options it was given" },
+    { 1223, "the installation was cancelled" },
+    { -2147023673, "the installation was cancelled" },   /* 0x800704C7, a bundle's ERROR_CANCELLED */
+}, inno_codes[] = {
+    { 1, "setup could not start" },
+    { 2, "the installation was cancelled before it began" },
+    { 3, "it failed while preparing to install" },
+    { 4, "it failed while installing" },
+    { 5, "the installation was cancelled" },
+    { 6, "setup was stopped" },
+    { 7, "it found something on this computer that stops it from installing" },
+    { 8, "restart the computer, then install it again" },
+}, nsis_codes[] = {
+    { 1, "the installation was cancelled" },
+    { 2, "the installer stopped itself" },
+};
+
+const char *mf_exit_reason(const char *type, long code, const char *expected)
+{
+    const char *t = expected;
+    unsigned i;
+    while (t && *t) {
+        char *end, resp[64];
+        long c = strtol(t, &end, 10);
+        size_t k = 0;
+        if (end == t || *end != '=') break;
+        t = end + 1;
+        while (*t && *t != ' ' && k + 1 < sizeof(resp)) resp[k++] = *t++;
+        resp[k] = 0;
+        while (*t == ' ') t++;
+        if (c != code) continue;
+        for (i = 0; i < sizeof(responses) / sizeof(responses[0]); i++)
+            if (!strcasecmp(resp, responses[i].response)) return responses[i].text;
+    }
+#ifdef SG_MUTANT_NOEXITREASON
+    return NULL;
+#endif
+    if (!type) return NULL;
+    if (!strcasecmp(type, "msi") || !strcasecmp(type, "wix") || !strcasecmp(type, "burn")) {
+        for (i = 0; i < sizeof(msi_codes) / sizeof(msi_codes[0]); i++) if (msi_codes[i].code == code) return msi_codes[i].text;
+    } else if (!strcasecmp(type, "inno")) {
+        for (i = 0; i < sizeof(inno_codes) / sizeof(inno_codes[0]); i++) if (inno_codes[i].code == code) return inno_codes[i].text;
+    } else if (!strcasecmp(type, "nullsoft")) {
+        for (i = 0; i < sizeof(nsis_codes) / sizeof(nsis_codes[0]); i++) if (nsis_codes[i].code == code) return nsis_codes[i].text;
+    }
+    return NULL;
 }

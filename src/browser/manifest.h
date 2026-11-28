@@ -14,7 +14,8 @@ typedef struct {
     char custom[512];
     char deps[512];             /* Dependencies: PackageDependencies' PackageIdentifiers, space-separated */
     char elevation[32];         /* ElevationRequirement: elevationRequired = run it as an administrator */
-    char success[256];          /* InstallerSuccessCodes: exit codes that mean it installed, space-separated */           /* InstallerSwitches Custom: passed as well, whatever the mode (Opera's /allusers=0) */
+    char success[256];          /* InstallerSuccessCodes: exit codes that mean it installed, space-separated */
+    char expected[512];         /* ExpectedReturnCodes: "CODE=ReturnResponse ...", what an exit code means */           /* InstallerSwitches Custom: passed as well, whatever the mode (Opera's /allusers=0) */
 } mf_entry;
 
 #define MF_MAX_ENTRIES 64
@@ -39,6 +40,11 @@ int mf_pick(const mf_entry *list, int n, const char *locale, int admin, int is64
  * together (WinRAR's winrar-x64-723.exe for 7.23.0). 0: one address for every release
  * (Spotify's SpotifyFullSetupX64.exe), whose file changes before its listing does */
 int mf_url_names_version(const char *url, const char *version);
+/* what an installer's exit code means, in words ("another installation is in progress: try again when
+ * it has finished"): the manifest's ExpectedReturnCodes first (expected: "CODE=response ..."), then
+ * what the installer type's own codes mean (msi/wix/burn: Windows Installer's, inno, nullsoft);
+ * NULL when nothing is known of it */
+const char *mf_exit_reason(const char *type, long code, const char *expected);
 /* 64 hex digits -> 32 bytes; 0 if not valid */
 int mf_sha256(const char *hex, unsigned char out[32]);
 

@@ -123,6 +123,7 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch); /* the program (or 
 BOOL app_check_update(app_t *a, WCHAR *err, int cch); /* fills available_version; AST_UPDATE if newer */
 const WCHAR *app_section(const app_t *a);         /* its category, or LINUX_SECTION */
 int  app_install(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch);
+int  app_portable_elevated(app_t *a, const WCHAR *file);  /* (elevated) --elevated-portable: a portable app for the machine */
 /* msix.c: app packages (winget's msix/appx) */
 BOOL msix_installed(const WCHAR *family, WCHAR *version, int cch);
 int  msix_remove(const WCHAR *family, const WCHAR *name, WCHAR *err, int cch);   /* 0: gone */

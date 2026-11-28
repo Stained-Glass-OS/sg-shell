@@ -56,6 +56,13 @@ if gcc -O1 -o "$T/manifest-test" "$HERE/test/browser-manifest-test.c" "$HERE/src
     "$T/manifest-test" > "$T/manifest.log" 2>&1 && pass "the manifest reader's unit test ($(grep -c ^PASS "$T/manifest.log") checks)" \
         || { fail "the manifest reader's unit test:"; grep ^FAIL "$T/manifest.log"; }
 else fail "the manifest test does not build: $(head -3 "$T/cc.log")"; fi
+# what an installer's exit code means (ExpectedReturnCodes, the installer kinds' own codes): each mutant
+# turns the unit test red
+for m in NOEXPECTED NOEXITREASON; do
+    if gcc -O1 "-DSG_MUTANT_$m" -o "$T/manifest-$m" "$HERE/test/browser-manifest-test.c" "$HERE/src/browser/manifest.c" 2>>"$T/cc.log"; then
+        "$T/manifest-$m" >/dev/null 2>&1 && fail "MUTANT $m not detected by the manifest test" || pass "MUTANT $m fails the manifest test (gate catches it)"
+    else fail "mutant $m does not build"; fi
+done
 "$MINGW" -municode -O1 -o "$T/fakebrowser-setup.exe" "$HERE/test/sg-browser-fake.c" || { fail "the stand-ins do not build"; exit 1; }
 mkdir -p "$T/wg"; cp "$T/fakebrowser-setup.exe" "$T/wg/winget.exe"
 

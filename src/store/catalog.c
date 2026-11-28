@@ -16,6 +16,7 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <tlhelp32.h>
+#include <bcrypt.h>
 #include "zipcore.h"
 
 const WCHAR *tier_name(int tier)
@@ -735,6 +736,22 @@ BOOL app_launch_target(const app_t *a, WCHAR *out, int cch)
  * is how it takes it away again: when the app is uninstalled, or found gone. */
 #define SHORTCUTS_KEY STORE_KEY L"\\Shortcuts"
 
+static BOOL link_target(IShellLinkW *link, const WCHAR *lnk, WCHAR *target, int cch);
+
+/* where a shortcut goes (FALSE: it cannot be read) */
+static BOOL link_goes_to(const WCHAR *lnk, WCHAR *target, int cch)
+{
+    IShellLinkW *link;
+    HRESULT init = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOL ok = FALSE;
+    if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) {
+        ok = link_target(link, lnk, target, cch);
+        link->lpVtbl->Release(link);
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+    return ok;
+}
+
 static void ensure_start_shortcut(const app_t *a)
 {
     WCHAR target[MAX_PATH], dir[MAX_PATH], lnk[MAX_PATH], name[128], *slash;
@@ -748,7 +765,17 @@ static void ensure_start_shortcut(const app_t *a)
     if (a->tier == TIER_OURS || a->tier == TIER_LINUX || app_is_runtime(a) || a->package_family[0]) return;   /* a package's own entry is in Start */
     start_shortcut(a, target, MAX_PATH);
     if (target[0]) { forget_start_shortcut(a); return; }   /* it has its own: never two in Start */
-    if (store_shortcut(a, lnk, MAX_PATH) && GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES) return;   /* ours is there */
+    if (store_shortcut(a, lnk, MAX_PATH) && GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES) {
+#ifndef SG_MUTANT_STALELINK
+        /* ours is there -- to the program still? An update of a portable app named by its version
+         * (Rufus's rufus-4.15.exe, then rufus-4.16.exe) took its old program away */
+        WCHAR was[MAX_PATH];
+        if (!link_goes_to(lnk, was, MAX_PATH) || GetFileAttributesW(was) != INVALID_FILE_ATTRIBUTES) return;
+        DeleteFileW(lnk);
+#else
+        return;
+#endif
+    }
     if (!app_launch_target(a, target, MAX_PATH)) return;   /* no program */
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_PROGRAMS | CSIDL_FLAG_CREATE, NULL, 0, dir))) return;
     lstrcpynW(name, a->name, ARRAYSIZE(name));
@@ -973,34 +1000,141 @@ static BOOL unpack_nested(package_t *p, WCHAR *err, int cch)
  * A winget "portable" package is the program itself, no installer: a bare .exe,
  * or a zip of the program's files (NestedInstallerType portable: Godot). As
  * winget does, it is put in the person's %LOCALAPPDATA%\Microsoft\WinGet\
- * Packages\<id>__SgStore -- a zip whole, an .exe under its download's name --
- * and given an Uninstall entry of its own (the program as its icon, so the
- * store's Start shortcut points at it), whose uninstaller takes the folder and
- * the entry away. Godot ended with "portable installers can't be run here yet". */
+ * Packages\<id>__SgStore -- or, for the machine (the catalogue's Scope machine),
+ * in %ProgramFiles%\WinGet\Packages\<id>__SgStore by an elevated copy of the
+ * store -- a zip whole, an .exe under its download's name, and given an
+ * Uninstall entry of its own (the program as its icon, so the store's Start
+ * shortcut points at it; its version, size and date, as Apps & features shows
+ * them), whose uninstaller takes the folder and the entry away. Godot ended
+ * with "portable installers can't be run here yet".
+ *
+ * A pinned download can be one too (pin: Type portable -- the program -- or
+ * portable-zip, whose Silent field names the program inside the zip, as
+ * winget's NestedInstallerFiles does): ILSpy 5 is a zip on its GitHub page
+ * and in no winget manifest that runs here.
+ *
+ * An update unpacks the new version over the old one, the program closed
+ * first, and takes away the files the old version had and the new one does
+ * not (the entry's SgStoreFiles lists what the store put there, as winget's
+ * portable index does); files the program made there itself stay. */
+
+static void close_running(const WCHAR *dir);
 
 static BOOL portable_package(const package_t *p)
 {
     return !_wcsicmp(p->type, L"portable") || (!_wcsicmp(p->type, L"zip") && !_wcsicmp(p->nested, L"portable"));
 }
 
-static BOOL install_portable(package_t *p, const app_t *a, WCHAR *err, int cch)
+/* the files put in place, as REG_MULTI_SZ text: relative paths, each with its NUL */
+typedef struct { WCHAR *s; size_t n, cap; } file_list_t;
+
+static BOOL list_add(file_list_t *l, const WCHAR *rel)
 {
-    WCHAR base[MAX_PATH], prog[MAX_PATH], rel[MAX_PATH], path[MAX_PATH], sub[300], cmd[2048], sys[MAX_PATH], *c;
-    const WCHAR *name;
+    size_t k = lstrlenW(rel) + 1;
+    if (l->n + k + 1 > l->cap) {
+        size_t cap = (l->cap ? l->cap * 2 : 4096) + k;
+        WCHAR *s = realloc(l->s, cap * sizeof(WCHAR));
+        if (!s) return FALSE;
+        l->s = s; l->cap = cap;
+    }
+    memcpy(l->s + l->n, rel, k * sizeof(WCHAR));
+    l->n += k;
+    l->s[l->n] = 0;
+    return TRUE;
+}
+
+static BOOL list_has(const file_list_t *l, const WCHAR *rel)
+{
+    const WCHAR *p;
+    if (!l->s) return FALSE;
+    for (p = l->s; p < l->s + l->n && *p; p += lstrlenW(p) + 1) if (!lstrcmpiW(p, rel)) return TRUE;
+    return FALSE;
+}
+
+/* the old version's list, from its entry */
+static void list_read(HKEY root, const WCHAR *sub, file_list_t *l)
+{
+    DWORD cb = 0, type;
     HKEY key;
+    memset(l, 0, sizeof(*l));
+    if (RegOpenKeyExW(root, sub, 0, KEY_READ, &key)) return;
+    if (!RegQueryValueExW(key, L"SgStoreFiles", NULL, &type, NULL, &cb) && type == REG_MULTI_SZ && cb >= 2 * sizeof(WCHAR) &&
+        (l->s = calloc(cb / sizeof(WCHAR) + 2, sizeof(WCHAR)))) {
+        if (RegQueryValueExW(key, L"SgStoreFiles", NULL, NULL, (BYTE *)l->s, &cb)) { free(l->s); l->s = NULL; }
+        else { l->n = cb / sizeof(WCHAR); while (l->n && !l->s[l->n - 1]) l->n--; l->n++; l->cap = l->n + 1; }
+    }
+    RegCloseKey(key);
+}
+
+/* where a portable app goes: winget's portable package roots */
+static BOOL portable_base(const WCHAR *id, BOOL machine, WCHAR *base)
+{
+    WCHAR dir[MAX_PATH], safe[128];
+    int i;
+    lstrcpynW(safe, id, ARRAYSIZE(safe));
+    for (i = 0; safe[i]; i++) if (wcschr(L"\\/:*?\"<>|", safe[i])) safe[i] = L'_';
+#ifdef SG_MUTANT_PORTABLEUSERONLY
+    machine = FALSE;
+#endif
+    if (machine ? FAILED(SHGetFolderPathW(NULL, CSIDL_PROGRAM_FILES, NULL, 0, dir))
+                : !GetEnvironmentVariableW(L"LOCALAPPDATA", dir, MAX_PATH)) return FALSE;
+    if (lstrlenW(dir) + lstrlenW(safe) + 48 >= MAX_PATH) return FALSE;
+    swprintf(base, MAX_PATH, machine ? L"%ls\\WinGet\\Packages\\%ls__SgStore" : L"%ls\\Microsoft\\WinGet\\Packages\\%ls__SgStore",
+             dir, safe);
+    return TRUE;
+}
+
+/* a shortcut at lnk to target (its folder the working one, its icon) */
+static BOOL make_link(const WCHAR *lnk, const WCHAR *target)
+{
+    WCHAR dir[MAX_PATH], *slash;
+    IShellLinkW *link;
+    IPersistFile *file;
+    HRESULT init = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOL ok = FALSE;
+    if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) {
+        link->lpVtbl->SetPath(link, target);
+        lstrcpynW(dir, target, MAX_PATH);
+        if ((slash = wcsrchr(dir, L'\\'))) *slash = 0;
+        link->lpVtbl->SetWorkingDirectory(link, dir);
+        link->lpVtbl->SetIconLocation(link, target, 0);
+        if (SUCCEEDED(link->lpVtbl->QueryInterface(link, &IID_IPersistFile, (void **)&file))) {
+            ok = SUCCEEDED(file->lpVtbl->Save(file, lnk, TRUE));
+            file->lpVtbl->Release(file);
+        }
+        link->lpVtbl->Release(link);
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+    return ok;
+}
+
+static BOOL install_portable(package_t *p, const app_t *a, BOOL machine, WCHAR *err, int cch)
+{
+    WCHAR base[MAX_PATH], prog[MAX_PATH], rel[MAX_PATH], path[MAX_PATH], sub[300], cmd[2048], sys[MAX_PATH], date[16], *c;
+    const WCHAR *name;
+    HKEY root = machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER, key;
+    file_list_t old, now;
+    ULONGLONG bytes = 0;
+    SYSTEMTIME st;
+    DWORD kb, one = 1;
     int i, r;
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH) || lstrlenW(base) + lstrlenW(p->id) + 40 >= MAX_PATH) {
+#ifdef SG_MUTANT_PORTABLEUSERONLY
+    root = HKEY_CURRENT_USER;
+#endif
+    if (!portable_base(p->id, machine, base)) {
         lstrcpynW(err, L"There is no folder to put the app in.", cch);
         return FALSE;
     }
-    lstrcatW(base, L"\\Microsoft\\WinGet\\Packages\\");
-    lstrcatW(base, p->id);
-    lstrcatW(base, L"__SgStore");
+    swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls", wcsrchr(base, L'\\') + 1);
+    memset(&now, 0, sizeof(now));
+    list_read(root, sub, &old);
+    /* an update: the old version is not running while its files are replaced */
+    if (GetFileAttributesW(base) != INVALID_FILE_ATTRIBUTES) close_running(base);
     SHCreateDirectoryExW(NULL, base, NULL);
     if (!_wcsicmp(p->type, L"zip")) {
         zarchive z;
         for (c = p->nested_file; *c; c++) if (*c == L'/') *c = L'\\';
-        if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); return FALSE; }
+        if ((r = zip_open(&z, p->file))) { swprintf(err, cch, L"The download is not a readable ZIP file (%ls).", zip_strerror(r)); goto fail; }
         prog[0] = 0;
         for (i = 0; i < z.n; i++) {
             portable_sink_t s;
@@ -1014,8 +1148,10 @@ static BOOL install_portable(package_t *p, const app_t *a, WCHAR *err, int cch)
             if (r) {
                 zip_close(&z);
                 swprintf(err, cch, L"%ls could not be unpacked (%ls).", rel, zip_strerror(r));
-                return FALSE;
+                goto fail;
             }
+            list_add(&now, rel);
+            bytes += z.e[i].usize;
             /* the program: the file the manifest names, else the zip's one .exe */
             if (p->nested_file[0] ? (!_wcsicmp(rel, p->nested_file) ||
                                      ((name = wcsrchr(rel, L'\\')) && !wcspbrk(p->nested_file, L"\\") && !_wcsicmp(name + 1, p->nested_file)))
@@ -1023,8 +1159,9 @@ static BOOL install_portable(package_t *p, const app_t *a, WCHAR *err, int cch)
                 lstrcpynW(prog, path, MAX_PATH);
         }
         zip_close(&z);
-        if (!prog[0]) { swprintf(err, cch, L"%ls holds no program.", p->id); return FALSE; }
+        if (!prog[0]) { swprintf(err, cch, L"%ls holds no program.", p->id); goto fail; }
     } else {
+        WIN32_FILE_ATTRIBUTE_DATA fa;
         /* the .exe under its download's name (the address's last part) */
         lstrcpynW(rel, p->url, MAX_PATH);
         if ((c = wcspbrk(rel, L"?#"))) *c = 0;
@@ -1032,24 +1169,129 @@ static BOOL install_portable(package_t *p, const app_t *a, WCHAR *err, int cch)
         if (!name[0] || wcspbrk(name, L"\\:*\"<>|")) name = L"program.exe";
         swprintf(prog, MAX_PATH, L"%ls\\%ls%ls", base, name,
                  lstrlenW(name) > 4 && !_wcsicmp(name + lstrlenW(name) - 4, L".exe") ? L"" : L".exe");
-        if (!CopyFileW(p->file, prog, FALSE)) { swprintf(err, cch, L"The program could not be put in place (error %lu).", GetLastError()); return FALSE; }
+        if (!CopyFileW(p->file, prog, FALSE)) { swprintf(err, cch, L"The program could not be put in place (error %lu).", GetLastError()); goto fail; }
+        list_add(&now, wcsrchr(prog, L'\\') + 1);
+        if (GetFileAttributesExW(prog, GetFileExInfoStandard, &fa)) bytes = ((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
     }
-    swprintf(sub, ARRAYSIZE(sub), L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%ls__SgStore", p->id);
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, NULL, 0, KEY_WRITE, NULL, &key, NULL)) {
+#ifndef SG_MUTANT_PORTABLEKEEPOLD
+    /* what the old version had and this one has not */
+    if (old.s)
+        for (name = old.s; name < old.s + old.n && *name; name += lstrlenW(name) + 1) {
+            if (list_has(&now, name) || wcsstr(name, L"..") || lstrlenW(base) + lstrlenW(name) + 2 >= MAX_PATH) continue;
+            swprintf(path, MAX_PATH, L"%ls\\%ls", base, name);
+            DeleteFileW(path);
+            /* and its folder, once that left it empty */
+            while ((c = wcsrchr(path, L'\\')) && c > path + lstrlenW(base)) { *c = 0; if (!RemoveDirectoryW(path)) break; }
+        }
+#endif
+    if (RegCreateKeyExW(root, sub, 0, NULL, 0, KEY_WRITE, NULL, &key, NULL)) {
         lstrcpynW(err, L"The app's Uninstall entry could not be written.", cch);
-        return FALSE;
+        goto fail;
     }
     GetSystemDirectoryW(sys, MAX_PATH);
-    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\cmd.exe\" /c rmdir /s /q \"%ls\" & reg delete \"HKCU\\%ls\" /f", sys, base, sub);
+    swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\\cmd.exe\" /c rmdir /s /q \"%ls\" & reg delete \"%ls\\%ls\" /f", sys, base,
+             root == HKEY_LOCAL_MACHINE ? L"HKLM" : L"HKCU", sub);
     set_sz(key, L"DisplayName", a && a->detect_name[0] && !wcspbrk(a->detect_name, L"|!") ? a->detect_name : a ? a->name : p->id);
     if (p->version[0]) set_sz(key, L"DisplayVersion", p->version);
     if (a) set_sz(key, L"Publisher", a->publisher);
     set_sz(key, L"InstallLocation", base);
     set_sz(key, L"DisplayIcon", prog);
     set_sz(key, L"UninstallString", cmd);
+    GetLocalTime(&st);
+    swprintf(date, ARRAYSIZE(date), L"%04u%02u%02u", st.wYear, st.wMonth, st.wDay);
+    set_sz(key, L"InstallDate", date);
+    kb = (DWORD)min(bytes / 1024, 0xffffffffULL);
+    RegSetValueExW(key, L"EstimatedSize", 0, REG_DWORD, (const BYTE *)&kb, sizeof(kb));
+    RegSetValueExW(key, L"NoModify", 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
+    RegSetValueExW(key, L"NoRepair", 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
+    if (now.s) RegSetValueExW(key, L"SgStoreFiles", 0, REG_MULTI_SZ, (const BYTE *)now.s, (DWORD)((now.n + 1) * sizeof(WCHAR)));
     RegCloseKey(key);
+    /* the machine's app is in everyone's Start (the person's own Start shortcut is the store's, later) */
+    if (root == HKEY_LOCAL_MACHINE && a && SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS | CSIDL_FLAG_CREATE, NULL, 0, path))) {
+        WCHAR nm[128];
+        lstrcpynW(nm, a->name, ARRAYSIZE(nm));
+        for (i = 0; nm[i]; i++) if (wcschr(L"\\/:*?\"<>|", nm[i])) nm[i] = L'_';
+        if (lstrlenW(path) + lstrlenW(nm) + 6 < MAX_PATH) {
+            lstrcatW(path, L"\\"); lstrcatW(path, nm); lstrcatW(path, L".lnk");
+            make_link(path, prog);
+        }
+    }
+    free(old.s); free(now.s);
     p->exit_code = 0;
     return TRUE;
+fail:
+    free(old.s); free(now.s);
+    return FALSE;
+}
+
+/* the catalogue's Scope machine, for a portable app: an elevated copy of the store puts it in Program
+ * Files (--elevated-portable ORD FILE), checking the download again itself -- the file is the person's */
+static BOOL file_sha256(const WCHAR *path, BYTE out[32])
+{
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_HASH_HANDLE hash = NULL;
+    BYTE buf[65536];
+    DWORD got;
+    BOOL ok = FALSE;
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return FALSE;
+    if (!BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0) && !BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0)) {
+        while (ReadFile(f, buf, sizeof(buf), &got, NULL) && got) BCryptHashData(hash, buf, got, 0);
+        ok = !BCryptFinishHash(hash, out, 32, 0);
+    }
+    if (hash) BCryptDestroyHash(hash);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    CloseHandle(f);
+    return ok;
+}
+
+static BOOL machine_scope(const app_t *a)
+{
+#ifdef SG_MUTANT_PORTABLEUSERONLY
+    return FALSE;
+#endif
+    return a && !_wcsicmp(a->scope, L"machine");
+}
+
+static void pin_package(const app_t *a, package_t *p);
+
+static BOOL install_portable_machine(package_t *p, app_t *a, WCHAR *err, int cch)
+{
+    WCHAR args[MAX_PATH + 64];
+    int code;
+    if (wcschr(p->file, L'"')) { lstrcpynW(err, L"The download's name cannot be handed on.", cch); return FALSE; }
+    swprintf(args, ARRAYSIZE(args), L"--elevated-portable %ls \"%ls\"", a->ord, p->file);
+    code = sys_elevate_wait(args);
+    a->ran_elevated = TRUE;
+    p->elevated = TRUE;
+    if (code == SYS_DENIED) { swprintf(err, cch, L"%ls was not installed: an administrator's consent was not given.", a->name); return FALSE; }
+    if (code) { swprintf(err, cch, L"%ls could not be put in Program Files (code %d).", a->name, code); return FALSE; }
+    return TRUE;
+}
+
+/* (elevated) --elevated-portable: the download checked again -- a copy of it of our own, against the
+ * catalogue's pin or winget's manifest for the machine -- and put in Program Files */
+int app_portable_elevated(app_t *a, const WCHAR *file)
+{
+    package_t p;
+    WCHAR tmp[MAX_PATH], copy[MAX_PATH], err[512];
+    BYTE got[32];
+    BOOL ok;
+    memset(&p, 0, sizeof(p));
+    if (a->method == SRC_PIN) {
+        if (!a->pin_has_sha) return SYS_FAILED;
+        pin_package(a, &p);
+    } else if (a->method == SRC_WINGET) {
+        if (!pkg_resolve_scope(a->winget_id, L"machine", &p, err, ARRAYSIZE(err))) return SYS_FAILED;
+    } else return SYS_FAILED;
+    if (!portable_package(&p) || !machine_scope(a)) return SYS_FAILED;
+    GetTempPathW(MAX_PATH, tmp);
+    if (!GetTempFileNameW(tmp, L"sgp", 0, copy)) return SYS_FAILED;
+    if (!CopyFileW(file, copy, FALSE) || !file_sha256(copy, got) || memcmp(got, p.sha256, 32)) { DeleteFileW(copy); return SYS_FAILED; }
+    lstrcpynW(p.file, copy, MAX_PATH);
+    ok = install_portable(&p, a, TRUE, err, ARRAYSIZE(err));
+    DeleteFileW(copy);
+    return ok ? SYS_OK : SYS_FAILED;
 }
 
 /* What the system already provides, so a package's dependency on it is met:
@@ -1263,7 +1505,8 @@ static int install_id(const WCHAR *id, int depth, app_t *a, progress_fn progress
     if (!_wcsicmp(p.type, L"zip") && !portable_package(&p) && !unpack_nested(&p, err, cch)) { pkg_cleanup(&p); return 1; }
 #endif
 #ifndef SG_MUTANT_NOPORTABLE
-    if (portable_package(&p)) ok = install_portable(&p, a, err, cch);
+    if (portable_package(&p)) ok = machine_scope(a) ? install_portable_machine(&p, a, err, cch)
+                                                    : install_portable(&p, a, FALSE, err, cch);
     else
 #endif
     ok = pkg_install(&p, err, cch);
@@ -1290,17 +1533,33 @@ static int install_winget(app_t *a, progress_fn progress, void *ctx, volatile LO
     return install_id(a->winget_id, 0, a, progress, ctx, cancel, err, cch);
 }
 
+/* a pinned entry's package: its download, its SHA-256, what kind it is (pin: Type portable -- the
+ * program -- and portable-zip, whose Silent names the program in the zip: winget's zip + portable) */
+static void pin_package(const app_t *a, package_t *p)
+{
+    memset(p, 0, sizeof(*p));
+    lstrcpynW(p->id, a->name, ARRAYSIZE(p->id));
+    lstrcpynW(p->url, a->pin_url, ARRAYSIZE(p->url));
+    lstrcpynW(p->type, a->pin_type[0] ? a->pin_type : L"exe", ARRAYSIZE(p->type));
+    lstrcpynW(p->silent, a->pin_silent, ARRAYSIZE(p->silent));
+    lstrcpynW(p->version, a->pin_version, ARRAYSIZE(p->version));
+    memcpy(p->sha256, a->pin_sha, 32);
+#ifndef SG_MUTANT_NOPINPORTABLE
+    if (!_wcsicmp(p->type, L"portable-zip")) {
+        lstrcpyW(p->type, L"zip");
+        lstrcpyW(p->nested, L"portable");
+        lstrcpynW(p->nested_file, a->pin_silent, ARRAYSIZE(p->nested_file));
+        p->silent[0] = 0;
+    } else if (!_wcsicmp(p->type, L"portable")) p->silent[0] = 0;
+#endif
+}
+
 static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG *cancel, WCHAR *err, int cch)
 {
     package_t p;
     BOOL ok;
     if (!a->pin_has_sha) { lstrcpynW(err, L"This app has no pinned SHA-256, so it was not installed.", cch); return 1; }
-    memset(&p, 0, sizeof(p));
-    lstrcpynW(p.id, a->name, ARRAYSIZE(p.id));
-    lstrcpynW(p.url, a->pin_url, ARRAYSIZE(p.url));
-    lstrcpynW(p.type, a->pin_type[0] ? a->pin_type : L"exe", ARRAYSIZE(p.type));
-    lstrcpynW(p.silent, a->pin_silent, ARRAYSIZE(p.silent));
-    memcpy(p.sha256, a->pin_sha, 32);
+    pin_package(a, &p);
 #ifndef SG_MUTANT_NOCATALOGELEVATE
     if (!_wcsicmp(a->elevation, L"elevationRequired")) p.elevate = TRUE;   /* as for a winget entry */
 #endif
@@ -1312,8 +1571,10 @@ static int install_pin(app_t *a, progress_fn progress, void *ctx, volatile LONG 
     if (install_deps(&p, 0, progress, ctx, cancel, err, cch)) return 1;
 #endif
     if (!pkg_download(&p, progress, ctx, cancel, err, cch)) return 1;
-    ok = pkg_install(&p, err, cch);
-    if (ok) settle_install(a, &p);
+    if (portable_package(&p)) ok = machine_scope(a) ? install_portable_machine(&p, a, err, cch)
+                                                    : install_portable(&p, a, FALSE, err, cch);
+    else ok = pkg_install(&p, err, cch);
+    if (ok && !portable_package(&p)) settle_install(a, &p);
     a->ran_elevated = p.elevated;
     if (ok) register_installed(a, a->pin_version);
     pkg_cleanup(&p);

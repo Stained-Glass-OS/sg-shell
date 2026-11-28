@@ -1,3 +1,37 @@
+sg-shell (0.1.0-334) unstable; urgency=medium
+
+  * SG Store: portable apps from a pinned download (store3, ledger i0870),
+    as winget installs its zip + portable packages: pin types portable (the
+    program) and portable-zip (its Silent field names the program in the
+    zip). Put in the person's %LOCALAPPDATA%\Microsoft\WinGet\Packages\
+    <name>__SgStore, or with Scope=machine in %ProgramFiles%\WinGet\
+    Packages by an elevated copy of the store (--elevated-portable, which
+    checks its own copy of the download again) with the machine's entry and
+    a shortcut in everyone's Start. The entry has the version, size, date
+    and the files put there (SgStoreFiles); an update closes the program,
+    unpacks the new version and takes away what only the old one had,
+    keeping what the program made there; the Start shortcut follows a
+    program renamed by an update (Rufus's rufus-4.15.exe). Gate
+    test/store-portable-check.sh (make test-store-portable; mutants
+    NOPINPORTABLE, PORTABLEKEEPOLD, PORTABLEUSERONLY, STALELINK);
+    store-catalog-check: a portable zip names its program.
+  * SG Store as the Microsoft Store and winget do it (store3, i0871-i0874):
+    a failed install says why -- the manifest's ExpectedReturnCodes in
+    winget's words, and the installer kinds' own codes (MSI, Inno Setup,
+    NSIS): "Another installation is in progress: try again when it has
+    finished. (The installer stopped with code 1618.)"; Update all (N)
+    after Check for updates, one consent for all, and --update-all; Check
+    for updates looks at installed apps only, on a thread of its own (the
+    window froze while it resolved every winget entry); chips for
+    Communication, Education and Security, wrapping onto a second row
+    rather than cut off; search results ranked (the name, its beginning, a
+    word of it, the maker, the description), sections in the order of
+    their best answer. Gate test/store-ux-check.sh (make test-store-ux;
+    mutants NOEXITREASON, NOEXPECTED, NOUPDATEALL, CHECKALL, FEWCATS,
+    CHIPSCUT, NORANK); browser-manifest-test covers ExpectedReturnCodes.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 01:20:00 -0800
+
 sg-shell (0.1.0-333) unstable; urgency=medium
 
   * The notification centre ends in Windows 10's quick action tiles:

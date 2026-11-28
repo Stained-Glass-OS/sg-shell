@@ -609,6 +609,18 @@ test-notify: build
 test-store: build
 	@sh test/store-check.sh
 
+# Portable apps from a pinned download (pin: portable-zip / portable): the person's or the machine's
+# WinGet Packages folder, entry, Start shortcut, update, uninstall. test/store-portable-check.sh.
+# The Store's UX as the Microsoft Store and winget do it: failure reasons, Update all, every category,
+# search ranking. test/store-ux-check.sh.
+.PHONY: test-store-ux
+test-store-ux: build
+	@sh test/store-ux-check.sh
+
+.PHONY: test-store-portable
+test-store-portable: build
+	@sh test/store-portable-check.sh
+
 # Linux apps in Start: .desktop files -> Programs\Linux apps shortcuts. test/linuxapps-check.sh.
 .PHONY: test-linuxapps
 test-linuxapps: build

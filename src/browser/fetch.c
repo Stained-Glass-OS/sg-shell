@@ -49,6 +49,22 @@ static void seterr(WCHAR *err, int cch, const WCHAR *fmt, ...)
     err[cch - 1] = 0;
 }
 
+/* an installer that failed: what its code means, when that is known (mf_exit_reason), and the code */
+static void exit_error(WCHAR *err, int cch, const package_t *p, const WCHAR *type, DWORD code)
+{
+    char t[32];
+    const char *why;
+    WCHAR w[256];
+    WideCharToMultiByte(CP_UTF8, 0, type, -1, t, sizeof(t), NULL, NULL);
+    t[sizeof(t) - 1] = 0;
+    if (!(why = mf_exit_reason(t, (long)code, p->expected)) || !MultiByteToWideChar(CP_UTF8, 0, why, -1, w, ARRAYSIZE(w))) {
+        seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
+        return;
+    }
+    w[0] = towupper(w[0]);
+    seterr(err, cch, L"%ls. (The installer stopped with code %ld.)", w, (long)code);
+}
+
 static void source_url(const WCHAR *name, const WCHAR *def, WCHAR *out, int cch)
 {
     WCHAR env[64];
@@ -416,6 +432,7 @@ BOOL pkg_resolve_scope(const WCHAR *id, const WCHAR *scope, package_t *p, WCHAR 
     MultiByteToWideChar(CP_UTF8, 0, best->deps, -1, p->deps, 512);
     p->elevate = !_stricmp(best->elevation, "elevationRequired");
     lstrcpynA(p->success, best->success, sizeof(p->success));
+    lstrcpynA(p->expected, best->expected, sizeof(p->expected));
     free(list);
     if (!p->type[0]) { seterr(err, cch, L"%ls %ls does not say how to install it.", id, p->version); return FALSE; }
     return TRUE;
@@ -867,7 +884,7 @@ static BOOL install_iexpress_msi(package_t *p, WCHAR *err, int cch)
     swprintf(path, MAX_PATH, L"%ls\\cmd.exe", sys);
     if (!run_wait(path, args, TRUE, &code, &p->elevated, err, cch)) goto done;
     p->exit_code = code;
-    if (code != 0 && code != 3010 && code != 1641) seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
+    if (code != 0 && code != 3010 && code != 1641) exit_error(err, cch, p, L"msi", code);
     else ok = TRUE;
 done:
     swprintf(path, MAX_PATH, L"%ls\\*", dir);
@@ -1118,7 +1135,7 @@ BOOL pkg_install(package_t *p, WCHAR *err, int cch)
     if (!run_wait(file, args, file == msi || p->elevate, &code, &p->elevated, err, cch)) return FALSE;
     p->exit_code = code;
     if (code != 0 && code != 3010 && code != 1641 && !success_code(p, code)) {
-        seterr(err, cch, L"The installer stopped with code %ld.", (long)code);
+        exit_error(err, cch, p, file == msi ? L"msi" : p->type, code);
         return FALSE;
     }
     return TRUE;

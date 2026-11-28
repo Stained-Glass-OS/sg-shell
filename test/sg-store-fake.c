@@ -305,6 +305,10 @@ int wmain(int argc, WCHAR **argv)
             Sleep(_wtoi(ms));
         }
     }
+    {   /* %SG_FAKE_EXIT%: an installer that fails with that code, installing nothing */
+        WCHAR code[16];
+        if (GetEnvironmentVariableW(L"SG_FAKE_EXIT", code, ARRAYSIZE(code))) return _wtoi(code);
+    }
     env(L"SG_FAKE_KEY", L"FakeApp", key, ARRAYSIZE(key));
     env(L"SG_FAKE_DISPLAY", L"Fake App", display, ARRAYSIZE(display));
     env(L"SG_FAKE_VERSION", L"1.10.0", version, ARRAYSIZE(version));

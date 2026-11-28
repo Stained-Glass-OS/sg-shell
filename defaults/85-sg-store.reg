@@ -23,7 +23,10 @@ Windows Registry Editor Version 5.00
 ;   Tier   = windows | ours | linux         (inferred from Source if absent)
 ;   Source = winget:<PackageId>
 ;          | pin:<Url>|<Sha256>|<Type>|<Silent>   (Type: msi, nullsoft, inno, burn, exe,
-;            or iexpress-msi -- a package of MSIs, unpacked and installed x86 first)
+;            or iexpress-msi -- a package of MSIs, unpacked and installed x86 first;
+;            portable -- the program itself -- or portable-zip, a zip of its files whose
+;            <Silent> is the program's path in it: put in the person's WinGet Packages
+;            folder, or with Scope=machine the machine's, with an entry of its own)
 ;          | ours:apt:<package> | linux:apt:<package>   (apt, via sg-admind)
 ;   DetectName = a Windows program's Uninstall DisplayName: "A|B|!C" -- the
 ;                name starts with A or B as a whole word ("Git" is not "GitHub

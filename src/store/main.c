@@ -18,7 +18,9 @@
  *                                  Start; sg-appimage, sysinstall.c)
  *   --elevated-apt / --elevated-apt-remove / --elevated-deb
  *   --install-batch ORD...   install them as Install selected does: one consent
+ *   --update-all             check, then update every app with an update (Update all): one consent
  *   --elevated-helper FILE   that consent's helper (sysinstall.c)
+ *   --elevated-portable ORD FILE   a portable app for the machine (Scope machine)
  *   --elevated-uninstall-run "DIR" "UNINSTALLER" ARGS...
  *                            (runas) the uninstaller, then its dead shortcuts (catalog.c)
  *                                  the elevated half (sysinstall.c)
@@ -64,6 +66,7 @@ static int g_queue[MAX_APPS], g_qn;
 static BOOL g_qremove[MAX_APPS];          /* by app: its turn removes it */
 static CRITICAL_SECTION g_qlock;
 static volatile LONG g_batch;             /* the queue holds checked apps: one consent (sysinstall.c) */
+static volatile LONG g_checking;           /* Check for updates is at work (its thread) */
 static WCHAR g_query[128];                /* the search box */
 static int g_cat;                         /* the chosen category: 0 = all */
 static int g_sel = -1;                    /* the selected app (keyboard), or -1 */
@@ -85,14 +88,20 @@ static volatile LONGLONG g_prog_done, g_prog_total;
  * and the Linux apps come last. */
 static const WCHAR *const g_cats[] = {
     L"All", L"Browsers", L"Productivity", L"Graphics", L"Media", L"Development",
-    L"Utilities", L"Internet", L"Games", LINUX_SECTION,
+    L"Utilities", L"Internet", L"Games",
+#ifndef SG_MUTANT_FEWCATS
+    /* the catalogue's other categories (Discord, Thorium Reader, KeePass...): with no chip of their
+     * own they were found only under All */
+    L"Communication", L"Education", L"Security",
+#endif
+    LINUX_SECTION,
 };
 #define NCATS ((int)ARRAYSIZE(g_cats))
 
 /* hit rectangles, for the mouse and the gate */
 static int find_app(const WCHAR *key);
 enum { H_INSTALL, H_OPEN, H_UPDATE, H_CHECKALL, H_CAT, H_FROMFILE, H_CARD, H_BUILD, H_UNINSTALL, H_UNQUEUE, H_ICON,
-       H_CHECK, H_INSTALLSEL, H_BACK, H_HOMEPAGE };
+       H_CHECK, H_INSTALLSEL, H_BACK, H_HOMEPAGE, H_UPDATEALL };
 typedef struct { int verb, idx; RECT rc; } hit_t;
 static hit_t g_hits[MAX_APPS * 3 + 32];
 static int g_nhits;
@@ -268,10 +277,44 @@ static BOOL names_exactly(const app_t *a, const WCHAR *q)
     return n && n == lstrlenW(a->name) && !_wcsnicmp(a->name, q, n);
 }
 
+/* how well an app answers the search, as a store ranks its results (lower is better): the name
+ * itself, the name's beginning, one of its words' beginning, anywhere in the name, the maker, and
+ * last the description or category alone. Sections come in the order of their best answer, and
+ * within one the better answers first: "paint" lists Paint.NET before an app that only mentions
+ * painting, and "code" Visual Studio Code's section before the many that say "source code". */
+static __thread int g_score[MAX_APPS], g_secbest[MAX_APPS];
+
+static int query_score(const app_t *a, const WCHAR *q)
+{
+    WCHAR qs[128], ns[256];
+    const WCHAR *p;
+    int n;
+    while (*q == L' ') q++;
+    n = lstrlenW(q);
+    while (n && q[n - 1] == L' ') n--;
+    if (!n) return 5;
+    if (n == lstrlenW(a->name) && !_wcsnicmp(a->name, q, n)) return 0;
+    squash(q, qs, ARRAYSIZE(qs));
+    squash(a->name, ns, ARRAYSIZE(ns));
+    if (!_wcsnicmp(a->name, q, n) || (qs[0] && !wcsncmp(ns, qs, lstrlenW(qs)))) return 1;
+    for (p = a->name; *p; p++)
+        if (!iswalnum(*p) && iswalnum(p[1]) && !_wcsnicmp(p + 1, q, n)) return 2;
+    if (StrStrIW(a->name, q) || (qs[0] && wcsstr(ns, qs))) return 3;
+    if (StrStrIW(a->publisher, q)) return 4;
+    return 5;
+}
+
 static int cmp_view(const void *x, const void *y)
 {
     const app_t *a = &g_apps[*(const int *)x], *b = &g_apps[*(const int *)y];
     int ra = section_rank(a), rb = section_rank(b), c;
+#if !defined(SG_MUTANT_NOBESTMATCH) && !defined(SG_MUTANT_NORANK)
+    if (g_query[0]) {
+        int ia = (int)(a - g_apps), ib = (int)(b - g_apps);
+        if (g_secbest[ia] != g_secbest[ib]) return g_secbest[ia] - g_secbest[ib];
+        if (!lstrcmpiW(app_section(a), app_section(b)) && g_score[ia] != g_score[ib]) return g_score[ia] - g_score[ib];
+    }
+#endif
     if (g_best >= 0) {
         const WCHAR *bs = app_section(&g_apps[g_best]);
         BOOL ia = !lstrcmpiW(app_section(a), bs), ib = !lstrcmpiW(app_section(b), bs);
@@ -306,6 +349,17 @@ static void list_view(int *view, int *n)
 #ifndef SG_MUTANT_NOBESTMATCH
     for (i = 0; g_query[0] && i < *n && g_best < 0; i++) if (names_exactly(&g_apps[view[i]], g_query)) g_best = view[i];
 #endif
+    if (g_query[0]) {
+        int j;
+        for (i = 0; i < *n; i++) g_score[view[i]] = query_score(&g_apps[view[i]], g_query);
+        for (i = 0; i < *n; i++) {
+            int best = g_score[view[i]];
+            const WCHAR *sec = app_section(&g_apps[view[i]]);
+            for (j = 0; j < *n; j++)
+                if (g_score[view[j]] < best && !lstrcmpiW(app_section(&g_apps[view[j]]), sec)) best = g_score[view[j]];
+            g_secbest[view[i]] = best;
+        }
+    }
     qsort(view, *n, sizeof(view[0]), cmp_view);
 }
 
@@ -365,6 +419,7 @@ static void dump(void)
     }
     dumpf(f, L"icons %d\n", icons_ready());
     dumpf(f, L"batch %d\n", g_batch);
+    dumpf(f, L"checking %d\n", g_checking);
     /* the list's order: ordinals, first to last */
     {
         int view[MAX_APPS];
@@ -405,7 +460,7 @@ static void dump(void)
         }
         static const WCHAR *const verbs[] = { L"install", L"open", L"update", L"checkall", L"category", L"fromfile", L"card",
                                               L"build", L"uninstall", L"unqueue", L"icon", L"check", L"installsel",
-                                              L"back", L"homepage" };
+                                              L"back", L"homepage", L"updateall" };
         if (g_wnd) ClientToScreen(g_wnd, &pt);
         dumpf(f, L"hit %ls %ls %d %d\n", verbs[g_hits[i].verb],
               g_hits[i].verb == H_CAT ? g_cats[g_hits[i].idx] : g_hits[i].idx >= 0 ? g_apps[g_hits[i].idx].ord : L"-",
@@ -644,6 +699,28 @@ static void install_selected(void)
     if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
 }
 
+/* ---- Update all (the Microsoft Store's Library: "Update all"; winget upgrade --all) ----
+ * every app the last check found an update for, in turn, the administrator asked once */
+static int count_updates(void)
+{
+    int i, n = 0;
+#ifdef SG_MUTANT_NOUPDATEALL
+    return 0;
+#endif
+    for (i = 0; i < g_napps; i++) if (!g_apps[i].is_alt && g_apps[i].state == AST_UPDATE && !in_hand(i)) n++;
+    return n;
+}
+
+static void update_all(void)
+{
+    int i, n = count_updates();
+    if (!n) return;
+    if (n > 1 && !InterlockedExchange(&g_batch, 1)) sys_batch_begin();
+    for (i = 0; i < g_napps; i++)
+        if (!g_apps[i].is_alt && g_apps[i].state == AST_UPDATE && !in_hand(i)) enqueue(i, FALSE);
+    if (g_wnd) { InvalidateRect(g_wnd, NULL, FALSE); dump(); }
+}
+
 static void unqueue(int i)
 {
     int k;
@@ -724,7 +801,10 @@ static void follow_mode(HWND hwnd)
     InvalidateRect(hwnd, NULL, TRUE);
 }
 
-static int header_height(void) { return dpx(160); }
+/* the category chips wrap onto more rows in a narrow window (all thirteen of them: none is left
+ * out), and the header grows by a row each */
+static int g_chip_rows = 1;
+static int header_height(void) { return dpx(160) + (g_chip_rows - 1) * dpx(30); }
 
 static void add_hit(int verb, int idx, RECT rc)
 {
@@ -1179,6 +1259,22 @@ static void paint(HWND hwnd)
     if (g_detail >= 0) { paint_details(dc, &rc); goto drawn; }
     g_cols = cols = content_box(&rc, &x, &w);
     colw = (w - (cols - 1) * dpx(CARD_GAP)) / cols;
+    {   /* how many rows the chips take at this width */
+        int cx = x, k, rows = 1;
+        HFONT of = SelectObject(dc, g_f_small);
+        for (k = 0; k < NCATS; k++) {
+            SIZE sz;
+            GetTextExtentPoint32W(dc, g_cats[k], lstrlenW(g_cats[k]), &sz);
+            if (cx > x && cx + sz.cx + dpx(20) > x + w) { rows++; cx = x; }
+            cx += sz.cx + dpx(26);
+        }
+        SelectObject(dc, of);
+#ifdef SG_MUTANT_CHIPSCUT
+        rows = 1;
+#endif
+        g_chip_rows = rows;
+        head = header_height();
+    }
 
     /* the list (scrolled), under the header: sections, each a grid of cards */
     build_view();
@@ -1229,7 +1325,7 @@ static void paint(HWND hwnd)
     { RECT h = { x, dpx(14), x + w - dpx(330), dpx(54) };
       text(dc, g_f_title, C_TEXT, h, L"SG Store", DT_LEFT | DT_VCENTER | DT_SINGLELINE); }
     { RECT bt = { x + w - dpx(150), dpx(18), x + w, dpx(50) };
-      button(dc, bt, L"Check for updates", FALSE); add_hit(H_CHECKALL, -1, bt); }
+      button(dc, bt, g_checking ? L"Checking..." : L"Check for updates", FALSE); add_hit(H_CHECKALL, -1, bt); }
     { RECT bt = { x + w - dpx(310), dpx(18), x + w - dpx(160), dpx(50) };
       button(dc, bt, L"Install from a file...", FALSE); add_hit(H_FROMFILE, -1, bt); }
     { RECT l = { x, dpx(66), x + dpx(66), dpx(94) };
@@ -1243,7 +1339,10 @@ static void paint(HWND hwnd)
             HFONT of = SelectObject(dc, g_f_small);
             GetTextExtentPoint32W(dc, g_cats[k], lstrlenW(g_cats[k]), &sz);
             SelectObject(dc, of);
-            if (cx + sz.cx + dpx(20) > x + w) break;
+            if (cx > x && cx + sz.cx + dpx(20) > x + w) {
+                if (cy + dpx(30) >= dpx(104) + g_chip_rows * dpx(30)) break;
+                cx = x; cy += dpx(30);
+            }
             chip.left = cx; chip.top = cy; chip.right = cx + sz.cx + dpx(20); chip.bottom = cy + dpx(24);
             {
                 HBRUSH b = CreateSolidBrush(k == g_cat ? C_ACCENT : C_CARD);
@@ -1259,14 +1358,16 @@ static void paint(HWND hwnd)
         }
     }
     {
-        int n = count_checked();
-        RECT sub = { x, dpx(134), x + w, dpx(154) };
-        if (n) {
+        int n = count_checked(), u = n ? 0 : count_updates();
+        int dy = (g_chip_rows - 1) * dpx(30);
+        RECT sub = { x, dpx(134) + dy, x + w, dpx(154) + dy };
+        if (n || u) {
             WCHAR lab[48];
-            RECT bt = { x + w - dpx(190), dpx(128), x + w, dpx(158) };
-            swprintf(lab, ARRAYSIZE(lab), L"Install selected (%d)", n);
+            RECT bt = { x + w - dpx(190), dpx(128) + dy, x + w, dpx(158) + dy };
+            if (n) swprintf(lab, ARRAYSIZE(lab), L"Install selected (%d)", n);
+            else swprintf(lab, ARRAYSIZE(lab), L"Update all (%d)", u);
             button(dc, bt, lab, TRUE);
-            add_hit(H_INSTALLSEL, -1, bt);
+            add_hit(n ? H_INSTALLSEL : H_UPDATEALL, -1, bt);
             sub.right = bt.left - dpx(10);
         }
         text(dc, g_f_small, C_SUB, sub, L"App and system updates are handled in Settings > Update & Security.",
@@ -1297,7 +1398,7 @@ static int hit_at(int cx, int cy, int *verb, int *idx)
     if (cy < header_height() && g_detail < 0) {
         for (i = 0; i < g_nhits; i++)
             if ((g_hits[i].verb == H_CHECKALL || g_hits[i].verb == H_CAT || g_hits[i].verb == H_FROMFILE ||
-                 g_hits[i].verb == H_INSTALLSEL) && PtInRect(&g_hits[i].rc, pt))
+                 g_hits[i].verb == H_INSTALLSEL || g_hits[i].verb == H_UPDATEALL) && PtInRect(&g_hits[i].rc, pt))
                 { *verb = g_hits[i].verb; *idx = g_hits[i].idx; return 1; }
         return 0;
     }
@@ -1308,14 +1409,35 @@ static int hit_at(int cx, int cy, int *verb, int *idx)
     return 0;
 }
 
-static void do_checkall(void)
+/* Check for updates: the installed Windows programs only (winget upgrade looks at what is installed; the
+ * store resolved every one of its 300-odd winget entries), on a thread of its own -- the window froze
+ * for as long as that took. The button says "Checking..." meanwhile. */
+static DWORD WINAPI check_thread(void *unused)
 {
     int i;
     WCHAR err[512];
+    (void)unused;
     for (i = 0; i < g_napps; i++) {
-        if (g_apps[i].tier == TIER_LINUX) continue;
-        app_check_update(&g_apps[i], err, ARRAYSIZE(err));
+        app_t *a = &g_apps[i];
+        if (a->tier == TIER_LINUX) continue;
+#ifndef SG_MUTANT_CHECKALL
+        if (a->state != AST_INSTALLED && a->state != AST_UPDATE) continue;
+#endif
+        if (in_hand(i)) continue;
+        app_check_update(a, err, ARRAYSIZE(err));
+        if (g_wnd) PostMessageW(g_wnd, WM_PROGRESS, 0, 0);
     }
+    InterlockedExchange(&g_checking, 0);
+    if (g_wnd) PostMessageW(g_wnd, WM_PROGRESS, 0, 0);
+    return 0;
+}
+
+static void do_checkall(void)
+{
+    HANDLE t;
+    if (InterlockedExchange(&g_checking, 1)) return;
+    if ((t = CreateThread(NULL, 0, check_thread, NULL, 0, NULL))) CloseHandle(t);
+    else InterlockedExchange(&g_checking, 0);
     InvalidateRect(g_wnd, NULL, FALSE);
     dump();
 }
@@ -1473,6 +1595,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             else if (verb == H_CHECKALL) do_checkall();
             else if (verb == H_CHECK) toggle_check(idx);
             else if (verb == H_INSTALLSEL) install_selected();
+            else if (verb == H_UPDATEALL) update_all();
             else if (verb == H_FROMFILE) install_from_file();
             else if (verb == H_CAT) set_category(hwnd, idx);
 #ifndef SG_MUTANT_NODETAILS
@@ -1721,6 +1844,16 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             LocalFree(argv);
             return app_uninstall_run_elevated(GetCommandLineW());
         }
+        if (!lstrcmpiW(argv[i], L"--elevated-portable") && i + 2 < argc) {
+            /* (runas) a portable app for the machine: its download checked again and put in
+             * Program Files, with the machine's entry and Start shortcut (catalog.c) */
+            int k;
+            load_all(FALSE);
+            k = find_app(argv[i + 1]);
+            rc = k < 0 ? SYS_FAILED : app_portable_elevated(&g_apps[k], argv[i + 2]);
+            LocalFree(argv);
+            return rc;
+        }
         if (!lstrcmpiW(argv[i], L"--elevated-uninstall") && i + 1 < argc) {
             /* (runas) an app whose installer put in a package for the machine: that
              * installer's uninstaller, then the package, for everyone (catalog.c) */
@@ -1775,6 +1908,29 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
             }
             LocalFree(argv);
             return rc ? 1 : 0;
+        }
+        if (!lstrcmpiW(argv[i], L"--update-all")) {
+            /* every app with an update, as Update all does them: under one consent */
+            int k, fails = 0, todo = 0;
+            WCHAR err[512], tmp[MAX_PATH + 8];
+            FILE *f = NULL;
+            load_all(TRUE);
+            for (k = 0; k < g_napps; k++) if (!g_apps[k].is_alt && g_apps[k].state == AST_UPDATE) todo++;
+#ifdef SG_MUTANT_NOUPDATEALL
+            todo = 0;
+#endif
+            if (todo > 1) sys_batch_begin();
+            if (g_dump[0]) { swprintf(tmp, ARRAYSIZE(tmp), L"%ls.result", g_dump); f = _wfopen(tmp, L"wb"); }
+            for (k = 0; todo && k < g_napps; k++) {
+                if (g_apps[k].is_alt || g_apps[k].state != AST_UPDATE) continue;
+                rc = app_install(&g_apps[k], progress_cb, NULL, &g_cancel, err, ARRAYSIZE(err));
+                if (rc) fails++;
+                if (f) { dumpf(f, L"result %ls %ls %d %ls\n", g_apps[k].ord, rc ? L"fail" : L"ok", rc, rc ? err : L"Updated."); fflush(f); }
+            }
+            if (f) { dumpf(f, L"updated %d failed %d\n", todo - fails, fails); fclose(f); }
+            sys_batch_end();
+            LocalFree(argv);
+            return fails ? 1 : 0;
         }
         if (!lstrcmpiW(argv[i], L"--install-batch") && i + 1 < argc) {
             /* several apps as Install selected does them: under one consent */

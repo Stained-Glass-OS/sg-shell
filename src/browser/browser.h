@@ -30,6 +30,7 @@ typedef struct {
     WCHAR custom[512];          /* the manifest's Custom switches, passed after the silent ones */
     WCHAR deps[512];            /* the packages it needs first (winget Dependencies), space-separated */
     char success[256];          /* InstallerSuccessCodes: more exit codes that mean it installed */
+    char expected[512];         /* ExpectedReturnCodes: what its other exit codes mean ("1618=installInProgress") */
     BOOL elevate;               /* ElevationRequirement: elevationRequired -- ask for an administrator first */
     BOOL elevated;              /* the installer was started as an administrator (runas) */
     BYTE sha256[32];

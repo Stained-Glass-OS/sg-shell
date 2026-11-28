@@ -225,6 +225,27 @@ static const char CUTEPDF[] =
     "    PortableCommandAlias: cw\n"
     "ManifestType: installer\n";
 
+/* ExpectedReturnCodes (a package's own codes, winget's ReturnResponse names), at the root and under
+ * an installer (which keeps its own); and what the installer kinds' own codes mean */
+static const char EXPECTED[] =
+    "PackageIdentifier: Fake.Codes\n"
+    "InstallerType: inno\n"
+    "ExpectedReturnCodes:\n"
+    "- InstallerReturnCode: 1618\n"
+    "  ReturnResponse: installInProgress\n"
+    "- InstallerReturnCode: -2147024891\n"
+    "  ReturnResponse: blockedByPolicy\n"
+    "  ReturnResponseUrl: https://example.org/why\n"
+    "Installers:\n"
+    "- Architecture: x86\n"
+    "  InstallerUrl: https://example.org/a.exe\n"
+    "- Architecture: x64\n"
+    "  ExpectedReturnCodes:\n"
+    "  - InstallerReturnCode: 42\n"
+    "    ReturnResponse: diskFull\n"
+    "  InstallerUrl: https://example.org/b.exe\n"
+    "ManifestType: installer\n";
+
 int main(void)
 {
     static char buf[16384];
@@ -319,6 +340,21 @@ int main(void)
     CHECK(!mf_url_names_version("https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi", "156.0.8078.48"),
           "Chrome's enterprise MSI names none (64 is not 156...)");
     CHECK(!mf_url_names_version("http://127.0.0.1:40849/files/setup.exe", "2.0"), "the host's numbers do not count");
+    strcpy(buf, EXPECTED);
+    n = mf_parse(buf, &root, list, MF_MAX_ENTRIES);
+    CHECK(n == 2 && !strcmp(list[0].expected, "1618=installInProgress -2147024891=blockedByPolicy"),
+          "the root's ExpectedReturnCodes go to an installer (%s)", n ? list[0].expected : "");
+    CHECK(n == 2 && !strcmp(list[1].expected, "42=diskFull") && !strcmp(list[1].url, "https://example.org/b.exe"),
+          "an installer's own win, and its fields after them still read (%s)", n > 1 ? list[1].expected : "");
+    CHECK(n == 2 && mf_exit_reason("inno", 1618, list[0].expected) && strstr(mf_exit_reason("inno", 1618, list[0].expected), "another installation"),
+          "a package's own code says what it means (1618: installInProgress)");
+    CHECK(n == 2 && mf_exit_reason("inno", -2147024891, list[0].expected) && strstr(mf_exit_reason("inno", -2147024891, list[0].expected), "policy"),
+          "a negative one too (blockedByPolicy)");
+    CHECK(mf_exit_reason("msi", 1603, "") && strstr(mf_exit_reason("msi", 1603, ""), "fatal"), "an MSI's 1603 is a fatal error");
+    CHECK(mf_exit_reason("wix", 1638, NULL) && strstr(mf_exit_reason("wix", 1638, NULL), "already installed"), "a WiX MSI's 1638: another version installed");
+    CHECK(mf_exit_reason("inno", 5, "") && strstr(mf_exit_reason("inno", 5, ""), "cancelled"), "Inno Setup's 5: cancelled");
+    CHECK(mf_exit_reason("nullsoft", 2, "") != NULL, "NSIS's 2: the installer stopped itself");
+    CHECK(!mf_exit_reason("exe", 5, "") && !mf_exit_reason("inno", 77, ""), "an unknown code means nothing said");
     printf("browser-manifest-test: %s\n", fails ? "FAILED" : "all passed");
     return fails ? 1 : 0;
 }
