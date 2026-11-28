@@ -14,6 +14,10 @@
  *   sg-linuxapp64.exe --watch              the same, then again whenever the
  *                                          applications folders change (Start
  *                                          starts this, one per session)
+ *   sg-linuxapp64.exe --action ACTION FILE.desktop   one of the app's own
+ *                                          actions ([Desktop Action ACTION]:
+ *                                          Firefox's New Private Window) --
+ *                                          its jump list's tasks
  *   sg-linuxapp64.exe --uninstall-appimage FILE.desktop [/quiet]
  *                                          an AppImage's Uninstall entry
  *                                          (sg-appimage installed it)
@@ -37,6 +41,17 @@
  * machine's) get NAME.exe -> this program, SgArguments "--launch FILE"; a
  * name a Windows program has -- the machine's App Paths, the Windows
  * folders -- is left to it.
+ * Each app is an app to the taskbar as a Windows program is, by its
+ * AppUserModelID (David 2026-11-27: Linux programs first class): SG.LinuxApp.
+ * <desktop id>, in its shortcut (so the shortcut pinned from Start is the
+ * button of the app's running windows), registered under HKCU\Software\
+ * Classes\AppUserModelId\<ID> (DisplayName, IconUri -- what a toast names
+ * it by --, RelaunchCommand, SgShortcut, SgDesktopFile), and named by its
+ * windows' classes (StartupWMClass, its program's name, its desktop id) in
+ * HKCU\Software\Stained Glass\Linux apps\Window classes, which explorer
+ * (wine-sg 9511) reads for a Linux window's button; its .desktop actions are
+ * the tasks of its jump list (ICustomDestinationList), each started with
+ * --action.
  * Shortcuts in that folder whose app has gone are removed; the folder is ours.
  *
  * Copyright (C) 2026 Stained Glass OS contributors
@@ -45,6 +60,8 @@
 #define COBJMACROS
 #include <windows.h>
 #include <shlobj.h>
+#include <shobjidl.h>
+#include <propsys.h>
 #include <objbase.h>
 #include <stdio.h>
 #include <wchar.h>
@@ -185,22 +202,23 @@ struct app {
     char appimage[MAX_PATH];    /* X-SG-AppImage: an AppImage installed for this user (sg-appimage) */
     char aiid[96];              /* X-SG-AppImage-Id: its own desktop id */
     WCHAR version[64];          /* X-AppImage-Version */
+    char actions[512];          /* Actions=: its own actions, ';'-separated */
 };
 
 static struct app *g_apps;
 static int g_napps;
 
-/* the value of KEY in the [Desktop Entry] group, or NULL */
-static const char *entry_value(const char *text, const char *key, char *out, int len)
+/* the value of KEY in the group [GROUP], or NULL */
+static const char *group_value(const char *text, const char *group, const char *key, char *out, int len)
 {
     const char *p = text;
-    size_t klen = strlen(key);
+    size_t klen = strlen(key), glen = strlen(group);
     BOOL in_group = FALSE;
     while (*p) {
         const char *eol = strchr(p, '\n');
         size_t n = eol ? (size_t)(eol - p) : strlen(p);
         if (n && p[n - 1] == '\r') n--;
-        if (p[0] == '[') in_group = n == 15 && !strncmp(p, "[Desktop Entry]", 15);
+        if (p[0] == '[') in_group = n == glen + 2 && !strncmp(p + 1, group, glen) && p[n - 1] == ']';
         else if (in_group && n > klen && !strncmp(p, key, klen)) {
             const char *v = p + klen;
             while (v < p + n && *v == ' ') v++;
@@ -218,6 +236,12 @@ static const char *entry_value(const char *text, const char *key, char *out, int
         p = eol + 1;
     }
     return NULL;
+}
+
+/* the value of KEY in the [Desktop Entry] group, or NULL */
+static const char *entry_value(const char *text, const char *key, char *out, int len)
+{
+    return group_value(text, "Desktop Entry", key, out, len);
 }
 
 static BOOL is_true(const char *text, const char *key)
@@ -360,6 +384,7 @@ static void add_desktop_file(const char *unix_file, const char *id)
     if (entry_value(text, "Icon", v, sizeof(v))) lstrcpynA(a->icon, v, sizeof(a->icon));
     if (entry_value(text, "StartupWMClass", v, sizeof(v))) lstrcpynA(a->wmclass, v, sizeof(a->wmclass));
     entry_value(text, "MimeType", a->mime, sizeof(a->mime));
+    entry_value(text, "Actions", a->actions, sizeof(a->actions));
     if (entry_value(text, "Exec", v, sizeof(v))) {
         char *end = v + strcspn(v, " \t"), *base;
         *end = 0;
@@ -638,7 +663,39 @@ static void safe_name(const WCHAR *in, WCHAR *out, int len)
 
 /* writes the shortcut unless one saying the same is there (keeps its date:
  * Start's "Recently added" goes by it) */
-static void write_link(const WCHAR *lnk, const WCHAR *target, const WCHAR *args, const WCHAR *icon, const WCHAR *desc)
+/* the properties of a shortcut and of a jump list's task (their own copies:
+ * no propkey.h symbols are needed from libuuid) */
+static const PROPERTYKEY KEY_AUMID = {{0x9f4c2855, 0x9f79, 0x4b39, {0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3}}, 5};
+static const PROPERTYKEY KEY_TITLE = {{0xf29f85e0, 0x4ff9, 0x1068, {0xab, 0x91, 0x08, 0x00, 0x2b, 0x27, 0xb3, 0xd9}}, 2};
+static const IID IID_STORE = {0x886d8eeb, 0x8cf2, 0x4446, {0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99}};
+
+/* a string property of a shell link's (its AppUserModelID); empty for none */
+static void link_prop(IShellLinkW *link, const PROPERTYKEY *key, WCHAR *out, int len)
+{
+    IPropertyStore *store;
+    PROPVARIANT v;
+    out[0] = 0;
+    if (FAILED(IShellLinkW_QueryInterface(link, &IID_STORE, (void **)&store))) return;
+    PropVariantInit(&v);
+    if (SUCCEEDED(IPropertyStore_GetValue(store, key, &v)) && v.vt == VT_LPWSTR && v.pwszVal) lstrcpynW(out, v.pwszVal, len);
+    PropVariantClear(&v);
+    IPropertyStore_Release(store);
+}
+
+static void set_link_prop(IShellLinkW *link, const PROPERTYKEY *key, const WCHAR *value)
+{
+    IPropertyStore *store;
+    PROPVARIANT v;
+    if (FAILED(IShellLinkW_QueryInterface(link, &IID_STORE, (void **)&store))) return;
+    PropVariantInit(&v);
+    v.vt = VT_LPWSTR;
+    v.pwszVal = (WCHAR *)value;
+    if (SUCCEEDED(IPropertyStore_SetValue(store, key, &v))) IPropertyStore_Commit(store);
+    IPropertyStore_Release(store);
+}
+
+static void write_link(const WCHAR *lnk, const WCHAR *target, const WCHAR *args, const WCHAR *icon, const WCHAR *desc,
+                       const WCHAR *aumid)
 {
     IShellLinkW *link;
     IPersistFile *file;
@@ -646,19 +703,34 @@ static void write_link(const WCHAR *lnk, const WCHAR *target, const WCHAR *args,
     if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file))) {
         BOOL same = FALSE;
         if (GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES && SUCCEEDED(IPersistFile_Load(file, lnk, STGM_READ))) {
-            WCHAR a[1024] = L"", ic[MAX_PATH] = L"", d[256] = L"";
+            WCHAR a[1024] = L"", ic[MAX_PATH] = L"", d[256] = L"", id[130];
             int idx = 0;
             IShellLinkW_GetArguments(link, a, ARRAYSIZE(a));
             IShellLinkW_GetIconLocation(link, ic, ARRAYSIZE(ic), &idx);
             IShellLinkW_GetDescription(link, d, ARRAYSIZE(d));
-            same = !lstrcmpW(a, args) && !lstrcmpiW(ic, icon ? icon : L"") && !lstrcmpW(d, desc);
+            link_prop(link, &KEY_AUMID, id, ARRAYSIZE(id));
+            same = !lstrcmpW(a, args) && !lstrcmpiW(ic, icon ? icon : L"") && !lstrcmpW(d, desc) && !lstrcmpW(id, aumid);
         }
         if (!same) {
+            /* an existing shortcut keeps its dates: Start's "Recently added" goes by them */
+            FILETIME made = {0}, written = {0};
+            HANDLE h = CreateFileW(lnk, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                   OPEN_EXISTING, 0, NULL);
+            if (h != INVALID_HANDLE_VALUE) { GetFileTime(h, &made, NULL, &written); CloseHandle(h); }
             IShellLinkW_SetPath(link, target);
             IShellLinkW_SetArguments(link, args);
             IShellLinkW_SetDescription(link, desc);
             IShellLinkW_SetIconLocation(link, icon ? icon : L"", 0);
+#ifndef SG_MUTANT_NO_AUMID
+            set_link_prop(link, &KEY_AUMID, aumid);
+#endif
             IPersistFile_Save(file, lnk, TRUE);
+            if ((made.dwLowDateTime || made.dwHighDateTime) &&
+                (h = CreateFileW(lnk, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                 OPEN_EXISTING, 0, NULL)) != INVALID_HANDLE_VALUE) {
+                SetFileTime(h, &made, NULL, &written);
+                CloseHandle(h);
+            }
         }
         IPersistFile_Release(file);
     }
@@ -1050,15 +1122,206 @@ static void unregister_gone_appimages(WCHAR (*made)[128], int nmade)
     free(gone);
 }
 
+/* ---- the app's identity: its AppUserModelID, window classes, jump list -- */
+
+#define AUMID_KEY L"Software\\Classes\\AppUserModelId"
+#define WINCLASS_KEY L"Software\\Stained Glass\\Linux apps\\Window classes"
+
+static void app_aumid(const struct app *a, WCHAR *out, int len)
+{
+    _snwprintf(out, len, PROGID_PREFIX L"%hs", a->id);
+    out[len - 1] = 0;
+}
+
+/* HKCU\Software\Classes\AppUserModelId\<ID>: what the shell knows the app by */
+static void register_aumid(const struct app *a, const WCHAR *aumid, const WCHAR *self, const WCHAR *desktop,
+                           const WCHAR *ico, const WCHAR *lnk)
+{
+    WCHAR sub[300], cmd[MAX_PATH * 3];
+    _snwprintf(sub, ARRAYSIZE(sub), AUMID_KEY L"\\%ls", aumid);
+    sub[ARRAYSIZE(sub) - 1] = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"DisplayName", a->name);
+    if (ico) set_sz(HKEY_CURRENT_USER, sub, L"IconUri", ico);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --run \"%ls\"", self, desktop);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    set_sz(HKEY_CURRENT_USER, sub, L"RelaunchCommand", cmd);
+    set_sz(HKEY_CURRENT_USER, sub, L"SgShortcut", lnk);
+    set_sz(HKEY_CURRENT_USER, sub, L"SgDesktopFile", desktop);
+}
+
+/* the window classes that name an app: its desktop id first (a GTK 4 or
+ * GApplication app's class), then for the apps whose class is another name,
+ * StartupWMClass and Exec's program -- never a name another app goes by,
+ * nor a program several apps start (Steam's games), as the icons' aliases */
+static void sync_window_classes(void)
+{
+    WCHAR (*names)[130], (*ids)[130];
+    int n = 0, i, k, pass;
+    HKEY key;
+    DWORD idx;
+
+    if (!(names = calloc(g_napps * 3 + 1, sizeof(*names)))) return;
+    if (!(ids = calloc(g_napps * 3 + 1, sizeof(*ids)))) { free(names); return; }
+    for (pass = 0; pass < 3; pass++) {
+        for (i = 0; i < g_napps; i++) {
+            const struct app *a = &g_apps[i];
+            const char *name = pass == 0 ? a->id : pass == 1 ? a->wmclass : a->exe;
+            WCHAR w[130];
+            BOOL taken = FALSE;
+            if (a->name_only || !name[0]) continue;
+            if (pass && (!_stricmp(name, a->id) || alias_taken(a, name, pass == 2))) continue;
+            MultiByteToWideChar(CP_UTF8, 0, name, -1, w, ARRAYSIZE(w));
+            w[ARRAYSIZE(w) - 1] = 0;
+            for (k = 0; k < n && !taken; k++) taken = !lstrcmpiW(names[k], w);
+            if (taken) continue;
+            lstrcpyW(names[n], w);
+            app_aumid(a, ids[n], ARRAYSIZE(ids[n]));
+            n++;
+        }
+    }
+    if (!RegCreateKeyExW(HKEY_CURRENT_USER, WINCLASS_KEY, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &key, NULL)) {
+        for (i = 0; i < n; i++) {
+            WCHAR old[130];
+            DWORD size = sizeof(old) - sizeof(WCHAR), type;
+            memset(old, 0, sizeof(old));
+            if (!RegQueryValueExW(key, names[i], NULL, &type, (BYTE *)old, &size) && type == REG_SZ && !lstrcmpW(old, ids[i]))
+                continue;
+            RegSetValueExW(key, names[i], 0, REG_SZ, (const BYTE *)ids[i], (lstrlenW(ids[i]) + 1) * sizeof(WCHAR));
+        }
+        /* the names no app goes by now */
+        for (idx = 0;;) {
+            WCHAR value[130];
+            DWORD len = ARRAYSIZE(value);
+            BOOL keep = FALSE;
+            if (RegEnumValueW(key, idx, value, &len, NULL, NULL, NULL, NULL)) break;
+            for (k = 0; k < n && !keep; k++) keep = !lstrcmpiW(names[k], value);
+            if (keep) idx++;
+            else RegDeleteValueW(key, value);
+        }
+        RegCloseKey(key);
+    }
+    free(names);
+    free(ids);
+}
+
+/* the app's .desktop actions as its jump list's tasks, as a Windows
+ * program's AddUserTasks: each one starts this program with --action.
+ * Kept as it is when the actions are the same as last time (SgActions). */
+static void sync_jump_list(const struct app *a, const WCHAR *aumid, const WCHAR *self, const WCHAR *desktop, const WCHAR *ico)
+{
+    WCHAR sub[300], sig[2048] = L"", old[2048] = L"";
+    WCHAR names[16][128];
+    char ids[16][64], *text = NULL, list[512], *p, *next;
+    int n = 0, i;
+    DWORD size = sizeof(old) - sizeof(WCHAR);
+    ICustomDestinationList *dest;
+
+    if (a->actions[0] && dos_path(a->file, sub, MAX_PATH)) text = read_file(sub, 1 << 20, NULL);
+    lstrcpynA(list, a->actions, sizeof(list));
+    for (p = list; text && p && *p && n < 16; p = next) {
+        char group[96], v[256];
+        if ((next = strchr(p, ';'))) *next++ = 0;
+        if (!*p || strlen(p) >= sizeof(ids[0])) continue;
+        _snprintf(group, sizeof(group), "Desktop Action %s", p);
+        group[sizeof(group) - 1] = 0;
+        if (!group_value(text, group, "Name", v, sizeof(v)) || !v[0]) continue;
+        if (!group_value(text, group, "Exec", v + 128, 128) && !is_true(text, "DBusActivatable")) continue;
+        group_value(text, group, "Name", v, sizeof(v));
+        lstrcpyA(ids[n], p);
+        MultiByteToWideChar(CP_UTF8, 0, v, -1, names[n], ARRAYSIZE(names[n]));
+        names[n][ARRAYSIZE(names[n]) - 1] = 0;
+        if (lstrlenW(sig) + lstrlenW(names[n]) + strlen(p) + 4 < ARRAYSIZE(sig))
+            _snwprintf(sig + lstrlenW(sig), ARRAYSIZE(sig) - lstrlenW(sig), L"%hs=%ls;", p, names[n]);
+        n++;
+    }
+    free(text);
+    _snwprintf(sub, ARRAYSIZE(sub), AUMID_KEY L"\\%ls", aumid);
+    sub[ARRAYSIZE(sub) - 1] = 0;
+    if (RegGetValueW(HKEY_CURRENT_USER, sub, L"SgActions", RRF_RT_REG_SZ, NULL, old, &size)) old[0] = 0;
+    if (!lstrcmpW(old, sig)) return;
+    if (FAILED(CoCreateInstance(&CLSID_DestinationList, NULL, CLSCTX_INPROC_SERVER, &IID_ICustomDestinationList, (void **)&dest)))
+        return;
+    if (!n) ICustomDestinationList_DeleteList(dest, aumid);
+    else {
+        UINT slots = 0;
+        IObjectArray *removed = NULL, *array = NULL;
+        IObjectCollection *tasks = NULL;
+        ICustomDestinationList_SetAppID(dest, aumid);
+        if (SUCCEEDED(ICustomDestinationList_BeginList(dest, &slots, &IID_IObjectArray, (void **)&removed)) &&
+            SUCCEEDED(CoCreateInstance(&CLSID_EnumerableObjectCollection, NULL, CLSCTX_INPROC_SERVER, &IID_IObjectCollection,
+                                       (void **)&tasks))) {
+            for (i = 0; i < n; i++) {
+                IShellLinkW *link;
+                WCHAR args[MAX_PATH + 200];
+                if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) continue;
+                _snwprintf(args, ARRAYSIZE(args), L"--action %hs \"%ls\"", ids[i], desktop);
+                args[ARRAYSIZE(args) - 1] = 0;
+                IShellLinkW_SetPath(link, self);
+                IShellLinkW_SetArguments(link, args);
+                IShellLinkW_SetDescription(link, names[i]);
+                if (ico) IShellLinkW_SetIconLocation(link, ico, 0);
+                set_link_prop(link, &KEY_TITLE, names[i]);
+                IObjectCollection_AddObject(tasks, (IUnknown *)link);
+                IShellLinkW_Release(link);
+            }
+            if (SUCCEEDED(IObjectCollection_QueryInterface(tasks, &IID_IObjectArray, (void **)&array))) {
+                ICustomDestinationList_AddUserTasks(dest, array);
+                IObjectArray_Release(array);
+            }
+            if (FAILED(ICustomDestinationList_CommitList(dest))) sig[0] = 0;
+        }
+        else ICustomDestinationList_AbortList(dest);
+        if (tasks) IObjectCollection_Release(tasks);
+        if (removed) IObjectArray_Release(removed);
+    }
+    ICustomDestinationList_Release(dest);
+    set_sz(HKEY_CURRENT_USER, sub, L"SgActions", sig);
+}
+
+/* the AppUserModelIDs of apps that are gone, and their jump lists */
+static void unregister_gone_aumids(WCHAR (*made)[130], int nmade)
+{
+    WCHAR (*gone)[130];
+    int ngone = 0, i, j;
+    HKEY key;
+    DWORD idx = 0;
+
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, AUMID_KEY, 0, KEY_READ, &key)) return;
+    if (!(gone = calloc(MAX_APPS, sizeof(*gone)))) { RegCloseKey(key); return; }
+    for (;;) {
+        WCHAR name[130];
+        DWORD len = ARRAYSIZE(name);
+        BOOL keep = FALSE;
+        if (RegEnumKeyExW(key, idx++, name, &len, NULL, NULL, NULL, NULL)) break;
+        if (_wcsnicmp(name, PROGID_PREFIX, lstrlenW(PROGID_PREFIX))) continue;
+        for (j = 0; j < nmade && !keep; j++) keep = !lstrcmpiW(made[j], name);
+        if (!keep && ngone < MAX_APPS) lstrcpyW(gone[ngone++], name);
+    }
+    RegCloseKey(key);
+    for (i = 0; i < ngone; i++) {
+        WCHAR sub[300];
+        ICustomDestinationList *dest;
+        if (SUCCEEDED(CoCreateInstance(&CLSID_DestinationList, NULL, CLSCTX_INPROC_SERVER, &IID_ICustomDestinationList,
+                                       (void **)&dest))) {
+            ICustomDestinationList_DeleteList(dest, gone[i]);
+            ICustomDestinationList_Release(dest);
+        }
+        _snwprintf(sub, ARRAYSIZE(sub), AUMID_KEY L"\\%ls", gone[i]);
+        sub[ARRAYSIZE(sub) - 1] = 0;
+        RegDeleteTreeW(HKEY_CURRENT_USER, sub);
+    }
+    free(gone);
+}
+
 static void sync_default_browser(void);
 
 static int sync_apps(void)
 {
     WCHAR programs[MAX_PATH], common[MAX_PATH], folder[MAX_PATH], icons[MAX_PATH], self[MAX_PATH], pattern[MAX_PATH];
-    WCHAR (*made)[MAX_PATH], (*progids)[128], (*named)[64], (*appimages)[128];
+    WCHAR (*made)[MAX_PATH], (*progids)[128], (*named)[64], (*appimages)[128], (*aumids)[130];
     WIN32_FIND_DATAW fd;
     HANDLE h;
-    int i, j, nmade = 0, nprogids = 0, nnamed = 0, nappimages = 0;
+    int i, j, nmade = 0, nprogids = 0, nnamed = 0, nappimages = 0, naumids = 0;
 
     if (!SHGetSpecialFolderPathW(NULL, programs, CSIDL_PROGRAMS, TRUE)) return 1;
     if (!SHGetSpecialFolderPathW(NULL, icons, CSIDL_LOCAL_APPDATA, TRUE)) return 1;
@@ -1076,6 +1339,7 @@ static int sync_apps(void)
     if (!(progids = calloc(g_napps + 1, sizeof(*progids)))) { free(made); return 1; }
     if (!(named = calloc(g_napps * MAX_APP_NAMES + 1, sizeof(*named)))) { free(made); free(progids); return 1; }
     if (!(appimages = calloc(g_napps + 1, sizeof(*appimages)))) { free(made); free(progids); free(named); return 1; }
+    if (!(aumids = calloc(g_napps + 1, sizeof(*aumids)))) { free(made); free(progids); free(named); free(appimages); return 1; }
     if (g_napps) CreateDirectoryW(folder, NULL);
     for (i = 0; i < g_napps; i++) {
         WCHAR name[140], lnk[MAX_PATH], args[1024], file[MAX_PATH], ico[MAX_PATH];
@@ -1097,8 +1361,12 @@ static int sync_apps(void)
         args[ARRAYSIZE(args) - 1] = 0;
         has_icon = make_icon(&g_apps[i], icons, ico, MAX_PATH);
         if (has_icon) icon_aliases(&g_apps[i], icons, ico);
-        write_link(lnk, self, args, has_icon ? ico : NULL, g_apps[i].comment);
+        app_aumid(&g_apps[i], aumids[naumids], ARRAYSIZE(aumids[naumids]));
+        write_link(lnk, self, args, has_icon ? ico : NULL, g_apps[i].comment, aumids[naumids]);
         lstrcpynW(made[nmade++], lnk, MAX_PATH);
+        register_aumid(&g_apps[i], aumids[naumids], self, file, has_icon ? ico : NULL, lnk);
+        sync_jump_list(&g_apps[i], aumids[naumids], self, file, has_icon ? ico : NULL);
+        naumids++;
 #ifndef SG_MUTANT_NO_PROGIDS
         if (register_app(&g_apps[i], self, file, has_icon ? ico : NULL, progids[nprogids], 128)) nprogids++;
 #endif
@@ -1107,6 +1375,11 @@ static int sync_apps(void)
     }
     unregister_gone_appimages(appimages, nappimages);
     free(appimages);
+    unregister_gone_aumids(aumids, naumids);
+    free(aumids);
+#ifndef SG_MUTANT_NO_WINDOW_CLASSES
+    sync_window_classes();
+#endif
     unregister_gone_app_paths(named, nnamed);
     free(named);
     unregister_gone(progids, nprogids);
@@ -1337,6 +1610,44 @@ static int run_app(const WCHAR *file)
     return r ? 1 : 0;
 }
 
+/* --action ACTION FILE.desktop: one of the app's own actions (its jump list's
+ * task), started as a Linux desktop starts it -- GLib's
+ * g_desktop_app_info_launch_action, which also asks a D-Bus activatable app
+ * (org.freedesktop.Application.ActivateAction) */
+static int run_action(const WCHAR *action, const WCHAR *file)
+{
+    static char script[] =
+        "import sys, gi\n"
+        "gi.require_version('Gio', '2.0')\n"
+        "from gi.repository import Gio\n"
+        "app = Gio.DesktopAppInfo.new_from_filename(sys.argv[1])\n"
+        "if app is None or sys.argv[2] not in app.list_actions(): sys.exit(3)\n"
+        "app.launch_action(sys.argv[2], None)\n"
+        "try:\n"
+        "    Gio.bus_get_sync(Gio.BusType.SESSION, None).flush_sync(None)\n"
+        "except Exception:\n"
+        "    pass\n";
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char *unix_file = NULL, py[] = "/usr/bin/python3", dash_c[] = "-c", act[128];
+    char *argv[6];
+    LONG r = 1;
+
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (p_unix_name) unix_file = p_unix_name(file);
+    if (WideCharToMultiByte(CP_UTF8, 0, action, -1, act, sizeof(act), NULL, NULL) && spawnvp && unix_file) {
+        argv[0] = py; argv[1] = dash_c; argv[2] = script; argv[3] = unix_file; argv[4] = act; argv[5] = NULL;
+        r = spawnvp(argv, FALSE);
+    }
+    if (unix_file) HeapFree(GetProcessHeap(), 0, unix_file);
+    if (r) {
+        WCHAR msg[MAX_PATH + 64];
+        _snwprintf(msg, ARRAYSIZE(msg), L"The Linux app could not be started:\n%ls", file);
+        msg[ARRAYSIZE(msg) - 1] = 0;
+        MessageBoxW(NULL, msg, L"Linux apps", MB_OK | MB_ICONERROR);
+    }
+    return r ? 1 : 0;
+}
+
 /* an app chosen in Default apps, opening a file (a Windows path: given as
  * the Unix one) or a URL */
 static int open_with_app(const WCHAR *desktop, const WCHAR *arg)
@@ -1520,6 +1831,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--run")) ret = run_app(argv[2]);
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--open")) ret = open_with_app(argv[2], argc >= 4 ? argv[3] : L"");
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--launch")) ret = launch_app(argv[2], argv + 3, argc - 3);
+    else if (argv && argc >= 4 && !lstrcmpiW(argv[1], L"--action")) ret = run_action(argv[2], argv[3]);
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--sync")) ret = sync_apps();
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--watch")) ret = watch_apps();
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--uninstall-appimage"))

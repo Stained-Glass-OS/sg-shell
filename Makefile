@@ -599,6 +599,12 @@ test-store: build
 test-linuxapps: build
 	@sh test/linuxapps-check.sh
 
+# A Linux app is an app to the taskbar (AppUserModelID, window classes, jump list from its .desktop
+# actions; wine-sg 9511 reads them). test/linuxapp-identity-check.sh.
+.PHONY: test-linuxapp-identity
+test-linuxapp-identity: build
+	@sh test/linuxapp-identity-check.sh
+
 # AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
 .PHONY: test-appimage test-appimage-mutants
 test-appimage: build

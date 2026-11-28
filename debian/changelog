@@ -1,3 +1,21 @@
+sg-shell (0.1.0-322) unstable; urgency=medium
+
+  * Linux apps are apps to the taskbar (linux1, ledger i0810; with wine-sg
+    10.0-1200's 9511): sg-linuxapp gives each Linux app's Start shortcut
+    the AppUserModelID SG.LinuxApp.<desktop id> (existing shortcuts keep
+    their dates), registers it (HKCU\Software\Classes\AppUserModelId:
+    DisplayName, IconUri, RelaunchCommand, SgShortcut, SgDesktopFile), maps
+    the app's window classes to it (Software\Stained Glass\Linux apps\
+    Window classes: desktop id, StartupWMClass, its program -- not one
+    several apps start) and makes its .desktop actions its jump list's
+    tasks (--action ACTION FILE, GLib's launch_action). A Linux app pinned
+    from Start is now its running window's button, its menu names it and
+    starts another; Firefox's New Private Window, Thunderbird's Compose are
+    on its jump list. Gate test/linuxapp-identity-check.sh (mutants
+    SG_MUTANT_NO_AUMID, SG_MUTANT_NO_WINDOW_CLASSES).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 21:05:00 -0800
+
 sg-shell (0.1.0-321) unstable; urgency=medium
 
   * diskmgmt-check, the loop-device part (i0647; 9 failures, now 35 pass):
