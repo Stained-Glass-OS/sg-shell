@@ -77,6 +77,12 @@
 #                            registry-push ID [TEXT] -- the firewall prompt's
 #                            "Allow access", Settings' Firewall pages, and the
 #                            rules netsh and INetFwPolicy2 store (wine-sg)
+#   share-add NAME PATH COMMENT MAXUSERS read|change|full
+#   share-remove NAME        a folder shared on the network (File Explorer's
+#                            Advanced Sharing, NetShareAdd/NetShareDel): a section
+#                            of /etc/samba/stained-glass-shares.conf; refused while
+#                            smbd does not run ("File and printer sharing is
+#                            turned off.", NERR_ServerNotStarted)
 #   restore-point SUBCOMMAND [ID]
 #                            restore points and going back (sg-session's
 #                            sg-snapshot): rollback ID, delete ID, create,
@@ -1848,6 +1854,122 @@ def op_restore_point(args):
     raise Refused("The restore point could not be used.")
 
 
+# ---- folder sharing (net4, ledger i0978) -----------------------------------
+# File Explorer's Properties > Sharing / Advanced Sharing and NetShareAdd (an
+# elevated program, as on Windows) define SMB shares here: one section each in
+# a file of our own that smb.conf includes. Windows' Server service is what
+# serves them; here it is Samba's smbd -- and whether smbd runs (it listens on
+# TCP 445; the firewall's file-sharing group answers on Private and Domain
+# networks) is the machine's decision, not this one's: with smbd not running a
+# share is refused as Windows refuses one with the Server service stopped
+# (NERR_ServerNotStarted). Each share is for the accounts of this PC (no
+# guests); Everyone's permission is read, change or full (read only = no for
+# the last two).
+SHARES_CONF = "/etc/samba/stained-glass-shares.conf"
+SMB_CONF = "/etc/samba/smb.conf"
+if TEST:
+    SHARES_CONF = os.environ.get("SG_ADMIN_SHARES_CONF", SHARES_CONF)
+    SMB_CONF = os.environ.get("SG_ADMIN_SMB_CONF", SMB_CONF)
+SHARE_BAD = set('\\/[]:|<>+=;,?*"%')
+SHARE_RESERVED = {"global", "homes", "printers", "print$", "ipc$"}
+SHARE_ACCESS = {"read": "yes", "change": "no", "full": "no"}
+
+
+def share_name(name):
+    if (not 1 <= len(name) <= 80 or any(c in SHARE_BAD or ord(c) < 32 or ord(c) == 127 for c in name)
+            or name.strip() != name or name.lower() in SHARE_RESERVED):
+        raise Refused("The share name is not valid.")
+    return name
+
+
+def shares_read():
+    """the shares of our file: [(name, {key: value})], in order"""
+    out = []
+    try:
+        with open(SHARES_CONF, encoding="utf-8") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("[") and line.endswith("]"):
+                    out.append((line[1:-1], {}))
+                elif out and "=" in line and not line.lstrip().startswith(("#", ";")):
+                    k, v = line.split("=", 1)
+                    out[-1][1][k.strip()] = v.strip()
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def shares_write(shares):
+    text = "# Stained Glass OS: the folders shared from File Explorer (Advanced Sharing,\n" \
+           "# NetShareAdd). Written by sg-admind; changes made here by hand are kept only\n" \
+           "# as long as the share is.\n"
+    for name, opts in shares:
+        text += "\n[%s]\n" % name
+        for k in ("path", "comment", "read only", "guest ok", "max connections", "browseable"):
+            if k in opts:
+                text += "   %s = %s\n" % (k, opts[k])
+    write_root_file(SHARES_CONF, text)
+    try:
+        with open(SMB_CONF, encoding="utf-8") as f:
+            conf = f.read()
+    except FileNotFoundError:
+        raise Refused("File sharing (Samba) is not installed.")
+    if "include = %s" % SHARES_CONF not in conf:
+        conf = conf.rstrip("\n") + "\n\n# Stained Glass OS: the folders shared from File Explorer\n" \
+               "include = %s\n" % SHARES_CONF
+        write_root_file(SMB_CONF, conf)
+    run(["smbcontrol", "smbd", "reload-config"])
+
+
+def sharing_on():
+    if os.environ.get("SG_MUTANT_SHARE_IGNORES_SERVER") == "1":
+        return True
+    return run(["systemctl", "is-active", "--quiet", "smbd.service"]).returncode == 0
+
+
+def op_share_add(args):
+    name, path, comment, maxusers, access = args
+    name = share_name(name)
+    if not os.path.isabs(path) or any(ord(c) < 32 or c == "%" for c in path) or not os.path.isdir(path):
+        raise Refused("The folder to share does not exist.")
+    path = os.path.normpath(path)
+    if any(ord(c) < 32 or c == "%" for c in comment) or len(comment) > 256:
+        raise Refused("The comment is not valid.")
+    if not maxusers.isdigit() or int(maxusers) > 16777216:
+        raise Refused("The number of users is not valid.")
+    if access not in SHARE_ACCESS:
+        raise Refused("The permission is not valid.")
+    if not os.path.exists(SMB_CONF):
+        raise Refused("File sharing (Samba) is not installed.")
+    if not sharing_on():
+        raise Refused("File and printer sharing is turned off.")
+    shares = shares_read()
+    if any(n.lower() == name.lower() for n, _ in shares):
+        raise Refused("The share name is already in use.")
+    opts = {"path": path, "read only": SHARE_ACCESS[access], "guest ok": "no"}
+    if comment:
+        opts["comment"] = comment
+    if int(maxusers):
+        opts["max connections"] = maxusers
+    if name.endswith("$"):
+        opts["browseable"] = "no"      # a hidden share, as on Windows
+    shares.append((name, opts))
+    shares_write(shares)
+    log("shared %s as %s (%s)" % (path, name, access))
+    return [name]
+
+
+def op_share_remove(args):
+    name = share_name(args[0])
+    shares = shares_read()
+    kept = [(n, o) for n, o in shares if n.lower() != name.lower()]
+    if len(kept) == len(shares):
+        raise Refused("The share does not exist.")
+    shares_write(kept)
+    log("stopped sharing %s" % name)
+    return []
+
+
 OPS = {
     "ping": (op_ping, 0),
     "hostname": (op_hostname, 1),
@@ -1881,6 +2003,8 @@ OPS = {
     "deb-install": (op_deb_install, 3),
     "firewall": (op_firewall, None),        # 1 to 8 fields: a subcommand and its arguments
     "restore-point": (op_restore_point, None),
+    "share-add": (op_share_add, 5),
+    "share-remove": (op_share_remove, 1),
 }
 # how many of the last fields are passwords (never logged)
 SECRET = {"join-domain": 1, "user-add": 1, "user-password": 1, "user-password-own": 2}

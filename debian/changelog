@@ -1,3 +1,19 @@
+sg-shell (0.1.0-338) unstable; urgency=medium
+
+  * Folder sharing (net4, ledger i0978): sg-admind's share-add NAME PATH
+    COMMENT MAXUSERS read|change|full and share-remove NAME -- what File
+    Explorer's Advanced Sharing and NetShareAdd/NetShareDel ask for (wine-sg
+    10.0-1239's 9636) -- keep a Samba share per folder in
+    /etc/samba/stained-glass-shares.conf, which smb.conf includes, and reload
+    smbd: for this PC's accounts (no guests), Everyone read or read/write, a
+    user limit, a hidden name$. Names, folders and comments are checked (no %,
+    no Samba's reserved names); with smbd not running a share is refused
+    ("File and printer sharing is turned off.", NERR_ServerNotStarted) --
+    whether smbd runs is the machine's decision. Gate admind-check.sh (mutant
+    SG_MUTANT_SHARE_IGNORES_SERVER).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 08:00:00 -0800
+
 sg-shell (0.1.0-337) unstable; urgency=medium
 
   * Settings > Network & Internet > Proxy saves the connection's proxy

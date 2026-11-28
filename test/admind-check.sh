@@ -34,7 +34,7 @@ sudo:x:27:owner
 EOF
 
 # every stand-in records its name, arguments and stdin
-for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join apt-get runuser sg-location; do
+for tool in hostnamectl useradd userdel chpasswd gpasswd timedatectl systemctl sg-domain-join apt-get runuser sg-location smbcontrol; do
     cat > "$B/$tool" <<EOF
 #!/bin/sh
 in=\$(cat 2>/dev/null)
@@ -69,7 +69,7 @@ chmod +x "$B"/*
 
 export SG_ADMIN_TEST=1 SG_ADMIN_SPOOL="$S" SG_ADMIN_PATH="$B" SG_ADMIN_ZONEINFO="$T/zoneinfo" \
     SG_ADMIN_HOSTS="$T/hosts" SG_ADMIN_SYSTEM_UID="$(id -u)" SG_ADMIN_TZ_AUTO="$T/tz-auto" SG_ADMIN_DEFENDER_CONF="$T/defender.conf" SG_ADMIN_DEFENDER_STATE="$T/def" SG_ADMIN_DEFENDER_RUNTIME="$T/defrun" SG_ADMIN_DEFENDER_EXCLUSIONS="$T/def-excl" SG_ADMIN_LOGIND_DROPIN="$T/logind.d/60-sg-power.conf" \
-    SG_ADMIN_LOCATION_TOOL="$B/sg-location"
+    SG_ADMIN_LOCATION_TOOL="$B/sg-location" SG_ADMIN_SHARES_CONF="$T/samba/stained-glass-shares.conf" SG_ADMIN_SMB_CONF="$T/samba/smb.conf"
 # a fresh request id each time -- ask runs in $(...), so no shell variable
 next_id() { n=$(($(cat "$T/n" 2>/dev/null || echo 0) + 1)); echo "$n" > "$T/n"; printf '%016x' "$n"; }
 # ask VERB ARGS... -- file a request, run sg-admind, print the reply
@@ -1147,6 +1147,44 @@ private_tmp "$HERE/admin/sg-admind.service" && fail "sg-admind.service has a pri
     || pass "sg-admind shares /tmp, so its registration reaches the running shared wineserver"
 sed 's/^TimeoutStartSec=/PrivateTmp=yes\nTimeoutStartSec=/' "$HERE/admin/sg-admind.service" > "$T/mut-privtmp.service"
 private_tmp "$T/mut-privtmp.service" && pass "MUTANT PRIVATETMP (the old unit) is caught" || fail "PRIVATETMP mutant not detected"
+
+# ---- folder sharing (i0978): Advanced Sharing / NetShareAdd
+mkdir -p "$T/samba" "$T/share dir"
+printf '[global]\n   workgroup = WORKGROUP\n' > "$T/samba/smb.conf"
+: > "$CALLS"
+r=$(ask share-add Projects "$T/share dir" 'Team projects' 0 read)
+c="$T/samba/stained-glass-shares.conf"
+sect() { sed -n "/^\[$1\]/,/^\[/p" "$c"; }
+[ "$(first "$r")" = OK ] && sect Projects | grep -qxF "   path = $T/share dir" && sect Projects | grep -qx '   read only = yes' \
+    && sect Projects | grep -qx '   guest ok = no' && sect Projects | grep -qx '   comment = Team projects' \
+    && pass "share-add: a section of its own (path, comment, Everyone read: read only, no guests)" || fail "share-add: $r / $(cat "$c" 2>/dev/null)"
+grep -qxF "include = $c" "$T/samba/smb.conf" && grep -q '^\[global\]' "$T/samba/smb.conf" \
+    && pass "...smb.conf includes it, the rest kept" || fail "smb.conf: $(cat "$T/samba/smb.conf")"
+grep -q '^smbcontrol smbd reload-config' "$CALLS" && pass "...and smbd reloads its configuration" || fail "no reload: $(cat "$CALLS")"
+r=$(ask share-add 'Hidden$' "$T/share dir" '' 5 full)
+[ "$(first "$r")" = OK ] && sect 'Hidden\$' | grep -qx '   read only = no' && sect 'Hidden\$' | grep -qx '   max connections = 5' \
+    && sect 'Hidden\$' | grep -qx '   browseable = no' \
+    && pass "a hidden share (name\$), full control, five users at most" || fail "hidden: $r / $(cat "$c")"
+[ "$(grep -c '^include = ' "$T/samba/smb.conf")" = 1 ] && pass "...the include is added once" || fail "include twice"
+for bad in 'projects' 'a/b' 'homes' 'x%U' ''; do
+    r=$(ask share-add "$bad" "$T/share dir" '' 0 read)
+    case "$(first "$r")" in "FAILED "*) ;; *) fail "share-add accepted the name '$bad': $r";; esac
+done
+r=$(ask share-add Other "$T/nowhere" '' 0 read); case "$(first "$r")" in "FAILED The folder"*) ;; *) fail "shared a missing folder: $r";; esac
+r=$(ask share-add Other "$T/share dir" 'a%Ub' 0 read); case "$(first "$r")" in "FAILED "*) ;; *) fail "accepted % in a comment: $r";; esac
+r=$(ask share-add Other "$T/share dir" '' 0 write); case "$(first "$r")" in "FAILED "*) ;; *) fail "accepted permission write: $r";; esac
+[ "$(grep -c '^\[' "$c")" = 2 ] && pass "refuses a name in use (any case), bad names, a missing folder, % and bad permissions" || fail "shares now: $(grep '^\[' "$c")"
+# smbd not running: refused as Windows refuses with the Server service stopped (mutant
+# SG_MUTANT_SHARE_IGNORES_SERVER=1 sh test/admind-check.sh must fail here)
+printf '#!/bin/sh\nprintf "%%s %%s |\\n" systemctl "$*" >> "%s"\n[ "$1" = is-active ] && exit 3\nexit 0\n' "$CALLS" > "$B/systemctl"
+chmod +x "$B/systemctl"
+r=$(ask share-add Third "$T/share dir" '' 0 read)
+[ "$(first "$r")" = "FAILED File and printer sharing is turned off." ] && ! grep -q '^\[Third\]' "$c" \
+    && pass "with smbd not running a share is refused: \"File and printer sharing is turned off.\"" || fail "server off: $r"
+r=$(ask share-remove projects)
+[ "$(first "$r")" = OK ] && ! grep -q '^\[Projects\]' "$c" && grep -q '^\[Hidden\$\]' "$c" \
+    && pass "share-remove takes the share away (any case), keeps the others" || fail "share-remove: $r / $(cat "$c")"
+r=$(ask share-remove Projects); case "$(first "$r")" in "FAILED The share does not exist."*) pass "share-remove of no such share: \"The share does not exist.\"";; *) fail "remove twice: $r";; esac
 
 # not SYSTEM's: the file's owner is checked
 : > "$CALLS"
