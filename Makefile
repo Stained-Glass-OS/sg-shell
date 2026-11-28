@@ -610,6 +610,12 @@ test-linuxapps: build
 test-linuxapp-identity: build
 	@sh test/linuxapp-identity-check.sh
 
+# Start's and Settings' Uninstall on a Linux app (the package through the store's elevated apt remove,
+# a Flatpak, an AppImage); Settings > Apps & features lists Linux apps. test/linuxapp-uninstall-check.sh.
+.PHONY: test-linuxapp-uninstall
+test-linuxapp-uninstall: build
+	@sh test/linuxapp-uninstall-check.sh
+
 # AppImages a person downloaded: install, Start, launch, newer version, uninstall. test/appimage-check.sh.
 .PHONY: test-appimage test-appimage-mutants
 test-appimage: build

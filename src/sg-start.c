@@ -1555,15 +1555,52 @@ static void run_debugging(const struct entry *e)
     ShellExecuteW(NULL, NULL, tool, params, NULL, SW_SHOWNORMAL);
 }
 
+/* A Linux app's shortcut (sg-linuxapp64.exe --run "FILE.desktop"): its
+ * launcher and .desktop file. Its menu is a Linux app's, as Windows' Start
+ * gives a Store app its own: no Run as administrator or Run with debugging
+ * (a Wine debug log of the launcher), and Uninstall uninstalls the app
+ * (sg-linuxapp --uninstall) -- Programs and Features lists no Linux app. */
+static BOOL linux_app_of(const struct entry *e, WCHAR *exe, WCHAR *desktop)
+{
+    WCHAR args[1024] = L"", *q, *end;
+    IShellLinkW *link;
+    IPersistFile *file;
+
+    exe[0] = desktop[0] = 0;
+    if (e->kind != K_APP || !wcsstr(e->path, L"\\Linux apps\\")) return FALSE;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&link))) return FALSE;
+    if (SUCCEEDED(IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&file)))
+    {
+        if (SUCCEEDED(IPersistFile_Load(file, e->path, STGM_READ)))
+        {
+            IShellLinkW_GetPath(link, exe, MAX_PATH, NULL, SLGP_RAWPATH);
+            IShellLinkW_GetArguments(link, args, ARRAYSIZE(args));
+        }
+        IPersistFile_Release(file);
+    }
+    IShellLinkW_Release(link);
+    if (!wcsstr(exe, L"sg-linuxapp") || wcsncmp(args, L"--run \"", 7)) return FALSE;
+    q = args + 7;
+    if (!(end = wcschr(q, L'"')) || end - q >= MAX_PATH) return FALSE;
+    lstrcpynW(desktop, q, (int)(end - q) + 1);
+    return TRUE;
+}
+
 static void entry_menu(int id, POINT pt)
 {
     enum { C_PIN = 1, C_RUNAS, C_LOCATION, C_UNINSTALL, C_TASKBAR, C_DEBUG, C_STARTUP };
     struct entry *e = entry_of(id);
     HMENU m;
-    BOOL pinned, on_taskbar, at_signin = FALSE;
+    BOOL pinned, on_taskbar, at_signin = FALSE, linux_app;
+    WCHAR linux_exe[MAX_PATH], linux_desktop[MAX_PATH];
     int cmd;
 
     if (!e) return;
+#ifndef SG_MUTANT_START_LINUX_AS_WINDOWS
+    linux_app = linux_app_of(e, linux_exe, linux_desktop);
+#else
+    linux_app = FALSE;
+#endif
     pinned = pin_index(e->name) >= 0;
     on_taskbar = taskbar_pinned(e);
     m = menu_new();
@@ -1574,8 +1611,11 @@ static void entry_menu(int id, POINT pt)
         at_signin = starts_at_signin(e);
         menu_add(m, C_STARTUP, at_signin ? L"Don't start at si&gn-in" : L"Start at si&gn-in");
         menu_add(m, 0, NULL);
-        menu_add(m, C_RUNAS, L"Run as &administrator");
-        menu_add(m, C_DEBUG, L"Run with &debugging");
+        if (!linux_app)
+        {
+            menu_add(m, C_RUNAS, L"Run as &administrator");
+            menu_add(m, C_DEBUG, L"Run with &debugging");
+        }
         menu_add(m, C_LOCATION, L"Open file &location");
         menu_add(m, 0, NULL);
         menu_add(m, C_UNINSTALL, L"&Uninstall");
@@ -1593,7 +1633,19 @@ static void entry_menu(int id, POINT pt)
     case C_RUNAS:     run_entry(e, e->kind == K_APP ? L"runas" : NULL); break;
     case C_DEBUG:     run_debugging(e); break;
     case C_LOCATION:  open_location(e); break;
-    case C_UNINSTALL: show_panel(FALSE); ShellExecuteW(NULL, NULL, L"control.exe", L"appwiz.cpl", NULL, SW_SHOWNORMAL); break;
+    case C_UNINSTALL:
+        show_panel(FALSE);
+        if (linux_app)
+        {
+            WCHAR params[MAX_PATH + 32];
+            _snwprintf(params, ARRAYSIZE(params), L"--uninstall \"%ls\"", linux_desktop);
+            params[ARRAYSIZE(params) - 1] = 0;
+            _snwprintf(g_launched, ARRAYSIZE(g_launched), L"uninstall %ls", e->name);
+            dump();
+            ShellExecuteW(NULL, NULL, linux_exe, params, NULL, SW_SHOWNORMAL);
+        }
+        else ShellExecuteW(NULL, NULL, L"control.exe", L"appwiz.cpl", NULL, SW_SHOWNORMAL);
+        break;
     default:          dump(); break;
     }
 }

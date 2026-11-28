@@ -18,6 +18,12 @@
  *                                          actions ([Desktop Action ACTION]:
  *                                          Firefox's New Private Window) --
  *                                          its jump list's tasks
+ *   sg-linuxapp64.exe --uninstall FILE.desktop [/quiet]   Start's Uninstall:
+ *                                          the package that installed the app
+ *                                          (SG Store's elevated apt remove,
+ *                                          sg-admind refusing what the system
+ *                                          needs), a Flatpak (flatpak
+ *                                          uninstall), an AppImage (below)
  *   sg-linuxapp64.exe --uninstall-appimage FILE.desktop [/quiet]
  *                                          an AppImage's Uninstall entry
  *                                          (sg-appimage installed it)
@@ -1772,6 +1778,135 @@ static int uninstall_appimage(const WCHAR *desktop, BOOL quiet)
     return rc;
 }
 
+/* ---- Start's Uninstall -------------------------------------------------- */
+
+/* the package that installed a file (dpkg's file lists), or FALSE */
+static BOOL owning_package(const char *unix_path, WCHAR *pkg, int cch)
+{
+    WCHAR pattern[MAX_PATH];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+    size_t n = strlen(unix_path);
+    BOOL found = FALSE;
+    char *dir = getenv("SG_DPKG_INFO") ? getenv("SG_DPKG_INFO") : "/var/lib/dpkg/info";
+
+    if (!dos_path(dir, pattern, MAX_PATH - 8)) return FALSE;
+    lstrcatW(pattern, L"\\*.list");
+    if ((h = FindFirstFileW(pattern, &fd)) == INVALID_HANDLE_VALUE) return FALSE;
+    do {
+        WCHAR file[MAX_PATH];
+        char *text, *p;
+        if (!dos_path(dir, file, MAX_PATH - 2 - lstrlenW(fd.cFileName))) continue;
+        lstrcatW(file, L"\\");
+        lstrcatW(file, fd.cFileName);
+        if (!(text = read_file(file, 64 << 20, NULL))) continue;
+        for (p = text; (p = strstr(p, unix_path)); p += n)
+            if ((p == text || p[-1] == '\n') && (p[n] == '\n' || !p[n])) { found = TRUE; break; }
+        free(text);
+        if (found) {
+            WCHAR *dot;
+            lstrcpynW(pkg, fd.cFileName, cch);
+            if ((dot = wcsrchr(pkg, '.'))) *dot = 0;   /* NAME.list, NAME:ARCH.list */
+        }
+    } while (!found && FindNextFileW(h, &fd));
+    FindClose(h);
+    return found;
+}
+
+/* --uninstall FILE.desktop [/quiet]: Start's Uninstall on a Linux app, as
+ * Windows' Start uninstalls a Store app -- asked first ("will be
+ * uninstalled"), then done: an AppImage by sg-appimage, a Flatpak by
+ * flatpak uninstall (its own consent for the machine's), anything else by
+ * removing the package that installed its .desktop file through SG Store's
+ * elevated apt remove (the administrator's consent; sg-admind refuses a
+ * removal that would take what the system needs). Before, Start opened
+ * Programs and Features, which lists no Linux app. Start is brought up to
+ * date after. */
+static int uninstall_app(const WCHAR *desktop, BOOL quiet)
+{
+    LONG (WINAPI *spawnvp)(char * const argv[], int wait);
+    char *udesk = NULL, *text = NULL, v[512];
+    WCHAR name[128] = L"", msg[700], pkg[160] = L"";
+    const char *slash;
+    int rc = 1;
+
+    if (!p_unix_name || !(udesk = p_unix_name(desktop))) return 1;
+    if ((text = read_file(desktop, 1 << 20, NULL)) && entry_value(text, "Name", v, sizeof(v)))
+        MultiByteToWideChar(CP_UTF8, 0, v, -1, name, ARRAYSIZE(name));
+    name[ARRAYSIZE(name) - 1] = 0;
+    if (text && entry_value(text, "X-SG-AppImage", v, sizeof(v)) && v[0] == '/') {
+        free(text);
+        HeapFree(GetProcessHeap(), 0, udesk);
+        return uninstall_appimage(desktop, quiet);
+    }
+    free(text);
+    spawnvp = (void *)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__wine_unix_spawnvp");
+    if (strstr(udesk, "/flatpak/exports/share/applications/")) {
+        /* a Flatpak: its desktop id is its application id */
+        char id[256], flatpak[] = "flatpak", un[] = "uninstall", y[] = "-y", ni[] = "--noninteractive",
+             user[] = "--user", system[] = "--system", *argv[7];
+        /* the person's own installation (~/.local/share/flatpak), or the machine's */
+        BOOL mine = strstr(udesk, "/.local/share/flatpak/exports/") != NULL;
+        slash = strrchr(udesk, '/');
+        lstrcpynA(id, slash + 1, sizeof(id));
+        if (strlen(id) > 8 && !strcmp(id + strlen(id) - 8, ".desktop")) id[strlen(id) - 8] = 0;
+        if (!quiet) {
+            _snwprintf(msg, ARRAYSIZE(msg), L"%ls will be uninstalled.\n\nThis app and its related info will be removed "
+                       L"from this computer.", name[0] ? name : L"This app");
+            msg[ARRAYSIZE(msg) - 1] = 0;
+            if (MessageBoxW(NULL, msg, L"Uninstall", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) goto done;
+        }
+        argv[0] = flatpak; argv[1] = un; argv[2] = mine ? user : system; argv[3] = y; argv[4] = ni; argv[5] = id; argv[6] = NULL;
+        rc = spawnvp ? (spawnvp(argv, TRUE) ? 1 : 0) : 1;
+    } else if (owning_package(udesk, pkg, ARRAYSIZE(pkg))) {
+        WCHAR store[MAX_PATH], other[MAX_PATH], args[600], *p;
+        SHELLEXECUTEINFOW sei;
+        DWORD code = 1;
+        memset(&sei, 0, sizeof(sei));
+        sei.cbSize = sizeof(sei);
+        if (!quiet) {
+            _snwprintf(msg, ARRAYSIZE(msg), L"%ls will be uninstalled.\n\nThis app and its related info will be removed "
+                       L"from this computer (the package %ls). An administrator may be asked to allow it.",
+                       name[0] ? name : L"This app", pkg);
+            msg[ARRAYSIZE(msg) - 1] = 0;
+            if (MessageBoxW(NULL, msg, L"Uninstall", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) goto done;
+        }
+        GetModuleFileNameW(NULL, store, MAX_PATH);
+        if ((p = wcsrchr(store, '\\'))) lstrcpyW(p + 1, L"sg-store64.exe");
+        /* the gate's stand-in for the store */
+        if (GetEnvironmentVariableW(L"SG_LINUXAPP_STORE", other, MAX_PATH) && other[0]) lstrcpynW(store, other, MAX_PATH);
+        for (p = name; *p; p++) if (*p == '"') *p = '\'';
+        _snwprintf(args, ARRAYSIZE(args), L"--elevated-apt-remove \"%ls\" \"%ls\"", pkg, name[0] ? name : pkg);
+        args[ARRAYSIZE(args) - 1] = 0;
+        sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS;
+        /* the gate's stand-in runs as it is (SG_STORE_DIRECT, as the store's own gates) */
+        sei.lpVerb = GetEnvironmentVariableW(L"SG_STORE_DIRECT", other, MAX_PATH) && other[0] == '1' ? NULL : L"runas";
+        sei.lpFile = store;
+        sei.lpParameters = args;
+        sei.nShow = SW_SHOWNORMAL;
+        if (ShellExecuteExW(&sei)) {
+            if (sei.hProcess) {
+                WaitForSingleObject(sei.hProcess, INFINITE);
+                GetExitCodeProcess(sei.hProcess, &code);
+                CloseHandle(sei.hProcess);
+            } else code = 0;
+        }
+        rc = code ? 1 : 0;   /* the store's window said why it could not */
+    } else {
+        /* an entry no package owns (one the person made, or left behind) */
+        if (!quiet) {
+            _snwprintf(msg, ARRAYSIZE(msg), L"%ls was not installed by a package Stained Glass OS knows, so it cannot be "
+                       L"uninstalled from here.", name[0] ? name : L"This app");
+            msg[ARRAYSIZE(msg) - 1] = 0;
+            MessageBoxW(NULL, msg, L"Uninstall", MB_OK | MB_ICONINFORMATION);
+        }
+    }
+    sync_apps();
+done:
+    HeapFree(GetProcessHeap(), 0, udesk);
+    return rc;
+}
+
 /* ---- keeping Start up to date ------------------------------------------ */
 
 static int watch_apps(void)
@@ -1834,6 +1969,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show)
     else if (argv && argc >= 4 && !lstrcmpiW(argv[1], L"--action")) ret = run_action(argv[2], argv[3]);
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--sync")) ret = sync_apps();
     else if (argv && argc >= 2 && !lstrcmpiW(argv[1], L"--watch")) ret = watch_apps();
+    else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--uninstall"))
+        ret = uninstall_app(argv[2], argc >= 4 && (!lstrcmpiW(argv[3], L"/quiet") || !lstrcmpiW(argv[3], L"--quiet")));
     else if (argv && argc >= 3 && !lstrcmpiW(argv[1], L"--uninstall-appimage"))
         ret = uninstall_appimage(argv[2], argc >= 4 && (!lstrcmpiW(argv[3], L"/quiet") || !lstrcmpiW(argv[3], L"--quiet")));
     CoUninitialize();

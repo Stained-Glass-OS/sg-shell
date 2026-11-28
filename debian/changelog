@@ -1,3 +1,20 @@
+sg-shell (0.1.0-324) unstable; urgency=medium
+
+  * Uninstalling a Linux app as Windows uninstalls a Store app (linux1,
+    ledger i0813): Start's Uninstall on a Linux app opened Programs and
+    Features, which lists no Linux app. Now sg-linuxapp --uninstall asks
+    ("will be uninstalled") and removes it -- the package that installed
+    its .desktop file (dpkg's file lists) through SG Store's elevated apt
+    remove (the administrator's consent; sg-admind refuses what the system
+    needs), a Flatpak by flatpak uninstall (--user for the person's own),
+    an AppImage as before; an entry no package owns is left. Start's menu
+    for a Linux app has no Run as administrator or Run with debugging.
+    Settings > Apps & features lists the Linux apps ("Linux app"), each
+    with Uninstall. Gate test/linuxapp-uninstall-check.sh (mutants
+    SG_MUTANT_START_LINUX_AS_WINDOWS, SG_MUTANT_NO_LINUX_APPS_LISTED).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 21:25:00 -0800
+
 sg-shell (0.1.0-323) unstable; urgency=medium
 
   * The Volume Mixer: "Open Volume mixer" on the volume icon's menu (as

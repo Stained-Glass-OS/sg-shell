@@ -130,8 +130,57 @@ int program_count(void)
     return g_nprogs;
 }
 
+/* Settings > Apps lists the Linux apps too, as Windows' lists its Store
+ * apps beside the programs (Programs and Features lists neither): each app
+ * sg-linuxapp registered (HKCU\Software\Classes\AppUserModelId\
+ * SG.LinuxApp.<desktop id>: DisplayName, IconUri, RelaunchCommand -- its
+ * launcher's --run), uninstalled by its launcher's --uninstall (the package
+ * through the store's elevated apt remove, a Flatpak, an AppImage), the
+ * page having asked already (/quiet). */
+static void read_linux_apps(void)
+{
+    static const WCHAR prefix[] = L"SG.LinuxApp.";
+    HKEY root, k;
+    WCHAR sub[160];
+    DWORD i, n;
+
+#ifdef SG_MUTANT_NO_LINUX_APPS_LISTED
+    return;
+#endif
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\AppUserModelId", 0, KEY_READ, &root) != ERROR_SUCCESS) return;
+    for (i = 0; n = ARRAYSIZE(sub), RegEnumKeyExW(root, i, sub, &n, NULL, NULL, NULL, NULL) == ERROR_SUCCESS; i++) {
+        struct program p, *grown;
+        WCHAR relaunch[1024], *run;
+        if (_wcsnicmp(sub, prefix, ARRAYSIZE(prefix) - 1) || RegOpenKeyExW(root, sub, 0, KEY_READ, &k) != ERROR_SUCCESS) continue;
+        memset(&p, 0, sizeof(p));
+        qsz(k, L"DisplayName", p.name, ARRAYSIZE(p.name));
+        qsz(k, L"IconUri", p.icon, ARRAYSIZE(p.icon));
+        qsz(k, L"RelaunchCommand", relaunch, ARRAYSIZE(relaunch));
+        RegCloseKey(k);
+        /* "LAUNCHER" --run "FILE.desktop" -> "LAUNCHER" --uninstall "FILE.desktop" /quiet */
+        if (!p.name[0] || !(run = wcsstr(relaunch, L" --run \""))) continue;
+        *run = 0;
+        _snwprintf(p.uninstall, ARRAYSIZE(p.uninstall), L"%ls --uninstall %ls /quiet", relaunch, run + 7);
+        p.uninstall[ARRAYSIZE(p.uninstall) - 1] = 0;
+        lstrcpynW(p.publisher, L"Linux app", ARRAYSIZE(p.publisher));
+        lstrcpynW(p.key, sub, ARRAYSIZE(p.key));
+        p.no_modify = p.no_repair = TRUE;
+        p.scope = L"user";
+        if (!(grown = realloc(g_progs, (g_nprogs + 1) * sizeof(*grown)))) break;
+        g_progs = grown;
+        g_progs[g_nprogs++] = p;
+    }
+    RegCloseKey(root);
+}
+
 /* for Settings > Apps */
-int prog_load(void) { load_programs(); return g_nprogs; }
+int prog_load(void)
+{
+    load_programs();
+    read_linux_apps();
+    qsort(g_progs, g_nprogs, sizeof(*g_progs), by_name);
+    return g_nprogs;
+}
 const struct program *prog_get(int i) { return i >= 0 && i < g_nprogs ? &g_progs[i] : NULL; }
 
 /* the command Windows would run for this action */
