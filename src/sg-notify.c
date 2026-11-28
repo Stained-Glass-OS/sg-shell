@@ -32,6 +32,9 @@
  *   SG_NOTIFY_DUMP=FILE    what the panel shows, written after every paint
  *                          (the gate)
  *
+ * The panel ends in Windows 10's quick action tiles (Network, All settings,
+ * Night light, Bluetooth, Project, Screen snip; see qa_paint).
+ *
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -40,6 +43,8 @@
 #include <shellapi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <math.h>
 #include "sg-mode.h"
 #include "sg-smooth.h"
 #include "sg-round.h"
@@ -325,6 +330,272 @@ static void activate_entry(const struct entry *e)
 
 /* --- the panel --------------------------------------------------------------------- */
 
+/* ---- quick actions ------------------------------------------------------
+ * Windows 10's action centre ends in quick action tiles: Network, All
+ * settings, Night light, Bluetooth, Project, Screen snip (each where this
+ * computer has it: Bluetooth with an adapter, Night light where the
+ * compositor can tint). A toggle's tile is in the accent while on. The state
+ * and the toggles go through sg-settingsctl (nightlight on|off, bluetooth
+ * power on|off), read on a thread when the panel opens; the others open what
+ * Windows' open: the network flyout, Settings, the Project pane, screen
+ * snipping. */
+enum { QA_NETWORK, QA_SETTINGS, QA_NIGHT, QA_BLUETOOTH, QA_PROJECT, QA_SNIP, QA_COUNT };
+static const WCHAR *const qa_names[QA_COUNT] = { L"Network", L"All settings", L"Night light", L"Bluetooth",
+                                                 L"Project", L"Screen snip" };
+static RECT g_qa[QA_COUNT];
+static int g_qa_hot = -1, g_qa_top;
+static volatile LONG g_night = -1, g_bt = -1;   /* -1: not on this computer (or not known yet), 0 off, 1 on */
+#define WM_QA_STATE (WM_APP + 4)
+
+/* sg-settingsctl ARGS: its answer (UTF-8, caller frees), as Settings' ctl_run */
+static char *qa_ctl(const WCHAR *args)
+{
+    static LONG seq;
+    char *(CDECL *to_unix)(const WCHAR *) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+    WCHAR tool[MAX_PATH] = L"/usr/bin/sg-settingsctl", dir[MAX_PATH], dos[MAX_PATH], cmd[1024], *p;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    char *unix_out, *text = NULL;
+    DWORD waited = 0, size, got = 0;
+    HANDLE h;
+
+    GetEnvironmentVariableW(L"SG_SETTINGSCTL", tool, MAX_PATH);
+    if (!to_unix || !GetTempPathW(MAX_PATH, dir)) return NULL;
+    _snwprintf(dos, MAX_PATH, L"%lssg-notify-%lu-%ld.txt", dir, GetCurrentProcessId(), InterlockedIncrement(&seq));
+    dos[MAX_PATH - 1] = 0;
+    CloseHandle(CreateFileW(dos, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL));
+    if (!(unix_out = to_unix(dos))) return NULL;
+    DeleteFileW(dos);
+    _snwprintf(cmd, ARRAYSIZE(cmd), L"\\\\?\\unix%ls %ls --out %S", tool, args, unix_out);
+    cmd[ARRAYSIZE(cmd) - 1] = 0;
+    HeapFree(GetProcessHeap(), 0, unix_out);
+    for (p = cmd + 8; *p && *p != L' '; p++) if (*p == L'/') *p = L'\\';
+    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return NULL;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    while (GetFileAttributesW(dos) == INVALID_FILE_ATTRIBUTES && waited < 8000) { Sleep(40); waited += 40; }
+    h = CreateFileW(dos, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return NULL;
+    size = GetFileSize(h, NULL);
+    if (size < 65536 && (text = malloc(size + 1))) { ReadFile(h, text, size, &got, NULL); text[got] = 0; }
+    CloseHandle(h);
+    DeleteFileW(dos);
+    return text;
+}
+
+static DWORD WINAPI qa_read_state(void *arg)
+{
+    char *a;
+    LONG night = -1, bt = -1;
+    (void)arg;
+    if ((a = qa_ctl(L"nightlight")))
+    {
+        /* NIGHTLIGHT on|off <TAB> temp <TAB> available ... */
+        char *l = strstr(a, "NIGHTLIGHT ");
+        if (l && strstr(l, "\tyes")) night = !strncmp(l + 11, "on", 2);
+        free(a);
+    }
+    if ((a = qa_ctl(L"bluetooth")))
+    {
+        if (strstr(a, "BLUETOOTH yes")) bt = strstr(a, "POWERED yes") != NULL;
+        free(a);
+    }
+    InterlockedExchange(&g_night, night);
+    InterlockedExchange(&g_bt, bt);
+    PostMessageW(g_fly, WM_QA_STATE, 0, 0);
+    return 0;
+}
+
+static BOOL qa_shown(int i)
+{
+    if (i == QA_NIGHT) return g_night >= 0;
+    if (i == QA_BLUETOOTH) return g_bt >= 0;
+    return TRUE;
+}
+
+static int qa_on(int i)
+{
+    if (i == QA_NIGHT) return g_night == 1;
+    if (i == QA_BLUETOOTH) return g_bt == 1;
+    return 0;
+}
+
+/* each tile's picture: plain strokes, as the action centre's glyphs */
+static void qa_glyph(HDC dc, int i, int x, int y, int sz, COLORREF col, COLORREF back)
+{
+    HPEN pen = CreatePen(PS_SOLID, U(8) >= 12 ? 2 : 1, col), op = SelectObject(dc, pen);
+    HBRUSH ob = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    int k, m = sz / 2;
+
+    switch (i)
+    {
+    case QA_NETWORK:   /* a screen on a stand (a wired network) */
+        sg_line(dc, x + 1, y + 2, x + sz - 1, y + 2);
+        sg_line(dc, x + sz - 1, y + 2, x + sz - 1, y + sz * 2 / 3);
+        sg_line(dc, x + sz - 1, y + sz * 2 / 3, x + 1, y + sz * 2 / 3);
+        sg_line(dc, x + 1, y + sz * 2 / 3, x + 1, y + 2);
+        sg_line(dc, x + m, y + sz * 2 / 3, x + m, y + sz - 2);
+        sg_line(dc, x + m - sz / 4, y + sz - 2, x + m + sz / 4, y + sz - 2);
+        break;
+    case QA_SETTINGS:  /* a gear: a ring and its teeth */
+        sg_ellipse(dc, x + sz / 4, y + sz / 4, x + sz - sz / 4, y + sz - sz / 4);
+        for (k = 0; k < 8; k++)
+        {
+            double a = k * 3.14159265 / 4;
+            int x0 = x + m + (int)(cos(a) * sz * 0.30), y0 = y + m + (int)(sin(a) * sz * 0.30);
+            int x1 = x + m + (int)(cos(a) * sz * 0.46), y1 = y + m + (int)(sin(a) * sz * 0.46);
+            sg_line(dc, x0, y0, x1, y1);
+        }
+        break;
+    case QA_NIGHT:     /* a crescent moon: the moon, less a disc of the tile's colour */
+    {
+        HBRUSH fg = CreateSolidBrush(col), bk = CreateSolidBrush(back);
+        HPEN none = GetStockObject(NULL_PEN);
+        SelectObject(dc, none);
+        SelectObject(dc, fg);
+        sg_ellipse(dc, x + 1, y + 1, x + sz - 1, y + sz - 1);
+        SelectObject(dc, bk);
+        sg_ellipse(dc, x + sz * 2 / 5, y - sz / 8, x + sz + sz / 4, y + sz * 3 / 4);
+        SelectObject(dc, pen);
+        SelectObject(dc, GetStockObject(NULL_BRUSH));
+        DeleteObject(fg);
+        DeleteObject(bk);
+        break;
+    }
+    case QA_BLUETOOTH: /* the rune */
+        sg_line(dc, x + m, y + 1, x + m, y + sz - 1);
+        sg_line(dc, x + m, y + 1, x + sz * 3 / 4, y + sz / 4);
+        sg_line(dc, x + sz * 3 / 4, y + sz / 4, x + sz / 4, y + sz * 3 / 4);
+        sg_line(dc, x + m, y + sz - 1, x + sz * 3 / 4, y + sz * 3 / 4);
+        sg_line(dc, x + sz * 3 / 4, y + sz * 3 / 4, x + sz / 4, y + sz / 4);
+        break;
+    case QA_PROJECT:   /* two screens */
+        Rectangle(dc, x, y + 2, x + sz * 3 / 5, y + sz * 3 / 5);
+        Rectangle(dc, x + sz * 2 / 5, y + sz * 2 / 5, x + sz, y + sz - 2);
+        break;
+    default:           /* a snip: a dashed frame */
+        for (k = 0; k < sz; k += 4)
+        {
+            sg_line(dc, x + k, y + 1, x + min(k + 2, sz), y + 1);
+            sg_line(dc, x + k, y + sz - 1, x + min(k + 2, sz), y + sz - 1);
+            sg_line(dc, x + 1, y + k, x + 1, y + min(k + 2, sz));
+            sg_line(dc, x + sz - 1, y + k, x + sz - 1, y + min(k + 2, sz));
+        }
+        break;
+    }
+    SelectObject(dc, ob);
+    SelectObject(dc, op);
+    DeleteObject(pen);
+}
+
+/* the tiles, four to a row, at the foot of the panel; g_qa_top is where they start */
+static void qa_layout(int w, int h)
+{
+    int cols = 4, gap = U(2), pad = U(12), tw = (w - 2 * pad - (cols - 1) * gap) / cols, th = U(58), n = 0, i, rows;
+
+    for (i = 0; i < QA_COUNT; i++) if (qa_shown(i)) n++;
+    rows = (n + cols - 1) / cols;
+    g_qa_top = h - pad - rows * th - (rows - 1) * gap - U(8);
+    n = 0;
+    for (i = 0; i < QA_COUNT; i++)
+    {
+        int r, c;
+        if (!qa_shown(i)) { SetRectEmpty(&g_qa[i]); continue; }
+        r = n / cols; c = n % cols; n++;
+        SetRect(&g_qa[i], pad + c * (tw + gap), g_qa_top + U(8) + r * (th + gap),
+                pad + c * (tw + gap) + tw, g_qa_top + U(8) + r * (th + gap) + th);
+    }
+}
+
+static void qa_paint(HDC dc, int w, int h, COLORREF bg, COLORREF card, COLORREF card_hot, COLORREF text)
+{
+    COLORREF accent = sg_accent();
+    RECT r;
+    HBRUSH b;
+    int i;
+
+    qa_layout(w, h);
+    SetRect(&r, 0, g_qa_top, w, h);
+    b = CreateSolidBrush(bg);
+    FillRect(dc, &r, b);
+    DeleteObject(b);
+    SelectObject(dc, g_font_small);
+    for (i = 0; i < QA_COUNT; i++)
+    {
+        RECT t;
+        int on = qa_on(i);
+        if (IsRectEmpty(&g_qa[i])) continue;
+        b = CreateSolidBrush(on ? accent : i == g_qa_hot ? card_hot : card);
+        FillRect(dc, &g_qa[i], b);
+        DeleteObject(b);
+        qa_glyph(dc, i, g_qa[i].left + U(10), g_qa[i].top + U(8), U(16), on ? RGB(0xFF, 0xFF, 0xFF) : text,
+                 on ? accent : i == g_qa_hot ? card_hot : card);
+        SetTextColor(dc, on ? RGB(0xFF, 0xFF, 0xFF) : text);
+        SetRect(&t, g_qa[i].left + U(10), g_qa[i].bottom - U(24), g_qa[i].right - U(4), g_qa[i].bottom - U(4));
+        DrawTextW(dc, qa_names[i], -1, &t, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
+    }
+}
+
+static int qa_at(POINT pt)
+{
+    int i;
+    for (i = 0; i < QA_COUNT; i++) if (!IsRectEmpty(&g_qa[i]) && PtInRect(&g_qa[i], pt)) return i;
+    return -1;
+}
+
+static void show_panel(BOOL show);
+
+static DWORD WINAPI qa_toggle_thread(void *arg)
+{
+    int i = (int)(INT_PTR)arg & 0xff, on = ((int)(INT_PTR)arg >> 8) & 1;
+#ifdef SG_MUTANT_QA_NO_TOGGLE
+    return 0;
+#endif
+    free(qa_ctl(i == QA_NIGHT ? (on ? L"nightlight on" : L"nightlight off")
+                              : (on ? L"bluetooth power on" : L"bluetooth power off")));
+    qa_read_state(NULL);
+    return 0;
+}
+
+static void qa_click(int i)
+{
+    HWND net;
+    switch (i)
+    {
+    case QA_NIGHT:
+    case QA_BLUETOOTH:
+    {
+        /* turned at once on the tile, as Windows' (the answer follows) */
+        int on = !qa_on(i);
+        InterlockedExchange(i == QA_NIGHT ? &g_night : &g_bt, on);
+        InvalidateRect(g_fly, NULL, FALSE);
+        CloseHandle(CreateThread(NULL, 0, qa_toggle_thread, (void *)(INT_PTR)(i | (on << 8)), 0, NULL));
+        return;
+    }
+    case QA_NETWORK:
+        show_panel(FALSE);
+        AllowSetForegroundWindow(ASFW_ANY);
+        if ((net = FindWindowW(L"SgNetworkTray", NULL))) PostMessageW(net, WM_APP + 1, 1, WM_LBUTTONUP);
+        else ShellExecuteW(NULL, NULL, L"ms-settings:network-status", NULL, NULL, SW_SHOWNORMAL);
+        return;
+    case QA_SETTINGS:
+        show_panel(FALSE);
+        AllowSetForegroundWindow(ASFW_ANY);
+        ShellExecuteW(NULL, NULL, L"ms-settings:", NULL, NULL, SW_SHOWNORMAL);
+        return;
+    case QA_PROJECT:
+        show_panel(FALSE);
+        AllowSetForegroundWindow(ASFW_ANY);
+        ShellExecuteW(NULL, NULL, L"ms-settings-displays-topology:projection", NULL, NULL, SW_SHOWNORMAL);
+        return;
+    case QA_SNIP:
+        show_panel(FALSE);
+        AllowSetForegroundWindow(ASFW_ANY);
+        ShellExecuteW(NULL, NULL, L"snippingtool.exe", L"/clip", NULL, SW_SHOWNORMAL);
+        return;
+    }
+}
+
 static void dump(void)
 {
     FILE *f;
@@ -337,6 +608,12 @@ static void dump(void)
             wr.right, wr.bottom, g_count, unread());
     fprintf(f, "clear=%ld,%ld,%ld,%ld\n", g_clear_rect.left, g_clear_rect.top, g_clear_rect.right, g_clear_rect.bottom);
     if (g_activated != (DWORD)-1) fprintf(f, "activated=%lu hr=%08lx\n", (unsigned long)g_activated, (unsigned long)g_activated_hr);
+    for (i = 0; i < QA_COUNT; i++)
+        if (!IsRectEmpty(&g_qa[i]))
+        {
+            WideCharToMultiByte(CP_UTF8, 0, qa_names[i], -1, a, sizeof(a), NULL, NULL);
+            fprintf(f, "tile %ld,%ld,%ld,%ld on=%d %s\n", g_qa[i].left, g_qa[i].top, g_qa[i].right, g_qa[i].bottom, qa_on(i), a);
+        }
     for (i = 0; i < g_count; i++)
     {
         struct entry *e = &g_entries[i];
@@ -459,6 +736,9 @@ static void fly_paint(HWND hwnd)
         }
         y = e->rect.bottom + U(8);
     }
+#ifndef SG_MUTANT_QA_NONE
+    qa_paint(dc, w, c.bottom, bg, card, card_hot, text);
+#endif
     BitBlt(wdc, 0, 0, c.right, c.bottom, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbuf);
     DeleteObject(buf);
@@ -481,7 +761,9 @@ static void show_panel(BOOL show)
     if (g_s8 > 24) g_s8 = 24;
     load_history();
     g_hot = -1;
+    g_qa_hot = -1;
     g_scroll = 0;
+    CloseHandle(CreateThread(NULL, 0, qa_read_state, NULL, 0, NULL));
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     /* the right of the screen, the work area's height, as Windows 10's */
     SetWindowPos(g_fly, HWND_TOPMOST, work.right - U(396), work.top, U(396), work.bottom - work.top, SWP_NOACTIVATE);
@@ -529,6 +811,7 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
 #endif
     case WM_ERASEBKGND: return 1;
+    case WM_QA_STATE: InvalidateRect(hwnd, NULL, FALSE); return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE)
         {
@@ -553,25 +836,32 @@ static LRESULT CALLBACK fly_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
         POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
         BOOL close, clear = PtInRect(&g_clear_rect, pt);
-        int hot = entry_at(pt, &close);
+        int qa = qa_at(pt), hot = qa >= 0 || pt.y >= g_qa_top ? -1 : entry_at(pt, &close);
         TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
         TrackMouseEvent(&tme);
-        if (hot != g_hot || close != g_hot_close || clear != g_clear_hot)
+        if (hot < 0) close = FALSE;
+        if (hot != g_hot || close != g_hot_close || clear != g_clear_hot || qa != g_qa_hot)
         {
-            g_hot = hot; g_hot_close = close; g_clear_hot = clear;
+            g_hot = hot; g_hot_close = close; g_clear_hot = clear; g_qa_hot = qa;
             InvalidateRect(hwnd, NULL, FALSE);
         }
         SetCursor(LoadCursorW(NULL, (const WCHAR *)(clear || (hot >= 0 && !close) ? IDC_HAND : IDC_ARROW)));
         return 0;
     }
     case WM_MOUSELEAVE:
-        if (g_hot != -1 || g_clear_hot) { g_hot = -1; g_clear_hot = FALSE; InvalidateRect(hwnd, NULL, FALSE); }
+        if (g_hot != -1 || g_clear_hot || g_qa_hot != -1) { g_hot = -1; g_qa_hot = -1; g_clear_hot = FALSE; InvalidateRect(hwnd, NULL, FALSE); }
         return 0;
     case WM_LBUTTONUP:
     {
         POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
         BOOL close;
         int i;
+        if ((i = qa_at(pt)) >= 0)
+        {
+            qa_click(i);
+            return 0;
+        }
+        if (pt.y >= g_qa_top) return 0;
         if (PtInRect(&g_clear_rect, pt) && g_count)
         {
 #ifndef SG_MUTANT_NOTIFY_NO_CLEAR

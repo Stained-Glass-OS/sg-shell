@@ -10,6 +10,8 @@
 #   - a notification's x dismisses it (gone from the history too);
 #   - Clear all dismisses the rest;
 #   - /toggle again closes it;
+#   - Windows 10's quick actions at its foot; Night light's tile turns it on
+#     (a stand-in sg-settingsctl);
 #   - clicking one hands it to its program through wine-sg 0819's
 #     SgActivateNotification (here a program gone, so it is started), the
 #     panel closes and it leaves the history;
@@ -17,7 +19,7 @@
 #     Runtimes\Missing): it asks, once a session, and Yes opens SG Store on
 #     its page (sg-store --page); a DLL the store does not offer: no question.
 #
-#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutants SG_MUTANT_NOTIFY_NO_CLEAR, SG_MUTANT_NOTIFY_NO_ACTIVATE; SG_MUTANT_NO_RUNTIME_ASK, built here)
+#   sh test/notify-check.sh        SG_WINE_DIR=<wine-sg>   (mutants SG_MUTANT_NOTIFY_NO_CLEAR, SG_MUTANT_NOTIFY_NO_ACTIVATE, SG_MUTANT_QA_NONE, SG_MUTANT_QA_NO_TOGGLE; SG_MUTANT_NO_RUNTIME_ASK, built here)
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 WINE_DIR="${SG_WINE_DIR:-/opt/wine-sg}"
@@ -55,6 +57,26 @@ add 3 "Stained Glass OS" "Restart to finish updating" "NVIDIA's driver was insta
 "$WINE" reg add 'HKCU\Software\Stained Glass\Notifications\History' /v Next /t REG_DWORD /d 4 /f >/dev/null 2>&1
 "$WINESERVER" -w
 mkdir -p "$T/run"; export XDG_RUNTIME_DIR="$T/run" SG_LOCK_CONTROL=/nonexistent
+# the native half for the quick actions: night light off (and available), a Bluetooth adapter, off
+CTL="$T/sg-settingsctl"; CTLLOG="$T/ctl.log"; : > "$CTLLOG"; echo off > "$T/night"
+cat > "$CTL" <<EOS
+#!/bin/sh
+out=""; args=""
+while [ \$# -gt 0 ]; do
+    case "\$1" in --out) out="\$2"; shift 2 ;; *) args="\$args \$1"; shift ;; esac
+done
+echo "\${args# }" >> "$CTLLOG"
+case "\${args# }" in
+nightlight) printf 'NIGHTLIGHT %s\t4000\tyes\tno\nOK\n' "\$(cat "$T/night")" ;;
+"nightlight on") echo on > "$T/night"; printf 'NIGHTLIGHT on\t4000\tyes\tyes\nOK\n' ;;
+"nightlight off") echo off > "$T/night"; printf 'NIGHTLIGHT off\t4000\tyes\tno\nOK\n' ;;
+bluetooth) printf 'BLUETOOTH yes\nPOWERED no\nOK\n' ;;
+*) echo 'ERROR invalid usage' ;;
+esac > "\$out.part"
+mv "\$out.part" "\$out"
+EOS
+chmod 755 "$CTL"
+export SG_SETTINGSCTL="$CTL"
 
 out=$("$WINE" "$T/sg-notify64.exe" --dump 2>&1 | tr -d '\r' | grep -E '^(NOTIFICATIONS|ENTRY)')
 echo "$out" | sed 's/^/      /'
@@ -72,6 +94,19 @@ set -- $(val rect | tr ',' ' ')
 [ "$(val visible)" = 1 ] && [ $# = 4 ] && [ "$3" = 1280 ] && [ "$2" = 0 ] && [ $(( $4 - $2 )) -ge 700 ] \
     && pass "/toggle (Win+A) opens the panel at the right, the work area's height: $(val rect)" || fail "panel: visible $(val visible) rect $(val rect)"
 px=$1 py=$2
+# Windows 10's quick actions at the panel's foot (Network, All settings, Night light, Bluetooth,
+# Project, Screen snip); Night light's tile turns it on through sg-settingsctl, in the accent
+sleep 2
+tiles=$(d | sed -n 's/^tile [0-9,]* on=[01] //p' | tr '\n' '|')
+[ "$tiles" = "Network|All settings|Night light|Bluetooth|Project|Screen snip|" ] \
+    && pass "the quick actions: $tiles" || fail "quick actions: '$tiles'"
+set -- $(d | sed -n 's/^tile \([0-9,]*\) on=0 Night light$/\1/p' | tr ',' ' ')
+if [ $# = 4 ]; then
+    xdotool mousemove $(( px + ($1 + $3) / 2 )) $(( py + ($2 + $4) / 2 )); sleep 0.4; xdotool click 1; sleep 2.5
+fi
+grep -qx 'nightlight on' "$CTLLOG" && d | grep -q '^tile [0-9,]* on=1 Night light$' \
+    && pass "Night light's tile turns it on (sg-settingsctl nightlight on), and shows it on" \
+    || fail "Night light's tile: calls $(tr '\n' '|' < "$CTLLOG"), tile $(d | grep 'Night light')"
 [ "$(d | grep '^entry' | awk '{print $2}' | tr '\n' ' ')" = "3 2 1 0 " ] && pass "it lists them newest first" \
     || fail "order: $(d | grep '^entry' | awk '{print $2}' | tr '\n' ' ')"
 [ "$(val unread)" = 0 ] && pass "opening it marks them seen" || fail "unread after opening: $(val unread)"
