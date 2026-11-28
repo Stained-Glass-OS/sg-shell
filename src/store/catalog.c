@@ -631,6 +631,12 @@ static BOOL icon_program(const app_t *a, const WCHAR *icon, WCHAR *out, int cch)
     if (n < 5 || _wcsicmp(path + n - 4, L".exe")) return FALSE;
     base = wcsrchr(path, '\\') ? wcsrchr(path, '\\') + 1 : path;
     if (not_the_program(a, base) || GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return FALSE;
+#ifndef SG_MUTANT_CACHEDSETUP
+    /* a cached installer is not the program either, whatever it is called: a WiX bundle's entry
+     * shows its copy in Package Cache as its icon (Mumble's mumble_client-1.5.939-x64.exe, whose
+     * Open was its Modify/Repair/Uninstall window), an MSI's an icon file in Windows\Installer */
+    if (StrStrIW(path, L"\\Package Cache\\") || StrStrIW(path, L"\\Windows\\Installer\\")) return FALSE;
+#endif
     lstrcpynW(out, path, cch);
     return TRUE;
 }

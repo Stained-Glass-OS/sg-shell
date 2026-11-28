@@ -1,3 +1,17 @@
+sg-shell (0.1.0-319) unstable; urgency=medium
+
+  * SG Store: Open of an app whose Uninstall entry shows its cached
+    installer as its icon (a WiX bundle's copy in C:\ProgramData\Package
+    Cache, Mumble 1.5's mumble_client-1.5.939-x64.exe; an MSI's icon file
+    in Windows\Installer) started that installer -- the bundle's
+    Modify/Repair/Uninstall window -- instead of the program. Such a path
+    is not the program; its Start shortcut is used, as for an entry whose
+    icon is its uninstaller. Found in apps11's walk on next37 (ledger
+    i0701). Gate test/store-check.sh (Gate Bundle), mutant
+    SG_MUTANT_CACHEDSETUP.
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Fri, 27 Nov 2026 19:20:10 -0800
+
 sg-shell (0.1.0-318) unstable; urgency=medium
 
   * Gates: sg_kill_prefix (test/scratch-home.sh) kills every process left in

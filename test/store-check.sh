@@ -68,6 +68,7 @@
 #   SG_MUTANT_NOCUSTOM    drops a manifest's Custom switches (Opera stopped with 103)
 #   SG_MUTANT_NOLAUNCH    Open shows Apps & features instead of starting the program
 #   SG_MUTANT_UNINSTNAMED an app named as an uninstaller (BCUninstaller.exe) is taken for its own uninstaller
+#   SG_MUTANT_CACHEDSETUP a bundle's cached installer (Package Cache, its entry's icon) is opened as its program
 #   SG_MUTANT_KEEPDEADLINKS an uninstalled app's own Desktop shortcut into its removed folder stays (GeoGebra)
 #   SG_MUTANT_NOSUITEFOLDER a suite's shortcuts in its own Start folder (FreeOffice's TextMaker) are not its programs
 #   SG_MUTANT_NOELEVATE   ignores ElevationRequirement: elevationRequired
@@ -193,7 +194,7 @@ build_mut() { # define outfile
     "$MINGW" -municode -mwindows -O1 -Wno-missing-field-initializers -I"$HERE/src/browser" -I"$HERE/src/store" -I"$HERE/src/zip" \
         "-D$1" -o "$2" $STORE_SRC $STORE_LIBS 2>>"$T/cc.log"
 }
-for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST NOCATALOGELEVATE NOCATALOGSCOPE; do
+for m in NOHASH LINUXMIXED LINUXBYNAME SUBSTRING NOUPDATE ANYTYPE NOZIP NOSEARCH NOCUSTOM NOLAUNCH NOELEVATE NOWOWCU NOPLUS NODESKTOP NODEPINSTALL NOUNINSTALL NOPAIR NOICON NOQUEUE NOQUIET NOIEXPRESS NOCABDLL WHOLEHIT BATCH_PER_APP HELPER_ANYONE STORE_ALWAYS_LIGHT NO_SELECT_ALL MULTI_INSTANCE NOTREE NONESTEDFILE SYSTEMUNINSTALL NOINNOSCOPE NOSWEEP NODEPENDS DEPRECORD PIDREUSE NO429RETRY NOBESTMATCH NOREGISTER SHOWPARTS NONSISSILENT NOCHROMIUMFORCE NOINVOKER NOUNINVOKER NOMACHINEELEVATE NOUNINSTARGS NOINSTALLARGS NOMSIQUIET NOFORGET NOCLOSEAPP NOPARTS NSISTAIL NODISKHINT NOINSTALLTREE NOELEVATEDTREE NEEDEDBYSYSTEM ALTSKIP NOSQUASH NOAFTERWAIT NOPINDEPENDS NOSUCCESSCODES NOSTOREDEP NOOTHERBUILD RECORDASUSER NOCAB64 ADMINMACHINE NOSCOPEPIN NOMIRROR WAITLASTMESSAGE NOSTARTLINK NOSEED NOCDN NOCDNHASH NOREGISTERWAIT NODETECTREGISTER SHALLOWSTART KEEPSTORELINK NOMSIELEVATE NOPORTABLE ONEFILE PARTBYCMD NOMSIX PKGFIRST WRAPPEDLEAVE NOFRAMEWORK NOSHUTDOWN DOTNAME NOREPLACEARGS UNINSTNAMED NOSUITEFOLDER KEEPDEADLINKS PACKAGE_NO_MANIFEST NOCATALOGELEVATE NOCATALOGSCOPE CACHEDSETUP; do
     build_mut "SG_MUTANT_$m" "$T/mut-$(echo $m | tr 'A-Z' 'a-z').exe" || fail "mutant $m does not build: $(tail -3 "$T/cc.log")"
 done
 
@@ -888,6 +889,28 @@ wine "$T/mut-uninstnamed.exe" --open 0U >/dev/null 2>&1; sleep 3
 [ ! -e "$G/launch.log" ] && pass "MUTANT UNINSTNAMED takes it for an uninstaller and opens Apps & features (gate catches it)" \
     || fail "UNINSTNAMED not detected: $(cat "$G/launch.log" 2>/dev/null)"
 rm -f "$G/launch.log"; wine reg delete "$K\\0U" /f >/dev/null 2>&1; ununinstall GateUn_is1; rm -rf "$UD"
+# A WiX bundle (Mumble 1.5): its entry's DisplayIcon is its cached installer in Package Cache, named
+# as nothing in particular (mumble_client-1.5.939-x64.exe); Open started that -- the bundle's
+# Modify/Repair/Uninstall window. The program is its Start shortcut's.
+app 0B 'Gate Bundle' Communication windows 'winget:Fake.Pick' 'Gate Bundle'
+SG_FAKE_LINK=1 SG_FAKE_KEY=GateBundle SG_FAKE_DISPLAY='Gate Bundle' SG_FAKE_VERSION=1.5 SG_FAKE_DIR='Gate Bundle' \
+    wine "$EXE" --install 0B >/dev/null 2>&1
+CD="$WINEPREFIX/drive_c/ProgramData/Package Cache/{5A1B2C3D-0000-4000-8000-00000000BBBB}"
+mkdir -p "$CD"; cp "$W/files/store-fake.exe" "$CD/app.exe"
+reg 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\GateBundle' /v DisplayIcon \
+    /d 'C:\ProgramData\Package Cache\{5A1B2C3D-0000-4000-8000-00000000BBBB}\app.exe,0'
+rm -f "$G/launch.log"
+run --open 0B
+launched 'from-shortcut' && pass "a bundle whose icon is its cached installer (Package Cache) opens its program, not the installer" \
+    || fail "Open 0B: $(cat "$G/launch.log" 2>/dev/null)"
+rm -f "$G/launch.log"
+wine "$T/mut-cachedsetup.exe" --open 0B >/dev/null 2>&1; sleep 3
+grep -q 'from-shortcut' "$G/launch.log" 2>/dev/null \
+    && fail "CACHEDSETUP not detected: $(cat "$G/launch.log" 2>/dev/null)" \
+    || pass "MUTANT CACHEDSETUP opens the cached installer (gate catches it)"
+rm -f "$G/launch.log"; wine reg delete "$K\\0B" /f >/dev/null 2>&1; ununinstall GateBundle; rm -rf "$CD" "$WINEPREFIX/drive_c/Program Files/Gate Bundle"
+rm -f "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Gate Bundle.lnk" \
+    "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/Programs/Uninstall Gate Bundle.lnk"
 # A suite whose programs are not named as it (FreeOffice: TextMaker, PlanMaker in "SoftMaker FreeOffice
 # 2024"), with no program for its icon (an MSI's entry has none): the shortcuts in its own Start folder
 app 0S 'Pick Suite' Productivity windows 'winget:Fake.Pick' 'Pick Suite'
