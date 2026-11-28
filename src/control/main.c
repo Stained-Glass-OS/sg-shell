@@ -1129,6 +1129,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
             return rc;
         }
         if (!wcscmp(argv[1], L"--uninstall") && argc > 2) return programs_uninstall_cli(argv[2]);
+        /* a printer's buttons from the command line (and the gates): --printer NAME queue|properties|preferences|test */
+        if (!wcscmp(argv[1], L"--printer") && argc > 3) return printer_cli(argv[2], argv[3]);
         if (!wcscmp(argv[1], L"--resolve") && argc > 2 && !settings) {
             /* what control.exe ARG would open, without opening it */
             const WCHAR *cpl, *settings, *a = argv[2];

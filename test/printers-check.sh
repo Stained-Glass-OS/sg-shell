@@ -14,13 +14,16 @@
 #     Linux driver) and the maker's-driver one -- so one physical printer is
 #     one entry;
 #   - the status is the printer's: a queue paused with cupsdisable is
-#     "Paused" (needs wine-sg 1222), and Ready again with cupsenable;
+#     "Paused" (needs wine-sg 1222), and Ready again with cupsenable; a
+#     document waiting there is counted (wine-sg 9812);
+#   - Open queue (sg-control --printer NAME queue, the page's button) opens
+#     the printer's queue window (wine-sg 9813);
 #   - the Settings window opened on ms-settings:printers shows the page
 #     (SG_SETTINGS_DUMP), and Control Panel's "printers" name opens Devices
 #     and Printers (--resolve).
 #
 #   SG_WINE_DIR=/opt/wine-sg test/printers-check.sh   (WINE=... another wine)
-# Mutation: built with -DSG_MUTANT_PRINTERS_LINUX or -DSG_MUTANT_PRINTERS_STATUS
+# Mutation: built with -DSG_MUTANT_PRINTERS_LINUX, -DSG_MUTANT_PRINTERS_STATUS or -DSG_MUTANT_PRN_NO_QUEUE
 # (SG_CONTROL_EXE / SG_SETTINGS_EXE name those builds) the gate fails.
 set -u
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -41,7 +44,7 @@ unset DISPLAY WAYLAND_DISPLAY
 T=$(mktemp -d /var/tmp/sg-printers-check.XXXXXX); chmod 755 "$T"
 # shellcheck disable=SC2317
 cleanup() {
-    "$WINESERVER" -k 2>/dev/null
+    "$WINESERVER" -k 2>/dev/null; sg_kill_prefix "$WINEPREFIX"
     [ -n "$CP" ] && { kill "$CP" 2>/dev/null; wait "$CP" 2>/dev/null; }
     [ -n "$XP" ] && kill "$XP" 2>/dev/null
     rm -f "/tmp/.X${DPY}-lock"; rm -rf "$T"
@@ -175,6 +178,29 @@ case "$(printf '%s\n' "$out" | sed -n 's/^linux=Office|//p')" in *"Office Laser"
 off=$(ctl --dump printers | grep '^printer=Office|')
 case "$off" in "printer=Office|Office Laser|Paused|"*) pass "a paused printer says so ($off)" ;;
     *) fail "a paused printer: '$off'" ;; esac
+# a document waiting at the paused printer is counted (wine-sg 9812: CUPS's queue is the printer's)
+lp -d Office -t "Quarterly report" /etc/hostname >/dev/null 2>&1; sleep 2.2
+off=$(ctl --dump printers | grep '^printer=Office|')
+case "$off" in "printer=Office|Office Laser|Paused, 1 document waiting|"*) pass "the document waiting is counted ($off)" ;;
+    *) fail "a document waiting at the paused printer: '$off'" ;; esac
+# Open queue: the printer's queue window (wine-sg 9813's printui /o), from the page's button
+if command -v Xvfb >/dev/null && command -v xdotool >/dev/null; then
+    QDPY=$((DPY + 1))
+    Xvfb ":$QDPY" -screen 0 1024x768x24 -nolisten tcp >/dev/null 2>&1 & QXP=$!
+    sleep 1
+    (cd "$T" && DISPLAY=":$QDPY" timeout 60 "$WINE" "$T/sg-control64.exe" --printer Office queue >/dev/null 2>&1 </dev/null)
+    i=0; while ! DISPLAY=":$QDPY" xdotool search --name '^Office - Paused$' >/dev/null 2>&1 && [ $i -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+    if DISPLAY=":$QDPY" xdotool search --name '^Office - Paused$' >/dev/null 2>&1; then
+        pass "Open queue opens the printer's queue window (Office - Paused)"
+    else
+        fail "Open queue: no queue window ($(DISPLAY=":$QDPY" xdotool search --name . getwindowname %@ 2>/dev/null | head -5 | tr '\n' ';'))"
+    fi
+    "$WINESERVER" -k 2>/dev/null; "$WINESERVER" -w 2>/dev/null
+    kill "$QXP" 2>/dev/null; rm -f "/tmp/.X${QDPY}-lock"
+else
+    echo "      (no Xvfb or xdotool: Open queue is not checked)"
+fi
+cancel -a Office 2>/dev/null
 /usr/sbin/cupsenable Office 2>/dev/null; sleep 2.2
 off=$(ctl --dump printers | grep '^printer=Office|')
 case "$off" in "printer=Office|Office Laser|Ready|"*) pass "ready again" ;; *) fail "after cupsenable: '$off'" ;; esac

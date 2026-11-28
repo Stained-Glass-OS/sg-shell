@@ -1,3 +1,18 @@
+sg-shell (0.1.0-332) unstable; urgency=medium
+
+  * Settings > Printers & scanners: "Open queue" and "Printer properties"
+    for the selected printer, and Devices and Printers: "See what's
+    printing" and "Printer properties", as Windows has them (print1, ledger
+    i0892). Open queue is the printer's queue window (wine-sg 9813's
+    printui /o: its documents, to pause, restart or cancel; with 9812 the
+    CUPS queue's documents). sg-control --printer NAME
+    queue|properties|preferences|test does what the buttons do.
+    printers-check.sh: +2 (a document waiting at a paused printer is
+    counted; Open queue opens the queue window; fails on wine 10.0-1185;
+    mutant SG_MUTANT_PRN_NO_QUEUE caught).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 00:30:00 -0800
+
 sg-shell (0.1.0-331) unstable; urgency=medium
 
   * Start's jump list headings (Recent, Tasks) are dimmed, as Windows'

@@ -369,6 +369,7 @@ int  keyring_signin_main(void);                  /* /keyring-signin */
 int  credmgr_delete_cli(const WCHAR *target, const WCHAR *type);   /* --credential-delete */
 /* set_printers.c: Devices and Printers, and Settings' Printers & scanners */
 void build_printers(void);      BOOL cmd_printers(int, int, HWND);   void dump_printers(void);
+int printer_cli(const WCHAR *name, const WCHAR *action);
 int  printers_load(BOOL with_queues);
 
 #endif

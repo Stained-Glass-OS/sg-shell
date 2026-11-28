@@ -271,7 +271,35 @@ static const WCHAR *test_page(int i)
 }
 
 /* ---- Settings > Devices > Printers & scanners ------------------------------------------------ */
-enum { CMD_PRN_REFRESH = CMD_PAGE_FIRST + 1, CMD_PRN_DEFAULT, CMD_PRN_PREFS, CMD_PRN_TEST, CMD_PRN_SEL = CMD_PAGE_FIRST + 100 };
+enum { CMD_PRN_REFRESH = CMD_PAGE_FIRST + 1, CMD_PRN_DEFAULT, CMD_PRN_PREFS, CMD_PRN_TEST, CMD_PRN_QUEUE, CMD_PRN_PROPS,
+       CMD_PRN_SEL = CMD_PAGE_FIRST + 100 };
+
+/* the printer's queue window (wine-sg 9813's printui /o: its documents, to
+ * pause, restart or cancel), as Windows' "Open queue" opens it */
+static const WCHAR *open_queue(int i)
+{
+    WCHAR args[400];
+    if (i < 0 || i >= g_nprn) return L"No printer is selected.";
+    _snwprintf(args, ARRAYSIZE(args), L"printui.dll,PrintUIEntry /o /n \"%ls\"", g_prn[i].name);
+    args[ARRAYSIZE(args) - 1] = 0;
+#ifndef SG_MUTANT_PRN_NO_QUEUE
+    if ((INT_PTR)ShellExecuteW(g_main, NULL, L"rundll32.exe", args, NULL, SW_SHOWNORMAL) <= 32)
+#endif
+        return L"The printer's queue could not be opened.";
+    return NULL;
+}
+
+/* the printer's properties (its driver's pages), as "Printer properties" */
+static const WCHAR *properties(int i)
+{
+    HANDLE h;
+    BOOL ok;
+    if (i < 0 || i >= g_nprn) return L"No printer is selected.";
+    if (!OpenPrinterW(g_prn[i].name, &h, NULL)) return L"The printer could not be opened.";
+    ok = PrinterProperties(g_main, h);
+    ClosePrinter(h);
+    return ok || GetLastError() == ERROR_CANCELLED ? NULL : L"The printer's properties could not be shown.";
+}
 
 void set_build_printers(void)
 {
@@ -307,6 +335,9 @@ void set_build_printers(void)
                    st_x(), y, S(130), S(30), CMD_PRN_DEFAULT);
         pg_control(L"BUTTON", L"Printing preferences", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(140), y, S(160), S(30), CMD_PRN_PREFS);
         pg_control(L"BUTTON", L"Print a test page", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(310), y, S(140), S(30), CMD_PRN_TEST);
+        y += S(40);
+        pg_control(L"BUTTON", L"Open queue", WS_TABSTOP | BS_PUSHBUTTON, st_x(), y, S(130), S(30), CMD_PRN_QUEUE);
+        pg_control(L"BUTTON", L"Printer properties", WS_TABSTOP | BS_PUSHBUTTON, st_x() + S(140), y, S(160), S(30), CMD_PRN_PROPS);
         y += S(46);
     }
 }
@@ -323,6 +354,8 @@ BOOL set_cmd_printers(int id, int code, HWND ctl)
         return TRUE;
     }
     if (id == CMD_PRN_PREFS) { if ((why = preferences(g_sel))) st_status(why); return TRUE; }
+    if (id == CMD_PRN_QUEUE) { if ((why = open_queue(g_sel))) st_status(why); return TRUE; }
+    if (id == CMD_PRN_PROPS) { if ((why = properties(g_sel))) st_status(why); else refresh_page(); return TRUE; }
     if (id == CMD_PRN_TEST) {
         why = test_page(g_sel);
         st_status(why ? why : L"A test page was sent to the printer.");
@@ -332,7 +365,8 @@ BOOL set_cmd_printers(int id, int code, HWND ctl)
 }
 
 /* ---- Control Panel > Hardware and Sound > Devices and Printers ------------------------------ */
-enum { CMD_DP_SEL = CMD_PAGE_FIRST + 100, CMD_DP_DEFAULT = CMD_PAGE_FIRST + 1, CMD_DP_PREFS, CMD_DP_TEST, CMD_DP_SETTINGS };
+enum { CMD_DP_SEL = CMD_PAGE_FIRST + 100, CMD_DP_DEFAULT = CMD_PAGE_FIRST + 1, CMD_DP_PREFS, CMD_DP_TEST, CMD_DP_SETTINGS,
+       CMD_DP_QUEUE, CMD_DP_PROPS };
 
 void build_printers(void)
 {
@@ -382,8 +416,10 @@ void build_printers(void)
         }
     }
     y += S(8);
+    pg_link(x0, y, L"See what's printing", CMD_DP_QUEUE, 0); y += S(24);
     if (!g_prn[g_sel].deflt) { pg_link(x0, y, L"Set as default printer", CMD_DP_DEFAULT, 0); y += S(24); }
     pg_link(x0, y, L"Printing preferences", CMD_DP_PREFS, 0); y += S(24);
+    pg_link(x0, y, L"Printer properties", CMD_DP_PROPS, 0); y += S(24);
     pg_link(x0, y, L"Print a test page", CMD_DP_TEST, 0);
 }
 
@@ -394,6 +430,11 @@ BOOL cmd_printers(int id, int code, HWND ctl)
     if (id >= CMD_DP_SEL && id < CMD_DP_SEL + MAX_PRN) { g_sel = id - CMD_DP_SEL; refresh_page(); return TRUE; }
     if (id == CMD_DP_DEFAULT) why = set_default(g_sel);
     else if (id == CMD_DP_PREFS) why = preferences(g_sel);
+    else if (id == CMD_DP_PROPS) why = properties(g_sel);
+    else if (id == CMD_DP_QUEUE) {
+        if ((why = open_queue(g_sel))) message(g_main, L"Devices and Printers", why, TRUE);
+        return TRUE;
+    }
     else if (id == CMD_DP_TEST) {
         why = test_page(g_sel);
         if (!why) message(g_main, L"Print a test page", L"A test page was sent to the printer.", FALSE);
@@ -404,6 +445,26 @@ BOOL cmd_printers(int id, int code, HWND ctl)
     if (why) message(g_main, L"Devices and Printers", why, TRUE);
     else refresh_page();
     return TRUE;
+}
+
+/* --printer NAME ACTION: what the page's buttons do, for printer NAME (its
+ * Windows name); 0 when done */
+int printer_cli(const WCHAR *name, const WCHAR *action)
+{
+    const WCHAR *why = L"No such printer.";
+    int i;
+    printers_load(FALSE);
+    for (i = 0; i < g_nprn; i++) {
+        if (lstrcmpiW(g_prn[i].name, name)) continue;
+        if (!_wcsicmp(action, L"queue")) why = open_queue(i);
+        else if (!_wcsicmp(action, L"properties")) why = properties(i);
+        else if (!_wcsicmp(action, L"preferences")) why = preferences(i);
+        else if (!_wcsicmp(action, L"test")) why = test_page(i);
+        else why = L"Unknown action (queue, properties, preferences, test).";
+        break;
+    }
+    if (why) fwprintf(stderr, L"%ls\n", why);
+    return why ? 1 : 0;
 }
 
 /* the printers as the pages list them, for the gates (--dump printers) */
