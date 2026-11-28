@@ -47,12 +47,16 @@ static void related(int *y)
 void set_build_netstatus(void)
 {
     struct adapter ad[16];
-    int n = load_adapters(ad, 16), y = st_title(L"Status"), i, inet = 0;
+    int n = load_adapters(ad, 16), y = st_title(L"Status"), i, inet = 0, up = 0;
     for (i = 0; i < n; i++) if (ad[i].internet) inet++;
     y = st_head(y, L"Network status");
-    y = st_card(y, IC_G_PC, inet ? L"You're connected to the Internet" : L"You're not connected",
+    for (i = 0; i < n; i++) if (ad[i].up && ad[i].gateway[0]) up++;
+    /* connected, but the network does not reach the internet (its NCSI probe went unanswered or
+     * a captive portal answered): Windows' "No Internet access" */
+    y = st_card(y, IC_G_PC, inet ? L"You're connected to the Internet" : up ? L"No Internet access" : L"You're not connected",
                 inet ? L"If you have a limited data plan, you can make this network a metered connection."
-                     : L"Troubleshoot: check the cable or join a Wi-Fi network from the taskbar.");
+                     : up ? L"You're connected to a network, but it doesn't reach the Internet. If it asks you to sign in, open a browser."
+                          : L"Troubleshoot: check the cable or join a Wi-Fi network from the taskbar.");
     for (i = 0; i < n; i++) if (ad[i].up) y = adapter_card(y, &ad[i]);
     related(&y);
 }
@@ -108,13 +112,42 @@ static const WCHAR INET[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Inte
 enum { CMD_AUTODETECT = CMD_PAGE_FIRST + 1, CMD_USESCRIPT, CMD_SCRIPT, CMD_USEPROXY, CMD_SERVER, CMD_BYPASS, CMD_LOCAL, CMD_SAVE };
 static HWND g_px[8];
 
+/* The proxy is the connection's, as WinINet keeps it: Connections\DefaultConnectionSettings
+ * (with ProxyEnable/ProxyServer/ProxyOverride beside it, which WinINet writes too). WinHTTP's
+ * view of the user's settings (WinHttpGetIEProxyConfigForCurrentUser: Chrome, Edge, .NET's
+ * HttpClient) reads only DefaultConnectionSettings, so the page reads and writes them through
+ * INTERNET_OPTION_PER_CONNECTION_OPTION, as Windows' Settings and Internet Options do. Writing
+ * the values alone (as this page once did) left WinHTTP's programs on no proxy, and "Automatically
+ * detect settings" (the connection's PROXY_TYPE_AUTO_DETECT flag) was a value nobody reads. */
+static DWORD proxy_flags(WCHAR *server, WCHAR *bypass, WCHAR *script, BOOL *saved)
+{
+    INTERNET_PER_CONN_OPTION_LISTW list = { sizeof(list) };
+    INTERNET_PER_CONN_OPTIONW o[4] = { { INTERNET_PER_CONN_FLAGS }, { INTERNET_PER_CONN_PROXY_SERVER },
+                                       { INTERNET_PER_CONN_PROXY_BYPASS }, { INTERNET_PER_CONN_AUTOCONFIG_URL } };
+    DWORD size = sizeof(list), flags = PROXY_TYPE_DIRECT | PROXY_TYPE_AUTO_DETECT;
+    WCHAR *out[3] = { server, bypass, script };
+    DWORD cch[3] = { 512, 1024, 512 };
+    HKEY k = NULL;
+    int i;
+    /* no saved settings yet: Windows' own for a new account, automatically detect */
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Connections",
+                      0, KEY_QUERY_VALUE, &k)) k = NULL;
+    *saved = k && !RegQueryValueExW(k, L"DefaultConnectionSettings", NULL, NULL, NULL, NULL);
+    if (k) RegCloseKey(k);
+    list.dwOptionCount = 4; list.pOptions = o;
+    if (!InternetQueryOptionW(NULL, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size)) return flags;
+    if (*saved) flags = o[0].Value.dwValue;
+    for (i = 0; i < 3; i++)
+        if (o[i + 1].Value.pszValue) { lstrcpynW(out[i], o[i + 1].Value.pszValue, cch[i]); GlobalFree(o[i + 1].Value.pszValue); }
+    return flags;
+}
+
 void set_build_proxy(void)
 {
     WCHAR server[512] = L"", bypass[1024] = L"", script[512] = L"", *local;
+    BOOL saved;
+    DWORD flags = proxy_flags(server, bypass, script, &saved);
     int y = st_title(L"Proxy");
-    reg_sz(HKEY_CURRENT_USER, INET, L"ProxyServer", server, ARRAYSIZE(server));
-    reg_sz(HKEY_CURRENT_USER, INET, L"ProxyOverride", bypass, ARRAYSIZE(bypass));
-    reg_sz(HKEY_CURRENT_USER, INET, L"AutoConfigURL", script, ARRAYSIZE(script));
     /* "<local>" in the list is the "don't use the proxy for local addresses" box */
     if ((local = wcsstr(bypass, L"<local>"))) {
         WCHAR *end = local + 7;
@@ -123,15 +156,15 @@ void set_build_proxy(void)
         if (local > bypass && local[-1] == L';' && !*local) local[-1] = 0;
     }
     y = st_head(y, L"Automatic proxy setup");
-    g_px[0] = st_toggle(&y, L"Automatically detect settings", reg_dword(HKEY_CURRENT_USER, INET, L"AutoDetect", 0) != 0, CMD_AUTODETECT);
-    g_px[1] = st_toggle(&y, L"Use setup script", script[0] != 0, CMD_USESCRIPT);
+    g_px[0] = st_toggle(&y, L"Automatically detect settings", (flags & PROXY_TYPE_AUTO_DETECT) != 0, CMD_AUTODETECT);
+    g_px[1] = st_toggle(&y, L"Use setup script", (flags & PROXY_TYPE_AUTO_PROXY_URL) && script[0], CMD_USESCRIPT);
     g_px[2] = st_edit(&y, L"Script address", script, CMD_SCRIPT);
     y = st_head(y, L"Manual proxy setup");
-    g_px[3] = st_toggle(&y, L"Use a proxy server", reg_dword(HKEY_CURRENT_USER, INET, L"ProxyEnable", 0) != 0, CMD_USEPROXY);
+    g_px[3] = st_toggle(&y, L"Use a proxy server", (flags & PROXY_TYPE_PROXY) != 0, CMD_USEPROXY);
     g_px[4] = st_edit(&y, L"Address:Port", server, CMD_SERVER);
     g_px[5] = st_edit(&y, L"Use the proxy server except for addresses that start with the following entries. "
                           L"Use semicolons (;) to separate entries.", bypass, CMD_BYPASS);
-    st_checkbox(&y, L"Don't use the proxy server for local (intranet) addresses", wcsstr(bypass, L"<local>") != NULL || local != NULL, CMD_LOCAL);
+    st_checkbox(&y, L"Don't use the proxy server for local (intranet) addresses", local != NULL, CMD_LOCAL);
     g_px[6] = GetDlgItem(g_page, CMD_LOCAL);
     st_button(&y, L"Save", CMD_SAVE);
 }
@@ -139,18 +172,37 @@ void set_build_proxy(void)
 static void save_proxy(void)
 {
     WCHAR server[512], bypass[1100], script[512];
+    INTERNET_PER_CONN_OPTION_LISTW list = { sizeof(list) };
+    INTERNET_PER_CONN_OPTIONW o[4] = { { INTERNET_PER_CONN_FLAGS }, { INTERNET_PER_CONN_PROXY_SERVER },
+                                       { INTERNET_PER_CONN_PROXY_BYPASS }, { INTERNET_PER_CONN_AUTOCONFIG_URL } };
+    DWORD flags = 0;
+    HKEY k;
     GetWindowTextW(g_px[4], server, ARRAYSIZE(server));
     GetWindowTextW(g_px[5], bypass, 1024);
     GetWindowTextW(g_px[2], script, ARRAYSIZE(script));
     if (st_checked(g_px[6])) { if (bypass[0]) lstrcatW(bypass, L";"); lstrcatW(bypass, L"<local>"); }
-    reg_set_dword(HKEY_CURRENT_USER, INET, L"ProxyEnable", st_checked(g_px[3]));
-    reg_set_sz(HKEY_CURRENT_USER, INET, L"ProxyServer", server);
-    reg_set_sz(HKEY_CURRENT_USER, INET, L"ProxyOverride", bypass);
-    reg_set_dword(HKEY_CURRENT_USER, INET, L"AutoDetect", st_checked(g_px[0]));
-    if (st_checked(g_px[1]) && script[0]) reg_set_sz(HKEY_CURRENT_USER, INET, L"AutoConfigURL", script);
-    else {
-        HKEY k;
-        if (!RegOpenKeyExW(HKEY_CURRENT_USER, INET, 0, KEY_SET_VALUE, &k)) { RegDeleteValueW(k, L"AutoConfigURL"); RegCloseKey(k); }
+    if (st_checked(g_px[0])) flags |= PROXY_TYPE_AUTO_DETECT;
+    if (st_checked(g_px[1]) && script[0]) flags |= PROXY_TYPE_AUTO_PROXY_URL;
+    /* direct only when no proxy server is used (WinINet reads "proxy and direct" as direct) */
+    flags |= st_checked(g_px[3]) && server[0] ? PROXY_TYPE_PROXY : PROXY_TYPE_DIRECT;
+#ifdef SG_MUTANT_PROXY_DIRECT_TOO
+    flags |= PROXY_TYPE_DIRECT;
+#endif
+    o[0].Value.dwValue = flags;
+    o[1].Value.pszValue = server;
+    o[2].Value.pszValue = bypass;
+    o[3].Value.pszValue = script;
+    list.dwOptionCount = 4; list.pOptions = o;
+    /* the connection's settings: DefaultConnectionSettings and the values beside it */
+    if (!InternetSetOptionW(NULL, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, sizeof(list)))
+        st_status(L"The proxy settings could not be saved.");
+    /* AutoConfigURL, the setup script's value as Internet Options keeps it beside the others */
+    if (!RegOpenKeyExW(HKEY_CURRENT_USER, INET, 0, KEY_SET_VALUE, &k)) {
+        if (flags & PROXY_TYPE_AUTO_PROXY_URL)
+            RegSetValueExW(k, L"AutoConfigURL", 0, REG_SZ, (BYTE *)script, (lstrlenW(script) + 1) * sizeof(WCHAR));
+        else RegDeleteValueW(k, L"AutoConfigURL");
+        RegDeleteValueW(k, L"AutoDetect");   /* an older page's own value; the flag is the setting */
+        RegCloseKey(k);
     }
     /* tell WinINet, as Internet Options does */
     InternetSetOptionW(NULL, INTERNET_OPTION_SETTINGS_CHANGED, NULL, 0);

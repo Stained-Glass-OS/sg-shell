@@ -18,9 +18,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #define _WIN32_WINNT 0x0601
+#define COBJMACROS
 #include <windows.h>
 #include <shellapi.h>
 #include <stdio.h>
+#include <initguid.h>
+#include <netlistmgr.h>
 #include "sg-netclient.h"
 #include "sg-mode.h"
 #include "sg-smooth.h"
@@ -85,6 +88,9 @@ static struct wnet g_nets[MAX_NETS];
 static struct wired g_wired[MAX_WIRED];
 static int g_nnets, g_nwired, g_scroll;
 static BOOL g_has_wifi, g_radio_on = TRUE, g_busy, g_autoconnect = TRUE;
+/* whether the connection reaches the internet, as the Network List Manager says (wine-sg 9661: what
+ * the NCSI probes found); TRUE when it cannot be asked */
+static BOOL g_internet = TRUE;
 static char g_wifi_dev[32];
 static HWND g_tray_wnd, g_fly, g_key;
 static DWORD g_fly_hidden;   /* GetTickCount when the flyout last hid on deactivation: a tray click within ~200ms is that same click and must not reopen it (else it flickers instead of closing) */
@@ -98,6 +104,23 @@ static WCHAR g_exp_msg[256];
 
 /* --- the data ---------------------------------------------------------------------- */
 
+/* The Network List Manager's answer, as Windows' network icon shows it: connected but its NCSI probe
+ * unanswered (a captive portal, a router with no line) is "No internet access" -- it said "Internet
+ * access" for any connection (net3, i0972) */
+static BOOL nlm_internet(void)
+{
+    INetworkListManager *mgr;
+    NLM_CONNECTIVITY c = NLM_CONNECTIVITY_IPV4_INTERNET;
+#ifdef SG_MUTANT_TRAY_ALWAYS_INTERNET
+    return TRUE;
+#endif
+    if (FAILED(CoCreateInstance(&CLSID_NetworkListManager, NULL, CLSCTX_ALL, &IID_INetworkListManager, (void **)&mgr)))
+        return TRUE;
+    if (FAILED(INetworkListManager_GetConnectivity(mgr, &c))) c = NLM_CONNECTIVITY_IPV4_INTERNET;
+    INetworkListManager_Release(mgr);
+    return (c & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET)) != 0;
+}
+
 static void refresh(BOOL pumped, BOOL rescan)
 {
     struct net_reply r;
@@ -108,6 +131,7 @@ static void refresh(BOOL pumped, BOOL rescan)
     int i, eth = 0;
 
     if (g_exp >= 0 && g_exp < g_nnets) snprintf(keep, sizeof(keep), "%s", g_nets[g_exp].hex);
+    g_internet = nlm_internet();
     pumped ? net_request_pumped(1, ad, NULL, &r) : net_request_argv(1, ad, NULL, &r);
     g_nwired = 0;
     g_has_wifi = FALSE;
@@ -252,7 +276,7 @@ static HICON make_icon(int size)
     enum icon_kind kind = icon_kind();
     BOOL wifi_up = kind == ICON_WIFI, wired_up = kind == ICON_WIRED;
     BOOL fan = kind == ICON_WIFI || kind == ICON_WIFI_AVAILABLE || kind == ICON_WIFI_NONE;
-    enum { BADGE_NONE, BADGE_CROSS, BADGE_STAR } badge = BADGE_NONE;
+    enum { BADGE_NONE, BADGE_CROSS, BADGE_STAR, BADGE_WARN } badge = BADGE_NONE;
 
     old = SelectObject(dc, canvas);
     memset(big, 0, S * S * 4);
@@ -284,6 +308,7 @@ static HICON make_icon(int size)
             }
         }
         if (!wifi_up) badge = kind == ICON_WIFI_AVAILABLE ? BADGE_STAR : BADGE_CROSS;
+        else if (!g_internet) badge = BADGE_WARN;
     }
     else
     {
@@ -296,6 +321,7 @@ static HICON make_icon(int size)
         MoveToEx(dc, S / 4, S * 13 / 16, NULL); LineTo(dc, S * 3 / 4, S * 13 / 16);
         SelectObject(dc, op); SelectObject(dc, ob); DeleteObject(pen);
         if (!wired_up) badge = BADGE_CROSS;
+        else if (!g_internet) badge = BADGE_WARN;
     }
     if (badge != BADGE_NONE)
     {
@@ -307,7 +333,16 @@ static HICON make_icon(int size)
         FillRect(dc, &sq, clear);
         DeleteObject(clear);
         op = SelectObject(dc, pen);
-        if (badge == BADGE_CROSS)
+        if (badge == BADGE_WARN)
+        {
+            /* no internet: an exclamation mark, as Windows' "no internet" icon warns */
+            HBRUSH dot = CreateSolidBrush(RGB(0xFF, 0xFF, 0xFF)), odb;
+            MoveToEx(dc, bc, bc - br, NULL); LineTo(dc, bc, bc + br / 4);
+            odb = SelectObject(dc, dot);
+            Ellipse(dc, bc - S / 22, bc + br * 3 / 5, bc + S / 22, bc + br * 3 / 5 + S / 11);
+            SelectObject(dc, odb); DeleteObject(dot);
+        }
+        else if (badge == BADGE_CROSS)
         {
             MoveToEx(dc, bc - br, bc - br, NULL); LineTo(dc, bc + br, bc + br);
             MoveToEx(dc, bc + br, bc - br, NULL); LineTo(dc, bc - br, bc + br);
@@ -356,8 +391,8 @@ static void tray_update(BOOL add)
     g_nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
     g_nid.uCallbackMessage = WM_TRAY;
     g_nid.hIcon = make_icon(GetSystemMetrics(SM_CXSMICON));
-    if (cn >= 0) _snwprintf(g_nid.szTip, 128, L"%ls\nInternet access", g_nets[cn].name);
-    else if (any_wired()) _snwprintf(g_nid.szTip, 128, L"Network\nInternet access");
+    if (cn >= 0) _snwprintf(g_nid.szTip, 128, L"%ls\n%ls", g_nets[cn].name, g_internet ? L"Internet access" : L"No internet access");
+    else if (any_wired()) _snwprintf(g_nid.szTip, 128, L"Network\n%ls", g_internet ? L"Internet access" : L"No internet access");
     else if (g_has_wifi && !g_radio_on) _snwprintf(g_nid.szTip, 128, L"Wi-Fi is turned off");
     else if (g_nnets > 0) _snwprintf(g_nid.szTip, 128, L"Not connected - Connections are available");
     else _snwprintf(g_nid.szTip, 128, L"Not connected - No connections are available");
@@ -534,7 +569,8 @@ static void on_paint(HWND hwnd)
         DrawTextW(dc, g_wired[i].name, -1, &t, DT_SINGLELINE | DT_NOPREFIX);
         OffsetRect(&t, 0, S(20));
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
-        DrawTextW(dc, g_wired[i].connected ? L"Connected" : L"Not connected", -1, &t, DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextW(dc, !g_wired[i].connected ? L"Not connected" : g_internet ? L"Connected" : L"No internet", -1, &t,
+                  DT_SINGLELINE | DT_NOPREFIX);
     }
     if (!g_nwired && !g_nnets)
     {
@@ -569,7 +605,8 @@ static void on_paint(HWND hwnd)
         SelectObject(dc, g_font); SetTextColor(dc, COL_TEXT);
         DrawTextW(dc, n->name, -1, &t, DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
         OffsetRect(&t, 0, S(20));
-        if (n->inuse) _snwprintf(sub, 64, secured(n) ? L"Connected, secured" : L"Connected");
+        if (n->inuse && !g_internet) _snwprintf(sub, 64, secured(n) ? L"No internet, secured" : L"No internet, open");
+        else if (n->inuse) _snwprintf(sub, 64, secured(n) ? L"Connected, secured" : L"Connected");
         else _snwprintf(sub, 64, secured(n) ? L"Secured" : L"Open");
         SelectObject(dc, g_font_small); SetTextColor(dc, COL_SUBTLE);
         DrawTextW(dc, sub, -1, &t, DT_SINGLELINE | DT_NOPREFIX);
@@ -1140,6 +1177,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, WCHAR *cmdline, int show)
     MSG msg;
     (void)prev; (void)cmdline; (void)show;
 
+    CoInitialize(NULL);   /* the Network List Manager (nlm_internet) */
     load_mode();
 
     if (!net_init(GetCommandLineW()))

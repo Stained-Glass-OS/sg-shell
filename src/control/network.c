@@ -5,9 +5,12 @@
  * Copyright (C) 2026 Stained Glass OS contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#define COBJMACROS
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
+#include <initguid.h>
+#include <netlistmgr.h>
 #include "control.h"
 
 enum { CMD_ADAPTERS = CMD_PAGE_FIRST + 1, CMD_INET = CMD_PAGE_FIRST + 2 };
@@ -25,6 +28,37 @@ static void append(WCHAR *list, int cch, const WCHAR *item)
     if (!item[0]) return;
     if (list[0]) wcsncat(list, L", ", cch - lstrlenW(list) - 1);
     wcsncat(list, item, cch - lstrlenW(list) - 1);
+}
+
+/* whether an adapter's connection reaches the internet, as the Network List Manager says (its
+ * connection has the adapter's id; wine-sg 9661 follows the NCSI probes): a gateway alone said
+ * "You're connected to the Internet" behind a captive portal (net3, i0972). TRUE when it cannot say. */
+static BOOL nlm_internet(const char *adapter)
+{
+    WCHAR idw[64];
+    GUID id;
+    INetworkListManager *mgr;
+    INetworkConnection *conn;
+    NLM_CONNECTIVITY c = NLM_CONNECTIVITY_IPV4_INTERNET;
+    HRESULT init;
+
+#ifdef SG_MUTANT_SETTINGS_ROUTE_IS_INTERNET
+    return TRUE;
+#endif
+    if (!adapter || !MultiByteToWideChar(CP_ACP, 0, adapter, -1, idw, ARRAYSIZE(idw)) || FAILED(CLSIDFromString(idw, &id)))
+        return TRUE;
+    init = CoInitialize(NULL);
+    if (SUCCEEDED(CoCreateInstance(&CLSID_NetworkListManager, NULL, CLSCTX_ALL, &IID_INetworkListManager, (void **)&mgr)))
+    {
+        if (SUCCEEDED(INetworkListManager_GetNetworkConnection(mgr, id, &conn)))
+        {
+            if (FAILED(INetworkConnection_GetConnectivity(conn, &c))) c = NLM_CONNECTIVITY_IPV4_INTERNET;
+            INetworkConnection_Release(conn);
+        }
+        INetworkListManager_Release(mgr);
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+    return (c & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET)) != 0;
 }
 
 int load_adapters(struct adapter *out, int max)
@@ -75,7 +109,7 @@ int load_adapters(struct adapter *out, int max)
             if (a->TransmitLinkSpeed >= 1000000000ULL) _snwprintf(d->speed, ARRAYSIZE(d->speed), L"%.1f Gbps", a->TransmitLinkSpeed / 1e9);
             else _snwprintf(d->speed, ARRAYSIZE(d->speed), L"%.0f Mbps", a->TransmitLinkSpeed / 1e6);
         }
-        d->internet = d->up && d->gateway[0];
+        d->internet = d->up && d->gateway[0] && nlm_internet(a->AdapterName);
         n++;
     }
     free(buf);

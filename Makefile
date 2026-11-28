@@ -322,6 +322,14 @@ test-displaykeep: build
 test-kiosk: build
 	@sh test/kiosk-check.sh
 
+# Settings > Proxy saves the connection's settings where WinHTTP's programs read them (net3, i0970);
+# "No internet access" in the tray and Settings from the Network List Manager (i0972; wine-sg 9661).
+# Both start Xvfb and need a private network namespace: run them under /var/tmp/sgwork/netns-run.sh.
+test-proxypage: build
+	@sh test/proxy-page-check.sh
+test-nointernet: build
+	@sh test/nointernet-check.sh
+
 test-credmgr: build
 	@sh test/credmgr-check.sh; rc=$$?; [ $$rc -eq 77 ] && exit 0 || [ $$rc -eq 0 ] || exit $$rc; \
 	 for m in KEYRING_NOTICE KEYRING_NOTICE_ORDER; do \

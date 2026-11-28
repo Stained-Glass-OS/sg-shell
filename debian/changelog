@@ -1,3 +1,26 @@
+sg-shell (0.1.0-337) unstable; urgency=medium
+
+  * Settings > Network & Internet > Proxy saves the connection's proxy
+    settings where every kind of Windows program reads them (net3, ledger
+    i0970): it wrote the ProxyEnable/ProxyServer values alone, and WinHTTP's
+    view of the user's settings (WinHttpGetIEProxyConfigForCurrentUser --
+    Chrome, Edge, .NET's HttpClient) reads only DefaultConnectionSettings,
+    so those programs went direct; "Automatically detect settings" was a
+    value nothing reads. The page reads and writes them through WinINet's
+    per-connection options, as Windows' Settings does. Gate
+    test/proxy-page-check.sh (drives the real page; fails on 0.1.0-321;
+    mutant SG_MUTANT_PROXY_DIRECT_TOO).
+  * "No internet access" (net3, ledger i0972): the taskbar's network icon
+    (tooltip, an exclamation badge, the flyout's "No internet") and Settings'
+    Network status ("No Internet access") follow the Network List Manager,
+    which follows the NCSI probe since wine-sg 10.0-1231 (9661); any
+    connection with a gateway said "Internet access". Gate
+    test/nointernet-check.sh (its own network namespace, probe page on and
+    off; fails on 0.1.0-321; mutants SG_MUTANT_TRAY_ALWAYS_INTERNET,
+    SG_MUTANT_SETTINGS_ROUTE_IS_INTERNET).
+
+ -- Stained Glass OS <ke7oxh@gmail.com>  Sat, 28 Nov 2026 05:40:00 -0800
+
 sg-shell (0.1.0-336) unstable; urgency=medium
 
   * SG Store: 21 apps that earlier walks found working (store3, ledger
